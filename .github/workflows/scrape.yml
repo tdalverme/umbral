@@ -8,6 +8,16 @@ on:
   # Permitir ejecución manual
   workflow_dispatch:
     inputs:
+      job:
+        description: 'Job a ejecutar'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - scrape
+          - analyze
+          - match
       operation:
         description: 'Tipo de operación'
         required: true
@@ -35,6 +45,7 @@ jobs:
     name: Scrape Properties
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.job == 'all') }}
     
     steps:
       - name: Checkout repository
@@ -76,6 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: scrape
     timeout-minutes: 30
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.job == 'all') }}
     
     steps:
       - name: Checkout repository
@@ -108,7 +120,113 @@ jobs:
     runs-on: ubuntu-latest
     needs: analyze
     timeout-minutes: 15
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.job == 'all') }}
     
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run matching
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          cd src
+          python -m umbral.scripts.run_matching
+
+  scrape_manual:
+    name: Scrape Properties (Manual)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.job == 'scrape' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Run scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          cd src
+          python -m umbral.scripts.run_scraper \
+            --source mercadolibre \
+            --operation ${{ github.event.inputs.operation || 'alquiler' }} \
+            --max-pages ${{ github.event.inputs.max_pages || '5' }} \
+            ${{ github.event.inputs.neighborhoods && format('--neighborhoods {0}', github.event.inputs.neighborhoods) || '' }}
+
+  analyze_manual:
+    name: Analyze with AI (Manual)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.job == 'analyze' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run analysis
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          cd src
+          python -m umbral.scripts.run_analysis --limit 50
+
+  match_manual:
+    name: Match & Notify (Manual)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.job == 'match' }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # LLM Provider
     llm_provider: str = Field(
-        "gemini",
+        "groq",
         description="Proveedor de LLM a usar: 'gemini' o 'groq'"
     )
     
