@@ -62,6 +62,11 @@ class Settings(BaseSettings):
         "0.0.0.0", description="Host de escucha para webhook"
     )
 
+    # Feedback learning rate
+    feedback_learning_rate: float = Field(
+        0.1, ge=0.0, le=1.0, description="Learning rate para feedback like/dislike"
+    )
+
     # Scraping
     scrape_delay_min: float = Field(2.0, description="Delay mínimo entre requests (segundos)")
     scrape_delay_max: float = Field(5.0, description="Delay máximo entre requests (segundos)")

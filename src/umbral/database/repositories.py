@@ -221,6 +221,17 @@ class AnalyzedListingRepository(BaseRepository):
         )
         return response.data[0] if response.data else None
 
+    def get_by_id(self, listing_id: str) -> Optional[dict]:
+        """Obtiene un analyzed listing por su UUID."""
+        response = (
+            self.client.table(self.TABLE)
+            .select("*")
+            .eq("id", listing_id)
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
     def search_by_filters(
         self,
         neighborhoods: Optional[list[str]] = None,
