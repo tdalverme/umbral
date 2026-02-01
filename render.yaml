@@ -1,0 +1,23 @@
+services:
+  - type: worker
+    name: umbral-telegram-bot
+    runtime: python
+    plan: free
+    autoDeploy: true
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m umbral.scripts.run_bot"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
