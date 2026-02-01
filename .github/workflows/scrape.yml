@@ -21,6 +21,11 @@ on:
         required: false
         default: '5'
         type: string
+      neighborhoods:
+        description: 'Barrios separados por coma (ej: Palermo,Belgrano)'
+        required: false
+        default: ''
+        type: string
 
 env:
   PYTHON_VERSION: '3.11'
@@ -63,7 +68,8 @@ jobs:
           python -m umbral.scripts.run_scraper \
             --source mercadolibre \
             --operation ${{ github.event.inputs.operation || 'alquiler' }} \
-            --max-pages ${{ github.event.inputs.max_pages || '5' }}
+            --max-pages ${{ github.event.inputs.max_pages || '5' }} \
+            ${{ github.event.inputs.neighborhoods && format('--neighborhoods {0}', github.event.inputs.neighborhoods) || '' }}
 
   analyze:
     name: Analyze with AI
