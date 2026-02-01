@@ -23,11 +23,13 @@ logger = structlog.get_logger()
 # Estados de la conversación
 (
     WAITING_OPERATION,
-    WAITING_NEIGHBORHOODS,
     WAITING_BUDGET,
     WAITING_ROOMS,
     WAITING_DESCRIPTION,
-) = range(5)
+    WAITING_NEIGHBORHOODS_OPTIONAL,
+    WAITING_NEIGHBORHOODS,
+    WAITING_MUST_HAVES,
+) = range(7)
 
 
 class OnboardingHandler:
@@ -36,10 +38,11 @@ class OnboardingHandler:
 
     Nuevo flujo simplificado:
     1. Tipo de operación (alquiler/venta)
-    2. Selección de barrios
-    3. Presupuesto máximo
-    4. Cantidad de ambientes
-    5. Descripción en lenguaje natural del hogar ideal
+    2. Presupuesto máximo
+    3. Cantidad de ambientes
+    4. Descripción en lenguaje natural del hogar ideal
+    5. Barrios (opcional)
+    6. Must-haves (opcional)
     """
 
     POPULAR_NEIGHBORHOODS = [
@@ -63,6 +66,12 @@ class OnboardingHandler:
                 "min_rooms": None,
                 "max_rooms": None,
                 "ideal_description": None,
+                "soft_preferences": None,
+                "embedding": None,
+                "requires_balcony": False,
+                "requires_parking": False,
+                "requires_furnished": False,
+                "requires_pets_allowed": False,
             }
         return self._temp_data[telegram_id]
 
@@ -166,10 +175,10 @@ class OnboardingHandler:
             parse_mode="Markdown",
         )
 
-        return await self._ask_neighborhoods(query, context)
+        return await self._ask_budget(query, context)
 
     async def _ask_neighborhoods(self, query, context: ContextTypes.DEFAULT_TYPE):
-        """Paso 2: Barrios."""
+        """Paso 5: Barrios."""
         telegram_id = query.from_user.id
         data = self._get_temp_data(telegram_id)
         selected = data.get("neighborhoods", [])
@@ -199,7 +208,7 @@ class OnboardingHandler:
         selected_text = ", ".join(selected) if selected else "Ninguno aún"
 
         await query.message.reply_text(
-            f"📋 *Paso 2 de 5*\n\n"
+            f"📋 *Paso 5 de 6*\n\n"
             f"¿En qué barrios te gustaría vivir?\n"
             f"Podés seleccionar varios.\n\n"
             f"Seleccionados: _{selected_text}_",
@@ -207,6 +216,51 @@ class OnboardingHandler:
             parse_mode="Markdown",
         )
         return WAITING_NEIGHBORHOODS
+
+    async def _ask_neighborhoods_optional(
+        self, update_or_query, context: ContextTypes.DEFAULT_TYPE
+    ):
+        """Paso 5: Barrios (opcional)."""
+        keyboard = [
+            [
+                InlineKeyboardButton("📍 Elegir barrios", callback_data="neighopt_choose"),
+            ],
+            [
+                InlineKeyboardButton("🌆 Todos CABA (saltar)", callback_data="neighopt_skip"),
+            ],
+        ]
+
+        message = update_or_query.message
+        await message.reply_text(
+            "📋 *Paso 5 de 6 (opcional)*\n\n"
+            "¿Querés elegir barrios específicos?\n"
+            "Si no, buscamos en toda CABA.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+        )
+        return WAITING_NEIGHBORHOODS_OPTIONAL
+
+    async def handle_neighborhoods_optional(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        """Procesa selección de barrios (opcional)."""
+        query = update.callback_query
+        await query.answer()
+
+        telegram_id = query.from_user.id
+        action = query.data.replace("neighopt_", "")
+
+        if action == "skip":
+            data = self._get_temp_data(telegram_id)
+            data["neighborhoods"] = []
+            self.user_repo.update_onboarding_step(telegram_id, 5)
+            await query.edit_message_text(
+                "✅ Barrios: *Todos CABA*",
+                parse_mode="Markdown",
+            )
+            return await self._ask_must_haves(query, context)
+
+        return await self._ask_neighborhoods(query, context)
 
     async def handle_neighborhood(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -222,22 +276,22 @@ class OnboardingHandler:
         selected = data.get("neighborhoods", [])
 
         if action == "done":
-            self.user_repo.update_onboarding_step(telegram_id, 2)
+            self.user_repo.update_onboarding_step(telegram_id, 5)
             barrios_text = ", ".join(selected) if selected else "Todos CABA"
             await query.edit_message_text(
                 f"✅ Barrios: *{barrios_text}*",
                 parse_mode="Markdown",
             )
-            return await self._ask_budget(query, context)
+            return await self._ask_must_haves(query, context)
 
         if action == "todos":
             data["neighborhoods"] = []
-            self.user_repo.update_onboarding_step(telegram_id, 2)
+            self.user_repo.update_onboarding_step(telegram_id, 5)
             await query.edit_message_text(
                 "✅ Buscaremos en *todos los barrios de CABA*.",
                 parse_mode="Markdown",
             )
-            return await self._ask_budget(query, context)
+            return await self._ask_must_haves(query, context)
 
         # Toggle barrio
         if action in selected:
@@ -251,28 +305,53 @@ class OnboardingHandler:
         return await self._ask_neighborhoods(query, context)
 
     async def _ask_budget(self, query, context: ContextTypes.DEFAULT_TYPE):
-        """Paso 3: Presupuesto."""
-        keyboard = [
-            [
-                InlineKeyboardButton("< $400", callback_data="budget_400"),
-                InlineKeyboardButton("$400-600", callback_data="budget_600"),
-            ],
-            [
-                InlineKeyboardButton("$600-800", callback_data="budget_800"),
-                InlineKeyboardButton("$800-1000", callback_data="budget_1000"),
-            ],
-            [
-                InlineKeyboardButton("$1000-1500", callback_data="budget_1500"),
-                InlineKeyboardButton("> $1500", callback_data="budget_9999"),
-            ],
-            [
-                InlineKeyboardButton("💰 Sin límite", callback_data="budget_0"),
-            ],
-        ]
+        """Paso 2: Presupuesto."""
+        telegram_id = query.from_user.id
+        data = self._get_temp_data(telegram_id)
+        operation = data.get("operation_type", "alquiler")
+
+        if operation == "venta":
+            keyboard = [
+                [
+                    InlineKeyboardButton("< $100k", callback_data="budget_100000"),
+                    InlineKeyboardButton("$100-150k", callback_data="budget_150000"),
+                ],
+                [
+                    InlineKeyboardButton("$150-200k", callback_data="budget_200000"),
+                    InlineKeyboardButton("$200-300k", callback_data="budget_300000"),
+                ],
+                [
+                    InlineKeyboardButton("$300-500k", callback_data="budget_500000"),
+                    InlineKeyboardButton("> $500k", callback_data="budget_999999"),
+                ],
+                [
+                    InlineKeyboardButton("💰 Sin límite", callback_data="budget_0"),
+                ],
+            ]
+            question = "¿Cuál es tu presupuesto máximo de compra? (en USD)"
+        else:
+            keyboard = [
+                [
+                    InlineKeyboardButton("< $400", callback_data="budget_400"),
+                    InlineKeyboardButton("$400-600", callback_data="budget_600"),
+                ],
+                [
+                    InlineKeyboardButton("$600-800", callback_data="budget_800"),
+                    InlineKeyboardButton("$800-1000", callback_data="budget_1000"),
+                ],
+                [
+                    InlineKeyboardButton("$1000-1500", callback_data="budget_1500"),
+                    InlineKeyboardButton("> $1500", callback_data="budget_9999"),
+                ],
+                [
+                    InlineKeyboardButton("💰 Sin límite", callback_data="budget_0"),
+                ],
+            ]
+            question = "¿Cuál es tu presupuesto máximo mensual (alquiler + expensas)? (en USD)"
 
         await query.message.reply_text(
-            "📋 *Paso 3 de 5*\n\n"
-            "¿Cuál es tu presupuesto máximo mensual? (en USD)",
+            "📋 *Paso 2 de 6*\n\n"
+            f"{question}",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown",
         )
@@ -297,11 +376,11 @@ class OnboardingHandler:
             parse_mode="Markdown",
         )
 
-        self.user_repo.update_onboarding_step(telegram_id, 3)
+        self.user_repo.update_onboarding_step(telegram_id, 2)
         return await self._ask_rooms(query, context)
 
     async def _ask_rooms(self, query, context: ContextTypes.DEFAULT_TYPE):
-        """Paso 4: Cantidad de ambientes."""
+        """Paso 3: Cantidad de ambientes."""
         keyboard = [
             [
                 InlineKeyboardButton("Monoambiente", callback_data="rooms_1_1"),
@@ -321,7 +400,7 @@ class OnboardingHandler:
         ]
 
         await query.message.reply_text(
-            "📋 *Paso 4 de 5*\n\n¿Cuántos ambientes necesitás?",
+            "📋 *Paso 3 de 6*\n\n¿Cuántos ambientes necesitás?",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown",
         )
@@ -355,13 +434,13 @@ class OnboardingHandler:
             parse_mode="Markdown",
         )
 
-        self.user_repo.update_onboarding_step(telegram_id, 4)
+        self.user_repo.update_onboarding_step(telegram_id, 3)
         return await self._ask_ideal_description(query, context)
 
     async def _ask_ideal_description(self, query, context: ContextTypes.DEFAULT_TYPE):
-        """Paso 5: Descripción del hogar ideal en lenguaje natural."""
+        """Paso 4: Descripción del hogar ideal en lenguaje natural."""
         await query.message.reply_text(
-            "📋 *Paso 5 de 5 - Tu hogar ideal*\n\n"
+            "📋 *Paso 4 de 6 - Tu hogar ideal*\n\n"
             "Ahora contame con tus palabras: *¿Cómo es tu hogar ideal?*\n\n"
             "Por ejemplo:\n"
             "_\"Busco un PH luminoso en zona residencial, ideal para trabajar "
@@ -404,73 +483,14 @@ class OnboardingHandler:
             embedding = await self.embedding_generator.generate_query_embedding(
                 description
             )
-
-            # Construir preferencias completas
-            hard_filters = HardFilters(
-                max_price_usd=data.get("max_price_usd"),
-                neighborhoods=data.get("neighborhoods", []),
-                min_rooms=data.get("min_rooms"),
-                max_rooms=data.get("max_rooms"),
-                operation_type=data.get("operation_type", "alquiler"),
-            )
-
-            soft_prefs.ideal_description = description
-
-            preferences = UserPreferences(
-                hard_filters=hard_filters,
-                soft_preferences=soft_prefs,
-            )
-
-            # Guardar en DB
-            self.user_repo.update_preferences(telegram_id, preferences)
-            self.user_repo.update_preference_vector(telegram_id, embedding)
-            self.user_repo.complete_onboarding(telegram_id)
-
-            # Limpiar datos temporales
-            self._temp_data.pop(telegram_id, None)
+            data["soft_preferences"] = soft_prefs
+            data["embedding"] = embedding
+            self.user_repo.update_onboarding_step(telegram_id, 4)
 
             # Eliminar mensaje de procesamiento
             await processing_msg.delete()
 
-            # Resumen final
-            barrios = ", ".join(data.get("neighborhoods", [])) or "Todos CABA"
-            budget = data.get("max_price_usd")
-            budget_text = f"${budget} USD" if budget else "Sin límite"
-            
-            min_r = data.get("min_rooms")
-            max_r = data.get("max_rooms")
-            if min_r and max_r and min_r == max_r:
-                rooms_text = f"{min_r} amb."
-            elif min_r and max_r:
-                rooms_text = f"{min_r}-{max_r} amb."
-            elif min_r:
-                rooms_text = f"{min_r}+ amb."
-            else:
-                rooms_text = "Cualquiera"
-
-            await update.message.reply_text(
-                "🎉 *¡Configuración completada!*\n\n"
-                f"📍 Barrios: {barrios}\n"
-                f"💰 Presupuesto: {budget_text}\n"
-                f"🏠 Ambientes: {rooms_text}\n"
-                f"🔑 Operación: {data.get('operation_type', 'alquiler').capitalize()}\n\n"
-                f"🏡 *Tu hogar ideal:*\n_{description[:200]}{'...' if len(description) > 200 else ''}_\n\n"
-                "A partir de ahora te voy a enviar *solo* las propiedades "
-                "que matcheen con lo que buscás.\n\n"
-                "Cuando recibas una, podés marcarla como:\n"
-                "• 👍 *Me interesa* - Para ver más así\n"
-                "• 👎 *No es lo que busco* - Para ajustar\n\n"
-                "_Usá /preferencias para ver o /reset para cambiar._",
-                parse_mode="Markdown",
-            )
-
-            logger.info(
-                "Onboarding completado con descripción",
-                telegram_id=telegram_id,
-                description_length=len(description),
-            )
-
-            return ConversationHandler.END
+            return await self._ask_neighborhoods_optional(update, context)
 
         except Exception as e:
             logger.error(
@@ -483,6 +503,185 @@ class OnboardingHandler:
                 "Por favor intentá de nuevo."
             )
             return WAITING_DESCRIPTION
+
+    async def _ask_must_haves(self, query, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 6: Must-haves (opcional)."""
+        telegram_id = query.from_user.id
+        data = self._get_temp_data(telegram_id)
+
+        def flag_text(value: bool, label: str) -> str:
+            return f"✅ {label}" if value else label
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    flag_text(data.get("requires_balcony", False), "🏡 Balcón"),
+                    callback_data="must_balcony",
+                ),
+                InlineKeyboardButton(
+                    flag_text(data.get("requires_parking", False), "🚗 Cochera"),
+                    callback_data="must_parking",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    flag_text(data.get("requires_furnished", False), "🛋️ Amoblado"),
+                    callback_data="must_furnished",
+                ),
+                InlineKeyboardButton(
+                    flag_text(data.get("requires_pets_allowed", False), "🐶 Mascotas"),
+                    callback_data="must_pets",
+                ),
+            ],
+            [
+                InlineKeyboardButton("✔️ Listo", callback_data="must_done"),
+                InlineKeyboardButton("Saltar", callback_data="must_skip"),
+            ],
+        ]
+
+        await query.message.reply_text(
+            "📋 *Paso 6 de 6 (opcional)*\n\n"
+            "¿Tenés algún requisito imprescindible?",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+        )
+        return WAITING_MUST_HAVES
+
+    async def handle_must_haves(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        """Procesa selección de must-haves."""
+        query = update.callback_query
+        await query.answer()
+
+        telegram_id = query.from_user.id
+        action = query.data.replace("must_", "")
+        data = self._get_temp_data(telegram_id)
+
+        if action in {"balcony", "parking", "furnished", "pets"}:
+            key_map = {
+                "balcony": "requires_balcony",
+                "parking": "requires_parking",
+                "furnished": "requires_furnished",
+                "pets": "requires_pets_allowed",
+            }
+            key = key_map[action]
+            data[key] = not data.get(key, False)
+            return await self._ask_must_haves(query, context)
+
+        if action == "skip":
+            data["requires_balcony"] = False
+            data["requires_parking"] = False
+            data["requires_furnished"] = False
+            data["requires_pets_allowed"] = False
+            await query.edit_message_text(
+                "✅ Requisitos: *Ninguno*",
+                parse_mode="Markdown",
+            )
+        else:
+            selected = []
+            if data.get("requires_balcony"):
+                selected.append("Balcón")
+            if data.get("requires_parking"):
+                selected.append("Cochera")
+            if data.get("requires_furnished"):
+                selected.append("Amoblado")
+            if data.get("requires_pets_allowed"):
+                selected.append("Mascotas")
+            text = ", ".join(selected) if selected else "Ninguno"
+            await query.edit_message_text(
+                f"✅ Requisitos: *{text}*",
+                parse_mode="Markdown",
+            )
+
+        self.user_repo.update_onboarding_step(telegram_id, 6)
+        return await self._complete_onboarding(query, context)
+
+    async def _complete_onboarding(self, query, context: ContextTypes.DEFAULT_TYPE):
+        telegram_id = query.from_user.id
+        data = self._get_temp_data(telegram_id)
+
+        soft_prefs = data.get("soft_preferences") or SoftPreferences()
+        embedding = data.get("embedding") or []
+        description = data.get("ideal_description", "")
+
+        hard_filters = HardFilters(
+            max_price_usd=data.get("max_price_usd"),
+            neighborhoods=data.get("neighborhoods", []),
+            min_rooms=data.get("min_rooms"),
+            max_rooms=data.get("max_rooms"),
+            operation_type=data.get("operation_type", "alquiler"),
+            requires_balcony=data.get("requires_balcony", False),
+            requires_parking=data.get("requires_parking", False),
+            requires_pets_allowed=data.get("requires_pets_allowed", False),
+            requires_furnished=data.get("requires_furnished", False),
+        )
+
+        soft_prefs.ideal_description = description
+
+        preferences = UserPreferences(
+            hard_filters=hard_filters,
+            soft_preferences=soft_prefs,
+        )
+
+        # Guardar en DB
+        self.user_repo.update_preferences(telegram_id, preferences)
+        self.user_repo.update_preference_vector(telegram_id, embedding)
+        self.user_repo.complete_onboarding(telegram_id)
+
+        # Limpiar datos temporales
+        self._temp_data.pop(telegram_id, None)
+
+        barrios = ", ".join(data.get("neighborhoods", [])) or "Todos CABA"
+        budget = data.get("max_price_usd")
+        budget_text = f"${budget} USD" if budget else "Sin límite"
+
+        min_r = data.get("min_rooms")
+        max_r = data.get("max_rooms")
+        if min_r and max_r and min_r == max_r:
+            rooms_text = f"{min_r} amb."
+        elif min_r and max_r:
+            rooms_text = f"{min_r}-{max_r} amb."
+        elif min_r:
+            rooms_text = f"{min_r}+ amb."
+        else:
+            rooms_text = "Cualquiera"
+
+        must_items = []
+        if data.get("requires_balcony"):
+            must_items.append("Balcón")
+        if data.get("requires_parking"):
+            must_items.append("Cochera")
+        if data.get("requires_furnished"):
+            must_items.append("Amoblado")
+        if data.get("requires_pets_allowed"):
+            must_items.append("Mascotas")
+        must_text = ", ".join(must_items) if must_items else "Ninguno"
+
+        await query.message.reply_text(
+            "🎉 *¡Configuración completada!*\n\n"
+            f"📍 Barrios: {barrios}\n"
+            f"💰 Presupuesto: {budget_text}\n"
+            f"🏠 Ambientes: {rooms_text}\n"
+            f"✅ Requisitos: {must_text}\n"
+            f"🔑 Operación: {data.get('operation_type', 'alquiler').capitalize()}\n\n"
+            f"🏡 *Tu hogar ideal:*\n_{description[:200]}{'...' if len(description) > 200 else ''}_\n\n"
+            "A partir de ahora te voy a enviar *solo* las propiedades "
+            "que matcheen con lo que buscás.\n\n"
+            "Cuando recibas una, podés marcarla como:\n"
+            "• 👍 *Me interesa* - Para ver más así\n"
+            "• 👎 *No es lo que busco* - Para ajustar\n\n"
+            "_Usá /preferencias para ver o /reset para cambiar._",
+            parse_mode="Markdown",
+        )
+
+        logger.info(
+            "Onboarding completado con descripción",
+            telegram_id=telegram_id,
+            description_length=len(description),
+        )
+
+        return ConversationHandler.END
 
     async def _extract_preferences_from_description(
         self, description: str

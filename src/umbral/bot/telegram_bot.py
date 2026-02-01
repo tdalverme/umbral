@@ -24,10 +24,12 @@ from umbral.bot.handlers import (
     OnboardingHandler,
     FeedbackHandler,
     WAITING_OPERATION,
+    WAITING_NEIGHBORHOODS_OPTIONAL,
     WAITING_NEIGHBORHOODS,
     WAITING_BUDGET,
     WAITING_ROOMS,
     WAITING_DESCRIPTION,
+    WAITING_MUST_HAVES,
 )
 
 logger = structlog.get_logger()
@@ -75,6 +77,12 @@ class UmbralBot:
                         pattern=r"^op_",
                     ),
                 ],
+                WAITING_NEIGHBORHOODS_OPTIONAL: [
+                    CallbackQueryHandler(
+                        self.onboarding.handle_neighborhoods_optional,
+                        pattern=r"^neighopt_",
+                    ),
+                ],
                 WAITING_NEIGHBORHOODS: [
                     CallbackQueryHandler(
                         self.onboarding.handle_neighborhood,
@@ -97,6 +105,12 @@ class UmbralBot:
                     MessageHandler(
                         filters.TEXT & ~filters.COMMAND,
                         self.onboarding.handle_ideal_description,
+                    ),
+                ],
+                WAITING_MUST_HAVES: [
+                    CallbackQueryHandler(
+                        self.onboarding.handle_must_haves,
+                        pattern=r"^must_",
                     ),
                 ],
             },
