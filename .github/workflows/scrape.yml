@@ -1,9 +1,9 @@
 name: Scrape & Analyze Properties
 
 on:
-  # Ejecutar cada hora
+  # Ejecutar una vez al día (UTC)
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 12 * * *'
   
   # Permitir ejecución manual
   workflow_dispatch:

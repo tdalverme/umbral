@@ -80,6 +80,7 @@ cython_debug/
 *.sqlite3
 .DS_Store
 Thumbs.db
+.learnings/
 
 # Playwright
 playwright-report/
