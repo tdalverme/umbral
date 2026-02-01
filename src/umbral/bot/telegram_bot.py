@@ -57,9 +57,12 @@ class UmbralBot:
         # Repositories
         self.user_repo = UserRepository()
 
-    def setup(self) -> Application:
+    def setup(self, use_webhook: bool = False) -> Application:
         """Configura la aplicación de Telegram."""
-        self.application = Application.builder().token(self.token).build()
+        builder = Application.builder().token(self.token)
+        if use_webhook:
+            builder = builder.updater(None)
+        self.application = builder.build()
         self.bot = self.application.bot
 
         # ConversationHandler para el onboarding

@@ -52,6 +52,15 @@ class Settings(BaseSettings):
 
     # Telegram
     telegram_bot_token: str = Field(..., description="Token del bot de Telegram")
+    telegram_webhook_url: Optional[str] = Field(
+        None, description="URL pública base para webhook (ej: https://app.onrender.com)"
+    )
+    telegram_webhook_path: str = Field(
+        "telegram", description="Path del webhook (sin / inicial)"
+    )
+    telegram_webhook_listen: str = Field(
+        "0.0.0.0", description="Host de escucha para webhook"
+    )
 
     # Scraping
     scrape_delay_min: float = Field(2.0, description="Delay mínimo entre requests (segundos)")
