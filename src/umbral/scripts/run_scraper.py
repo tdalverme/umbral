@@ -4,6 +4,7 @@ Script para ejecutar el scraping de propiedades.
 Uso:
     python -m umbral.scripts.run_scraper --source mercadolibre --operation alquiler
     python -m umbral.scripts.run_scraper --neighborhoods Palermo,Belgrano
+    python -m umbral.scripts.run_scraper --max-listings 20
 """
 
 import argparse
@@ -50,6 +51,7 @@ async def run_scraper(
     operation_type: str = "alquiler",
     neighborhoods: Optional[list[str]] = None,
     max_pages: int = 5,
+    max_listings: Optional[int] = None,
 ):
     """
     Ejecuta el scraping de propiedades.
@@ -91,6 +93,7 @@ async def run_scraper(
             operation_type=operation_type,
             neighborhoods=neighborhoods,
             max_pages=max_pages,
+            max_listings=max_listings,
         ):
             stats["total"] += 1
 
@@ -159,6 +162,12 @@ def main():
         default=5,
         help="Máximo de páginas por barrio",
     )
+    parser.add_argument(
+        "--max-listings",
+        type=int,
+        default=None,
+        help="Máximo de listings a procesar (None = sin límite)",
+    )
 
     args = parser.parse_args()
 
@@ -184,6 +193,7 @@ def main():
                     operation_type=args.operation,
                     neighborhoods=neighborhoods,
                     max_pages=args.max_pages,
+                    max_listings=args.max_listings,
                 )
             )
             exit_code = 0 if stats["errors"] == 0 else 1

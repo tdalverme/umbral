@@ -280,6 +280,7 @@ class BaseScraper(ABC):
         property_type: str = "departamento",
         neighborhoods: Optional[list[str]] = None,
         max_pages: Optional[int] = None,
+        max_listings: Optional[int] = None,
     ) -> AsyncGenerator[RawListing, None]:
         """
         Ejecuta el scraping completo.
@@ -289,12 +290,14 @@ class BaseScraper(ABC):
             property_type: Tipo de propiedad
             neighborhoods: Lista de barrios a scrapear (None = todos)
             max_pages: Máximo de páginas por barrio
+            max_listings: Máximo de listings a devolver (None = sin límite)
 
         Yields:
             RawListing para cada propiedad encontrada
         """
         max_pages = max_pages or self.settings.max_pages_per_run
         neighborhoods = neighborhoods or [None]  # None = búsqueda general
+        yielded = 0
 
         for neighborhood in neighborhoods:
             logger.info(
@@ -305,6 +308,8 @@ class BaseScraper(ABC):
             )
 
             for page_num in range(1, max_pages + 1):
+                if max_listings is not None and yielded >= max_listings:
+                    return
                 search_url = self.build_search_url(
                     operation_type=operation_type,
                     property_type=property_type,
@@ -314,9 +319,12 @@ class BaseScraper(ABC):
 
                 listing_count = 0
                 async for listing_url in self.scrape_search_page(search_url):
+                    if max_listings is not None and yielded >= max_listings:
+                        return
                     listing = await self.scrape_listing(listing_url)
                     if listing:
                         listing_count += 1
+                        yielded += 1
                         yield listing
 
                 # Si no hay listings en esta página, terminamos
