@@ -75,21 +75,32 @@ async def run_webhook(
         if scrape_task and not scrape_task.done():
             return web.Response(text="scrape_in_progress", status=409)
 
-        operation = request.query.get("operation", "alquiler")
+        operation = request.query.get("operation", "alquiler").strip()
         if operation not in ("alquiler", "venta"):
-            return web.Response(text="invalid_operation", status=400)
+            logger.warning(
+                "Operación inválida",
+                operation=operation,
+                query=dict(request.query),
+            )
+            return web.Response(text=f"invalid_operation:{operation}", status=400)
 
         def parse_int(value: str | None, default: int | None) -> int | None:
             if value is None or value == "":
                 return default
             try:
-                return int(value)
+                return int(value.strip())
             except ValueError:
                 return None
 
         max_pages = parse_int(request.query.get("max_pages"), 5)
         max_listings = parse_int(request.query.get("max_listings"), None)
         if max_pages is None or max_listings is None:
+            logger.warning(
+                "Límites inválidos",
+                max_pages=request.query.get("max_pages"),
+                max_listings=request.query.get("max_listings"),
+                query=dict(request.query),
+            )
             return web.Response(text="invalid_limits", status=400)
 
         neighborhoods_raw = request.query.get("neighborhoods", "")

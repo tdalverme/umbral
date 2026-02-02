@@ -65,5 +65,12 @@ jobs:
             QUERY="${QUERY}&neighborhoods=${NEIGHBORHOODS}"
           fi
 
-          curl -sS -f -X POST "${RENDER_SCRAPE_URL}?${QUERY}" \
-            -H "X-Trigger-Token: ${SCRAPE_TRIGGER_TOKEN}"
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${RENDER_SCRAPE_URL}?${QUERY}" \
+            -H "X-Trigger-Token: ${SCRAPE_TRIGGER_TOKEN}")
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "status=$STATUS"
+          echo "body=$BODY"
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            exit 1
+          fi
