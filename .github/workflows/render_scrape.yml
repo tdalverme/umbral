@@ -36,6 +36,7 @@ jobs:
   trigger:
     name: Trigger Render Scrape
     runs-on: ubuntu-latest
+    environment: test
     steps:
       - name: Trigger scraper webhook
         env:
