@@ -15,6 +15,7 @@ from telegram import Update
 
 from umbral.bot import UmbralBot
 from umbral.config import get_settings
+from umbral.scripts.run_scraper import run_scraper as run_scraper_job
 
 # Configurar logging
 structlog.configure(
@@ -38,8 +39,11 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
-async def run_webhook(bot: UmbralBot, base_url: str, path: str, listen: str, port: int):
+async def run_webhook(
+    bot: UmbralBot, base_url: str, path: str, listen: str, port: int
+):
     application = bot.setup(use_webhook=True)
+    settings = get_settings()
 
     webhook_path = f"/{path.lstrip('/')}"
     webhook_url = f"{base_url.rstrip('/')}{webhook_path}"
@@ -50,6 +54,7 @@ async def run_webhook(bot: UmbralBot, base_url: str, path: str, listen: str, por
     )
 
     app = web.Application()
+    scrape_task: asyncio.Task | None = None
 
     async def handle_update(request: web.Request) -> web.Response:
         update = Update.de_json(data=await request.json(), bot=application.bot)
@@ -59,8 +64,67 @@ async def run_webhook(bot: UmbralBot, base_url: str, path: str, listen: str, por
     async def health(_: web.Request) -> web.Response:
         return web.Response(text="ok")
 
+    async def trigger_scrape(request: web.Request) -> web.Response:
+        nonlocal scrape_task
+
+        token = request.headers.get("X-Trigger-Token")
+        expected = settings.scrape_trigger_token
+        if not expected or token != expected:
+            return web.Response(text="forbidden", status=403)
+
+        if scrape_task and not scrape_task.done():
+            return web.Response(text="scrape_in_progress", status=409)
+
+        operation = request.query.get("operation", "alquiler")
+        if operation not in ("alquiler", "venta"):
+            return web.Response(text="invalid_operation", status=400)
+
+        def parse_int(value: str | None, default: int | None) -> int | None:
+            if value is None or value == "":
+                return default
+            try:
+                return int(value)
+            except ValueError:
+                return None
+
+        max_pages = parse_int(request.query.get("max_pages"), 5)
+        max_listings = parse_int(request.query.get("max_listings"), None)
+        if max_pages is None or max_listings is None:
+            return web.Response(text="invalid_limits", status=400)
+
+        neighborhoods_raw = request.query.get("neighborhoods", "")
+        neighborhoods = (
+            [n.strip() for n in neighborhoods_raw.split(",") if n.strip()]
+            if neighborhoods_raw
+            else None
+        )
+
+        async def _run_scrape():
+            try:
+                logger.info(
+                    "Scrape trigger recibido",
+                    operation=operation,
+                    max_pages=max_pages,
+                    max_listings=max_listings,
+                    neighborhoods=neighborhoods or "todos",
+                )
+                stats = await run_scraper_job(
+                    source="mercadolibre",
+                    operation_type=operation,
+                    neighborhoods=neighborhoods,
+                    max_pages=max_pages,
+                    max_listings=max_listings,
+                )
+                logger.info("Scrape finalizado", **stats)
+            except Exception as e:
+                logger.error("Scrape falló", error=str(e))
+
+        scrape_task = asyncio.create_task(_run_scrape())
+        return web.Response(text="started")
+
     app.router.add_post(webhook_path, handle_update)
     app.router.add_get("/health", health)
+    app.router.add_post("/run-scrape", trigger_scrape)
 
     runner = web.AppRunner(app)
     await runner.setup()

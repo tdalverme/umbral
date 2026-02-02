@@ -312,7 +312,6 @@ class MercadoLibreScraper(BaseScraper):
         for selector in breadcrumb_selectors:
             breadcrumb_count = await page.locator(selector).count()
             components = []
-            print(f"Breadcrumb count: {breadcrumb_count}")
             for i in range(4, breadcrumb_count):
                 breadcrumb = page.locator(selector).nth(i)
                 text = await breadcrumb.text_content()

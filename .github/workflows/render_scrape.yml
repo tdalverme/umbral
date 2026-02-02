@@ -1,0 +1,68 @@
+name: Trigger Render Scraper
+
+on:
+  # Ejecutar una vez al día (UTC)
+  schedule:
+    - cron: '0 12 * * *'
+
+  # Permitir ejecución manual
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'Tipo de operación'
+        required: true
+        default: 'alquiler'
+        type: choice
+        options:
+          - alquiler
+          - venta
+      max_pages:
+        description: 'Máximo de páginas a scrapear'
+        required: false
+        default: '1'
+        type: string
+      max_listings:
+        description: 'Máximo de listings a procesar'
+        required: false
+        default: ''
+        type: string
+      neighborhoods:
+        description: 'Barrios separados por coma (ej: Palermo,Belgrano)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  trigger:
+    name: Trigger Render Scrape
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scraper webhook
+        env:
+          RENDER_SCRAPE_URL: ${{ secrets.RENDER_SCRAPE_URL }}
+          SCRAPE_TRIGGER_TOKEN: ${{ secrets.SCRAPE_TRIGGER_TOKEN }}
+        run: |
+          if [ -z "$RENDER_SCRAPE_URL" ]; then
+            echo "RENDER_SCRAPE_URL is not set"
+            exit 1
+          fi
+          if [ -z "$SCRAPE_TRIGGER_TOKEN" ]; then
+            echo "SCRAPE_TRIGGER_TOKEN is not set"
+            exit 1
+          fi
+
+          OPERATION="${{ github.event.inputs.operation || 'alquiler' }}"
+          MAX_PAGES="${{ github.event.inputs.max_pages || '1' }}"
+          MAX_LISTINGS="${{ github.event.inputs.max_listings || '' }}"
+          NEIGHBORHOODS="${{ github.event.inputs.neighborhoods || '' }}"
+
+          QUERY="operation=${OPERATION}&max_pages=${MAX_PAGES}"
+          if [ -n "$MAX_LISTINGS" ]; then
+            QUERY="${QUERY}&max_listings=${MAX_LISTINGS}"
+          fi
+          if [ -n "$NEIGHBORHOODS" ]; then
+            QUERY="${QUERY}&neighborhoods=${NEIGHBORHOODS}"
+          fi
+
+          curl -sS -f -X POST "${RENDER_SCRAPE_URL}?${QUERY}" \
+            -H "X-Trigger-Token: ${SCRAPE_TRIGGER_TOKEN}"
