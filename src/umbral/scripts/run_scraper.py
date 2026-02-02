@@ -22,7 +22,7 @@ import structlog
 
 from umbral.config import get_settings, CABA_NEIGHBORHOODS
 from umbral.database import RawListingRepository
-from umbral.scrapers import MercadoLibreScraper
+from umbral.scrapers import MercadoLibreScraper, ArgenPropScraper
 
 # Configurar logging
 structlog.configure(
@@ -68,6 +68,8 @@ async def run_scraper(
     # Seleccionar scraper
     if source == "mercadolibre":
         scraper_class = MercadoLibreScraper
+    elif source == "argenprop":
+        scraper_class = ArgenPropScraper
     else:
         raise ValueError(f"Scraper no implementado para: {source}")
 

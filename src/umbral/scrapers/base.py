@@ -45,8 +45,30 @@ class BaseScraper(ABC):
     BASE_URL: str = ""
     SEARCH_URL_TEMPLATE: str = ""
 
+    # User agents y viewports comunes para rotación simple
+    USER_AGENTS = [
+        # Chrome Windows
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        # Chrome macOS
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        # Edge Windows
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0",
+    ]
+
+    VIEWPORTS = [
+        {"width": 1366, "height": 768},
+        {"width": 1440, "height": 900},
+        {"width": 1536, "height": 864},
+        {"width": 1920, "height": 1080},
+    ]
+
     def __init__(self):
         self.settings = get_settings()
+        self._user_agent = random.choice(self.USER_AGENTS)
+        self._viewport = random.choice(self.VIEWPORTS)
         self._playwright = None
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
@@ -64,7 +86,7 @@ class BaseScraper(ABC):
         """Inicializa Playwright y el browser."""
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
-            headless=True,  # Headless para producción
+            headless=False,  # Headless para producción
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--disable-dev-shm-usage",
@@ -72,14 +94,16 @@ class BaseScraper(ABC):
             ],
         )
         self._context = await self._browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
+            viewport=self._viewport,
+            user_agent=self._user_agent,
             locale="es-AR",
             timezone_id="America/Argentina/Buenos_Aires",
+        )
+        await self._context.set_extra_http_headers(
+            {
+                "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+                "DNT": "1",
+            }
         )
         # Bloquear recursos innecesarios para acelerar
         await self._context.route(
