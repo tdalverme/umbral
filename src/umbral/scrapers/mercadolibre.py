@@ -149,6 +149,25 @@ class MercadoLibreScraper(BaseScraper):
                         urls.append(clean_url)
             logger.info(f"Búsqueda alternativa: {len(urls)} URLs encontradas")
 
+        if not urls:
+            try:
+                title = await page.title()
+                body_text = await page.text_content("body") or ""
+                body_snippet = body_text.strip().replace("\n", " ")[:300]
+                flags = []
+                lower = body_text.lower()
+                for keyword in ("robot", "captcha", "verific", "blocked", "unusual traffic"):
+                    if keyword in lower:
+                        flags.append(keyword)
+                logger.warning(
+                    "Página sin resultados",
+                    title=title,
+                    snippet=body_snippet,
+                    flags=",".join(flags) if flags else "none",
+                )
+            except Exception as e:
+                logger.warning("No se pudo inspeccionar la página", error=str(e))
+
         return urls
 
     async def parse_listing(self, page: Page, url: str) -> Optional[RawListing]:
@@ -179,8 +198,6 @@ class MercadoLibreScraper(BaseScraper):
             # Ubicación
             address = await self._safe_get_text(page, ".ui-vip-location__subtitle p.ui-pdp-media__title")
             location_data = await self._extract_location(page)
-            print("Ubicación")
-            print(location_data)
 
             # Características
             specs = await self._extract_specifications(page)
