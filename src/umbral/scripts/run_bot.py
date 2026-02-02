@@ -67,12 +67,25 @@ async def run_webhook(
     async def trigger_scrape(request: web.Request) -> web.Response:
         nonlocal scrape_task
 
+        logger.info(
+            "Webhook scrape request",
+            path=request.path,
+            query=dict(request.query),
+            has_token=bool(request.headers.get("X-Trigger-Token")),
+        )
+
         token = request.headers.get("X-Trigger-Token")
         expected = settings.scrape_trigger_token
         if not expected or token != expected:
+            logger.warning(
+                "Scrape trigger forbidden",
+                expected_set=bool(expected),
+                token_match=bool(expected and token == expected),
+            )
             return web.Response(text="forbidden", status=403)
 
         if scrape_task and not scrape_task.done():
+            logger.info("Scrape ya en progreso")
             return web.Response(text="scrape_in_progress", status=409)
 
         operation = request.query.get("operation", "alquiler").strip()
@@ -137,6 +150,7 @@ async def run_webhook(
                 logger.error("Scrape falló", error=str(e))
 
         scrape_task = asyncio.create_task(_run_scrape())
+        logger.info("Scrape iniciado en background")
         return web.Response(text="started")
 
     app.router.add_post(webhook_path, handle_update)
