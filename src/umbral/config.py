@@ -67,11 +67,6 @@ class Settings(BaseSettings):
         0.1, ge=0.0, le=1.0, description="Learning rate para feedback like/dislike"
     )
 
-    # Scraper trigger (Render)
-    scrape_trigger_token: Optional[str] = Field(
-        None, description="Token para disparar scraping via webhook"
-    )
-
     # Scraping
     scrape_delay_min: float = Field(2.0, description="Delay mínimo entre requests (segundos)")
     scrape_delay_max: float = Field(5.0, description="Delay máximo entre requests (segundos)")

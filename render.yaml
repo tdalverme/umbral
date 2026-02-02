@@ -4,20 +4,16 @@ services:
     runtime: python
     plan: free
     autoDeploy: true
-    buildCommand: "pip install -r requirements.txt && pip install -e . && python -m playwright install chromium"
+    buildCommand: "pip install -r requirements.txt && pip install -e ."
     startCommand: "python -m umbral.scripts.run_bot"
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
-      - key: PLAYWRIGHT_BROWSERS_PATH
-        value: "0"
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_WEBHOOK_PATH
         value: "telegram"
-      - key: SCRAPE_TRIGGER_TOKEN
-        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
@@ -27,6 +23,4 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GROQ_API_KEY
-        sync: false
-      - key: LOG_LEVEL
         sync: false

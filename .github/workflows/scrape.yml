@@ -3,7 +3,7 @@ name: Analyze & Match Properties
 on:
   # Ejecutar una vez al día (UTC)
   schedule:
-    - cron: '30 12 * * *'
+    - cron: '0 12 * * *'
   
   # Permitir ejecución manual
   workflow_dispatch:
