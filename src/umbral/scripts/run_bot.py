@@ -92,13 +92,19 @@ async def run_webhook(
             except ValueError:
                 return None
 
-        max_pages = parse_int(request.query.get("max_pages"), 5)
-        max_listings = parse_int(request.query.get("max_listings"), None)
-        if max_pages is None or max_listings is None:
+        raw_max_pages = request.query.get("max_pages")
+        raw_max_listings = request.query.get("max_listings")
+        max_pages = parse_int(raw_max_pages, 5)
+        max_listings = parse_int(raw_max_listings, None)
+        invalid_pages = max_pages is None
+        invalid_listings = (
+            max_listings is None and raw_max_listings not in (None, "")
+        )
+        if invalid_pages or invalid_listings:
             logger.warning(
                 "Límites inválidos",
-                max_pages=request.query.get("max_pages"),
-                max_listings=request.query.get("max_listings"),
+                max_pages=raw_max_pages,
+                max_listings=raw_max_listings,
                 query=dict(request.query),
             )
             return web.Response(text="invalid_limits", status=400)
