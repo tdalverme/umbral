@@ -103,7 +103,9 @@ class MercadoLibreScraper(BaseScraper):
         # Selectores para items de resultado (actualizados 2024)
         selectors = [
             # Selector principal de cards
-            "a.ui-search-result__content-wrapper",
+            ".ui-search-result",
+            ".ui-search-layout__item",
+            ".andes-card"
             # Alternativo
             "div.ui-search-result__wrapper a.ui-search-link",
             # Cards de galería
@@ -175,7 +177,10 @@ class MercadoLibreScraper(BaseScraper):
             description = await self._extract_description(page)
 
             # Ubicación
+            address = await self._safe_get_text(page, ".ui-vip-location__subtitle p.ui-pdp-media__title")
             location_data = await self._extract_location(page)
+            print("Ubicación")
+            print(location_data)
 
             # Características
             specs = await self._extract_specifications(page)
@@ -185,6 +190,9 @@ class MercadoLibreScraper(BaseScraper):
 
             # Features booleanas
             features = await self._extract_features(page, description)
+            
+            # Coordenadas
+            coordinates = await self._extract_coordinates(page)
 
             return RawListing(
                 external_id=external_id,
@@ -194,9 +202,9 @@ class MercadoLibreScraper(BaseScraper):
                 description=description,
                 price=price_data["price"],
                 currency=price_data["currency"],
-                location=location_data["full"],
-                region="CABA",
-                city="Buenos Aires",
+                location=address,
+                region=location_data["region"],
+                city=location_data["city"],
                 neighborhood=location_data["neighborhood"],
                 rooms=specs.get("rooms", "1"),
                 bathrooms=specs.get("bathrooms", "1"),
@@ -208,7 +216,7 @@ class MercadoLibreScraper(BaseScraper):
                 maintenance_fee=specs.get("maintenance_fee"),
                 operation_type=self._detect_operation_type(url),
                 images=images,
-                coordinates=None,  # MercadoLibre no expone coordenadas fácilmente
+                coordinates=coordinates,  # MercadoLibre no expone coordenadas fácilmente
                 parking_spaces=specs.get("parking", 0),
                 features=features,
             )
@@ -279,38 +287,35 @@ class MercadoLibreScraper(BaseScraper):
         return "Sin descripción disponible"
 
     async def _extract_location(self, page: Page) -> dict:
-        """Extrae información de ubicación."""
-        result = {"full": "", "neighborhood": "CABA"}
-
-        # Ubicación completa
-        location_selectors = [
-            ".ui-pdp-media__title",
-            ".ui-vip-location .ui-pdp-media__title",
-            "p.ui-pdp-color--BLACK",
+        """Extrae información de ubicación."""  
+        # Buscar en breadcrumbs
+        breadcrumb_selectors = [
+            "ol.andes-breadcrumb li a.andes-breadcrumb__link"
         ]
-
-        for selector in location_selectors:
-            location = await self._safe_get_text(page, selector)
-            if location and ("Capital Federal" in location or "Buenos Aires" in location):
-                result["full"] = location
-                break
-
-        # Intentar extraer barrio
-        if result["full"]:
-            for barrio in self.NEIGHBORHOOD_SLUGS.keys():
-                if barrio.lower() in result["full"].lower():
-                    result["neighborhood"] = barrio
-                    break
-
-        # Si no encontramos en la ubicación, buscar en breadcrumbs
-        if result["neighborhood"] == "CABA":
-            breadcrumb = await self._safe_get_text(page, ".andes-breadcrumb")
-            for barrio in self.NEIGHBORHOOD_SLUGS.keys():
-                if barrio.lower() in breadcrumb.lower():
-                    result["neighborhood"] = barrio
-                    break
-
-        return result
+        for selector in breadcrumb_selectors:
+            breadcrumb_count = await page.locator(selector).count()
+            components = []
+            print(f"Breadcrumb count: {breadcrumb_count}")
+            for i in range(4, breadcrumb_count):
+                breadcrumb = page.locator(selector).nth(i)
+                text = await breadcrumb.text_content()
+                if text:
+                    components.append(text.strip())
+                
+            if len(components) == 3:
+                return {
+                    "region": components[0],
+                    "city": components[1],
+                    "neighborhood": components[2]
+                }
+            elif len(components) == 2:
+                return {
+                    "region": components[0],
+                    "city": components[0],
+                    "neighborhood": components[1]
+                }
+            
+            return None
 
     async def _extract_specifications(self, page: Page) -> dict:
         """Extrae especificaciones técnicas del inmueble."""
@@ -528,6 +533,24 @@ class MercadoLibreScraper(BaseScraper):
             has_garden="jardín" in full_text or "jardin" in full_text,
             has_patio="patio" in full_text,
         )
+    
+    async def _extract_coordinates(self, page: Page) -> dict:
+        """Extrae coordenadas de la página."""
+        try:
+            img_element = await page.query_selector(".ui-vip-location__map img.ui-pdp-image")
+            if img_element:
+                src = await img_element.get_attribute("src")
+                if src:
+                    # Obtener coordenadas de la URL
+                    params = src.split("&")
+                    for param in params:
+                        if "center" in param:
+                            coordinates = param.split("=")[1].split("%2C")
+                            return {"lat": float(coordinates[0]), "lng": float(coordinates[1])}
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting coordinates: {str(e)}")
+            return None
 
     def _detect_operation_type(self, url: str) -> str:
         """Detecta si es alquiler o venta desde la URL."""
