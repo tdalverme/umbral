@@ -120,6 +120,15 @@ class ArgenPropScraper(BaseScraper):
             coordinates = await self._extract_coordinates(page)
 
             operation_type = await self._detect_operation_type(page, title, url)
+            features, inferred_parking = self.enrich_features_from_text(
+                features=features,
+                title=title,
+                description=description,
+            )
+
+            parking_spaces = specs.get("parking_spaces")
+            if parking_spaces is None and inferred_parking is not None:
+                parking_spaces = inferred_parking
 
             return RawListing(
                 external_id=external_id,
@@ -144,7 +153,7 @@ class ArgenPropScraper(BaseScraper):
                 operation_type=operation_type,
                 images=images,
                 coordinates=coordinates,
-                parking_spaces=specs.get("parking_spaces"),
+                parking_spaces=parking_spaces,
                 features=features,
             )
 
@@ -255,15 +264,24 @@ class ArgenPropScraper(BaseScraper):
                 if match:
                     specs["size_total"] = match.group(1)
 
-        elements = await page.query_selector_all(".property-features li")
+        elements = await page.query_selector_all(".property-features li, li.property-features-item")
         for element in elements:
             label = (await element.query_selector("p") or await element.query_selector("span"))
             strong = await element.query_selector("strong")
             label_text = (await label.text_content() or "") if label else ""
             value_text = (await strong.text_content() or "") if strong else ""
 
-            text = f"{label_text} {value_text}".lower()
-            text = text.replace("\n", " ").strip()
+            raw_text = f"{label_text} {value_text}".strip()
+            if not raw_text:
+                # Fallback para ítems de lista con texto plano (sin estructura interna)
+                raw_text = (await element.inner_text() or "").strip()
+
+            text = raw_text.lower().replace("\n", " ").strip()
+            text_normalized = (
+                unicodedata.normalize("NFKD", text)
+                .encode("ascii", "ignore")
+                .decode("ascii")
+            )
 
             if "cant. ambientes" in text or "cant ambientes" in text:
                 match = re.search(r"(\d+)", text)
@@ -275,16 +293,16 @@ class ArgenPropScraper(BaseScraper):
                 if match:
                     specs["bathrooms"] = match.group(1)
                     continue
-            if "antiguedad" in text:
+            if "antiguedad" in text_normalized:
                 match = re.search(r"(\d+)", text)
                 if match:
                     specs["age"] = match.group(1)
                     continue
-            if "disposición" in text or "disposicion" in text:
+            if "disposicion" in text_normalized:
                 if value_text:
                     specs["disposition"] = value_text.strip()
                     continue
-            if "orientación" in text or "orientacion" in text:
+            if "orientacion" in text_normalized:
                 if value_text:
                     specs["orientation"] = value_text.strip()
                     continue
@@ -299,7 +317,7 @@ class ArgenPropScraper(BaseScraper):
                     specs["rooms"] = match.group(1)
                 elif "monoambiente" in text:
                     specs["rooms"] = "1"
-            if "baño" in text:
+            if "baño" in text or "bano" in text_normalized:
                 match = re.search(r"(\d+)\s*bañ", text)
                 if match:
                     specs["bathrooms"] = match.group(1)
@@ -311,13 +329,13 @@ class ArgenPropScraper(BaseScraper):
                 specs["parking_spaces"] = 1
             if "ascensor" in text:
                 features.has_elevator = True
-            if "balcón" in text:
+            if "balcon" in text_normalized:
                 features.has_balcony = True
             if "terraza" in text or "solarium" in text:
                 features.has_terrace = True
             if "patio" in text:
                 features.has_patio = True
-            if "jardín" in text:
+            if "jardin" in text_normalized:
                 features.has_garden = True
             if "parrilla" in text:
                 features.has_bbq = True
@@ -331,7 +349,7 @@ class ArgenPropScraper(BaseScraper):
                 features.has_air_conditioning = True
             if "gas natural" in text:
                 features.has_gas = True
-            if "calefacción" in text:
+            if "calefaccion" in text_normalized:
                 features.has_heating = True
             if "sum" in text or "quincho" in text:
                 features.has_sum = True

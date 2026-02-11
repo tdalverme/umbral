@@ -14,7 +14,8 @@ import structlog
 from playwright.async_api import async_playwright, Browser, Page, BrowserContext
 
 from umbral.config import get_settings
-from umbral.models import RawListing
+from umbral.models import RawListing, ListingFeatures
+from umbral.scrapers.amenities_detector import KeywordAmenitiesDetector
 
 logger = structlog.get_logger()
 
@@ -72,6 +73,7 @@ class BaseScraper(ABC):
         self._playwright = None
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
+        self._amenities_detector = KeywordAmenitiesDetector()
 
     async def __aenter__(self):
         """Context manager entry: inicializa el browser."""
@@ -366,3 +368,27 @@ class BaseScraper(ABC):
                     page=page_num,
                     listings=listing_count,
                 )
+
+    def enrich_features_from_text(
+        self,
+        features: ListingFeatures,
+        title: str,
+        description: str,
+    ) -> tuple[ListingFeatures, Optional[int]]:
+        """
+        Enriquecer features booleanas usando texto libre.
+
+        Solo activa flags faltantes (nunca pisa True -> False).
+        Devuelve parking inferido opcional para usar como fallback.
+        """
+        text = f"{title or ''}. {description or ''}"
+        detected = self._amenities_detector.detect_features(text)
+        inferred_parking = self._amenities_detector.detect_parking_spaces(text)
+
+        for feature_name, detected_value in detected.items():
+            if not detected_value:
+                continue
+            if hasattr(features, feature_name) and not getattr(features, feature_name):
+                setattr(features, feature_name, True)
+
+        return features, inferred_parking

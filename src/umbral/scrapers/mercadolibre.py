@@ -207,6 +207,14 @@ class MercadoLibreScraper(BaseScraper):
 
             # Features booleanas
             features = await self._extract_features(page, description)
+            features, inferred_parking = self.enrich_features_from_text(
+                features=features,
+                title=title,
+                description=description,
+            )
+            parking_spaces = specs.get("parking", 0)
+            if not parking_spaces and inferred_parking is not None:
+                parking_spaces = inferred_parking
             
             # Coordenadas
             coordinates = await self._extract_coordinates(page)
@@ -234,7 +242,7 @@ class MercadoLibreScraper(BaseScraper):
                 operation_type=self._detect_operation_type(url),
                 images=images,
                 coordinates=coordinates,  # MercadoLibre no expone coordenadas fácilmente
-                parking_spaces=specs.get("parking", 0),
+                parking_spaces=parking_spaces,
                 features=features,
             )
 
