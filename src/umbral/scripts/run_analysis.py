@@ -1,8 +1,8 @@
 """
-Script para analizar propiedades con IA.
+Script para preparar propiedades para matching.
 
 Procesa raw_listings pendientes y genera analyzed_listings
-con scores cualitativos y embeddings.
+normalizados con embedding del texto crudo del scraper.
 
 Uso:
     python -m umbral.scripts.run_analysis
@@ -21,8 +21,8 @@ warnings.filterwarnings("ignore", category=ResourceWarning, message=".*unclosed 
 
 from umbral.config import get_settings
 from umbral.database import RawListingRepository, AnalyzedListingRepository
-from umbral.analysis import ListingAnalyzer, EmbeddingGenerator
-from umbral.models import RawListing, ListingFeatures
+from umbral.analysis import EmbeddingGenerator
+from umbral.models import RawListing, ListingFeatures, AnalyzedListing, PropertyScores, InferredFeatures
 
 # Configurar logging
 structlog.configure(
@@ -48,7 +48,7 @@ logger = structlog.get_logger()
 
 async def run_analysis(limit: int = 100):
     """
-    Analiza listings pendientes con Gemini.
+    Prepara listings pendientes para matching.
 
     Args:
         limit: Máximo de listings a procesar
@@ -56,24 +56,16 @@ async def run_analysis(limit: int = 100):
     settings = get_settings()
     raw_repo = RawListingRepository()
     analyzed_repo = AnalyzedListingRepository()
-    analyzer = ListingAnalyzer()  # Usa settings.llm_provider automáticamente
     embedder = EmbeddingGenerator()
     
-    logger.info(
-        "Usando proveedor LLM",
-        provider=settings.llm_provider,
-        model=settings.groq_model if settings.llm_provider == "groq" else settings.gemini_model,
-    )
-
     stats = {
         "processed": 0,
-        "analyzed": 0,
+        "prepared": 0,
         "embedded": 0,
-        "vibe_embedded": 0,
         "errors": 0,
     }
 
-    logger.info("Iniciando análisis de listings", limit=limit)
+    logger.info("Iniciando preparacion de listings", limit=limit)
 
     # Obtener listings no analizados
     pending = raw_repo.get_unanalyzed(limit=limit)
@@ -111,22 +103,59 @@ async def run_analysis(limit: int = 100):
                 features=ListingFeatures(**raw_data.get("features", {})),
             )
 
-            # Analizar con Gemini
+            # Preparar listing normalizado SIN analisis por LLM
             logger.info(
-                "Analizando listing",
+                "Preparando listing",
                 external_id=raw_listing.external_id,
                 title=raw_listing.title[:50],
             )
 
-            analysis = await analyzer.analyze(raw_listing)
-            stats["analyzed"] += 1
+            try:
+                price_original = float(raw_listing.price.replace(".", "").replace(",", "."))
+            except ValueError:
+                price_original = 0.0
 
-            # Crear AnalyzedListing
-            analyzed_listing = analyzer.create_analyzed_listing(
-                raw_listing=raw_listing,
-                raw_listing_id=raw_data["id"],
-                analysis=analysis,
+            price_usd = AnalyzedListing.calculate_price_usd(
+                price_original,
+                raw_listing.currency,
+                settings.ars_to_usd_rate,
             )
+
+            try:
+                size = float(raw_listing.size_covered or raw_listing.size_total or "0")
+            except ValueError:
+                size = 0.0
+
+            price_per_m2 = AnalyzedListing.calculate_price_per_m2(price_usd, size)
+
+            try:
+                rooms = int(raw_listing.rooms)
+            except ValueError:
+                rooms = 1
+
+            analyzed_listing = AnalyzedListing(
+                raw_listing_id=raw_data["id"],
+                external_id=raw_listing.external_id,
+                currency_original=raw_listing.currency,
+                price_original=price_original,
+                price_usd=price_usd,
+                price_per_m2_usd=price_per_m2,
+                neighborhood=raw_listing.neighborhood,
+                rooms=rooms,
+                scores=PropertyScores(
+                    quietness=0.5,
+                    luminosity=0.5,
+                    connectivity=0.5,
+                    wfh_suitability=0.5,
+                    modernity=0.5,
+                    green_spaces=0.5,
+                ),
+                features=InferredFeatures(),
+                style_tags=[],
+                executive_summary="Resumen personalizado disponible al hacer match.",
+                analysis_version=settings.analysis_version,
+            )
+            stats["prepared"] += 1
 
             # Guardar en DB
             result = analyzed_repo.create(analyzed_listing)
@@ -134,33 +163,23 @@ async def run_analysis(limit: int = 100):
             if result:
                 # Generar embeddings
                 try:
-                    # Embedding completo del listing
+                    # Embedding desde datos crudos del scraper
                     embedding = await embedder.generate_listing_embedding(
                         raw_listing=raw_listing,
-                        analyzed_listing=analyzed_listing,
                     )
                     stats["embedded"] += 1
 
-                    # Vibe embedding (solo executive_summary + style_tags)
-                    vibe_embedding = await embedder.generate_vibe_embedding(
-                        executive_summary=analyzed_listing.executive_summary,
-                        style_tags=analyzed_listing.style_tags,
-                    )
-                    stats["vibe_embedded"] += 1
-
-                    # Guardar ambos en una sola operación
-                    analyzed_repo.update_embeddings(
+                    # Guardar embedding principal
+                    analyzed_repo.update_embedding(
                         listing_id=result["id"],
                         embedding=embedding,
-                        vibe_embedding=vibe_embedding,
                     )
 
                     logger.info(
-                        "Listing analizado y embebido",
+                        "Listing preparado y embebido",
                         external_id=raw_listing.external_id,
-                        quietness=analysis.scores.quietness,
-                        luminosity=analysis.scores.luminosity,
-                        style_tags=analyzed_listing.style_tags[:3],
+                        neighborhood=analyzed_listing.neighborhood,
+                        rooms=analyzed_listing.rooms,
                     )
 
                 except Exception as e:
@@ -181,14 +200,14 @@ async def run_analysis(limit: int = 100):
                 error=str(e),
             )
 
-    logger.info("Análisis completado", **stats)
+    logger.info("Preparacion completada", **stats)
     return stats
 
 
 def main():
     """Entry point del script."""
     parser = argparse.ArgumentParser(
-        description="Analiza propiedades con IA"
+        description="Prepara propiedades para matching"
     )
     parser.add_argument(
         "--limit",

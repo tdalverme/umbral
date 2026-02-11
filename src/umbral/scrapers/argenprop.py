@@ -119,7 +119,7 @@ class ArgenPropScraper(BaseScraper):
             images = await self._extract_images(page)
             coordinates = await self._extract_coordinates(page)
 
-            operation_type = self._detect_operation_type(title, url)
+            operation_type = await self._detect_operation_type(page, title, url)
 
             return RawListing(
                 external_id=external_id,
@@ -197,10 +197,101 @@ class ArgenPropScraper(BaseScraper):
         specs: dict = {}
         features = ListingFeatures()
 
+        # Características principales (property-main-features)
+        main_items = await page.query_selector_all(".property-main-features li")
+        for item in main_items:
+            title_attr = (await item.get_attribute("title") or "").lower()
+            strong = await item.query_selector("p.strong")
+            value_text = (await strong.text_content() or "").lower() if strong else ""
+            combined = f"{title_attr} {value_text}".replace("\n", " ").strip()
+
+            if "sup. cubierta" in combined:
+                match = re.search(r"(\d+)", combined)
+                if match:
+                    specs["size_covered"] = match.group(1)
+                    continue
+            if "antiguedad" in combined:
+                if "a estrenar" in combined:
+                    specs["age"] = "0"
+                    continue
+                match = re.search(r"(\d+)", combined)
+                if match:
+                    specs["age"] = match.group(1)
+                    continue
+            if "bañ" in combined:
+                match = re.search(r"(\d+)", combined)
+                if match:
+                    specs["bathrooms"] = match.group(1)
+                    continue
+            if "ambiente" in combined:
+                match = re.search(r"(\d+)", combined)
+                if match:
+                    specs["rooms"] = match.group(1)
+                    continue
+            if "disposici" in combined:
+                if value_text:
+                    specs["disposition"] = value_text.strip()
+                    continue
+            if "orientaci" in combined:
+                if value_text:
+                    specs["orientation"] = value_text.strip()
+                    continue
+
+        # Superficie (section-superficie)
+        surface_items = await page.query_selector_all("#section-superficie li")
+        for item in surface_items:
+            label = await item.query_selector("p")
+            strong = await item.query_selector("strong")
+            label_text = (await label.text_content() or "").lower() if label else ""
+            value_text = (await strong.text_content() or "").lower() if strong else ""
+            combined = f"{label_text} {value_text}".replace("\n", " ").strip()
+
+            if "sup. cubierta" in combined and "size_covered" not in specs:
+                match = re.search(r"(\d+)", combined)
+                if match:
+                    specs["size_covered"] = match.group(1)
+            if "sup. total" in combined and "size_total" not in specs:
+                match = re.search(r"(\d+)", combined)
+                if match:
+                    specs["size_total"] = match.group(1)
+
         elements = await page.query_selector_all(".property-features li")
         for element in elements:
-            text = (await element.text_content() or "").lower()
+            label = (await element.query_selector("p") or await element.query_selector("span"))
+            strong = await element.query_selector("strong")
+            label_text = (await label.text_content() or "") if label else ""
+            value_text = (await strong.text_content() or "") if strong else ""
+
+            text = f"{label_text} {value_text}".lower()
             text = text.replace("\n", " ").strip()
+
+            if "cant. ambientes" in text or "cant ambientes" in text:
+                match = re.search(r"(\d+)", text)
+                if match:
+                    specs["rooms"] = match.group(1)
+                    continue
+            if "cant. baños" in text or "cant ban" in text:
+                match = re.search(r"(\d+)", text)
+                if match:
+                    specs["bathrooms"] = match.group(1)
+                    continue
+            if "antiguedad" in text:
+                match = re.search(r"(\d+)", text)
+                if match:
+                    specs["age"] = match.group(1)
+                    continue
+            if "disposición" in text or "disposicion" in text:
+                if value_text:
+                    specs["disposition"] = value_text.strip()
+                    continue
+            if "orientación" in text or "orientacion" in text:
+                if value_text:
+                    specs["orientation"] = value_text.strip()
+                    continue
+            if "expensas" in text:
+                if value_text:
+                    specs["maintenance_fee"] = value_text.strip()
+                    continue
 
             if "ambiente" in text:
                 match = re.search(r"(\d+)\s*amb", text)
@@ -272,6 +363,21 @@ class ArgenPropScraper(BaseScraper):
                         break
             if images:
                 break
+        if not images:
+            elements = await page.query_selector_all("[data-open-gallery][style]")
+            for element in elements:
+                style = await element.get_attribute("style") or ""
+                matches = re.findall(r"url\((https?://[^)]+)\)", style)
+                for match in matches:
+                    clean = match.split("?")[0]
+                    if clean not in images:
+                        images.append(clean)
+                if images:
+                    break
+        if not images:
+            og_image = await page.get_attribute("meta[property='og:image']", "content")
+            if og_image:
+                images.append(og_image)
         return images
 
     async def _extract_coordinates(self, page: Page) -> Optional[dict]:
@@ -287,10 +393,34 @@ class ArgenPropScraper(BaseScraper):
                 return None
         return None
 
-    def _detect_operation_type(self, title: str, url: str) -> str:
-        title_lower = title.lower()
-        if "venta" in title_lower or "/venta/" in url:
+    async def _detect_operation_type(self, page: Page, title: str, url: str) -> str:
+        title_lower = (title or "").lower()
+        url_lower = (url or "").lower()
+
+        if "venta" in title_lower or "/venta/" in url_lower or "-en-venta-" in url_lower:
             return "venta"
-        if "alquiler" in title_lower or "/alquiler/" in url:
+        if "alquiler" in title_lower or "/alquiler/" in url_lower or "-en-alquiler-" in url_lower:
             return "alquiler"
+
+        og_title = await page.get_attribute("meta[property='og:title']", "content")
+        og_title_lower = (og_title or "").lower()
+        if "venta" in og_title_lower:
+            return "venta"
+        if "alquiler" in og_title_lower:
+            return "alquiler"
+
+        page_title = await page.title()
+        page_title_lower = (page_title or "").lower()
+        if "venta" in page_title_lower:
+            return "venta"
+        if "alquiler" in page_title_lower:
+            return "alquiler"
+
+        titlebar = await self._safe_get_text(page, ".titlebar__title", default="")
+        titlebar_lower = titlebar.lower()
+        if "venta" in titlebar_lower:
+            return "venta"
+        if "alquiler" in titlebar_lower:
+            return "alquiler"
+
         return "alquiler"

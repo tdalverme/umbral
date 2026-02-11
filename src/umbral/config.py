@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     similarity_threshold: float = Field(
         0.85, ge=0.0, le=1.0, description="Umbral de similitud para notificaciones"
     )
+    personalized_analysis_threshold: float = Field(
+        0.85,
+        ge=0.0,
+        le=1.0,
+        description="Umbral de similitud para ejecutar analisis LLM personalizado",
+    )
 
     # Exchange Rate
     ars_to_usd_rate: float = Field(1000.0, description="Tipo de cambio ARS/USD")

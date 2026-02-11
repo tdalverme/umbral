@@ -3,8 +3,8 @@ Motor de matching entre usuarios y propiedades.
 
 Implementa:
 - Filtro Hard: Descarta propiedades fuera de criterios absolutos
-- Filtro Soft: Calcula similitud semántica y pondera scores
-- Ranking: Ordena por relevancia combinada
+- Filtro Vectorial: Calcula similitud semántica usuario-listing
+- Personalización LLM: Genera análisis por usuario solo sobre umbral
 """
 
 from dataclasses import dataclass
@@ -19,7 +19,7 @@ from umbral.database import (
     NotificationRepository,
 )
 from umbral.models import UserPreferences
-from umbral.analysis import EmbeddingGenerator
+from umbral.analysis import EmbeddingGenerator, PersonalizedMatchAnalyzer
 
 logger = structlog.get_logger()
 
@@ -31,22 +31,22 @@ class MatchResult:
     listing_id: str
     listing_data: dict
     similarity_score: float  # 0.0 a 1.0
-    weighted_score: float  # Score ponderado con preferencias
-    final_score: float  # Score combinado final
+    final_score: float  # Score final (actualmente igual a similarity_score)
+    personalized_analysis: Optional[str] = None
 
 
 class MatchingEngine:
     """
-    Motor de matching que combina filtros hard y soft.
+    Motor de matching con hard filters + similitud vectorial.
 
     Flujo:
     1. Obtener usuarios activos con onboarding completado
     2. Para cada usuario:
        a. Aplicar filtros hard (SQL) para pre-filtrar
        b. Calcular similitud semántica con embeddings
-       c. Ponderar scores cualitativos según preferencias
-       d. Combinar en score final
-       e. Notificar si score >= threshold
+       c. Filtrar por threshold
+       d. Generar análisis personalizado con LLM para los matches finales
+       e. Notificar
     """
 
     def __init__(self):
@@ -55,6 +55,7 @@ class MatchingEngine:
         self.listing_repo = AnalyzedListingRepository()
         self.notification_repo = NotificationRepository()
         self.embedding_generator = EmbeddingGenerator()
+        self.personalized_analyzer = PersonalizedMatchAnalyzer()
 
     async def find_matches_for_user(
         self,
@@ -76,7 +77,6 @@ class MatchingEngine:
             Lista de MatchResult ordenados por score
         """
         hard = preferences.hard_filters
-        soft = preferences.soft_preferences
 
         # Paso 1: Filtros Hard (via SQL)
         listings = self.listing_repo.search_by_filters(
@@ -133,18 +133,14 @@ class MatchingEngine:
                 listing, preference_vector
             )
 
-            # Score ponderado por preferencias
-            weighted = self._calculate_weighted_score(listing, soft)
-
-            # Score final (60% similitud + 40% weighted)
-            final = (similarity * 0.6) + (weighted * 0.4)
+            # Score final vectorial
+            final = similarity
 
             matches.append(
                 MatchResult(
                     listing_id=listing["id"],
                     listing_data=listing,
                     similarity_score=similarity,
-                    weighted_score=weighted,
                     final_score=final,
                 )
             )
@@ -155,6 +151,16 @@ class MatchingEngine:
         # Filtrar por threshold
         threshold = self.settings.similarity_threshold
         matches = [m for m in matches if m.final_score >= threshold]
+
+        # Paso 4: Analisis LLM personalizado para los mejores candidatos
+        personalized_threshold = self.settings.personalized_analysis_threshold
+        for match in matches:
+            if match.similarity_score >= personalized_threshold:
+                match.personalized_analysis = await self.personalized_analyzer.generate(
+                    preferences=preferences,
+                    listing_data=match.listing_data,
+                    similarity_score=match.similarity_score,
+                )
 
         logger.info(
             "Matches encontrados",
@@ -172,17 +178,14 @@ class MatchingEngine:
     ) -> float:
         """
         Calcula similitud semántica entre preferencias del usuario y el listing.
-        
-        Usa vibe_embedding (executive_summary + style_tags) para comparar
-        contra la descripción del hogar ideal del usuario.
-        
-        Esto captura el "vibe match" sin mezclar datos estructurales
-        que ya se filtran con hard filters.
+
+        Compara el embedding de preferencias del usuario contra el
+        embedding del texto crudo del listing.
         """
         if not preference_vector:
             return 0.5  # Sin vector, asumimos match medio
 
-        # Preferir embedding_vector, fallback a vibe_embedding
+        # Matching vectorial contra embedding del texto crudo del listing
         listing_vector = listing.get("embedding_vector") or listing.get("vibe_embedding")
         if not listing_vector:
             return 0.5
@@ -209,66 +212,6 @@ class MatchingEngine:
         except Exception as e:
             logger.warning(f"Error calculando similitud: {e}")
             return 0.5
-
-    def _calculate_weighted_score(
-        self,
-        listing: dict,
-        soft_prefs,
-    ) -> float:
-        """
-        Calcula score ponderado según preferencias cualitativas.
-
-        Pondera los scores del listing según los weights del usuario.
-        """
-        scores = listing.get("scores", {})
-        
-        # Helper para convertir a float de forma segura
-        def to_float(val, default=0.5):
-            if val is None:
-                return default
-            try:
-                return float(val)
-            except (ValueError, TypeError):
-                return default
-
-        # Obtener weights del usuario (pueden venir de dict o de objeto)
-        if hasattr(soft_prefs, 'weight_quietness'):
-            weights = {
-                'quietness': to_float(soft_prefs.weight_quietness),
-                'luminosity': to_float(soft_prefs.weight_luminosity),
-                'connectivity': to_float(soft_prefs.weight_connectivity),
-                'wfh_suitability': to_float(soft_prefs.weight_wfh_suitability),
-                'modernity': to_float(soft_prefs.weight_modernity),
-                'green_spaces': to_float(soft_prefs.weight_green_spaces),
-            }
-        else:
-            # Es un dict
-            weights = {
-                'quietness': to_float(soft_prefs.get('weight_quietness')),
-                'luminosity': to_float(soft_prefs.get('weight_luminosity')),
-                'connectivity': to_float(soft_prefs.get('weight_connectivity')),
-                'wfh_suitability': to_float(soft_prefs.get('weight_wfh_suitability')),
-                'modernity': to_float(soft_prefs.get('weight_modernity')),
-                'green_spaces': to_float(soft_prefs.get('weight_green_spaces')),
-            }
-
-        # Mapeo de weights a scores
-        score_weights = [
-            (to_float(scores.get("quietness")), weights['quietness']),
-            (to_float(scores.get("luminosity")), weights['luminosity']),
-            (to_float(scores.get("connectivity")), weights['connectivity']),
-            (to_float(scores.get("wfh_suitability")), weights['wfh_suitability']),
-            (to_float(scores.get("modernity")), weights['modernity']),
-            (to_float(scores.get("green_spaces")), weights['green_spaces']),
-        ]
-
-        # Calcular weighted average
-        total_weight = sum(w for _, w in score_weights)
-        if total_weight == 0:
-            return 0.5
-
-        weighted_sum = sum(s * w for s, w in score_weights)
-        return weighted_sum / total_weight
 
     async def process_new_listings(
         self,
@@ -334,7 +277,7 @@ class MatchingEngine:
                     user_id=user["id"],
                     preferences=preferences,
                     preference_vector=preference_vector,
-                    limit=5,  # Máximo 5 notificaciones por run
+                    limit=3,  # Máximo 3 notificaciones por run
                 )
 
                 stats["users_processed"] += 1
@@ -347,6 +290,7 @@ class MatchingEngine:
                             telegram_id=user["telegram_id"],
                             listing_data=match.listing_data,
                             similarity_score=match.final_score,
+                            personalized_analysis=match.personalized_analysis,
                         )
 
                         if success:

@@ -184,6 +184,7 @@ class UmbralBot:
         telegram_id: int,
         listing_data: dict,
         similarity_score: float,
+        personalized_analysis: Optional[str] = None,
     ) -> bool:
         """
         Envía una notificación de propiedad a un usuario.
@@ -192,6 +193,7 @@ class UmbralBot:
             telegram_id: ID de Telegram del usuario
             listing_data: Datos del listing (analyzed + raw)
             similarity_score: Score de match (0.0 a 1.0)
+            personalized_analysis: Texto personalizado generado con LLM (opcional)
 
         Returns:
             True si se envió correctamente
@@ -255,12 +257,16 @@ class UmbralBot:
                 tags = [tags]
             tags_text = " • ".join([f"#{t}" for t in tags[:3]]) if tags else ""
 
+            analysis_text = personalized_analysis or analyzed.get(
+                "executive_summary", ""
+            )
+
             message = (
                 f"🏠 *Nueva propiedad encontrada* {emojis_text}\n\n"
                 f"📍 *{analyzed.get('neighborhood', 'CABA')}* • "
                 f"{analyzed.get('rooms', '?')} amb.\n"
                 f"💰 {price_text}\n\n"
-                f"📝 {analyzed.get('executive_summary', '')}\n\n"
+                f"📝 {analysis_text}\n\n"
                 f"{tags_text}\n\n"
                 f"🎯 Match: *{match_pct}%*"
             )
