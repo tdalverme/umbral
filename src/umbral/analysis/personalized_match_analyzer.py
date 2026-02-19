@@ -36,11 +36,11 @@ Reglas:
 - No usar listas, solo 2-3 frases cortas.
 - No ignores "red flags" aunque el match sea alto.
 - Responder SOLO en JSON válido con esta estructura exacta:
-{
+{{
   "why_match": "2-3 frases cortas sobre por qué matchea con este usuario",
   "warnings": "1 frase corta con trade-off o red flag (opcional, string vacío si no hay)",
   "conclusion": "1 frase final breve y accionable"
-}
+}}
 
 [USER]
 - Hogar ideal: {ideal_description}

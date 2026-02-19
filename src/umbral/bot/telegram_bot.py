@@ -4,6 +4,7 @@ Bot principal de Telegram para UMBRAL.
 Orquesta los handlers y provee métodos para enviar notificaciones.
 """
 
+import re
 from typing import Optional
 
 import structlog
@@ -179,6 +180,74 @@ class UmbralBot:
         logger.info("Iniciando bot de Telegram...")
         self.application.run_polling(allowed_updates=Update.ALL_TYPES)
 
+    def _normalize_street_name(self, street_name: str) -> str:
+        """Normaliza el nombre de calle para mostrarlo más limpio."""
+        if not street_name:
+            return ""
+
+        common_words = {"de", "y", "el", "la", "entre", "del", "los", "las"}
+        words = street_name.split()
+        normalized_words = [
+            word.capitalize() if word.lower() not in common_words else word.lower()
+            for word in words
+        ]
+        return " ".join(normalized_words)
+
+    def _parse_street(self, street_text: str) -> tuple[Optional[str], Optional[int]]:
+        """Extrae calle y altura aproximada desde location."""
+        if not street_text:
+            return None, None
+
+        match = re.search(
+            r"^(?P<street>[\w.ÁÉÍÓÚáéíóúñÑ\s]+?)\s+(?:al\s+)?(?P<number>\d{3,5})\b",
+            street_text,
+            re.IGNORECASE,
+        )
+        if not match:
+            return None, None
+
+        try:
+            street = self._normalize_street_name(match.group("street").strip())
+            number = int(match.group("number"))
+            number = (number // 100) * 100
+            return street, number
+        except Exception as e:
+            logger.warning("Error parseando calle", error=str(e), location=street_text)
+            return None, None
+
+    def _format_display_location(self, listing_data: dict) -> str:
+        """Devuelve location amigable para notificaciones."""
+        location = (listing_data.get("location") or "").strip()
+        neighborhood = listing_data.get("neighborhood", "CABA")
+
+        street, number = self._parse_street(location)
+        if street and number:
+            return f"{street} {number}"
+        if location:
+            return location
+        return neighborhood
+
+    def _parse_amount(self, value) -> Optional[float]:
+        """Parsea montos aunque vengan con texto (ej: '+ $280.000 expensas')."""
+        if value is None:
+            return None
+
+        text = str(value).strip()
+        if not text:
+            return None
+
+        match = re.search(r"(\d[\d\.,]*)", text)
+        if not match:
+            return None
+
+        num_text = match.group(1)
+        # Formato AR habitual: miles con punto, decimal con coma
+        normalized = num_text.replace(".", "").replace(",", ".")
+        try:
+            return float(normalized)
+        except ValueError:
+            return None
+
     async def send_listing_notification(
         self,
         telegram_id: int,
@@ -204,20 +273,13 @@ class UmbralBot:
         try:
             # Construir mensaje
             raw = listing_data
+            display_location = self._format_display_location(raw)
 
             # Formatear precio
             price_raw = raw.get("price", 0)
             currency = raw.get("currency", "USD")
-            try:
-                price_raw = float(str(price_raw).replace(".", "").replace(",", "."))
-            except (ValueError, TypeError):
-                price_raw = 0
-
-            # Convertir a float de forma segura
-            try:
-                price_raw = float(price_raw) if price_raw else 0
-            except (ValueError, TypeError):
-                price_raw = 0
+            parsed_price = self._parse_amount(price_raw)
+            price_raw = parsed_price if parsed_price is not None else 0
 
             if currency == "ARS" and price_raw > 0:
                 price_text = f"${price_raw:,.0f} ARS"
@@ -228,10 +290,10 @@ class UmbralBot:
             expenses_text = ""
             maintenance_fee = raw.get("maintenance_fee")
             if maintenance_fee:
-                try:
-                    exp_value = float(str(maintenance_fee).replace(".", "").replace(",", "."))
+                exp_value = self._parse_amount(maintenance_fee)
+                if exp_value is not None:
                     expenses_text = f" • Exp. ${exp_value:,.0f}"
-                except (ValueError, TypeError):
+                else:
                     expenses_text = f" • Exp. {maintenance_fee}"
 
             # m2
@@ -268,7 +330,7 @@ class UmbralBot:
 
             message = (
                 f"🎯 ¡Oportunidad en *{raw.get('neighborhood', 'CABA')}*! — Match: *{match_pct}%*\n\n"
-                f"📍 *{raw.get('location') or raw.get('neighborhood', 'CABA')}* • "
+                f"📍 *{display_location}* • "
                 f"{raw.get('rooms', '?')} amb{m2_text}\n"
                 f"💰 *{price_text}*{expenses_text}\n\n"
                 f"💡 *¿Por qué es para vos?*\n"
