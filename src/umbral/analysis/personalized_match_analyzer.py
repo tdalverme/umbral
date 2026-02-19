@@ -4,6 +4,8 @@ Generador de análisis personalizado por usuario + propiedad.
 Se ejecuta solo en etapa de matching para listings con alta similitud.
 """
 
+import json
+from dataclasses import dataclass
 import structlog
 
 from umbral.analysis.llm_providers import get_llm_provider, BaseLLMProvider
@@ -30,10 +32,15 @@ Reglas:
 - Evitar frases marketineras.
 - Evitar modismos excesivos.
 - Cerrar con una conclusión breve.
-- Devolver SOLO el texto final, sin markdown ni JSON.
 - Si falta un must-have, decirlo con tacto.
 - No usar listas, solo 2-3 frases cortas.
 - No ignores "red flags" aunque el match sea alto.
+- Responder SOLO en JSON válido con esta estructura exacta:
+{
+  "why_match": "2-3 frases cortas sobre por qué matchea con este usuario",
+  "warnings": "1 frase corta con trade-off o red flag (opcional, string vacío si no hay)",
+  "conclusion": "1 frase final breve y accionable"
+}
 
 [USER]
 - Hogar ideal: {ideal_description}
@@ -52,6 +59,15 @@ Reglas:
 - Similitud vectorial: {similarity}
 
 Escribí un mensaje personalizado para esta persona."""
+
+
+@dataclass
+class PersonalizedAnalysis:
+    """Resultado estructurado de análisis personalizado."""
+
+    why_match: str
+    warnings: str
+    conclusion: str
 
 
 class PersonalizedMatchAnalyzer:
@@ -128,8 +144,8 @@ class PersonalizedMatchAnalyzer:
         preferences: UserPreferences,
         listing_data: dict,
         similarity_score: float,
-    ) -> str:
-        """Genera un texto personalizado para notificación."""
+    ) -> PersonalizedAnalysis:
+        """Genera un analisis estructurado para notificación."""
         try:
             user_context = self._build_user_context(preferences)
             listing_context = self._build_listing_context(listing_data)
@@ -156,10 +172,40 @@ class PersonalizedMatchAnalyzer:
             )
 
             text = (response.text or "").strip()
+            if text.startswith("```"):
+                parts = text.split("```")
+                if len(parts) >= 2:
+                    text = parts[1].strip()
+                    if text.startswith("json"):
+                        text = text[4:].strip()
+
             if not text:
-                return "Matchea bien con tu perfil general, pero revisaria detalles finos en la publicacion."
-            return text
+                return PersonalizedAnalysis(
+                    why_match="Está alineada con varias de tus prioridades principales.",
+                    warnings="",
+                    conclusion="Vale revisarla en detalle para validar encaje final.",
+                )
+
+            data = json.loads(text)
+            why_match = str(data.get("why_match", "")).strip()
+            warnings = str(data.get("warnings", "")).strip()
+            conclusion = str(data.get("conclusion", "")).strip()
+
+            if not why_match:
+                why_match = "Está alineada con varias de tus prioridades principales."
+            if not conclusion:
+                conclusion = "Vale revisarla en detalle para validar encaje final."
+
+            return PersonalizedAnalysis(
+                why_match=why_match[:420],
+                warnings=warnings[:220],
+                conclusion=conclusion[:200],
+            )
 
         except Exception as e:
             logger.warning("Error generando analisis personalizado", error=str(e))
-            return "Tiene buena afinidad con lo que buscas; vale la pena abrir la publicacion y validar los detalles clave."
+            return PersonalizedAnalysis(
+                why_match="Tiene buena afinidad con lo que buscas.",
+                warnings="",
+                conclusion="Vale la pena abrir la publicación y validar los detalles clave.",
+            )

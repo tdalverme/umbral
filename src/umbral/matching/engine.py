@@ -19,7 +19,11 @@ from umbral.database import (
     NotificationRepository,
 )
 from umbral.models import UserPreferences
-from umbral.analysis import EmbeddingGenerator, PersonalizedMatchAnalyzer
+from umbral.analysis import (
+    EmbeddingGenerator,
+    PersonalizedMatchAnalyzer,
+)
+from umbral.analysis.personalized_match_analyzer import PersonalizedAnalysis
 
 logger = structlog.get_logger()
 
@@ -32,7 +36,7 @@ class MatchResult:
     listing_data: dict
     similarity_score: float  # 0.0 a 1.0
     final_score: float  # Score final (actualmente igual a similarity_score)
-    personalized_analysis: Optional[str] = None
+    personalized_analysis: Optional[PersonalizedAnalysis] = None
 
 
 class MatchingEngine:
@@ -312,7 +316,7 @@ class MatchingEngine:
                             telegram_id=user["telegram_id"],
                             listing_data=match.listing_data,
                             similarity_score=match.final_score,
-                            personalized_analysis=match.personalized_analysis or "No funcionó",
+                            personalized_analysis=match.personalized_analysis,
                         )
 
                         if success:

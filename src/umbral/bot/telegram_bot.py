@@ -184,7 +184,7 @@ class UmbralBot:
         telegram_id: int,
         listing_data: dict,
         similarity_score: float,
-        personalized_analysis: Optional[str] = None,
+        personalized_analysis: Optional[object] = None,
     ) -> bool:
         """
         Envía una notificación de propiedad a un usuario.
@@ -193,7 +193,7 @@ class UmbralBot:
             telegram_id: ID de Telegram del usuario
             listing_data: Datos del raw listing
             similarity_score: Score de match (0.0 a 1.0)
-            personalized_analysis: Texto personalizado generado con LLM (opcional)
+            personalized_analysis: Analisis personalizado generado con LLM (opcional)
 
         Returns:
             True si se envió correctamente
@@ -224,51 +224,58 @@ class UmbralBot:
             else:
                 price_text = f"${price_raw:,.0f} USD"
 
+            # Expensas (si existen)
+            expenses_text = ""
+            maintenance_fee = raw.get("maintenance_fee")
+            if maintenance_fee:
+                try:
+                    exp_value = float(str(maintenance_fee).replace(".", "").replace(",", "."))
+                    expenses_text = f" • Exp. ${exp_value:,.0f}"
+                except (ValueError, TypeError):
+                    expenses_text = f" • Exp. {maintenance_fee}"
+
+            # m2
+            m2 = raw.get("size_covered") or raw.get("size_total")
+            m2_text = f" • {m2}m2" if m2 else ""
+
             # Match percentage
             match_pct = int(similarity_score * 100)
 
-            # Emojis por score
-            scores = {}
-            score_emojis = []
-            
-            def get_score(key):
-                val = scores.get(key, 0)
-                try:
-                    return float(val) if val else 0
-                except (ValueError, TypeError):
-                    return 0
-            
-            if get_score("luminosity") >= 0.7:
-                score_emojis.append("☀️")
-            if get_score("quietness") >= 0.7:
-                score_emojis.append("🤫")
-            if get_score("connectivity") >= 0.7:
-                score_emojis.append("🚇")
-            if get_score("wfh_suitability") >= 0.7:
-                score_emojis.append("💻")
-            if get_score("green_spaces") >= 0.7:
-                score_emojis.append("🌳")
+            # Parsear analisis estructurado
+            why_match = ""
+            warnings_text = ""
+            conclusion = ""
+            if personalized_analysis:
+                if hasattr(personalized_analysis, "why_match"):
+                    why_match = str(getattr(personalized_analysis, "why_match", "")).strip()
+                    warnings_text = str(getattr(personalized_analysis, "warnings", "")).strip()
+                    conclusion = str(getattr(personalized_analysis, "conclusion", "")).strip()
+                elif isinstance(personalized_analysis, dict):
+                    why_match = str(personalized_analysis.get("why_match", "")).strip()
+                    warnings_text = str(personalized_analysis.get("warnings", "")).strip()
+                    conclusion = str(personalized_analysis.get("conclusion", "")).strip()
+                else:
+                    why_match = str(personalized_analysis).strip()
 
-            emojis_text = " ".join(score_emojis) if score_emojis else ""
+            if not why_match:
+                why_match = "Está alineada con varias de tus prioridades y merece una revisión más fina."
+            if not conclusion:
+                conclusion = "Buena opción para evaluar si te cierra en detalle."
 
-            # Style tags
-            tags = []
-            if isinstance(tags, str):
-                tags = [tags]
-            tags_text = " • ".join([f"#{t}" for t in tags[:3]]) if tags else ""
-
-            analysis_text = personalized_analysis or ""
-            if not analysis_text:
-                analysis_text = "Propiedad compatible con tu perfil. Revisa la publicacion para confirmar detalles."
+            warning_block = ""
+            if warnings_text:
+                warning_block = f"\n⚠️ *A tener en cuenta*\n{warnings_text}\n"
 
             message = (
-                f"🏠 *Nueva propiedad encontrada* {emojis_text}\n\n"
-                f"📍 *{raw.get('neighborhood', 'CABA')}* • "
-                f"{raw.get('rooms', '?')} amb.\n"
-                f"💰 {price_text}\n\n"
-                f"📝 {analysis_text}\n\n"
-                f"{tags_text}\n\n"
-                f"🎯 Match: *{match_pct}%*"
+                f"🎯 ¡Oportunidad en *{raw.get('neighborhood', 'CABA')}*! — Match: *{match_pct}%*\n\n"
+                f"📍 *{raw.get('location') or raw.get('neighborhood', 'CABA')}* • "
+                f"{raw.get('rooms', '?')} amb{m2_text}\n"
+                f"💰 *{price_text}*{expenses_text}\n\n"
+                f"💡 *¿Por qué es para vos?*\n"
+                f"{why_match}\n"
+                f"{warning_block}"
+                f"—\n"
+                f"_{conclusion}_"
             )
 
             # Botones
