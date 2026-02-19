@@ -74,10 +74,10 @@ class Settings(BaseSettings):
 
     # Matching
     similarity_threshold: float = Field(
-        0.85, ge=0.0, le=1.0, description="Umbral de similitud para notificaciones"
+        0.75, ge=0.0, le=1.0, description="Umbral de similitud para notificaciones"
     )
     personalized_analysis_threshold: float = Field(
-        0.85,
+        0.75,
         ge=0.0,
         le=1.0,
         description="Umbral de similitud para ejecutar analisis LLM personalizado",

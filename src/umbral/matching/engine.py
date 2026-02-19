@@ -312,7 +312,7 @@ class MatchingEngine:
                             telegram_id=user["telegram_id"],
                             listing_data=match.listing_data,
                             similarity_score=match.final_score,
-                            personalized_analysis=match.personalized_analysis,
+                            personalized_analysis=match.personalized_analysis or "No funcionó",
                         )
 
                         if success:
