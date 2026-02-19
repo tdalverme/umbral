@@ -846,10 +846,14 @@ class FeedbackHandler:
         self.feedback_repo.create(feedback)
         self.user_repo.increment_feedback_count(telegram_id, is_like=True)
 
-        await query.edit_message_reply_markup(
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("✅ Te interesa", callback_data="noop")]
+        keyboard = [[InlineKeyboardButton("✅ Te interesa", callback_data="noop")]]
+        if raw_listing and raw_listing.get("url"):
+            keyboard.append([
+                InlineKeyboardButton("🔗 Ver publicación", url=raw_listing["url"])
             ])
+
+        await query.edit_message_reply_markup(
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
         logger.info("Feedback like registrado", telegram_id=telegram_id, listing_id=listing_id)
@@ -887,10 +891,14 @@ class FeedbackHandler:
         self.feedback_repo.create(feedback)
         self.user_repo.increment_feedback_count(telegram_id, is_like=False)
 
-        await query.edit_message_reply_markup(
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("❌ No te interesa", callback_data="noop")]
+        keyboard = [[InlineKeyboardButton("❌ No te interesa", callback_data="noop")]]
+        if raw_listing and raw_listing.get("url"):
+            keyboard.append([
+                InlineKeyboardButton("🔗 Ver publicación", url=raw_listing["url"])
             ])
+
+        await query.edit_message_reply_markup(
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
         logger.info("Feedback dislike registrado", telegram_id=telegram_id, listing_id=listing_id)
