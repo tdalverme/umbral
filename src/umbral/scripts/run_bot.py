@@ -6,6 +6,7 @@ Uso:
 """
 
 import asyncio
+import logging
 import os
 import sys
 
@@ -17,6 +18,13 @@ from umbral.bot import UmbralBot
 from umbral.config import get_settings
 
 # Configurar logging
+settings = get_settings()
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(message)s",
+    force=True,
+)
+
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,

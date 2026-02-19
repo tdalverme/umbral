@@ -9,6 +9,7 @@ Uso:
 """
 
 import asyncio
+import logging
 import sys
 import warnings
 
@@ -18,8 +19,16 @@ import structlog
 warnings.filterwarnings("ignore", category=ResourceWarning, message=".*unclosed transport.*")
 
 from umbral.matching import MatchingEngine
+from umbral.config import get_settings
 
 # Configurar logging
+settings = get_settings()
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(message)s",
+    force=True,
+)
+
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,

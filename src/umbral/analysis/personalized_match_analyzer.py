@@ -100,29 +100,27 @@ class PersonalizedMatchAnalyzer:
         }
 
     def _build_listing_context(self, listing_data: dict) -> dict:
-        raw = listing_data.get("raw_listings", {}) or {}
-        features = raw.get("features", {}) or {}
+        features = listing_data.get("features", {}) or {}
 
         feature_items = []
         for key, value in features.items():
             if value:
                 feature_items.append(key)
 
-        currency = listing_data.get("currency_original", "USD")
-        price_original = listing_data.get("price_original")
-        price_usd = listing_data.get("price_usd")
-        if currency == "ARS" and price_original:
-            price = f"ARS {price_original} (~USD {price_usd})"
+        currency = listing_data.get("currency", "USD")
+        price_raw = listing_data.get("price")
+        if currency == "ARS" and price_raw:
+            price = f"ARS {price_raw}"
         else:
-            price = f"USD {price_usd}"
+            price = f"USD {price_raw}"
 
         return {
-            "title": raw.get("title", ""),
+            "title": listing_data.get("title", ""),
             "listing_neighborhood": listing_data.get("neighborhood", ""),
             "price": price,
             "listing_rooms": listing_data.get("rooms", ""),
             "features": ", ".join(feature_items) if feature_items else "ninguna",
-            "description": (raw.get("description", "") or "")[:1400],
+            "description": (listing_data.get("description", "") or "")[:1400],
         }
 
     async def generate(

@@ -108,36 +108,51 @@ class RawListingRepository(BaseRepository):
         )
         return response.data[0] if response.data else None
 
-    def get_unanalyzed(self, limit: int = 100) -> list[dict]:
+    def get_unembedded(self, limit: int = 100) -> list[dict]:
         """
-        Obtiene listings que no han sido analizados aún.
+        Obtiene listings que no tienen embedding aún.
 
         Returns:
-            Lista de raw listings sin entrada en analyzed_listings
+            Lista de raw listings pendientes de embedding
         """
-        # Primero obtener IDs de listings ya analizados
-        analyzed_response = (
-            self.client.table("analyzed_listings")
-            .select("raw_listing_id")
-            .execute()
-        )
-        analyzed_ids = {r["raw_listing_id"] for r in analyzed_response.data}
-        
-        # Obtener raw listings
         response = (
             self.client.table(self.TABLE)
             .select("*")
+            .is_("embedding_vector", "null")
             .order("scraped_at", desc=True)
-            .limit(limit * 2)  # Traer más para compensar los filtrados
+            .limit(limit)
             .execute()
         )
-        
-        # Filtrar los que no están analizados
-        unanalyzed = [r for r in response.data if r["id"] not in analyzed_ids]
-        
-        logger.info(f"Raw listings: {len(response.data)}, Ya analizados: {len(analyzed_ids)}, Pendientes: {len(unanalyzed)}")
-        
-        return unanalyzed[:limit]
+        return response.data
+
+    def update_embedding(self, listing_id: str, embedding: list[float]) -> bool:
+        """Actualiza el embedding del raw listing."""
+        response = (
+            self.client.table(self.TABLE)
+            .update({"embedding_vector": embedding})
+            .eq("id", listing_id)
+            .execute()
+        )
+        return len(response.data) > 0
+
+    def search_by_filters(
+        self,
+        operation_type: Optional[str] = None,
+        neighborhoods: Optional[list[str]] = None,
+        limit: int = 300,
+    ) -> list[dict]:
+        """
+        Busca raw listings por filtros SQL básicos.
+        Los filtros complejos se aplican luego en Python.
+        """
+        query = self.client.table(self.TABLE).select("*")
+        if operation_type:
+            query = query.eq("operation_type", operation_type)
+        if neighborhoods:
+            query = query.in_("neighborhood", neighborhoods)
+
+        response = query.order("scraped_at", desc=True).limit(limit).execute()
+        return response.data
 
     def get_recent(self, limit: int = 50) -> list[dict]:
         """Obtiene los listings más recientes."""
@@ -464,13 +479,13 @@ class FeedbackRepository(BaseRepository):
         data = feedback.to_db_dict()
         response = (
             self.client.table(self.TABLE)
-            .upsert(data, on_conflict="user_id,analyzed_listing_id")
+            .upsert(data, on_conflict="user_id,raw_listing_id")
             .execute()
         )
         logger.info(
             "Feedback registrado",
             user_id=feedback.user_id,
-            listing_id=feedback.analyzed_listing_id,
+            listing_id=feedback.raw_listing_id,
             type=feedback.feedback_type,
         )
         return response.data[0] if response.data else {}
@@ -479,7 +494,7 @@ class FeedbackRepository(BaseRepository):
         """Obtiene todo el feedback de un usuario."""
         response = (
             self.client.table(self.TABLE)
-            .select("*, analyzed_listings(*)")
+            .select("*, raw_listings(*)")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
             .execute()
@@ -490,7 +505,7 @@ class FeedbackRepository(BaseRepository):
         """Obtiene los listings que el usuario marcó como interesantes."""
         response = (
             self.client.table(self.TABLE)
-            .select("*, analyzed_listings(*)")
+            .select("*, raw_listings(*)")
             .eq("user_id", user_id)
             .eq("feedback_type", "like")
             .execute()
@@ -512,7 +527,7 @@ class NotificationRepository(BaseRepository):
         """Registra una notificación enviada."""
         data = {
             "user_id": user_id,
-            "analyzed_listing_id": listing_id,
+            "raw_listing_id": listing_id,
             "similarity_score": similarity_score,
         }
         response = (
@@ -528,7 +543,7 @@ class NotificationRepository(BaseRepository):
             self.client.table(self.TABLE)
             .select("id")
             .eq("user_id", user_id)
-            .eq("analyzed_listing_id", listing_id)
+            .eq("raw_listing_id", listing_id)
             .limit(1)
             .execute()
         )
@@ -540,7 +555,7 @@ class NotificationRepository(BaseRepository):
         """Obtiene el historial de notificaciones de un usuario."""
         response = (
             self.client.table(self.TABLE)
-            .select("*, analyzed_listings(*)")
+            .select("*, raw_listings(*)")
             .eq("user_id", user_id)
             .order("sent_at", desc=True)
             .limit(limit)

@@ -9,6 +9,7 @@ Uso:
 import argparse
 import asyncio
 import json
+import logging
 import sys
 import warnings
 from urllib.parse import urlparse
@@ -20,12 +21,20 @@ from umbral.scrapers import (
     MercadoLibreScraper,
     KeywordAmenitiesDetector,
 )
+from umbral.config import get_settings
 
 # Suprimir warnings ruidosos de asyncio/Playwright en Windows
 warnings.filterwarnings("ignore", category=ResourceWarning)
 warnings.filterwarnings("ignore", message=".*unclosed.*")
 
 # Configurar logging
+settings = get_settings()
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(message)s",
+    force=True,
+)
+
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,

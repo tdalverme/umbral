@@ -88,7 +88,7 @@ class BaseScraper(ABC):
         """Inicializa Playwright y el browser."""
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
-            headless=False,  # Headless para producción
+            headless=True,  # Headless para producción
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--disable-dev-shm-usage",

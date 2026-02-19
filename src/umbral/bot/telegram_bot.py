@@ -191,7 +191,7 @@ class UmbralBot:
 
         Args:
             telegram_id: ID de Telegram del usuario
-            listing_data: Datos del listing (analyzed + raw)
+            listing_data: Datos del raw listing
             similarity_score: Score de match (0.0 a 1.0)
             personalized_analysis: Texto personalizado generado con LLM (opcional)
 
@@ -203,32 +203,32 @@ class UmbralBot:
 
         try:
             # Construir mensaje
-            analyzed = listing_data
-            raw = listing_data.get("raw_listings", {})
+            raw = listing_data
 
             # Formatear precio
-            price = analyzed.get("price_usd", 0)
-            currency = analyzed.get("currency_original", "USD")
-            price_original = analyzed.get("price_original", 0)
+            price_raw = raw.get("price", 0)
+            currency = raw.get("currency", "USD")
+            try:
+                price_raw = float(str(price_raw).replace(".", "").replace(",", "."))
+            except (ValueError, TypeError):
+                price_raw = 0
 
             # Convertir a float de forma segura
             try:
-                price = float(price) if price else 0
-                price_original = float(price_original) if price_original else 0
+                price_raw = float(price_raw) if price_raw else 0
             except (ValueError, TypeError):
-                price = 0
-                price_original = 0
+                price_raw = 0
 
-            if currency == "ARS" and price_original > 0:
-                price_text = f"${price_original:,.0f} ARS (~${price:,.0f} USD)"
+            if currency == "ARS" and price_raw > 0:
+                price_text = f"${price_raw:,.0f} ARS"
             else:
-                price_text = f"${price:,.0f} USD"
+                price_text = f"${price_raw:,.0f} USD"
 
             # Match percentage
             match_pct = int(similarity_score * 100)
 
             # Emojis por score
-            scores = analyzed.get("scores", {})
+            scores = {}
             score_emojis = []
             
             def get_score(key):
@@ -252,19 +252,19 @@ class UmbralBot:
             emojis_text = " ".join(score_emojis) if score_emojis else ""
 
             # Style tags
-            tags = analyzed.get("style_tags", [])
+            tags = []
             if isinstance(tags, str):
                 tags = [tags]
             tags_text = " • ".join([f"#{t}" for t in tags[:3]]) if tags else ""
 
-            analysis_text = personalized_analysis or analyzed.get(
-                "executive_summary", ""
-            )
+            analysis_text = personalized_analysis or ""
+            if not analysis_text:
+                analysis_text = "Propiedad compatible con tu perfil. Revisa la publicacion para confirmar detalles."
 
             message = (
                 f"🏠 *Nueva propiedad encontrada* {emojis_text}\n\n"
-                f"📍 *{analyzed.get('neighborhood', 'CABA')}* • "
-                f"{analyzed.get('rooms', '?')} amb.\n"
+                f"📍 *{raw.get('neighborhood', 'CABA')}* • "
+                f"{raw.get('rooms', '?')} amb.\n"
                 f"💰 {price_text}\n\n"
                 f"📝 {analysis_text}\n\n"
                 f"{tags_text}\n\n"
@@ -276,11 +276,11 @@ class UmbralBot:
                 [
                     InlineKeyboardButton(
                         "👍 Me interesa",
-                        callback_data=f"like_{analyzed.get('id', '')}",
+                        callback_data=f"like_{raw.get('id', '')}",
                     ),
                     InlineKeyboardButton(
                         "👎 No es lo que busco",
-                        callback_data=f"dislike_{analyzed.get('id', '')}",
+                        callback_data=f"dislike_{raw.get('id', '')}",
                     ),
                 ],
                 [
@@ -321,7 +321,7 @@ class UmbralBot:
             logger.info(
                 "Notificación enviada",
                 telegram_id=telegram_id,
-                listing_id=analyzed.get("id"),
+                listing_id=raw.get("id"),
                 match=match_pct,
             )
             return True

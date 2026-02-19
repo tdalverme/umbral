@@ -15,7 +15,7 @@ import structlog
 from umbral.config import get_settings
 from umbral.database import (
     UserRepository,
-    AnalyzedListingRepository,
+    RawListingRepository,
     NotificationRepository,
 )
 from umbral.models import UserPreferences
@@ -52,7 +52,7 @@ class MatchingEngine:
     def __init__(self):
         self.settings = get_settings()
         self.user_repo = UserRepository()
-        self.listing_repo = AnalyzedListingRepository()
+        self.listing_repo = RawListingRepository()
         self.notification_repo = NotificationRepository()
         self.embedding_generator = EmbeddingGenerator()
         self.personalized_analyzer = PersonalizedMatchAnalyzer()
@@ -80,12 +80,9 @@ class MatchingEngine:
 
         # Paso 1: Filtros Hard (via SQL)
         listings = self.listing_repo.search_by_filters(
+            operation_type=hard.operation_type,
             neighborhoods=hard.neighborhoods if hard.neighborhoods else None,
-            min_price=hard.min_price_usd,
-            max_price=hard.max_price_usd,
-            min_rooms=hard.min_rooms,
-            max_rooms=hard.max_rooms,
-            limit=limit * 2,  # Traer más para filtrar después
+            limit=limit * 20,
         )
 
         if not listings:
@@ -101,12 +98,22 @@ class MatchingEngine:
             if self.notification_repo.was_sent(user_id, listing_id):
                 continue
 
-            # Aplicar filtros adicionales (operation_type, requirements)
-            raw = listing.get("raw_listings", {})
-            features = raw.get("features", {})
+            features = listing.get("features", {}) or {}
 
-            # Filtro de tipo de operación
-            if raw.get("operation_type") != hard.operation_type:
+            # Precio en USD (si viene en ARS, convertir para comparar filtros)
+            price_usd = self._to_price_usd(
+                raw_price=listing.get("price"),
+                currency=listing.get("currency"),
+            )
+            if hard.min_price_usd is not None and price_usd < hard.min_price_usd:
+                continue
+            if hard.max_price_usd is not None and price_usd > hard.max_price_usd:
+                continue
+
+            rooms = self._to_int(listing.get("rooms"))
+            if hard.min_rooms is not None and rooms < hard.min_rooms:
+                continue
+            if hard.max_rooms is not None and rooms > hard.max_rooms:
                 continue
 
             # Filtros de requirements
@@ -186,7 +193,7 @@ class MatchingEngine:
             return 0.5  # Sin vector, asumimos match medio
 
         # Matching vectorial contra embedding del texto crudo del listing
-        listing_vector = listing.get("embedding_vector") or listing.get("vibe_embedding")
+        listing_vector = listing.get("embedding_vector")
         if not listing_vector:
             return 0.5
         
@@ -212,6 +219,21 @@ class MatchingEngine:
         except Exception as e:
             logger.warning(f"Error calculando similitud: {e}")
             return 0.5
+
+    def _to_int(self, value) -> int:
+        try:
+            return int(str(value).strip())
+        except (ValueError, TypeError):
+            return 0
+
+    def _to_price_usd(self, raw_price, currency) -> float:
+        try:
+            price = float(str(raw_price).replace(".", "").replace(",", "."))
+        except (ValueError, TypeError):
+            return 0.0
+        if (currency or "").upper() == "USD":
+            return price
+        return price / self.settings.ars_to_usd_rate
 
     async def process_new_listings(
         self,

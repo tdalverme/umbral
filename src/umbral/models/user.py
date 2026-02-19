@@ -133,7 +133,7 @@ class UserFeedback(BaseModel):
 
     id: Optional[str] = Field(None, description="UUID generado por Supabase")
     user_id: str = Field(..., description="FK al User")
-    analyzed_listing_id: str = Field(..., description="FK al AnalyzedListing")
+    raw_listing_id: str = Field(..., description="FK al RawListing")
     feedback_type: str = Field(
         ..., description="'like' o 'dislike'"
     )

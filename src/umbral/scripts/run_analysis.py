@@ -1,8 +1,7 @@
 """
 Script para preparar propiedades para matching.
 
-Procesa raw_listings pendientes y genera analyzed_listings
-normalizados con embedding del texto crudo del scraper.
+Procesa raw_listings pendientes y genera embeddings del texto crudo.
 
 Uso:
     python -m umbral.scripts.run_analysis
@@ -11,6 +10,7 @@ Uso:
 
 import argparse
 import asyncio
+import logging
 import sys
 import warnings
 
@@ -19,12 +19,19 @@ import structlog
 # Suprimir warnings de cleanup de asyncio en Windows
 warnings.filterwarnings("ignore", category=ResourceWarning, message=".*unclosed transport.*")
 
-from umbral.config import get_settings
-from umbral.database import RawListingRepository, AnalyzedListingRepository
+from umbral.database import RawListingRepository
 from umbral.analysis import EmbeddingGenerator
-from umbral.models import RawListing, ListingFeatures, AnalyzedListing, PropertyScores, InferredFeatures
+from umbral.config import get_settings
+from umbral.models import RawListing, ListingFeatures
 
 # Configurar logging
+settings = get_settings()
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(message)s",
+    force=True,
+)
+
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
@@ -53,23 +60,20 @@ async def run_analysis(limit: int = 100):
     Args:
         limit: Máximo de listings a procesar
     """
-    settings = get_settings()
     raw_repo = RawListingRepository()
-    analyzed_repo = AnalyzedListingRepository()
     embedder = EmbeddingGenerator()
     
     stats = {
         "processed": 0,
-        "prepared": 0,
         "embedded": 0,
         "errors": 0,
     }
 
     logger.info("Iniciando preparacion de listings", limit=limit)
 
-    # Obtener listings no analizados
-    pending = raw_repo.get_unanalyzed(limit=limit)
-    logger.info(f"Listings pendientes de análisis: {len(pending)}")
+    # Obtener listings sin embedding
+    pending = raw_repo.get_unembedded(limit=limit)
+    logger.info(f"Listings pendientes de embedding: {len(pending)}")
 
     for raw_data in pending:
         stats["processed"] += 1
@@ -103,91 +107,35 @@ async def run_analysis(limit: int = 100):
                 features=ListingFeatures(**raw_data.get("features", {})),
             )
 
-            # Preparar listing normalizado SIN analisis por LLM
             logger.info(
                 "Preparando listing",
                 external_id=raw_listing.external_id,
                 title=raw_listing.title[:50],
             )
 
+            # Generar embedding desde datos crudos del scraper
             try:
-                price_original = float(raw_listing.price.replace(".", "").replace(",", "."))
-            except ValueError:
-                price_original = 0.0
-
-            price_usd = AnalyzedListing.calculate_price_usd(
-                price_original,
-                raw_listing.currency,
-                settings.ars_to_usd_rate,
-            )
-
-            try:
-                size = float(raw_listing.size_covered or raw_listing.size_total or "0")
-            except ValueError:
-                size = 0.0
-
-            price_per_m2 = AnalyzedListing.calculate_price_per_m2(price_usd, size)
-
-            try:
-                rooms = int(raw_listing.rooms)
-            except ValueError:
-                rooms = 1
-
-            analyzed_listing = AnalyzedListing(
-                raw_listing_id=raw_data["id"],
-                external_id=raw_listing.external_id,
-                currency_original=raw_listing.currency,
-                price_original=price_original,
-                price_usd=price_usd,
-                price_per_m2_usd=price_per_m2,
-                neighborhood=raw_listing.neighborhood,
-                rooms=rooms,
-                scores=PropertyScores(
-                    quietness=0.5,
-                    luminosity=0.5,
-                    connectivity=0.5,
-                    wfh_suitability=0.5,
-                    modernity=0.5,
-                    green_spaces=0.5,
-                ),
-                features=InferredFeatures(),
-                style_tags=[],
-                executive_summary="Resumen personalizado disponible al hacer match.",
-                analysis_version=settings.analysis_version,
-            )
-            stats["prepared"] += 1
-
-            # Guardar en DB
-            result = analyzed_repo.create(analyzed_listing)
-
-            if result:
-                # Generar embeddings
-                try:
-                    # Embedding desde datos crudos del scraper
-                    embedding = await embedder.generate_listing_embedding(
-                        raw_listing=raw_listing,
-                    )
+                embedding = await embedder.generate_listing_embedding(
+                    raw_listing=raw_listing,
+                )
+                updated = raw_repo.update_embedding(
+                    listing_id=raw_data["id"],
+                    embedding=embedding,
+                )
+                if updated:
                     stats["embedded"] += 1
-
-                    # Guardar embedding principal
-                    analyzed_repo.update_embedding(
-                        listing_id=result["id"],
-                        embedding=embedding,
-                    )
-
                     logger.info(
-                        "Listing preparado y embebido",
+                        "Listing embebido",
                         external_id=raw_listing.external_id,
-                        neighborhood=analyzed_listing.neighborhood,
-                        rooms=analyzed_listing.rooms,
+                        neighborhood=raw_listing.neighborhood,
+                        rooms=raw_listing.rooms,
                     )
-
-                except Exception as e:
-                    logger.error(
-                        "Error generando embeddings",
-                        external_id=raw_listing.external_id,
-                        error=str(e),
-                    )
+            except Exception as e:
+                logger.error(
+                    "Error generando embeddings",
+                    external_id=raw_listing.external_id,
+                    error=str(e),
+                )
 
             # Pequeña pausa para no exceder rate limits
             await asyncio.sleep(1)

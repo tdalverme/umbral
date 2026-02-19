@@ -9,6 +9,7 @@ Uso:
 
 import argparse
 import asyncio
+import logging
 import sys
 import warnings
 from typing import Optional
@@ -25,6 +26,13 @@ from umbral.database import RawListingRepository
 from umbral.scrapers import MercadoLibreScraper, ArgenPropScraper
 
 # Configurar logging
+settings = get_settings()
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(message)s",
+    force=True,
+)
+
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,

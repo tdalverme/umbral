@@ -84,6 +84,9 @@ class RawListing(BaseModel):
     features: ListingFeatures = Field(
         default_factory=ListingFeatures, description="Características booleanas"
     )
+    embedding_vector: Optional[list[float]] = Field(
+        default=None, description="Embedding semántico del texto crudo del listing"
+    )
 
     # Metadatos
     scraped_at: str = Field(

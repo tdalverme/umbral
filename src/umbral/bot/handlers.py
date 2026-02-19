@@ -13,7 +13,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 
 from umbral.config import CABA_NEIGHBORHOODS, get_settings
-from umbral.database import UserRepository, FeedbackRepository, AnalyzedListingRepository
+from umbral.database import UserRepository, FeedbackRepository, RawListingRepository
 from umbral.config import get_settings
 from umbral.models import UserPreferences, HardFilters
 from umbral.models.user import SoftPreferences, UserFeedback
@@ -781,7 +781,7 @@ class FeedbackHandler:
         settings = get_settings()
         self.user_repo = UserRepository()
         self.feedback_repo = FeedbackRepository()
-        self.analyzed_repo = AnalyzedListingRepository()
+        self.raw_repo = RawListingRepository()
         self.learning_rate = settings.feedback_learning_rate
 
     def _adjust_preference_vector(
@@ -827,11 +827,11 @@ class FeedbackHandler:
         if not user:
             return
 
-        analyzed = self.analyzed_repo.get_by_id(listing_id)
-        if analyzed and analyzed.get("embedding_vector"):
+        raw_listing = self.raw_repo.get_by_id(listing_id)
+        if raw_listing and raw_listing.get("embedding_vector"):
             new_vector = self._adjust_preference_vector(
                 current_vector=user.get("preference_vector"),
-                listing_vector=analyzed.get("embedding_vector", []),
+                listing_vector=raw_listing.get("embedding_vector", []),
                 is_like=True,
             )
             if new_vector is not None:
@@ -839,7 +839,7 @@ class FeedbackHandler:
 
         feedback = UserFeedback(
             user_id=user["id"],
-            analyzed_listing_id=listing_id,
+            raw_listing_id=listing_id,
             feedback_type="like",
         )
 
@@ -868,11 +868,11 @@ class FeedbackHandler:
         if not user:
             return
 
-        analyzed = self.analyzed_repo.get_by_id(listing_id)
-        if analyzed and analyzed.get("embedding_vector"):
+        raw_listing = self.raw_repo.get_by_id(listing_id)
+        if raw_listing and raw_listing.get("embedding_vector"):
             new_vector = self._adjust_preference_vector(
                 current_vector=user.get("preference_vector"),
-                listing_vector=analyzed.get("embedding_vector", []),
+                listing_vector=raw_listing.get("embedding_vector", []),
                 is_like=False,
             )
             if new_vector is not None:
@@ -880,7 +880,7 @@ class FeedbackHandler:
 
         feedback = UserFeedback(
             user_id=user["id"],
-            analyzed_listing_id=listing_id,
+            raw_listing_id=listing_id,
             feedback_type="dislike",
         )
 
