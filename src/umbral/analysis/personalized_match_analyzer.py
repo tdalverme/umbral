@@ -31,7 +31,6 @@ Reglas:
 - Conexión semántica: Si el usuario pidió "silencio para programar" y la propiedad es un "contrafrente en calle cortada", resaltá esa conexión explícitamente.
 - Evitar frases marketineras.
 - Evitar modismos excesivos.
-- Cerrar con una conclusión breve.
 - Si falta un must-have, decirlo con tacto.
 - No usar listas, solo 2-3 frases cortas.
 - No ignores "red flags" aunque el match sea alto.
@@ -39,7 +38,7 @@ Reglas:
 {{
   "why_match": "2-3 frases cortas sobre por qué matchea con este usuario",
   "warnings": "1 frase corta con trade-off o red flag (opcional, string vacío si no hay)",
-  "conclusion": "1 frase final breve y accionable"
+  "conclusion": "1 frase final con el veredicto final"
 }}
 
 [USER]

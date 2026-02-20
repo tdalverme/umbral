@@ -222,7 +222,7 @@ class UmbralBot:
 
         street, number = self._parse_street(location)
         if street and number:
-            return f"{street} {number}"
+            return f"{street} al {number}"
         if location:
             return location
         return neighborhood
@@ -336,7 +336,7 @@ class UmbralBot:
                 f"💡 *¿Por qué es para vos?*\n"
                 f"{why_match}\n"
                 f"{warning_block}"
-                f"—\n"
+                f"\n—\n"
                 f"_{conclusion}_"
             )
 
