@@ -98,7 +98,7 @@ class ScoringEngine:
             self._property_fit(listing, preferences),
             self._lifestyle_fit(listing, preferences),
             self._semantic_fit(listing, preference_vector),
-            self._feedback_adjustment(feedback_examples or []),
+            self._feedback_adjustment(feedback_examples or [], listing, preferences),
         ]
         weighted = sum(c.score * c.weight for c in criteria if c.weight > 0)
         total_weight = sum(c.weight for c in criteria if c.weight > 0) or 1
@@ -280,13 +280,72 @@ class ScoringEngine:
             return CriterionScore(name="Semantic/vibe fit", score=55, weight=10, reason="No se pudo calcular similitud semantica.")
         return CriterionScore(name="Semantic/vibe fit", score=score, weight=10, reason="Similitud entre tu descripcion ideal y el vibe del inmueble.")
 
-    def _feedback_adjustment(self, feedback_examples: list[dict]) -> CriterionScore:
-        likes = sum(1 for item in feedback_examples if item.get("feedback_type") == "like")
-        dislikes = sum(1 for item in feedback_examples if item.get("feedback_type") == "dislike")
+    def _feedback_adjustment(
+        self,
+        feedback_examples: list[dict],
+        listing: dict,
+        preferences: UserPreferences,
+    ) -> CriterionScore:
+        preference_feedback = [
+            item for item in feedback_examples if item.get("reason") != "already_seen"
+        ]
+        likes = sum(1 for item in preference_feedback if item.get("feedback_type") == "like")
+        dislikes = sum(1 for item in preference_feedback if item.get("feedback_type") == "dislike")
         if likes == dislikes == 0:
             return CriterionScore(name="Feedback adjustment", score=60, weight=2, reason="Aun no hay suficiente feedback historico.")
         score = _clamp(60 + likes * 5 - dislikes * 7)
-        return CriterionScore(name="Feedback adjustment", score=score, weight=2, reason="Ajuste liviano segun likes/dislikes previos.")
+        reasons = ["Ajuste liviano segun likes/dislikes previos"]
+        reason_counts: dict[str, int] = {}
+        for item in preference_feedback:
+            reason = item.get("reason")
+            if reason:
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+        hard = preferences.hard_filters
+        price = _as_float(listing.get("price_usd"))
+        if reason_counts.get("too_expensive", 0) >= 2 and hard.max_price_usd and price > 0:
+            if price / hard.max_price_usd >= 0.9:
+                score -= 20
+                reasons.append("sensibilidad reciente a precio cerca del limite")
+
+        if reason_counts.get("bad_location", 0) >= 2 and hard.neighborhoods:
+            neighborhood = str(listing.get("neighborhood") or "")
+            if neighborhood not in hard.neighborhoods:
+                score -= 12
+                reasons.append("rechazos recientes por zona")
+
+        rooms = _as_int(listing.get("rooms"))
+        if reason_counts.get("too_small", 0) >= 2:
+            if (hard.min_rooms and rooms <= hard.min_rooms) or not listing.get("price_per_m2_usd"):
+                score -= 12
+                reasons.append("rechazos recientes por tamano")
+
+        features = _feature_dict(listing)
+        if reason_counts.get("missing_key_feature", 0) >= 2:
+            missing_required = (
+                (hard.requires_balcony and not features.get("has_balcony"))
+                or (hard.requires_pets_allowed and not features.get("is_pet_friendly"))
+                or (hard.requires_furnished and not features.get("is_furnished"))
+                or (hard.requires_parking and not listing.get("parking_spaces"))
+            )
+            if missing_required:
+                score -= 15
+                reasons.append("rechazos recientes por faltantes clave")
+
+        scores = _scores_dict(listing)
+        if reason_counts.get("style_condition", 0) >= 2:
+            modernity = float(scores.get("modernity", 0.5) or 0.5)
+            quality = int(listing.get("quality_score") or listing.get("listing_quality_score") or 70)
+            if modernity < 0.6 or quality < 75:
+                score -= 10
+                reasons.append("rechazos recientes por estado o estilo")
+
+        return CriterionScore(
+            name="Feedback adjustment",
+            score=_clamp(score),
+            weight=2,
+            reason=". ".join(reasons).capitalize() + ".",
+        )
 
     def _gaps(self, listing: dict, preferences: UserPreferences, criteria: list[CriterionScore]) -> list[str]:
         gaps = [c.reason for c in criteria if c.score < 58]

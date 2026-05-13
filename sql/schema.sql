@@ -217,6 +217,8 @@ CREATE TABLE IF NOT EXISTS user_feedback (
     analyzed_listing_id UUID NOT NULL REFERENCES analyzed_listings(id) ON DELETE CASCADE,
     
     feedback_type TEXT NOT NULL CHECK (feedback_type IN ('like', 'dislike')),
+    reason TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}',
     
     created_at TIMESTAMPTZ DEFAULT NOW(),
     

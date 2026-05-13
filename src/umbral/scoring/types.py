@@ -24,9 +24,15 @@ class ScoringResult(BaseModel):
 
     def to_personalized_analysis(self) -> dict:
         positives = [c.reason for c in self.criteria if c.score >= 70][:3]
+        why_parts = positives[:2] or [self.summary]
+        why_match = " ".join(why_parts)
+        warnings = "\n".join(self.gaps[:3])
+        if not warnings:
+            lower_scores = [c.reason for c in self.criteria if c.score < 70]
+            warnings = "\n".join(lower_scores[:2])
         return {
-            "why_match": self.summary,
-            "warnings": "\n".join(self.gaps[:3]),
+            "why_match": why_match,
+            "warnings": warnings,
             "conclusion": "Vale la pena revisarla." if self.final_score >= 75 else "Puede servir, pero revisaria los puntos flojos.",
             "match_points": positives,
             "criteria": [c.model_dump() for c in self.criteria],

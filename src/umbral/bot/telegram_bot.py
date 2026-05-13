@@ -144,6 +144,12 @@ class UmbralBot:
         # Callbacks de feedback (siempre activos)
         self.application.add_handler(
             CallbackQueryHandler(
+                self.feedback.handle_reason,
+                pattern=r"^feedback_reason_",
+            )
+        )
+        self.application.add_handler(
+            CallbackQueryHandler(
                 self.feedback.handle_like,
                 pattern=r"^like_",
             )

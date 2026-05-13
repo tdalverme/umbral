@@ -574,6 +574,29 @@ class FeedbackRepository(BaseRepository):
         )
         return response.data
 
+    def update_reason(
+        self,
+        user_id: str,
+        analyzed_listing_id: str,
+        reason: str,
+        metadata: dict | None = None,
+    ) -> dict:
+        """Agrega un motivo opcional a un feedback ya registrado."""
+        response = (
+            self.client.table(self.TABLE)
+            .update({"reason": reason, "metadata": metadata or {}})
+            .eq("user_id", user_id)
+            .eq("analyzed_listing_id", analyzed_listing_id)
+            .execute()
+        )
+        logger.info(
+            "Motivo de feedback registrado",
+            user_id=user_id,
+            listing_id=analyzed_listing_id,
+            reason=reason,
+        )
+        return response.data[0] if response.data else {}
+
 
 class NotificationRepository(BaseRepository):
     """Repositorio para notificaciones enviadas."""

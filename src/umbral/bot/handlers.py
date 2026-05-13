@@ -448,6 +448,7 @@ class OnboardingHandler:
         await query.message.reply_text(
             "📋 *Paso 4 de 6 - Tu hogar ideal*\n\n"
             "Ahora contame con tus palabras: *¿Cómo es tu hogar ideal?*\n\n"
+            "Inclui tambien que priorizas y que te haria descartar una propiedad.\n\n"
             "Por ejemplo:\n"
             "_\"Busco un PH luminoso en zona residencial, ideal para trabajar "
             "desde casa. Me gustaría que tenga techos altos y un estilo moderno "
@@ -782,6 +783,22 @@ Devuelve SOLO un JSON con esta estructura exacta:
 class FeedbackHandler:
     """Maneja el feedback de usuarios sobre listings."""
 
+    LIKE_REASONS = [
+        ("good_location", "gl", "Buena zona", "buena zona"),
+        ("good_price", "gp", "Buen precio", "buen precio"),
+        ("key_feature", "kf", "Tiene algo clave", "tiene algo clave"),
+        ("good_vibe", "gv", "Buena vibra", "buena vibra"),
+        ("contact_visit", "cv", "Contactar/visitar", "contactar/visitar"),
+    ]
+    DISLIKE_REASONS = [
+        ("too_expensive", "te", "Muy caro", "muy caro"),
+        ("bad_location", "bl", "Zona", "zona"),
+        ("too_small", "ts", "Muy chico", "muy chico"),
+        ("missing_key_feature", "mf", "Falta algo clave", "falta algo clave"),
+        ("style_condition", "sc", "Estado/estilo", "estado/estilo"),
+        ("already_seen", "as", "Ya lo vi", "ya lo vi"),
+    ]
+
     def __init__(self):
         settings = get_settings()
         self.user_repo = UserRepository()
@@ -830,6 +847,84 @@ class FeedbackHandler:
             adjusted.extend(current_vector[common_dim:])
         return adjusted
 
+    def _raw_listing_url(self, analyzed_listing: dict | None) -> str | None:
+        raw_listing = analyzed_listing.get("raw_listings") if analyzed_listing else None
+        if raw_listing and raw_listing.get("url"):
+            return raw_listing["url"]
+        return analyzed_listing.get("url") if analyzed_listing else None
+
+    def _reason_options(self, feedback_type: str) -> list[tuple[str, str, str, str]]:
+        return self.LIKE_REASONS if feedback_type == "like" else self.DISLIKE_REASONS
+
+    def _reason_label(self, reason: str) -> str:
+        for options in (self.LIKE_REASONS, self.DISLIKE_REASONS):
+            for code, _short_code, _button_text, final_text in options:
+                if code == reason:
+                    return final_text
+        return reason.replace("_", " ")
+
+    def _reason_keyboard(
+        self,
+        feedback_type: str,
+        analyzed_listing_id: str,
+        url: str | None,
+    ) -> InlineKeyboardMarkup:
+        options = self._reason_options(feedback_type)
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    text,
+                    callback_data=f"feedback_reason_{feedback_type[0]}_{short_code}_{analyzed_listing_id}",
+                )
+                for code, short_code, text, _ in options[:2]
+            ],
+            [
+                InlineKeyboardButton(
+                    text,
+                    callback_data=f"feedback_reason_{feedback_type[0]}_{short_code}_{analyzed_listing_id}",
+                )
+                for code, short_code, text, _ in options[2:4]
+            ],
+            [
+                InlineKeyboardButton(
+                    text,
+                    callback_data=f"feedback_reason_{feedback_type[0]}_{short_code}_{analyzed_listing_id}",
+                )
+                for code, short_code, text, _ in options[4:]
+            ],
+        ]
+        if url:
+            keyboard.append([InlineKeyboardButton("Ver publicacion", url=url)])
+        return InlineKeyboardMarkup(keyboard)
+
+    def _final_keyboard(
+        self,
+        reason: str,
+        url: str | None,
+    ) -> InlineKeyboardMarkup:
+        keyboard = [[InlineKeyboardButton(f"Anotado: {self._reason_label(reason)}", callback_data="noop")]]
+        if url:
+            keyboard.append([InlineKeyboardButton("Ver publicacion", url=url)])
+        return InlineKeyboardMarkup(keyboard)
+
+    def _parse_reason_callback(self, data: str) -> tuple[str, str, str]:
+        payload = data.replace("feedback_reason_", "", 1)
+        feedback_type, rest = payload.split("_", 1)
+        if feedback_type == "l":
+            feedback_type = "like"
+        elif feedback_type == "d":
+            feedback_type = "dislike"
+        reason_codes = [
+            (code, short_code)
+            for code, short_code, _, _ in self._reason_options(feedback_type)
+        ]
+        for code, short_code in sorted(reason_codes, key=lambda item: len(item[0]), reverse=True):
+            prefixes = (f"{short_code}_", f"{code}_")
+            prefix = next((item for item in prefixes if rest.startswith(item)), None)
+            if prefix:
+                return feedback_type, code, rest[len(prefix):]
+        raise ValueError(f"Motivo de feedback desconocido: {data}")
+
     async def handle_like(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
@@ -872,7 +967,11 @@ class FeedbackHandler:
             ])
 
         await query.edit_message_reply_markup(
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=self._reason_keyboard(
+                "like",
+                analyzed_listing_id,
+                self._raw_listing_url(analyzed_listing),
+            )
         )
 
         logger.info("Feedback like registrado", telegram_id=telegram_id, listing_id=analyzed_listing_id)
@@ -919,10 +1018,51 @@ class FeedbackHandler:
             ])
 
         await query.edit_message_reply_markup(
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=self._reason_keyboard(
+                "dislike",
+                analyzed_listing_id,
+                self._raw_listing_url(analyzed_listing),
+            )
         )
 
         logger.info("Feedback dislike registrado", telegram_id=telegram_id, listing_id=analyzed_listing_id)
+
+    async def handle_reason(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        """Procesa el motivo opcional de un feedback ya registrado."""
+        query = update.callback_query
+        await query.answer("Anotado")
+
+        telegram_id = query.from_user.id
+        feedback_type, reason, analyzed_listing_id = self._parse_reason_callback(query.data)
+
+        user = self.user_repo.get_by_telegram_id(telegram_id)
+        if not user:
+            return
+
+        self.feedback_repo.update_reason(
+            user["id"],
+            analyzed_listing_id,
+            reason,
+            metadata={"feedback_type": feedback_type},
+        )
+
+        analyzed_listing = self.analyzed_repo.get_by_id(analyzed_listing_id)
+        await query.edit_message_reply_markup(
+            reply_markup=self._final_keyboard(
+                reason,
+                self._raw_listing_url(analyzed_listing),
+            )
+        )
+
+        logger.info(
+            "Motivo de feedback procesado",
+            telegram_id=telegram_id,
+            listing_id=analyzed_listing_id,
+            feedback_type=feedback_type,
+            reason=reason,
+        )
 
     async def handle_noop(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE

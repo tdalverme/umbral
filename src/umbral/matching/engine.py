@@ -254,9 +254,12 @@ class MatchingService:
             if analyzer is None:
                 analyzer = PersonalizedMatchAnalyzer()
                 self.personalized_match_analyzer = analyzer
+            analysis_listing_data = self._notification_listing_data(listing_data)
+            analysis_listing_data["criteria"] = [criterion.model_dump() for criterion in scoring.criteria]
+            analysis_listing_data["gaps"] = scoring.gaps
             return await analyzer.generate(
                 preferences=preferences,
-                listing_data=listing_data,
+                listing_data=analysis_listing_data,
                 similarity_score=scoring.normalized_score,
             )
         except Exception as e:

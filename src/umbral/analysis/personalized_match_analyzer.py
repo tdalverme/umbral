@@ -17,6 +17,8 @@ PERSONALIZED_SYSTEM_PROMPT = "Responde solo JSON valido, breve y honesto."
 
 PERSONALIZED_USER_PROMPT_TEMPLATE = """Explicale a una persona por que esta propiedad puede matchear.
 Tono: espanol rioplatense, de vos, cercano y profesional. No inventes datos.
+No uses frases genericas como "muy buen match" si no mencionas datos concretos.
+Estructura mental: 1-2 razones conectadas a sus preferencias, 1 trade-off o dato incierto, 1 veredicto corto.
 Devolve SOLO JSON con esta forma:
 {{"why_match":"2 frases cortas","warnings":"1 trade-off o string vacio","conclusion":"veredicto corto"}}
 
@@ -35,6 +37,9 @@ PROPIEDAD:
 - features: {features}
 - descripcion: {description}
 - score: {similarity}
+
+SCORING:
+- fortalezas/gaps: {scoring_context}
 """
 
 
@@ -101,6 +106,7 @@ class PersonalizedMatchAnalyzer:
         price = f"ARS {price_raw}" if currency == "ARS" and price_raw else f"USD {price_raw}"
 
         description = " ".join((listing_data.get("description", "") or "").split())[:450]
+        scoring_context = self._build_scoring_context(listing_data)
         return {
             "title": (listing_data.get("title", "") or "")[:120],
             "listing_neighborhood": listing_data.get("neighborhood", ""),
@@ -108,7 +114,22 @@ class PersonalizedMatchAnalyzer:
             "listing_rooms": listing_data.get("rooms", ""),
             "features": ", ".join(feature_items[:10]) if feature_items else "ninguna",
             "description": description,
+            "scoring_context": scoring_context,
         }
+
+    def _build_scoring_context(self, listing_data: dict) -> str:
+        parts: list[str] = []
+        for criterion in (listing_data.get("criteria") or [])[:5]:
+            if not isinstance(criterion, dict):
+                continue
+            name = criterion.get("name", "Criterio")
+            score = criterion.get("score", "?")
+            reason = criterion.get("reason", "")
+            parts.append(f"{name}: {score} - {reason}")
+        gaps = listing_data.get("gaps") or []
+        if gaps:
+            parts.append("A revisar: " + "; ".join(str(gap) for gap in gaps[:3]))
+        return " | ".join(parts) if parts else "sin scoring explicable disponible"
 
     def _fallback(self) -> PersonalizedAnalysis:
         return PersonalizedAnalysis(
@@ -140,6 +161,7 @@ class PersonalizedMatchAnalyzer:
                 features=listing_context["features"],
                 description=listing_context["description"],
                 similarity=f"{similarity_score:.2f}",
+                scoring_context=listing_context["scoring_context"],
             )
 
             response = await self._provider.generate(

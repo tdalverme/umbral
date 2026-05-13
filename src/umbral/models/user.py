@@ -137,6 +137,8 @@ class UserFeedback(BaseModel):
     feedback_type: str = Field(
         ..., description="'like' o 'dislike'"
     )
+    reason: Optional[str] = Field(None, description="Motivo opcional del feedback")
+    metadata: dict = Field(default_factory=dict)
     created_at: str = Field(
         default_factory=lambda: datetime.utcnow().isoformat()
     )
