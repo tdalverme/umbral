@@ -125,6 +125,13 @@ class MatchingService:
                 preference_vector=preference_vector,
                 feedback_examples=feedback_examples,
             )
+            logger.info(
+                "Scoring calculado para candidato",
+                analyzed_listing_id=analyzed_id,
+                final_score=scoring.final_score,
+                eligible=scoring.eligible,
+                gaps=scoring.gaps,
+            )
             if not scoring.eligible:
                 continue
 

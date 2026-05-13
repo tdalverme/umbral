@@ -75,7 +75,10 @@ class Settings(BaseSettings):
     groq_api_key: Optional[str] = Field(None, description="API key de Groq")
     groq_model: str = Field(
         "llama-3.1-8b-instant",
-        description="Modelo de Groq a usar (llama-3.1-8b-instant, llama-3.3-70b-versatile)"
+        description=(
+            "Modelo de Groq a usar. Para run_analysis conviene un modelo de texto "
+            "como llama-3.1-8b-instant o llama-3.3-70b-versatile."
+        )
     )
 
     # Telegram

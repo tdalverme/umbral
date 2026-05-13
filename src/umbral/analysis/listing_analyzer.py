@@ -29,7 +29,7 @@ logger = structlog.get_logger()
 
 MAX_DESCRIPTION_CHARS_FOR_ANALYSIS = 3500
 MAX_PROMPT_CHARS_FOR_ANALYSIS = 6500
-MAX_COMPACT_DESCRIPTION_CHARS = 1200
+MAX_ULTRA_COMPACT_DESCRIPTION_CHARS = 450
 
 # System prompt para análisis de propiedades
 ANALYSIS_SYSTEM_PROMPT = """Eres un experto analista inmobiliario argentino con años de experiencia en el mercado de CABA.
@@ -74,6 +74,12 @@ REGLAS IMPORTANTES:
 3. El resumen debe ser útil para alguien que busca, no un texto de marketing.
 4. Los style_tags deben ser 3-5 palabras que describan la "vibra" del lugar.
 5. Responde SOLO con el JSON, sin texto adicional."""
+
+ANALYSIS_SYSTEM_PROMPT_COMPACT = """Analiza un anuncio inmobiliario de CABA.
+Responde SOLO JSON valido con scores, features, style_tags y executive_summary.
+Scores requeridos: quietness, luminosity, connectivity, wfh_suitability, modernity, green_spaces.
+Features requeridas: is_investment_opportunity, is_family_friendly, has_high_storage_capacity, neighborhood_vibe, view_type.
+Si falta informacion usa valores medios y no inventes."""
 
 
 @dataclass
@@ -177,35 +183,79 @@ DESCRIPCIÓN COMPLETA:
 ---
 Analiza este anuncio y devuelve el JSON con tu análisis."""
 
-    def _build_compact_prompt(self, listing: RawListing) -> str:
-        """Construye un prompt corto para evitar 413 en proveedores con limites bajos."""
+    def _build_ultra_compact_prompt(self, listing: RawListing) -> str:
+        """Payload minimo para reintentar cuando Groq rechaza por 413."""
         features = [
             key.replace("_", " ")
             for key, value in listing.features.model_dump().items()
             if value
         ]
         description = " ".join((listing.description or "").split())
-        if len(description) > MAX_COMPACT_DESCRIPTION_CHARS:
-            description = description[:MAX_COMPACT_DESCRIPTION_CHARS].rsplit(" ", 1)[0]
+        if len(description) > MAX_ULTRA_COMPACT_DESCRIPTION_CHARS:
+            description = description[:MAX_ULTRA_COMPACT_DESCRIPTION_CHARS].rsplit(" ", 1)[0]
             description += " [truncado]"
 
-        return f"""ANUNCIO A ANALIZAR:
-Titulo: {listing.title}
-Ubicacion: {listing.neighborhood}, {listing.location}
-Precio: {listing.currency} {listing.price}
-Expensas: {listing.maintenance_fee or 'No especificadas'}
-Ambientes: {listing.rooms}
-Banos: {listing.bathrooms}
-Superficie total: {listing.size_total or 'No especificada'} m2
-Superficie cubierta: {listing.size_covered or 'No especificada'} m2
-Antiguedad: {listing.age or 'No especificada'}
-Disposicion: {listing.disposition or 'No especificada'}
-Orientacion: {listing.orientation or 'No especificada'}
-Cochera: {'Si' if listing.parking_spaces else 'No'}
-Amenities/features: {', '.join(features) if features else 'No especificados'}
-Descripcion: {description}
+        return "\n".join(
+            [
+                "ANUNCIO:",
+                f"Titulo: {listing.title[:120]}",
+                f"Barrio/ubicacion: {listing.neighborhood}, {listing.location[:120]}",
+                f"Precio: {listing.currency} {listing.price}; expensas: {listing.maintenance_fee or 'N/E'}",
+                f"Ambientes/banos: {listing.rooms}/{listing.bathrooms}; m2: {listing.size_total or 'N/E'} total, {listing.size_covered or 'N/E'} cubiertos",
+                f"Antiguedad/disposicion/orientacion: {listing.age or 'N/E'}; {listing.disposition or 'N/E'}; {listing.orientation or 'N/E'}",
+                f"Cochera: {'Si' if listing.parking_spaces else 'No'}; features: {', '.join(features[:8]) if features else 'N/E'}",
+                f"Descripcion: {description}",
+                "Devolve solo el JSON de analisis.",
+            ]
+        )
 
-Devuelve SOLO el JSON pedido."""
+    @staticmethod
+    def _is_request_too_large(error_text: str) -> bool:
+        return (
+            "413" in error_text
+            or "request_too_large" in error_text
+            or "Request Entity Too Large" in error_text
+        )
+
+    async def _generate_analysis_response(
+        self,
+        *,
+        listing: RawListing,
+        prompt: str,
+        system_prompt: str,
+        max_tokens: int,
+    ):
+        try:
+            return await self._provider.generate(
+                system_prompt=system_prompt,
+                user_prompt=prompt,
+                temperature=0.2,
+                max_tokens=max_tokens,
+            )
+        except Exception as e:
+            error_text = str(e)
+            if self._is_request_too_large(error_text):
+                fallback_prompt = self._build_ultra_compact_prompt(listing)
+                logger.warning(
+                    "Proveedor rechazo payload; reintentando con prompt ultra compacto",
+                    external_id=listing.external_id,
+                    model=getattr(self._provider, "model", "unknown"),
+                    prompt_chars=len(prompt),
+                    compact_prompt_chars=len(fallback_prompt),
+                )
+                return await self._provider.generate(
+                    system_prompt=ANALYSIS_SYSTEM_PROMPT_COMPACT,
+                    user_prompt=fallback_prompt,
+                    temperature=0.2,
+                    max_tokens=512,
+                )
+            logger.error(
+                "Error al generar respuesta de analisis",
+                external_id=listing.external_id,
+                model=getattr(self._provider, "model", "unknown"),
+                error=error_text,
+            )
+            raise
 
     def _fallback_analysis(self, raw_response: str = "") -> AnalysisResult:
         """Resultado conservador cuando el proveedor no puede responder."""
@@ -323,7 +373,7 @@ Devuelve SOLO el JSON pedido."""
         Returns:
             AnalysisResult con scores, features y resumen
         """
-        prompt = self._build_compact_prompt(listing)
+        prompt = self._build_prompt(listing)
         if len(prompt) > MAX_PROMPT_CHARS_FOR_ANALYSIS:
             prompt = (
                 prompt[:MAX_PROMPT_CHARS_FOR_ANALYSIS]
@@ -331,10 +381,10 @@ Devuelve SOLO el JSON pedido."""
             )
 
         try:
-            response = await self._provider.generate(
+            response = await self._generate_analysis_response(
+                listing=listing,
+                prompt=prompt,
                 system_prompt=ANALYSIS_SYSTEM_PROMPT,
-                user_prompt=prompt,
-                temperature=0.2,
                 max_tokens=768,
             )
 
@@ -398,7 +448,7 @@ Devuelve SOLO el JSON pedido."""
                 external_id=listing.external_id,
                 error=error_text,
             )
-            if "413" in error_text or "request_too_large" in error_text or "Request Entity Too Large" in error_text:
+            if self._is_request_too_large(error_text):
                 logger.warning(
                     "Proveedor rechazo payload; usando analisis neutral",
                     external_id=listing.external_id,

@@ -65,6 +65,29 @@ def test_scoring_engine_rejects_hard_filter_mismatch():
     assert result.gaps
 
 
+def test_scoring_engine_allows_price_within_relaxed_budget_window():
+    result = ScoringEngine(exchange_rate=1000).score(
+        _listing(price_usd=915),
+        _preferences(max_price_usd=800),
+    )
+
+    assert result.eligible is True
+    price_fit = [c for c in result.criteria if c.name == "Price/budget fit"][0]
+    assert price_fit.score < 68
+    assert "sobre tu presupuesto" in price_fit.reason.lower()
+
+
+def test_scoring_engine_parses_decimal_price_usd_from_database_string():
+    result = ScoringEngine(exchange_rate=1000).score(
+        _listing(price_usd="824.74"),
+        _preferences(max_price_usd=800),
+    )
+
+    assert result.eligible is True
+    price_fit = [c for c in result.criteria if c.name == "Price/budget fit"][0]
+    assert price_fit.score == 52
+
+
 def test_scoring_engine_tolerates_missing_embeddings():
     result = ScoringEngine(exchange_rate=1000).score(
         _listing(vibe_embedding=None, embedding_vector=None),

@@ -13,6 +13,7 @@ from umbral.scoring.types import CriterionScore, ScoringResult
 
 
 SCORING_VERSION = "1.0"
+BUDGET_HARD_REJECT_MULTIPLIER = 1.15
 
 
 def _clamp(value: float, lo: int = 0, hi: int = 100) -> int:
@@ -23,7 +24,15 @@ def _as_float(value, default: float = 0.0) -> float:
     if value is None:
         return default
     try:
-        return float(str(value).replace(".", "").replace(",", "."))
+        text = str(value).strip()
+        if "," in text and "." in text:
+            if text.rfind(",") > text.rfind("."):
+                text = text.replace(".", "").replace(",", ".")
+            else:
+                text = text.replace(",", "")
+        elif "," in text:
+            text = text.replace(",", ".")
+        return float(text)
     except (TypeError, ValueError):
         return default
 
@@ -127,7 +136,10 @@ class ScoringEngine:
         price_usd = _as_float(listing.get("price_usd"))
         if hard.min_price_usd is not None and price_usd < hard.min_price_usd:
             gaps.append("Precio por debajo del minimo configurado.")
-        if hard.max_price_usd is not None and price_usd > hard.max_price_usd:
+        if (
+            hard.max_price_usd is not None
+            and price_usd > hard.max_price_usd * BUDGET_HARD_REJECT_MULTIPLIER
+        ):
             gaps.append("Precio supera tu presupuesto maximo.")
 
         neighborhood = str(listing.get("neighborhood") or "")
@@ -191,7 +203,9 @@ class ScoringEngine:
                 return CriterionScore(name="Price/budget fit", score=92, weight=18, reason="Precio muy comodo contra tu presupuesto.")
             if ratio <= 0.95:
                 return CriterionScore(name="Price/budget fit", score=82, weight=18, reason="Precio dentro de presupuesto con margen razonable.")
-            return CriterionScore(name="Price/budget fit", score=68, weight=18, reason="Precio dentro de presupuesto pero cerca del limite.")
+            if ratio <= 1:
+                return CriterionScore(name="Price/budget fit", score=68, weight=18, reason="Precio dentro de presupuesto pero cerca del limite.")
+            return CriterionScore(name="Price/budget fit", score=52, weight=18, reason="Precio levemente sobre tu presupuesto configurado.")
         ppm2 = _as_float(listing.get("price_per_m2_usd"))
         if ppm2 > 0:
             return CriterionScore(name="Price/budget fit", score=72, weight=18, reason="Tiene precio por m2 disponible para comparacion.")
