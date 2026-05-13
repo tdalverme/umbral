@@ -1,65 +1,97 @@
-"""
-Motor de matching entre usuarios y propiedades.
+"""Matching service explicable."""
 
-Implementa:
-- Filtro Hard: Descarta propiedades fuera de criterios absolutos
-- Filtro Vectorial: Calcula similitud semántica usuario-listing
-- Personalización LLM: Genera análisis por usuario solo sobre umbral
-"""
+from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Optional
 
 import structlog
 
+from umbral.analysis import PersonalizedMatchAnalyzer
 from umbral.config import get_settings
 from umbral.database import (
-    UserRepository,
-    RawListingRepository,
+    AnalyzedListingRepository,
+    FeedbackRepository,
     NotificationRepository,
+    UserListingMatchRepository,
+    UserRepository,
 )
-from umbral.models import UserPreferences
-from umbral.analysis import (
-    EmbeddingGenerator,
-    PersonalizedMatchAnalyzer,
-)
-from umbral.analysis.personalized_match_analyzer import PersonalizedAnalysis
+from umbral.models import UserListingMatch, UserPreferences
+from umbral.models.user import HardFilters, SoftPreferences
+from umbral.scoring import SCORING_VERSION, ScoringEngine, ScoringResult
 
 logger = structlog.get_logger()
 
 
 @dataclass
 class MatchResult:
-    """Resultado de matching para un listing."""
+    """Resultado listo para feed/notificacion."""
 
     listing_id: str
     listing_data: dict
-    similarity_score: float  # 0.0 a 1.0
-    final_score: float  # Score final (actualmente igual a similarity_score)
-    personalized_analysis: Optional[PersonalizedAnalysis] = None
+    scoring: ScoringResult
+    personalized_analysis: Optional[dict] = None
+
+    @property
+    def similarity_score(self) -> float:
+        return self.scoring.normalized_score
+
+    @property
+    def final_score(self) -> float:
+        return self.scoring.normalized_score
 
 
-class MatchingEngine:
-    """
-    Motor de matching con hard filters + similitud vectorial.
+def _parse_vector(value) -> list[float] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(value, list):
+        return None
+    try:
+        return [float(item) for item in value]
+    except (TypeError, ValueError):
+        return None
 
-    Flujo:
-    1. Obtener usuarios activos con onboarding completado
-    2. Para cada usuario:
-       a. Aplicar filtros hard (SQL) para pre-filtrar
-       b. Calcular similitud semántica con embeddings
-       c. Filtrar por threshold
-       d. Generar análisis personalizado con LLM para los matches finales
-       e. Notificar
-    """
 
-    def __init__(self):
-        self.settings = get_settings()
-        self.user_repo = UserRepository()
-        self.listing_repo = RawListingRepository()
-        self.notification_repo = NotificationRepository()
-        self.embedding_generator = EmbeddingGenerator()
-        self.personalized_analyzer = PersonalizedMatchAnalyzer()
+def _preferences_from_user(user: dict) -> UserPreferences:
+    prefs_dict = user.get("preferences", {}) or {}
+    hard_dict = prefs_dict.get("hard_filters", {}) or {}
+    soft_dict = prefs_dict.get("soft_preferences", {}) or {}
+    return UserPreferences(
+        hard_filters=HardFilters(**hard_dict),
+        soft_preferences=SoftPreferences(**soft_dict),
+    )
+
+
+class MatchingService:
+    """Orquestador de candidatos, scoring, cache y notificaciones."""
+
+    def __init__(
+        self,
+        user_repo: UserRepository | None = None,
+        listing_repo: AnalyzedListingRepository | None = None,
+        notification_repo: NotificationRepository | None = None,
+        match_repo: UserListingMatchRepository | None = None,
+        feedback_repo: FeedbackRepository | None = None,
+        scoring_engine: ScoringEngine | None = None,
+        personalized_match_analyzer: PersonalizedMatchAnalyzer | None = None,
+    ):
+        self.user_repo = user_repo or UserRepository()
+        self.listing_repo = listing_repo or AnalyzedListingRepository()
+        self.notification_repo = notification_repo or NotificationRepository()
+        self.match_repo = match_repo or UserListingMatchRepository()
+        self.feedback_repo = feedback_repo or FeedbackRepository()
+        self.scoring_engine = scoring_engine or ScoringEngine()
+        self.personalized_match_analyzer = personalized_match_analyzer
+
+    def get_feed(self, user_id: str, *, limit: int = 50) -> list[dict]:
+        """Devuelve matches cacheados para un futuro frontend."""
+        return self.match_repo.get_fresh_for_user(user_id, limit=limit)
 
     async def find_matches_for_user(
         self,
@@ -67,191 +99,84 @@ class MatchingEngine:
         preferences: UserPreferences,
         preference_vector: Optional[list[float]] = None,
         limit: int = 20,
+        candidate_limit: int = 300,
+        min_score: int = 75,
     ) -> list[MatchResult]:
-        """
-        Encuentra propiedades que matchean con un usuario.
-
-        Args:
-            user_id: UUID del usuario
-            preferences: Preferencias del usuario
-            preference_vector: Embedding de preferencias (opcional)
-            limit: Máximo de resultados
-
-        Returns:
-            Lista de MatchResult ordenados por score
-        """
-        hard = preferences.hard_filters
-
-        # Paso 1: Filtros Hard (via SQL)
-        listings = self.listing_repo.search_by_filters(
-            operation_type=hard.operation_type,
-            neighborhoods=hard.neighborhoods if hard.neighborhoods else None,
-            limit=limit * 20,
+        candidates = self.listing_repo.find_candidates_for_user(
+            preferences,
+            limit=candidate_limit,
         )
-
-        if not listings:
-            logger.info("No hay listings que cumplan filtros hard", user_id=user_id)
+        if not candidates:
+            logger.info("No hay candidatos para usuario", user_id=user_id)
             return []
 
-        # Paso 2: Filtrar los ya enviados
-        results = []
-        for listing in listings:
-            listing_id = listing.get("id")
+        feedback_examples = self.feedback_repo.get_user_feedback(user_id)
+        matches: list[MatchResult] = []
+        cache_rows: list[UserListingMatch] = []
 
-            # Verificar si ya se envió
-            if self.notification_repo.was_sent(user_id, listing_id):
+        for candidate in candidates:
+            analyzed_id = candidate["id"]
+            if self.notification_repo.was_sent(user_id, analyzed_id):
                 continue
 
-            features = listing.get("features", {}) or {}
-
-            # Precio en USD (si viene en ARS, convertir para comparar filtros)
-            price_usd = self._to_price_usd(
-                raw_price=listing.get("price"),
-                currency=listing.get("currency"),
+            scoring = self.scoring_engine.score(
+                candidate,
+                preferences,
+                preference_vector=preference_vector,
+                feedback_examples=feedback_examples,
             )
-            if hard.min_price_usd is not None and price_usd < hard.min_price_usd:
-                continue
-            if hard.max_price_usd is not None and price_usd > hard.max_price_usd:
+            if not scoring.eligible:
                 continue
 
-            rooms = self._to_int(listing.get("rooms"))
-            if hard.min_rooms is not None and rooms < hard.min_rooms:
-                continue
-            if hard.max_rooms is not None and rooms > hard.max_rooms:
-                continue
-
-            # Filtros de requirements
-            if hard.requires_balcony and not features.get("has_balcony"):
-                continue
-            if hard.requires_pets_allowed and not features.get("is_pet_friendly"):
-                continue
-            if hard.requires_furnished and not features.get("is_furnished"):
-                continue
-            if hard.requires_parking and not listing.get("parking_spaces"):
-                continue
-
-            results.append(listing)
-
-        if not results:
-            logger.info("No hay listings nuevos tras filtros", user_id=user_id)
-            return []
-
-        # Paso 3: Calcular scores
-        matches = []
-        for listing in results:
-            # Similitud semántica
-            similarity = await self._calculate_similarity(
-                listing, preference_vector
-            )
-
-            # Score final vectorial
-            final = similarity
-
-            matches.append(
-                MatchResult(
-                    listing_id=listing["id"],
-                    listing_data=listing,
-                    similarity_score=similarity,
-                    final_score=final,
+            cache_rows.append(
+                UserListingMatch(
+                    user_id=user_id,
+                    analyzed_listing_id=analyzed_id,
+                    final_score=scoring.final_score,
+                    band=scoring.band,
+                    summary=scoring.summary,
+                    criteria_breakdown=[criterion.model_dump() for criterion in scoring.criteria],
+                    gaps=scoring.gaps,
+                    scoring_version=SCORING_VERSION,
+                    preference_version="1",
                 )
             )
 
-        # Ordenar por score final
-        matches.sort(key=lambda m: m.final_score, reverse=True)
+            if scoring.final_score >= min_score:
+                matches.append(
+                    MatchResult(
+                        listing_id=analyzed_id,
+                        listing_data=self._notification_listing_data(candidate),
+                        scoring=scoring,
+                        personalized_analysis=scoring.to_personalized_analysis(),
+                    )
+                )
 
-        # Filtrar por threshold
-        threshold = self.settings.similarity_threshold
-        matches = [m for m in matches if m.final_score >= threshold]
+        if cache_rows:
+            self.match_repo.upsert_many(cache_rows)
 
-        # Paso 4: Analisis LLM personalizado para los mejores candidatos
-        personalized_threshold = self.settings.personalized_analysis_threshold
+        matches.sort(key=lambda match: match.scoring.final_score, reverse=True)
+        matches = matches[:limit]
         for match in matches:
-            if match.similarity_score >= personalized_threshold:
-                match.personalized_analysis = await self.personalized_analyzer.generate(
-                    preferences=preferences,
-                    listing_data=match.listing_data,
-                    similarity_score=match.similarity_score,
-                )
-
+            match.personalized_analysis = await self._personalized_analysis(
+                preferences=preferences,
+                listing_data=match.listing_data,
+                scoring=match.scoring,
+            )
         logger.info(
-            "Matches encontrados",
+            "Matches explicables encontrados",
             user_id=user_id,
-            total=len(results),
+            candidates=len(candidates),
+            cached=len(cache_rows),
             above_threshold=len(matches),
         )
-
-        return matches[:limit]
-
-    async def _calculate_similarity(
-        self,
-        listing: dict,
-        preference_vector: Optional[list[float]],
-    ) -> float:
-        """
-        Calcula similitud semántica entre preferencias del usuario y el listing.
-
-        Compara el embedding de preferencias del usuario contra el
-        embedding del texto crudo del listing.
-        """
-        if not preference_vector:
-            return 0.5  # Sin vector, asumimos match medio
-
-        # Matching vectorial contra embedding del texto crudo del listing
-        listing_vector = listing.get("embedding_vector")
-        if not listing_vector:
-            return 0.5
-        
-        # Parsear listing_vector si viene como string
-        if isinstance(listing_vector, str):
-            import json
-            try:
-                listing_vector = json.loads(listing_vector)
-            except json.JSONDecodeError:
-                return 0.5
-        
-        # Asegurar que ambos son listas de floats
-        if not isinstance(preference_vector, list) or not isinstance(listing_vector, list):
-            return 0.5
-
-        # Similitud de coseno
-        try:
-            similarity = EmbeddingGenerator.cosine_similarity(
-                preference_vector, listing_vector
-            )
-            # Normalizar a 0-1 (coseno puede dar negativos)
-            return max(0.0, min(1.0, (similarity + 1) / 2))
-        except Exception as e:
-            logger.warning(f"Error calculando similitud: {e}")
-            return 0.5
-
-    def _to_int(self, value) -> int:
-        try:
-            return int(str(value).strip())
-        except (ValueError, TypeError):
-            return 0
-
-    def _to_price_usd(self, raw_price, currency) -> float:
-        try:
-            price = float(str(raw_price).replace(".", "").replace(",", "."))
-        except (ValueError, TypeError):
-            return 0.0
-        if (currency or "").upper() == "USD":
-            return price
-        return price / self.settings.ars_to_usd_rate
+        return matches
 
     async def process_new_listings(
         self,
         listing_ids: Optional[list[str]] = None,
     ) -> dict:
-        """
-        Procesa nuevos listings y envía notificaciones.
-
-        Args:
-            listing_ids: IDs de listings a procesar (None = todos los nuevos)
-
-        Returns:
-            Estadísticas del procesamiento
-        """
+        """Procesa usuarios activos y envia notificaciones de top matches."""
         from umbral.bot import UmbralBot
 
         stats = {
@@ -260,84 +185,43 @@ class MatchingEngine:
             "notifications_sent": 0,
             "errors": 0,
         }
-
-        # Obtener usuarios activos
         active_users = self.user_repo.get_active_users()
         if not active_users:
             logger.info("No hay usuarios activos para notificar")
             return stats
 
-        # Inicializar bot para enviar notificaciones
         bot = UmbralBot()
-
         for user in active_users:
             try:
-                # Reconstruir preferencias desde el dict de la DB
-                prefs_dict = user.get("preferences", {})
-                hard_dict = prefs_dict.get("hard_filters", {})
-                soft_dict = prefs_dict.get("soft_preferences", {})
-                
-                # Crear objetos de preferencias
-                from umbral.models.user import HardFilters, SoftPreferences
-                
-                hard_filters = HardFilters(**hard_dict) if hard_dict else HardFilters()
-                soft_preferences = SoftPreferences(**soft_dict) if soft_dict else SoftPreferences()
-                
-                preferences = UserPreferences(
-                    hard_filters=hard_filters,
-                    soft_preferences=soft_preferences,
-                )
-
-                preference_vector = user.get("preference_vector")
-                
-                # Parsear preference_vector si viene como string
-                if preference_vector and isinstance(preference_vector, str):
-                    import json
-                    try:
-                        preference_vector = json.loads(preference_vector)
-                    except json.JSONDecodeError:
-                        preference_vector = None
-
-                # Buscar matches
+                preferences = _preferences_from_user(user)
+                preference_vector = _parse_vector(user.get("preference_vector"))
                 matches = await self.find_matches_for_user(
                     user_id=user["id"],
                     preferences=preferences,
                     preference_vector=preference_vector,
-                    limit=3,  # Máximo 3 notificaciones por run
+                    limit=3,
                 )
-
                 stats["users_processed"] += 1
                 stats["matches_found"] += len(matches)
 
-                # Enviar notificaciones
                 for match in matches:
-                    try:
-                        success = await bot.send_listing_notification(
-                            telegram_id=user["telegram_id"],
-                            listing_data=match.listing_data,
-                            similarity_score=match.final_score,
-                            personalized_analysis=match.personalized_analysis,
-                        )
-
-                        if success:
-                            # Registrar notificación enviada
-                            self.notification_repo.create(
-                                user_id=user["id"],
-                                listing_id=match.listing_id,
-                                similarity_score=match.final_score,
-                            )
-                            stats["notifications_sent"] += 1
-
-                    except Exception as e:
-                        logger.error(
-                            "Error enviando notificación",
+                    success = await bot.send_listing_notification(
+                        telegram_id=user["telegram_id"],
+                        listing_data=match.listing_data,
+                        similarity_score=match.final_score,
+                        personalized_analysis=match.personalized_analysis,
+                    )
+                    if success:
+                        self.notification_repo.create(
                             user_id=user["id"],
-                            error=str(e),
+                            analyzed_listing_id=match.listing_id,
+                            final_score=match.scoring.final_score,
                         )
-                        stats["errors"] += 1
-
+                        self.match_repo.mark_notified(user["id"], match.listing_id)
+                        stats["notifications_sent"] += 1
             except Exception as e:
                 import traceback
+
                 logger.error(
                     "Error procesando usuario",
                     user_id=user.get("id"),
@@ -346,20 +230,63 @@ class MatchingEngine:
                 )
                 stats["errors"] += 1
 
-        logger.info("Procesamiento de matching completado", **stats)
+        logger.info("Ciclo de matching completado", **stats)
         return stats
 
     async def run_matching_cycle(self):
-        """
-        Ejecuta un ciclo completo de matching.
+        logger.info("Iniciando ciclo de matching explicable")
+        return await self.process_new_listings()
 
-        Diseñado para ser llamado por GitHub Actions o cron.
-        """
-        logger.info("Iniciando ciclo de matching")
+    async def _personalized_analysis(
+        self,
+        *,
+        preferences: UserPreferences,
+        listing_data: dict,
+        scoring: ScoringResult,
+    ) -> object:
+        fallback = scoring.to_personalized_analysis()
+        threshold = get_settings().personalized_analysis_threshold
+        if scoring.normalized_score < threshold:
+            return fallback
 
         try:
-            stats = await self.process_new_listings()
-            return stats
+            analyzer = self.personalized_match_analyzer
+            if analyzer is None:
+                analyzer = PersonalizedMatchAnalyzer()
+                self.personalized_match_analyzer = analyzer
+            return await analyzer.generate(
+                preferences=preferences,
+                listing_data=listing_data,
+                similarity_score=scoring.normalized_score,
+            )
         except Exception as e:
-            logger.error("Error en ciclo de matching", error=str(e))
-            raise
+            logger.warning(
+                "No se pudo generar analisis personalizado; usando resumen explicable",
+                error=str(e),
+            )
+            return fallback
+
+    def _notification_listing_data(self, candidate: dict) -> dict:
+        """Aplana analyzed + raw para el adapter de Telegram."""
+        raw = candidate.get("raw_listings") or {}
+        return {
+            **raw,
+            **candidate,
+            "id": candidate["id"],
+            "analyzed_listing_id": candidate["id"],
+            "raw_listing_id": candidate.get("raw_listing_id"),
+            "price": raw.get("price") or candidate.get("price_original"),
+            "currency": raw.get("currency") or candidate.get("currency_original"),
+            "features": raw.get("features") or candidate.get("features") or {},
+            "images": raw.get("images") or [],
+            "url": raw.get("url") or candidate.get("url"),
+            "title": raw.get("title") or candidate.get("title"),
+            "location": raw.get("location") or candidate.get("neighborhood"),
+            "maintenance_fee": raw.get("maintenance_fee"),
+            "size_total": raw.get("size_total"),
+            "size_covered": raw.get("size_covered"),
+            "parking_spaces": raw.get("parking_spaces"),
+        }
+
+
+MatchingEngine = MatchingService

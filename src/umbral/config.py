@@ -42,6 +42,34 @@ class Settings(BaseSettings):
     # Gemini
     gemini_api_key: Optional[str] = Field(None, description="API key de Google Gemini")
     gemini_model: str = Field("gemini-2.0-flash", description="Modelo de Gemini a usar")
+    embedding_model: str = Field(
+        "gemini-embedding-2-preview",
+        description="Modelo de embedding (Gemini) para listings y preferencias",
+    )
+    embedding_output_dim: int = Field(
+        768,
+        ge=128,
+        le=3072,
+        description="Dimensión Matryoshka solicitada al modelo de embeddings",
+    )
+    embedding_storage_dim: int = Field(
+        768,
+        ge=128,
+        le=3072,
+        description="Dimensión final persistida en DB (padding/truncado si aplica)",
+    )
+    embedding_max_images: int = Field(
+        4,
+        ge=0,
+        le=10,
+        description="Máximo de imágenes principales usadas para embedding multimodal",
+    )
+    embedding_image_timeout_seconds: float = Field(
+        8.0,
+        ge=1.0,
+        le=30.0,
+        description="Timeout por descarga de imagen para embedding multimodal",
+    )
     
     # Groq
     groq_api_key: Optional[str] = Field(None, description="API key de Groq")

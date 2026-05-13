@@ -1,7 +1,8 @@
 """
 Script para preparar propiedades para matching.
 
-Procesa raw_listings pendientes y genera embeddings del texto crudo.
+Procesa raw_listings pendientes y genera embeddings multimodales
+(texto + imágenes principales cuando están disponibles).
 
 Uso:
     python -m umbral.scripts.run_analysis
@@ -19,10 +20,11 @@ import structlog
 # Suprimir warnings de cleanup de asyncio en Windows
 warnings.filterwarnings("ignore", category=ResourceWarning, message=".*unclosed transport.*")
 
-from umbral.database import RawListingRepository
-from umbral.analysis import EmbeddingGenerator
+from umbral.database import AnalyzedListingRepository, RawListingRepository
+from umbral.analysis import EmbeddingGenerator, ListingAnalyzer
 from umbral.config import get_settings
 from umbral.models import RawListing, ListingFeatures
+from umbral.quality import evaluate_listing_quality
 
 # Configurar logging
 settings = get_settings()
@@ -61,19 +63,21 @@ async def run_analysis(limit: int = 100):
         limit: Máximo de listings a procesar
     """
     raw_repo = RawListingRepository()
+    analyzed_repo = AnalyzedListingRepository()
+    analyzer = ListingAnalyzer()
     embedder = EmbeddingGenerator()
     
     stats = {
         "processed": 0,
+        "enriched": 0,
         "embedded": 0,
         "errors": 0,
     }
 
     logger.info("Iniciando preparacion de listings", limit=limit)
 
-    # Obtener listings sin embedding
-    pending = raw_repo.get_unembedded(limit=limit)
-    logger.info(f"Listings pendientes de embedding: {len(pending)}")
+    pending = raw_repo.get_recent(limit=limit)
+    logger.info(f"Listings candidatos a enrichment: {len(pending)}")
 
     for raw_data in pending:
         stats["processed"] += 1
@@ -113,15 +117,56 @@ async def run_analysis(limit: int = 100):
                 title=raw_listing.title[:50],
             )
 
-            # Generar embedding desde datos crudos del scraper
+            existing = analyzed_repo.get_by_raw_listing_id(raw_data["id"])
+            if existing and existing.get("embedding_vector") and existing.get("vibe_embedding"):
+                logger.debug("Listing ya enriquecido", raw_listing_id=raw_data["id"])
+                continue
+
+            quality = evaluate_listing_quality(raw_listing)
+            if not quality.accepted:
+                logger.info(
+                    "Listing salteado por quality gate en enrichment",
+                    external_id=raw_listing.external_id,
+                    quality=quality.score,
+                    reason=quality.reason,
+                )
+                continue
+
+            analysis = await analyzer.analyze(raw_listing)
+            analyzed_listing = analyzer.create_analyzed_listing(
+                raw_listing=raw_listing,
+                raw_listing_id=raw_data["id"],
+                analysis=analysis,
+            )
+            analyzed_data = analyzed_listing.to_db_dict()
+            analyzed_data["quality_score"] = quality.score
+            analyzed_data["quality_reasons"] = {
+                "reasons": quality.reasons,
+                "penalties": quality.penalties,
+                "tags": quality.tags,
+            }
+
+            if existing:
+                saved = existing
+            else:
+                saved = analyzed_repo.create_from_dict(analyzed_data)
+                stats["enriched"] += 1
+
             try:
                 embedding = await embedder.generate_listing_embedding(
                     raw_listing=raw_listing,
+                    analyzed_listing=analyzed_listing,
                 )
-                updated = raw_repo.update_embedding(
-                    listing_id=raw_data["id"],
+                vibe_embedding = await embedder.generate_vibe_embedding(
+                    executive_summary=analyzed_listing.executive_summary,
+                    style_tags=analyzed_listing.style_tags,
+                )
+                updated = analyzed_repo.update_embeddings(
+                    listing_id=saved["id"],
                     embedding=embedding,
+                    vibe_embedding=vibe_embedding,
                 )
+                raw_repo.update_embedding(raw_data["id"], embedding)
                 if updated:
                     stats["embedded"] += 1
                     logger.info(

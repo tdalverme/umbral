@@ -133,7 +133,7 @@ class UserFeedback(BaseModel):
 
     id: Optional[str] = Field(None, description="UUID generado por Supabase")
     user_id: str = Field(..., description="FK al User")
-    raw_listing_id: str = Field(..., description="FK al RawListing")
+    analyzed_listing_id: str = Field(..., description="FK al AnalyzedListing")
     feedback_type: str = Field(
         ..., description="'like' o 'dislike'"
     )
@@ -144,3 +144,20 @@ class UserFeedback(BaseModel):
     def to_db_dict(self) -> dict:
         """Convierte a diccionario para inserción en Supabase."""
         return self.model_dump(exclude={"id"})
+
+
+class UserListingMatch(BaseModel):
+    """Cache explicable de match usuario-propiedad."""
+
+    user_id: str
+    analyzed_listing_id: str
+    final_score: int = Field(ge=0, le=100)
+    band: str
+    summary: str
+    criteria_breakdown: list[dict] = Field(default_factory=list)
+    gaps: list[str] = Field(default_factory=list)
+    scoring_version: str = "1.0"
+    preference_version: str = "1"
+
+    def to_db_dict(self) -> dict:
+        return self.model_dump()

@@ -29,6 +29,28 @@ class ArgenPropScraper(BaseScraper):
 
     SOURCE_NAME = "argenprop"
     BASE_URL = "https://www.argenprop.com"
+    IMAGE_NOISE_KEYWORDS = (
+        "logo",
+        "watermark",
+        "plan",
+        "plano",
+        "floorplan",
+        "mapa",
+        "streetview",
+        "placeholder",
+        "vectorial",
+        ".svg",
+        "technical-specs",
+    )
+    IMAGE_PRIORITY_KEYWORDS = (
+        "living",
+        "frente",
+        "fachada",
+        "cocina",
+        "comedor",
+        "balcon",
+        "terraza",
+    )
 
     PROPERTY_TYPE_SLUGS = {
         "departamento": "departamentos",
@@ -396,7 +418,34 @@ class ArgenPropScraper(BaseScraper):
             og_image = await page.get_attribute("meta[property='og:image']", "content")
             if og_image:
                 images.append(og_image)
-        return images
+        return self._select_main_images(images)
+
+    def _select_main_images(self, images: list[str], max_images: int = 8) -> list[str]:
+        if not images:
+            return []
+
+        deduped: list[str] = []
+        for image in images:
+            if image and image not in deduped:
+                deduped.append(image)
+
+        def score(url: str) -> int:
+            lowered = url.lower()
+            if any(keyword in lowered for keyword in self.IMAGE_NOISE_KEYWORDS):
+                return -100
+            points = 0
+            if lowered.endswith(".jpg") or lowered.endswith(".jpeg") or lowered.endswith(".png"):
+                points += 2
+            if any(keyword in lowered for keyword in self.IMAGE_PRIORITY_KEYWORDS):
+                points += 10
+            if "cover" in lowered or "principal" in lowered or "front" in lowered:
+                points += 5
+            return points
+
+        ranked = sorted(deduped, key=score, reverse=True)
+        filtered = [url for url in ranked if score(url) >= 0]
+        selected = filtered if filtered else deduped
+        return selected[:max_images]
 
     async def _extract_coordinates(self, page: Page) -> Optional[dict]:
         map_element = await page.query_selector(".map-container .leaflet-container")

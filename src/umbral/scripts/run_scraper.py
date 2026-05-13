@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore", message=".*I/O operation on closed pipe.*")
 import structlog
 
 from umbral.config import get_settings, CABA_NEIGHBORHOODS
-from umbral.database import RawListingRepository
+from umbral.ingestion import IngestionService, NormalizedListingCandidate
 from umbral.scrapers import MercadoLibreScraper, ArgenPropScraper
 
 # Configurar logging
@@ -71,7 +71,7 @@ async def run_scraper(
         max_pages: Máximo de páginas por barrio
     """
     settings = get_settings()
-    repo = RawListingRepository()
+    ingestion = IngestionService()
 
     # Seleccionar scraper
     if source == "mercadolibre":
@@ -108,25 +108,23 @@ async def run_scraper(
             stats["total"] += 1
 
             try:
-                # Verificar si ya existe por hash
-                if repo.exists_by_hash(listing.hash_id):
-                    stats["skipped"] += 1
-                    logger.debug(
-                        "Listing ya existe",
-                        external_id=listing.external_id,
-                        hash=listing.hash_id,
-                    )
-                    continue
-
-                # Insertar o actualizar
-                result = repo.upsert(listing)
-                if result:
+                candidate = NormalizedListingCandidate.from_raw_listing(listing)
+                result = ingestion.ingest_candidate(candidate)
+                if result["accepted"]:
                     stats["new"] += 1
                     logger.info(
                         "Listing guardado",
                         external_id=listing.external_id,
                         neighborhood=listing.neighborhood,
                         price=f"{listing.currency} {listing.price}",
+                    )
+                else:
+                    stats["skipped"] += 1
+                    logger.info(
+                        "Listing descartado",
+                        external_id=listing.external_id,
+                        quality=result["quality"].get("score"),
+                        reason="; ".join(result["quality"].get("penalties", [])),
                     )
 
             except Exception as e:

@@ -1,13 +1,9 @@
-"""
-Motor de matching.
+"""Matching explicable."""
 
-Combina filtros hard y similitud semántica para encontrar
-las propiedades más relevantes para cada usuario.
-"""
-
-from umbral.matching.engine import MatchingEngine, MatchResult
+from umbral.matching.engine import MatchingEngine, MatchingService, MatchResult
 
 __all__ = [
     "MatchingEngine",
+    "MatchingService",
     "MatchResult",
 ]

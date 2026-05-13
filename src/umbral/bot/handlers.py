@@ -13,7 +13,12 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 
 from umbral.config import CABA_NEIGHBORHOODS, get_settings
-from umbral.database import UserRepository, FeedbackRepository, RawListingRepository
+from umbral.database import (
+    AnalyzedListingRepository,
+    UserListingMatchRepository,
+    UserRepository,
+    FeedbackRepository,
+)
 from umbral.config import get_settings
 from umbral.models import UserPreferences, HardFilters
 from umbral.models.user import SoftPreferences, UserFeedback
@@ -781,7 +786,8 @@ class FeedbackHandler:
         settings = get_settings()
         self.user_repo = UserRepository()
         self.feedback_repo = FeedbackRepository()
-        self.raw_repo = RawListingRepository()
+        self.analyzed_repo = AnalyzedListingRepository()
+        self.match_repo = UserListingMatchRepository()
         self.learning_rate = settings.feedback_learning_rate
 
     def _adjust_preference_vector(
@@ -794,24 +800,35 @@ class FeedbackHandler:
             return None
         if not current_vector:
             return listing_vector if is_like else None
+        common_dim = min(len(current_vector), len(listing_vector))
+        if common_dim == 0:
+            return None
         if len(current_vector) != len(listing_vector):
             logger.warning(
-                "Vector length mismatch",
+                "Vector length mismatch; ajustando por dimensión común",
                 current_len=len(current_vector),
                 listing_len=len(listing_vector),
+                common_dim=common_dim,
             )
-            return None
 
+        current_slice = current_vector[:common_dim]
+        listing_slice = listing_vector[:common_dim]
         lr = self.learning_rate
         if is_like:
-            return [
+            adjusted = [
                 cur + lr * (target - cur)
-                for cur, target in zip(current_vector, listing_vector)
+                for cur, target in zip(current_slice, listing_slice)
             ]
-        return [
+        else:
+            adjusted = [
             cur + lr * (cur - target)
-            for cur, target in zip(current_vector, listing_vector)
-        ]
+            for cur, target in zip(current_slice, listing_slice)
+            ]
+
+        # Conserva la dimensionalidad del vector actual para no romper persistencia.
+        if len(current_vector) > common_dim:
+            adjusted.extend(current_vector[common_dim:])
+        return adjusted
 
     async def handle_like(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -821,17 +838,17 @@ class FeedbackHandler:
         await query.answer("👍 ¡Anotado!")
 
         telegram_id = query.from_user.id
-        listing_id = query.data.replace("like_", "")
+        analyzed_listing_id = query.data.replace("like_", "")
 
         user = self.user_repo.get_by_telegram_id(telegram_id)
         if not user:
             return
 
-        raw_listing = self.raw_repo.get_by_id(listing_id)
-        if raw_listing and raw_listing.get("embedding_vector"):
+        analyzed_listing = self.analyzed_repo.get_by_id(analyzed_listing_id)
+        if analyzed_listing and analyzed_listing.get("embedding_vector"):
             new_vector = self._adjust_preference_vector(
                 current_vector=user.get("preference_vector"),
-                listing_vector=raw_listing.get("embedding_vector", []),
+                listing_vector=analyzed_listing.get("embedding_vector", []),
                 is_like=True,
             )
             if new_vector is not None:
@@ -839,14 +856,16 @@ class FeedbackHandler:
 
         feedback = UserFeedback(
             user_id=user["id"],
-            raw_listing_id=listing_id,
+            analyzed_listing_id=analyzed_listing_id,
             feedback_type="like",
         )
 
         self.feedback_repo.create(feedback)
+        self.match_repo.mark_feedback(user["id"], analyzed_listing_id, "like")
         self.user_repo.increment_feedback_count(telegram_id, is_like=True)
 
         keyboard = [[InlineKeyboardButton("✅ Te interesa", callback_data="noop")]]
+        raw_listing = analyzed_listing.get("raw_listings") if analyzed_listing else None
         if raw_listing and raw_listing.get("url"):
             keyboard.append([
                 InlineKeyboardButton("🔗 Ver publicación", url=raw_listing["url"])
@@ -856,7 +875,7 @@ class FeedbackHandler:
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-        logger.info("Feedback like registrado", telegram_id=telegram_id, listing_id=listing_id)
+        logger.info("Feedback like registrado", telegram_id=telegram_id, listing_id=analyzed_listing_id)
 
     async def handle_dislike(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -866,17 +885,17 @@ class FeedbackHandler:
         await query.answer("👎 Gracias por el feedback")
 
         telegram_id = query.from_user.id
-        listing_id = query.data.replace("dislike_", "")
+        analyzed_listing_id = query.data.replace("dislike_", "")
 
         user = self.user_repo.get_by_telegram_id(telegram_id)
         if not user:
             return
 
-        raw_listing = self.raw_repo.get_by_id(listing_id)
-        if raw_listing and raw_listing.get("embedding_vector"):
+        analyzed_listing = self.analyzed_repo.get_by_id(analyzed_listing_id)
+        if analyzed_listing and analyzed_listing.get("embedding_vector"):
             new_vector = self._adjust_preference_vector(
                 current_vector=user.get("preference_vector"),
-                listing_vector=raw_listing.get("embedding_vector", []),
+                listing_vector=analyzed_listing.get("embedding_vector", []),
                 is_like=False,
             )
             if new_vector is not None:
@@ -884,14 +903,16 @@ class FeedbackHandler:
 
         feedback = UserFeedback(
             user_id=user["id"],
-            raw_listing_id=listing_id,
+            analyzed_listing_id=analyzed_listing_id,
             feedback_type="dislike",
         )
 
         self.feedback_repo.create(feedback)
+        self.match_repo.mark_feedback(user["id"], analyzed_listing_id, "dislike")
         self.user_repo.increment_feedback_count(telegram_id, is_like=False)
 
         keyboard = [[InlineKeyboardButton("❌ No te interesa", callback_data="noop")]]
+        raw_listing = analyzed_listing.get("raw_listings") if analyzed_listing else None
         if raw_listing and raw_listing.get("url"):
             keyboard.append([
                 InlineKeyboardButton("🔗 Ver publicación", url=raw_listing["url"])
@@ -901,7 +922,7 @@ class FeedbackHandler:
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-        logger.info("Feedback dislike registrado", telegram_id=telegram_id, listing_id=listing_id)
+        logger.info("Feedback dislike registrado", telegram_id=telegram_id, listing_id=analyzed_listing_id)
 
     async def handle_noop(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE

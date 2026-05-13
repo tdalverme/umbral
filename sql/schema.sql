@@ -101,6 +101,12 @@ CREATE TABLE IF NOT EXISTS analyzed_listings (
     features JSONB NOT NULL,
     style_tags TEXT[] DEFAULT '{}',
     executive_summary TEXT NOT NULL,
+
+    -- Calidad y atractivo global del inmueble/publicacion
+    quality_score INTEGER DEFAULT 70 CHECK (quality_score >= 0 AND quality_score <= 100),
+    quality_reasons JSONB DEFAULT '[]',
+    property_signal_score INTEGER DEFAULT 70 CHECK (property_signal_score >= 0 AND property_signal_score <= 100),
+    is_active BOOLEAN DEFAULT TRUE,
     
     -- Vector para búsqueda semántica (768 dimensiones para text-embedding-004)
     embedding_vector vector(768),
@@ -121,6 +127,8 @@ CREATE TABLE IF NOT EXISTS analyzed_listings (
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_neighborhood ON analyzed_listings(neighborhood);
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_rooms ON analyzed_listings(rooms);
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_price_usd ON analyzed_listings(price_usd);
+CREATE INDEX IF NOT EXISTS idx_analyzed_listings_quality_score ON analyzed_listings(quality_score);
+CREATE INDEX IF NOT EXISTS idx_analyzed_listings_is_active ON analyzed_listings(is_active);
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_analyzed_at ON analyzed_listings(analyzed_at DESC);
 
 -- Índice GIN para scores y features
@@ -233,7 +241,7 @@ CREATE TABLE IF NOT EXISTS sent_notifications (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     analyzed_listing_id UUID NOT NULL REFERENCES analyzed_listings(id) ON DELETE CASCADE,
     
-    similarity_score NUMERIC NOT NULL,
+    final_score NUMERIC NOT NULL,
     sent_at TIMESTAMPTZ DEFAULT NOW(),
     
     -- No enviar el mismo listing dos veces al mismo usuario
@@ -243,6 +251,82 @@ CREATE TABLE IF NOT EXISTS sent_notifications (
 -- Índices
 CREATE INDEX IF NOT EXISTS idx_sent_notifications_user ON sent_notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_sent_notifications_sent_at ON sent_notifications(sent_at DESC);
+
+
+-- =====================================================
+-- MATCHES USUARIO-PROPIEDAD
+-- Cache barato y regenerable de scoring explicable
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS user_listing_matches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    analyzed_listing_id UUID NOT NULL REFERENCES analyzed_listings(id) ON DELETE CASCADE,
+
+    final_score INTEGER NOT NULL CHECK (final_score >= 0 AND final_score <= 100),
+    band TEXT NOT NULL CHECK (band IN ('excellent', 'strong', 'possible', 'weak', 'poor', 'ineligible')),
+    summary TEXT NOT NULL,
+    criteria_breakdown JSONB NOT NULL DEFAULT '[]',
+    gaps JSONB NOT NULL DEFAULT '[]',
+
+    scoring_version TEXT NOT NULL DEFAULT '1.0',
+    preference_version TEXT NOT NULL DEFAULT '1',
+    computed_at TIMESTAMPTZ DEFAULT NOW(),
+
+    seen_at TIMESTAMPTZ,
+    dismissed_at TIMESTAMPTZ,
+    liked_at TIMESTAMPTZ,
+    notified_at TIMESTAMPTZ,
+
+    UNIQUE(user_id, analyzed_listing_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_listing_matches_user_score
+ON user_listing_matches(user_id, final_score DESC);
+
+CREATE INDEX IF NOT EXISTS idx_user_listing_matches_listing
+ON user_listing_matches(analyzed_listing_id);
+
+
+-- =====================================================
+-- INGESTION EVENTS
+-- Auditoria de ingresos, rechazos y calidad de fuentes
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS ingestion_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source TEXT NOT NULL,
+    external_id TEXT,
+    url TEXT,
+    status TEXT NOT NULL CHECK (status IN ('accepted', 'rejected', 'error')),
+    raw_listing_id UUID REFERENCES raw_listings(id) ON DELETE SET NULL,
+    quality_score INTEGER DEFAULT 0 CHECK (quality_score >= 0 AND quality_score <= 100),
+    reason TEXT,
+    tags TEXT[] DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ingestion_events_source_status
+ON ingestion_events(source, status);
+
+CREATE INDEX IF NOT EXISTS idx_ingestion_events_created_at
+ON ingestion_events(created_at DESC);
+
+
+-- =====================================================
+-- PERSONALIZED EXPLANATIONS
+-- LLM opcional, limitado y regenerable
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS personalized_match_explanations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    analyzed_listing_id UUID NOT NULL REFERENCES analyzed_listings(id) ON DELETE CASCADE,
+    explanation JSONB NOT NULL,
+    generated_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ,
+    UNIQUE(user_id, analyzed_listing_id)
+);
 
 
 -- =====================================================
@@ -382,6 +466,9 @@ ALTER TABLE analyzed_listings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sent_notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_listing_matches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ingestion_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE personalized_match_explanations ENABLE ROW LEVEL SECURITY;
 
 -- Políticas permisivas para service_role (desarrollo)
 CREATE POLICY "Service role full access to raw_listings" ON raw_listings
@@ -397,6 +484,15 @@ CREATE POLICY "Service role full access to user_feedback" ON user_feedback
     FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
 CREATE POLICY "Service role full access to sent_notifications" ON sent_notifications
+    FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+CREATE POLICY "Service role full access to user_listing_matches" ON user_listing_matches
+    FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+CREATE POLICY "Service role full access to ingestion_events" ON ingestion_events
+    FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+CREATE POLICY "Service role full access to personalized_match_explanations" ON personalized_match_explanations
     FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
 

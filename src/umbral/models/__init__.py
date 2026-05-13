@@ -12,7 +12,7 @@ from umbral.models.analyzed_listing import (
     InferredFeatures,
     PropertyScores,
 )
-from umbral.models.user import User, UserPreferences, HardFilters
+from umbral.models.user import User, UserPreferences, HardFilters, UserListingMatch
 
 __all__ = [
     # Bronze
@@ -26,4 +26,5 @@ __all__ = [
     "User",
     "UserPreferences",
     "HardFilters",
+    "UserListingMatch",
 ]

@@ -27,6 +27,10 @@ from umbral.analysis.llm_providers import get_llm_provider, BaseLLMProvider
 
 logger = structlog.get_logger()
 
+MAX_DESCRIPTION_CHARS_FOR_ANALYSIS = 3500
+MAX_PROMPT_CHARS_FOR_ANALYSIS = 6500
+MAX_COMPACT_DESCRIPTION_CHARS = 1200
+
 # System prompt para análisis de propiedades
 ANALYSIS_SYSTEM_PROMPT = """Eres un experto analista inmobiliario argentino con años de experiencia en el mercado de CABA.
 Tu trabajo es analizar anuncios de propiedades y extraer información valiosa que NO está explícita en el anuncio.
@@ -173,6 +177,53 @@ DESCRIPCIÓN COMPLETA:
 ---
 Analiza este anuncio y devuelve el JSON con tu análisis."""
 
+    def _build_compact_prompt(self, listing: RawListing) -> str:
+        """Construye un prompt corto para evitar 413 en proveedores con limites bajos."""
+        features = [
+            key.replace("_", " ")
+            for key, value in listing.features.model_dump().items()
+            if value
+        ]
+        description = " ".join((listing.description or "").split())
+        if len(description) > MAX_COMPACT_DESCRIPTION_CHARS:
+            description = description[:MAX_COMPACT_DESCRIPTION_CHARS].rsplit(" ", 1)[0]
+            description += " [truncado]"
+
+        return f"""ANUNCIO A ANALIZAR:
+Titulo: {listing.title}
+Ubicacion: {listing.neighborhood}, {listing.location}
+Precio: {listing.currency} {listing.price}
+Expensas: {listing.maintenance_fee or 'No especificadas'}
+Ambientes: {listing.rooms}
+Banos: {listing.bathrooms}
+Superficie total: {listing.size_total or 'No especificada'} m2
+Superficie cubierta: {listing.size_covered or 'No especificada'} m2
+Antiguedad: {listing.age or 'No especificada'}
+Disposicion: {listing.disposition or 'No especificada'}
+Orientacion: {listing.orientation or 'No especificada'}
+Cochera: {'Si' if listing.parking_spaces else 'No'}
+Amenities/features: {', '.join(features) if features else 'No especificados'}
+Descripcion: {description}
+
+Devuelve SOLO el JSON pedido."""
+
+    def _fallback_analysis(self, raw_response: str = "") -> AnalysisResult:
+        """Resultado conservador cuando el proveedor no puede responder."""
+        return AnalysisResult(
+            scores=PropertyScores(
+                quietness=0.5,
+                luminosity=0.5,
+                connectivity=0.5,
+                wfh_suitability=0.5,
+                modernity=0.5,
+                green_spaces=0.5,
+            ),
+            features=InferredFeatures(),
+            style_tags=["sin-analizar"],
+            executive_summary="Analisis no disponible; se usan valores neutrales para scoring.",
+            raw_response=raw_response,
+        )
+
     def _fix_json(self, text: str) -> str:
         """
         Arregla JSON malformado que Llama a veces genera.
@@ -272,14 +323,19 @@ Analiza este anuncio y devuelve el JSON con tu análisis."""
         Returns:
             AnalysisResult con scores, features y resumen
         """
-        prompt = self._build_prompt(listing)
+        prompt = self._build_compact_prompt(listing)
+        if len(prompt) > MAX_PROMPT_CHARS_FOR_ANALYSIS:
+            prompt = (
+                prompt[:MAX_PROMPT_CHARS_FOR_ANALYSIS]
+                + "\n\n[Prompt truncado por longitud; analizar con la informacion disponible.]"
+            )
 
         try:
             response = await self._provider.generate(
                 system_prompt=ANALYSIS_SYSTEM_PROMPT,
                 user_prompt=prompt,
                 temperature=0.2,
-                max_tokens=4096,
+                max_tokens=768,
             )
 
             raw_text = self._clean_response(response.text)
@@ -336,11 +392,19 @@ Analiza este anuncio y devuelve el JSON con tu análisis."""
             )
 
         except Exception as e:
+            error_text = str(e)
             logger.error(
                 "Error en análisis de LLM",
                 external_id=listing.external_id,
-                error=str(e),
+                error=error_text,
             )
+            if "413" in error_text or "request_too_large" in error_text or "Request Entity Too Large" in error_text:
+                logger.warning(
+                    "Proveedor rechazo payload; usando analisis neutral",
+                    external_id=listing.external_id,
+                    prompt_chars=len(prompt),
+                )
+                return self._fallback_analysis(error_text)
             raise
 
     def create_analyzed_listing(

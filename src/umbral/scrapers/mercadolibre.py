@@ -28,6 +28,28 @@ class MercadoLibreScraper(BaseScraper):
 
     SOURCE_NAME = "mercadolibre"
     BASE_URL = "https://inmuebles.mercadolibre.com.ar"
+    IMAGE_NOISE_KEYWORDS = (
+        "logo",
+        "watermark",
+        "plan",
+        "plano",
+        "floorplan",
+        "mapa",
+        "streetview",
+        "placeholder",
+        "vectorial",
+        ".svg",
+        "technical-specs",
+    )
+    IMAGE_PRIORITY_KEYWORDS = (
+        "living",
+        "frente",
+        "fachada",
+        "cocina",
+        "comedor",
+        "balcon",
+        "terraza",
+    )
 
     # Mapeo de barrios a slugs de MercadoLibre
     NEIGHBORHOOD_SLUGS = {
@@ -507,9 +529,9 @@ class MercadoLibreScraper(BaseScraper):
 
         # Selectores de imágenes
         img_selectors = [
+            "img.gallery-image__image",
             "figure.ui-pdp-gallery__figure img",
             ".ui-pdp-gallery img",
-            "img.ui-pdp-image",
         ]
 
         for selector in img_selectors:
@@ -521,14 +543,49 @@ class MercadoLibreScraper(BaseScraper):
 
                 if img_url and "http" in img_url:
                     # Obtener versión de mayor resolución
-                    img_url = img_url.replace("-O.webp", "-F.webp")
+                    img_url = img_url.replace(".webp", ".png")
+                    lowered = img_url.lower()
+                    # Evitar íconos de specs/planos que no sirven como foto de propiedad.
+                    if (
+                        lowered.endswith(".svg")
+                        or "/vectorial/" in lowered
+                        or "technical-specs" in lowered
+                    ):
+                        continue
                     if img_url not in images:
                         images.append(img_url)
 
             if images:
                 break
 
-        return images[:10]  # Máximo 10 imágenes
+        return self._select_main_images(images)  # Prioriza fotos principales y limpia ruido
+
+    def _select_main_images(self, images: list[str], max_images: int = 8) -> list[str]:
+        if not images:
+            return []
+
+        deduped: list[str] = []
+        for image in images:
+            if image and image not in deduped:
+                deduped.append(image)
+
+        def score(url: str) -> int:
+            lowered = url.lower()
+            if any(keyword in lowered for keyword in self.IMAGE_NOISE_KEYWORDS):
+                return -100
+            points = 0
+            if lowered.endswith(".jpg") or lowered.endswith(".jpeg") or lowered.endswith(".png"):
+                points += 2
+            if any(keyword in lowered for keyword in self.IMAGE_PRIORITY_KEYWORDS):
+                points += 10
+            if "cover" in lowered or "principal" in lowered or "front" in lowered:
+                points += 5
+            return points
+
+        ranked = sorted(deduped, key=score, reverse=True)
+        filtered = [url for url in ranked if score(url) >= 0]
+        selected = filtered if filtered else deduped
+        return selected[:max_images]
 
     async def _extract_features(
         self, page: Page, description: str

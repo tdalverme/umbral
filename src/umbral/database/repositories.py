@@ -16,6 +16,7 @@ from umbral.models import (
     User,
     UserPreferences,
     HardFilters,
+    UserListingMatch,
 )
 from umbral.models.user import SoftPreferences, UserFeedback
 
@@ -174,11 +175,15 @@ class AnalyzedListingRepository(BaseRepository):
     def create(self, listing: AnalyzedListing) -> dict:
         """Inserta un nuevo listing analizado."""
         data = listing.to_db_dict()
+        return self.create_from_dict(data)
+
+    def create_from_dict(self, data: dict) -> dict:
+        """Inserta un analyzed listing ya serializado."""
         response = self.client.table(self.TABLE).insert(data).execute()
         logger.info(
             "Analyzed listing creado",
-            external_id=listing.external_id,
-            neighborhood=listing.neighborhood,
+            external_id=data.get("external_id"),
+            neighborhood=data.get("neighborhood"),
         )
         return response.data[0] if response.data else {}
 
@@ -240,7 +245,7 @@ class AnalyzedListingRepository(BaseRepository):
         """Obtiene un analyzed listing por su UUID."""
         response = (
             self.client.table(self.TABLE)
-            .select("*")
+            .select("*, raw_listings(*)")
             .eq("id", listing_id)
             .limit(1)
             .execute()
@@ -279,6 +284,63 @@ class AnalyzedListingRepository(BaseRepository):
 
         response = query.order("analyzed_at", desc=True).limit(limit).execute()
         return response.data
+
+    def find_candidates_for_user(
+        self,
+        preferences: UserPreferences,
+        *,
+        limit: int = 300,
+        relaxed_budget_multiplier: float = 1.15,
+        min_quality_score: int = 55,
+    ) -> list[dict]:
+        """
+        Obtiene candidatos baratos para scoring.
+
+        Esta query reduce el universo antes del scoring explicable: opera sobre
+        analyzed_listings y trae el raw asociado para features/requisitos.
+        """
+        hard = preferences.hard_filters
+        query = self.client.table(self.TABLE).select(
+            "*, raw_listings!inner(id, url, title, description, price, currency, location, "
+            "operation_type, images, maintenance_fee, size_total, size_covered, "
+            "parking_spaces, features)"
+        )
+
+        if hard.operation_type:
+            query = query.eq("raw_listings.operation_type", hard.operation_type)
+        if hard.neighborhoods:
+            query = query.in_("neighborhood", hard.neighborhoods)
+        if hard.min_price_usd is not None:
+            query = query.gte("price_usd", hard.min_price_usd)
+        if hard.max_price_usd is not None:
+            query = query.lte("price_usd", hard.max_price_usd * relaxed_budget_multiplier)
+        if hard.min_rooms is not None:
+            query = query.gte("rooms", hard.min_rooms)
+        if hard.max_rooms is not None:
+            query = query.lte("rooms", hard.max_rooms)
+
+        # Si la columna todavia no existe en algun entorno dev, Supabase fallara:
+        # esta rama es parte del future state y acompania la migracion SQL.
+        query = query.gte("quality_score", min_quality_score)
+
+        response = query.order("analyzed_at", desc=True).limit(limit).execute()
+        candidates = response.data or []
+        for candidate in candidates:
+            raw = candidate.get("raw_listings") or {}
+            candidate["operation_type"] = raw.get("operation_type")
+            candidate["raw_features"] = raw.get("features") or {}
+            candidate["parking_spaces"] = raw.get("parking_spaces")
+            candidate["url"] = raw.get("url")
+            candidate["title"] = raw.get("title")
+            candidate["description"] = raw.get("description")
+            candidate["price"] = raw.get("price")
+            candidate["currency"] = raw.get("currency")
+            candidate["location"] = raw.get("location")
+            candidate["images"] = raw.get("images") or []
+            candidate["maintenance_fee"] = raw.get("maintenance_fee")
+            candidate["size_total"] = raw.get("size_total")
+            candidate["size_covered"] = raw.get("size_covered")
+        return candidates
 
     def get_for_user_matching(self, user_id: str) -> list[dict]:
         """
@@ -479,13 +541,13 @@ class FeedbackRepository(BaseRepository):
         data = feedback.to_db_dict()
         response = (
             self.client.table(self.TABLE)
-            .upsert(data, on_conflict="user_id,raw_listing_id")
+            .upsert(data, on_conflict="user_id,analyzed_listing_id")
             .execute()
         )
         logger.info(
             "Feedback registrado",
             user_id=feedback.user_id,
-            listing_id=feedback.raw_listing_id,
+            listing_id=feedback.analyzed_listing_id,
             type=feedback.feedback_type,
         )
         return response.data[0] if response.data else {}
@@ -494,7 +556,7 @@ class FeedbackRepository(BaseRepository):
         """Obtiene todo el feedback de un usuario."""
         response = (
             self.client.table(self.TABLE)
-            .select("*, raw_listings(*)")
+            .select("*, analyzed_listings(*)")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
             .execute()
@@ -505,7 +567,7 @@ class FeedbackRepository(BaseRepository):
         """Obtiene los listings que el usuario marcó como interesantes."""
         response = (
             self.client.table(self.TABLE)
-            .select("*, raw_listings(*)")
+            .select("*, analyzed_listings(*)")
             .eq("user_id", user_id)
             .eq("feedback_type", "like")
             .execute()
@@ -521,29 +583,29 @@ class NotificationRepository(BaseRepository):
     def create(
         self,
         user_id: str,
-        listing_id: str,
-        similarity_score: float,
+        analyzed_listing_id: str,
+        final_score: float,
     ) -> dict:
         """Registra una notificación enviada."""
         data = {
             "user_id": user_id,
-            "raw_listing_id": listing_id,
-            "similarity_score": similarity_score,
+            "analyzed_listing_id": analyzed_listing_id,
+            "final_score": final_score,
         }
         response = (
             self.client.table(self.TABLE)
-            .insert(data)
+            .upsert(data, on_conflict="user_id,analyzed_listing_id")
             .execute()
         )
         return response.data[0] if response.data else {}
 
-    def was_sent(self, user_id: str, listing_id: str) -> bool:
+    def was_sent(self, user_id: str, analyzed_listing_id: str) -> bool:
         """Verifica si ya se envió una notificación."""
         response = (
             self.client.table(self.TABLE)
             .select("id")
             .eq("user_id", user_id)
-            .eq("raw_listing_id", listing_id)
+            .eq("analyzed_listing_id", analyzed_listing_id)
             .limit(1)
             .execute()
         )
@@ -555,10 +617,102 @@ class NotificationRepository(BaseRepository):
         """Obtiene el historial de notificaciones de un usuario."""
         response = (
             self.client.table(self.TABLE)
-            .select("*, raw_listings(*)")
+            .select("*, analyzed_listings(*)")
             .eq("user_id", user_id)
             .order("sent_at", desc=True)
             .limit(limit)
             .execute()
         )
         return response.data
+
+
+class UserListingMatchRepository(BaseRepository):
+    """Cache de matches explicables usuario-propiedad."""
+
+    TABLE = "user_listing_matches"
+
+    def upsert(self, match: UserListingMatch) -> dict:
+        data = match.to_db_dict()
+        response = (
+            self.client.table(self.TABLE)
+            .upsert(data, on_conflict="user_id,analyzed_listing_id")
+            .execute()
+        )
+        return response.data[0] if response.data else {}
+
+    def upsert_many(self, matches: list[UserListingMatch]) -> list[dict]:
+        if not matches:
+            return []
+        response = (
+            self.client.table(self.TABLE)
+            .upsert(
+                [match.to_db_dict() for match in matches],
+                on_conflict="user_id,analyzed_listing_id",
+            )
+            .execute()
+        )
+        return response.data or []
+
+    def get_fresh_for_user(self, user_id: str, *, limit: int = 50) -> list[dict]:
+        response = (
+            self.client.table(self.TABLE)
+            .select("*, analyzed_listings(*, raw_listings(*))")
+            .eq("user_id", user_id)
+            .is_("dismissed_at", "null")
+            .order("final_score", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return response.data or []
+
+    def mark_notified(self, user_id: str, analyzed_listing_id: str) -> bool:
+        response = (
+            self.client.table(self.TABLE)
+            .update({"notified_at": datetime.utcnow().isoformat()})
+            .eq("user_id", user_id)
+            .eq("analyzed_listing_id", analyzed_listing_id)
+            .execute()
+        )
+        return len(response.data or []) > 0
+
+    def mark_feedback(self, user_id: str, analyzed_listing_id: str, feedback_type: str) -> bool:
+        field = "liked_at" if feedback_type == "like" else "dismissed_at"
+        response = (
+            self.client.table(self.TABLE)
+            .update({field: datetime.utcnow().isoformat()})
+            .eq("user_id", user_id)
+            .eq("analyzed_listing_id", analyzed_listing_id)
+            .execute()
+        )
+        return len(response.data or []) > 0
+
+
+class IngestionEventRepository(BaseRepository):
+    """Auditoria liviana de ingestion y rechazos."""
+
+    TABLE = "ingestion_events"
+
+    def create(
+        self,
+        *,
+        source: str,
+        external_id: str,
+        url: str,
+        status: str,
+        quality_score: int,
+        reason: str,
+        tags: list[str] | None = None,
+        raw_listing_id: str | None = None,
+    ) -> dict:
+        data = {
+            "source": source,
+            "external_id": external_id,
+            "url": url,
+            "status": status,
+            "raw_listing_id": raw_listing_id,
+            "quality_score": quality_score,
+            "reason": reason,
+            "tags": tags or [],
+        }
+        response = self.client.table(self.TABLE).insert(data).execute()
+        return response.data[0] if response.data else {}

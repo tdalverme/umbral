@@ -19,6 +19,10 @@ groq>=0.4.0
 python-telegram-bot>=20.7
 aiohttp
 
+# API
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+
 # Utilities
 httpx>=0.25.0
 tenacity>=8.2.0

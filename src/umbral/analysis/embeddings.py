@@ -1,15 +1,20 @@
 """
-Generador de embeddings para búsqueda semántica.
+Generador de embeddings semánticos y multimodales.
 
-Usa el modelo text-embedding-004 de Google para generar
-vectores de 768 dimensiones.
+Usa Gemini embeddings para representar:
+- Listings (texto + imágenes principales)
+- Preferencias de usuario (texto)
+- Queries libres
 """
 
+import mimetypes
+from pathlib import Path
 from typing import Optional
 
 from google import genai
 from google.genai import types
 import structlog
+import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from umbral.config import get_settings
@@ -20,7 +25,7 @@ logger = structlog.get_logger()
 
 class EmbeddingGenerator:
     """
-    Genera embeddings usando Google's text-embedding-004.
+    Genera embeddings usando Gemini Embeddings (matryoshka ready).
 
     Los embeddings se usan para:
     - Búsqueda semántica de propiedades ("busco algo luminoso y tranquilo")
@@ -28,8 +33,35 @@ class EmbeddingGenerator:
     - Detección de propiedades similares
     """
 
-    # Dimensión del vector (gemini-embedding-001 soporta 768, 1536, 3072)
-    EMBEDDING_DIM = 768
+    # Dimensión nativa máxima del modelo Gemini embedding
+    NATIVE_MAX_DIM = 3072
+    DEFAULT_OUTPUT_DIM = 768
+    ALLOWED_MATRYOSHKA_DIMS = {512, 768, 1536, 3072}
+    SUPPORTED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png"}
+    SUPPORTED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+    IMAGE_NOISE_KEYWORDS = (
+        "logo",
+        "watermark",
+        "plan",
+        "plano",
+        "floorplan",
+        "mapa",
+        "streetview",
+        "sin-foto",
+        "placeholder",
+        "vectorial",
+        ".svg",
+        "technical-specs",
+    )
+    IMAGE_PRIORITY_KEYWORDS = (
+        "living",
+        "frente",
+        "fachada",
+        "cocina",
+        "comedor",
+        "balcon",
+        "terraza",
+    )
 
     def __init__(self, api_key: Optional[str] = None):
         settings = get_settings()
@@ -42,11 +74,239 @@ class EmbeddingGenerator:
             )
 
         self.client = genai.Client(api_key=api_key)
-        # Modelo de embedding según docs oficiales: gemini-embedding-001
-        # https://ai.google.dev/gemini-api/docs/embeddings
-        self.model_name = "gemini-embedding-001"
-        self.output_dim = self.EMBEDDING_DIM
-        logger.info("Embedding generator inicializado", model=self.model_name, dim=self.output_dim)
+        self.model_name = settings.embedding_model
+        self.output_dim = int(settings.embedding_output_dim or self.DEFAULT_OUTPUT_DIM)
+        self.storage_dim = int(settings.embedding_storage_dim or self.output_dim)
+        self.max_images = int(settings.embedding_max_images)
+        self.image_timeout_seconds = float(settings.embedding_image_timeout_seconds)
+
+        if self.output_dim > self.NATIVE_MAX_DIM:
+            raise ValueError(
+                f"embedding_output_dim={self.output_dim} excede el máximo {self.NATIVE_MAX_DIM}"
+            )
+        if self.storage_dim > self.NATIVE_MAX_DIM:
+            raise ValueError(
+                f"embedding_storage_dim={self.storage_dim} excede el máximo {self.NATIVE_MAX_DIM}"
+            )
+        if self.output_dim not in self.ALLOWED_MATRYOSHKA_DIMS:
+            logger.warning(
+                "Dimensión no estándar para Matryoshka; verificar soporte del modelo",
+                output_dim=self.output_dim,
+                allowed=sorted(self.ALLOWED_MATRYOSHKA_DIMS),
+            )
+
+        logger.info(
+            "Embedding generator inicializado",
+            model=self.model_name,
+            output_dim=self.output_dim,
+            storage_dim=self.storage_dim,
+            max_images=self.max_images,
+        )
+
+    def _normalize_embedding_for_storage(self, embedding: list[float]) -> list[float]:
+        """
+        Ajusta dimensión final para persistencia en DB.
+
+        - Si output_dim > storage_dim: truncamos (Matryoshka)
+        - Si output_dim < storage_dim: hacemos zero-padding
+        """
+        if len(embedding) == self.storage_dim:
+            return embedding
+        if len(embedding) > self.storage_dim:
+            return embedding[: self.storage_dim]
+        return embedding + [0.0] * (self.storage_dim - len(embedding))
+
+    def _score_image_url(self, image_url: str) -> int:
+        lowered = image_url.lower()
+        if any(keyword in lowered for keyword in self.IMAGE_NOISE_KEYWORDS):
+            return -100
+        score = 0
+        if lowered.endswith(self.SUPPORTED_IMAGE_EXTENSIONS):
+            score += 2
+        if any(keyword in lowered for keyword in self.IMAGE_PRIORITY_KEYWORDS):
+            score += 10
+        if "front" in lowered or "cover" in lowered or "principal" in lowered:
+            score += 5
+        return score
+
+    def _select_main_images(self, image_urls: list[str]) -> list[str]:
+        if not image_urls:
+            return []
+        deduped: list[str] = []
+        for image_url in image_urls:
+            if image_url and image_url not in deduped:
+                deduped.append(image_url)
+
+        ranked = sorted(
+            deduped,
+            key=lambda url: self._score_image_url(url),
+            reverse=True,
+        )
+        filtered = [url for url in ranked if self._score_image_url(url) >= 0]
+        selected = filtered if filtered else deduped
+        return selected[: self.max_images]
+
+    async def _download_image_part(self, image_url: str) -> Optional[types.Part]:
+        """
+        Descarga una imagen y la convierte a Part para embedding multimodal.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self.image_timeout_seconds) as client:
+                response = await client.get(image_url, follow_redirects=True)
+            response.raise_for_status()
+
+            mime_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+            if not mime_type or not mime_type.startswith("image/"):
+                guessed, _ = mimetypes.guess_type(image_url)
+                mime_type = guessed or ""
+
+            if mime_type not in self.SUPPORTED_IMAGE_MIME_TYPES:
+                logger.debug(
+                    "Imagen descartada por MIME no soportado por Gemini embeddings",
+                    url=image_url,
+                    mime_type=mime_type,
+                    supported=sorted(self.SUPPORTED_IMAGE_MIME_TYPES),
+                )
+                return None
+
+            image_bytes = response.content
+            if not image_bytes:
+                return None
+
+            return types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+        except Exception as e:
+            logger.debug("No se pudo descargar imagen para embedding", url=image_url, error=str(e))
+            return None
+
+    def _guess_mime_type_from_url(self, image_url: str) -> str:
+        guessed, _ = mimetypes.guess_type(image_url)
+        if guessed:
+            return guessed.lower()
+        suffix = Path(image_url.split("?")[0]).suffix.lower()
+        if suffix in (".jpg", ".jpeg"):
+            return "image/jpeg"
+        if suffix == ".png":
+            return "image/png"
+        return ""
+
+    async def debug_image_candidates(self, image_urls: list[str]) -> dict:
+        """
+        Inspecciona candidatas para embedding multimodal y explica decisiones.
+        """
+        urls = image_urls or []
+        scored = [
+            {"url": url, "score": self._score_image_url(url)}
+            for url in urls
+        ]
+        selected = self._select_main_images(urls)
+
+        accepted: list[dict] = []
+        rejected: list[dict] = []
+        for item in scored:
+            url = item["url"]
+            if item["score"] < 0:
+                rejected.append({
+                    "url": url,
+                    "stage": "selection",
+                    "reason": "noise_keyword",
+                    "score": item["score"],
+                })
+                continue
+
+            guessed_mime = self._guess_mime_type_from_url(url)
+            if guessed_mime and guessed_mime not in self.SUPPORTED_IMAGE_MIME_TYPES:
+                rejected.append({
+                    "url": url,
+                    "stage": "mime_guess",
+                    "reason": "unsupported_mime",
+                    "mime": guessed_mime,
+                })
+                continue
+
+            part = await self._download_image_part(url)
+            if part is None:
+                rejected.append({
+                    "url": url,
+                    "stage": "download_or_mime_validation",
+                    "reason": "download_failed_or_invalid_mime",
+                })
+            else:
+                accepted.append({
+                    "url": url,
+                    "mime": part.inline_data.mime_type if part.inline_data else None,
+                })
+
+        return {
+            "supported_mime_types": sorted(self.SUPPORTED_IMAGE_MIME_TYPES),
+            "input_count": len(urls),
+            "scored": scored,
+            "selected_count": len(selected),
+            "selected_urls": selected,
+            "accepted_count": len(accepted),
+            "accepted": accepted,
+            "rejected_count": len(rejected),
+            "rejected": rejected,
+        }
+
+    async def _build_multimodal_contents(self, text: str, image_urls: list[str]):
+        """
+        Construye payload multimodal para embed_content.
+        """
+        if not image_urls or self.max_images <= 0:
+            return text
+
+        selected_images = self._select_main_images(image_urls)
+        if not selected_images:
+            return text
+
+        parts: list[types.Part] = [types.Part.from_text(text=text)]
+        images_added = 0
+        for image_url in selected_images:
+            image_part = await self._download_image_part(image_url)
+            if image_part is not None:
+                parts.append(image_part)
+                images_added += 1
+
+        if images_added == 0:
+            return text
+
+        logger.debug(
+            "Contenido multimodal construido",
+            requested_images=len(image_urls),
+            selected_images=len(selected_images),
+            embedded_images=images_added,
+        )
+        return [types.Content(role="user", parts=parts)]
+
+    async def _build_image_only_contents(self, image_urls: list[str]):
+        """
+        Construye payload solo con imagenes para embed_content.
+        """
+        if not image_urls or self.max_images <= 0:
+            return None
+
+        selected_images = self._select_main_images(image_urls)
+        if not selected_images:
+            return None
+
+        parts: list[types.Part] = []
+        images_added = 0
+        for image_url in selected_images:
+            image_part = await self._download_image_part(image_url)
+            if image_part is not None:
+                parts.append(image_part)
+                images_added += 1
+
+        if images_added == 0:
+            return None
+
+        logger.debug(
+            "Contenido de imagen-only construido",
+            requested_images=len(image_urls),
+            selected_images=len(selected_images),
+            embedded_images=images_added,
+        )
+        return [types.Content(role="user", parts=parts)]
 
     def _build_listing_text(
         self,
@@ -210,6 +470,7 @@ class EmbeddingGenerator:
         self,
         raw_listing: RawListing,
         analyzed_listing: Optional[AnalyzedListing] = None,
+        image_urls: Optional[list[str]] = None,
     ) -> list[float]:
         """
         Genera embedding para un listing.
@@ -219,27 +480,42 @@ class EmbeddingGenerator:
             analyzed_listing: Listing analizado (opcional, mejora la calidad)
 
         Returns:
-            Vector de 768 dimensiones
+            Vector con dimensión storage_dim
         """
         text = self._build_listing_text(raw_listing, analyzed_listing)
+        effective_images = image_urls if image_urls is not None else (raw_listing.images or [])
 
         try:
-            response = await self.client.aio.models.embed_content(
-                model=self.model_name,
-                contents=text,
-                config=types.EmbedContentConfig(output_dimensionality=self.output_dim),
-            )
+            contents = await self._build_multimodal_contents(text=text, image_urls=effective_images)
+            try:
+                response = await self.client.aio.models.embed_content(
+                    model=self.model_name,
+                    contents=contents,
+                    config=types.EmbedContentConfig(output_dimensionality=self.output_dim),
+                )
+            except Exception as multimodal_error:
+                logger.warning(
+                    "Fallo embedding multimodal; fallback a texto",
+                    external_id=raw_listing.external_id,
+                    error=str(multimodal_error),
+                )
+                response = await self.client.aio.models.embed_content(
+                    model=self.model_name,
+                    contents=text,
+                    config=types.EmbedContentConfig(output_dimensionality=self.output_dim),
+                )
 
-            embedding = response.embeddings[0].values
+            embedding = self._normalize_embedding_for_storage(list(response.embeddings[0].values))
 
             logger.debug(
                 "Embedding generado para listing",
                 external_id=raw_listing.external_id,
                 text_length=len(text),
+                image_count=len(effective_images),
                 embedding_dim=len(embedding),
             )
 
-            return list(embedding)
+            return embedding
 
         except Exception as e:
             logger.error(
@@ -263,7 +539,7 @@ class EmbeddingGenerator:
             preferences: Preferencias del usuario
 
         Returns:
-            Vector de 768 dimensiones
+            Vector con dimensión storage_dim
         """
         text = self._build_preference_text(preferences)
 
@@ -274,7 +550,7 @@ class EmbeddingGenerator:
                 config=types.EmbedContentConfig(output_dimensionality=self.output_dim),
             )
 
-            embedding = response.embeddings[0].values
+            embedding = self._normalize_embedding_for_storage(list(response.embeddings[0].values))
 
             logger.debug(
                 "Embedding generado para preferencias",
@@ -282,7 +558,7 @@ class EmbeddingGenerator:
                 embedding_dim=len(embedding),
             )
 
-            return list(embedding)
+            return embedding
 
         except Exception as e:
             logger.error(
@@ -314,7 +590,7 @@ class EmbeddingGenerator:
             style_tags: Tags de estilo (luminoso, moderno, etc.)
 
         Returns:
-            Vector de 768 dimensiones
+            Vector con dimensión storage_dim
         """
         # Construir texto enfocado en el vibe
         parts = []
@@ -338,7 +614,7 @@ class EmbeddingGenerator:
                 config=types.EmbedContentConfig(output_dimensionality=self.output_dim),
             )
 
-            embedding = response.embeddings[0].values
+            embedding = self._normalize_embedding_for_storage(list(response.embeddings[0].values))
 
             logger.debug(
                 "Vibe embedding generado",
@@ -347,7 +623,7 @@ class EmbeddingGenerator:
                 embedding_dim=len(embedding),
             )
 
-            return list(embedding)
+            return embedding
 
         except Exception as e:
             logger.error(
@@ -368,7 +644,7 @@ class EmbeddingGenerator:
             query: Texto de búsqueda (ej: "departamento luminoso en Palermo")
 
         Returns:
-            Vector de 768 dimensiones
+            Vector con dimensión storage_dim
         """
         try:
             response = await self.client.aio.models.embed_content(
@@ -377,7 +653,7 @@ class EmbeddingGenerator:
                 config=types.EmbedContentConfig(output_dimensionality=self.output_dim),
             )
 
-            return list(response.embeddings[0].values)
+            return self._normalize_embedding_for_storage(list(response.embeddings[0].values))
 
         except Exception as e:
             logger.error(
@@ -385,6 +661,31 @@ class EmbeddingGenerator:
                 query=query[:50],
                 error=str(e),
             )
+            raise
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+    )
+    async def generate_images_only_embedding(self, image_urls: list[str]) -> list[float]:
+        """
+        Genera embedding usando solo imagenes (sin texto del listing).
+
+        Se usa para debugging de señal visual pura.
+        """
+        contents = await self._build_image_only_contents(image_urls=image_urls or [])
+        if not contents:
+            raise ValueError("No hay imagenes validas para generar embedding image-only")
+
+        try:
+            response = await self.client.aio.models.embed_content(
+                model=self.model_name,
+                contents=contents,
+                config=types.EmbedContentConfig(output_dimensionality=self.output_dim),
+            )
+            return self._normalize_embedding_for_storage(list(response.embeddings[0].values))
+        except Exception as e:
+            logger.error("Error generando embedding image-only", error=str(e))
             raise
 
     @staticmethod
@@ -401,9 +702,16 @@ class EmbeddingGenerator:
         """
         import math
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
-        norm1 = math.sqrt(sum(a * a for a in vec1))
-        norm2 = math.sqrt(sum(b * b for b in vec2))
+        if not vec1 or not vec2:
+            return 0.0
+
+        common_dim = min(len(vec1), len(vec2))
+        v1 = vec1[:common_dim]
+        v2 = vec2[:common_dim]
+
+        dot_product = sum(a * b for a, b in zip(v1, v2))
+        norm1 = math.sqrt(sum(a * a for a in v1))
+        norm2 = math.sqrt(sum(b * b for b in v2))
 
         if norm1 == 0 or norm2 == 0:
             return 0.0
