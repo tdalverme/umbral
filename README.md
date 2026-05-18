@@ -151,6 +151,19 @@ cd src
 python -m umbral.scripts.run_matching
 ```
 
+### Admin interno de aprendizaje
+
+El admin se expone desde la API FastAPI y resume usuarios, envios, feedback, calidad de matches e ingestion.
+
+```bash
+cd src
+uvicorn umbral.api.app:app --reload
+```
+
+- Dashboard: `http://localhost:8000/admin/learning`
+- JSON: `http://localhost:8000/admin/learning.json`
+- Si `ADMIN_API_KEY` esta configurado, usar `?key=TU_KEY` o el header `X-Admin-Key`.
+
 ## ⚙️ GitHub Actions
 
 El sistema incluye un workflow que se ejecuta cada hora:

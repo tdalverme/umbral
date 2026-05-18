@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from umbral.api.admin import router as admin_router
 from umbral.database import FeedbackRepository, UserListingMatchRepository, UserRepository
 from umbral.matching import MatchingService
 from umbral.matching.engine import _parse_vector, _preferences_from_user
@@ -17,6 +18,7 @@ class FeedbackRequest(BaseModel):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Umbral API", version="0.1.0")
+    app.include_router(admin_router)
     users = UserRepository()
     matches = UserListingMatchRepository()
     feedback = FeedbackRepository()

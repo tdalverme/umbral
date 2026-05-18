@@ -120,6 +120,12 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = Field("INFO", description="Nivel de logging")
 
+    # Internal admin
+    admin_api_key: Optional[str] = Field(
+        None,
+        description="API key opcional para proteger endpoints internos /admin",
+    )
+
     # Analysis versioning
     analysis_version: str = Field("2.0", description="Versión del análisis de IA")
 
