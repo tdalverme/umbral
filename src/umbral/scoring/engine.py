@@ -95,6 +95,7 @@ class ScoringEngine:
         *,
         preference_vector: list[float] | None = None,
         feedback_examples: list[dict] | None = None,
+        semantic_calibration: dict | None = None,
     ) -> ScoringResult:
         feedback_profile = self._feedback_profile(feedback_examples or [])
         hard_result = self._hard_filters(listing, preferences.hard_filters)
@@ -106,7 +107,7 @@ class ScoringEngine:
             self._property_fit(listing, preferences, feedback_profile),
             self._urban_fit(listing, preferences, feedback_profile),
             self._lifestyle_fit(listing, preferences),
-            self._semantic_fit(listing, preference_vector, feedback_profile),
+            self._semantic_fit(listing, preference_vector, feedback_profile, semantic_calibration),
             self._market_value(listing),
             self._freshness_confidence(listing),
         ]
@@ -324,9 +325,32 @@ class ScoringEngine:
         listing: dict,
         preference_vector: list[float] | None,
         feedback_profile: dict[str, float],
+        semantic_calibration: dict | None = None,
     ) -> CriterionScore:
         if not preference_vector:
             return CriterionScore(name="Semantic/vibe fit", score=55, weight=12, reason="Sin vector de preferencias; score semantico neutral.")
+        if semantic_calibration:
+            score = int(semantic_calibration["score"])
+            metadata = dict(semantic_calibration.get("metadata") or {})
+            if feedback_profile.get("style_sensitivity"):
+                penalty = min(10, int(feedback_profile["style_sensitivity"] * 8))
+                score -= penalty
+                metadata["style_feedback_penalty"] = penalty
+            calibration = metadata.get("calibration", "pool_percentile_v1")
+            if calibration == "pool_percentile_v1":
+                percentile = int(float(metadata.get("percentile", 0)) * 100)
+                reason = f"Vibe calibrado contra el pool de candidatos; percentil {percentile}."
+            elif calibration == "flat_distribution_v1":
+                reason = "Vibe calibrado con cautela porque las similitudes del pool son muy parecidas."
+            else:
+                reason = "Vibe estimado por similitud absoluta por falta de candidatos comparables."
+            return CriterionScore(
+                name="Semantic/vibe fit",
+                score=_clamp(score),
+                weight=12,
+                reason=reason,
+                metadata=metadata,
+            )
         listing_vector = _vector(listing.get("vibe_embedding")) or _vector(listing.get("embedding_vector"))
         if not listing_vector:
             return CriterionScore(name="Semantic/vibe fit", score=55, weight=12, reason="Sin embedding del inmueble; score semantico neutral.")

@@ -8,6 +8,7 @@ class CriterionScore(BaseModel):
     score: int = Field(ge=0, le=100)
     weight: int = Field(ge=0, le=100)
     reason: str
+    metadata: dict = Field(default_factory=dict)
 
 
 class ScoringResult(BaseModel):

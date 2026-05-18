@@ -8,7 +8,7 @@ from typing import Optional
 
 import structlog
 
-from umbral.analysis import PersonalizedMatchAnalyzer
+from umbral.analysis import EmbeddingGenerator, PersonalizedMatchAnalyzer
 from umbral.config import get_settings
 from umbral.database import (
     AnalyzedListingRepository,
@@ -20,6 +20,7 @@ from umbral.database import (
 from umbral.models import UserListingMatch, UserPreferences
 from umbral.models.user import HardFilters, SoftPreferences
 from umbral.scoring import SCORING_VERSION, ScoringEngine, ScoringResult
+from umbral.scoring.semantic import SemanticCalibrator
 
 logger = structlog.get_logger()
 
@@ -111,6 +112,7 @@ class MatchingService:
             return []
 
         feedback_examples = self.feedback_repo.get_user_feedback(user_id)
+        semantic_calibration = self._semantic_calibration(candidates, preference_vector)
         matches: list[MatchResult] = []
         cache_rows: list[UserListingMatch] = []
 
@@ -124,6 +126,7 @@ class MatchingService:
                 preferences,
                 preference_vector=preference_vector,
                 feedback_examples=feedback_examples,
+                semantic_calibration=semantic_calibration.get(analyzed_id),
             )
             logger.info(
                 "Scoring calculado para candidato",
@@ -178,6 +181,32 @@ class MatchingService:
             above_threshold=len(matches),
         )
         return matches
+
+    def _semantic_calibration(
+        self,
+        candidates: list[dict],
+        preference_vector: list[float] | None,
+        *,
+        min_candidates: int = 25,
+    ) -> dict[str, dict]:
+        if not preference_vector:
+            return {}
+        similarities: dict[str, float] = {}
+        for candidate in candidates:
+            candidate_id = candidate.get("id")
+            listing_vector = _parse_vector(candidate.get("vibe_embedding")) or _parse_vector(
+                candidate.get("embedding_vector")
+            )
+            if not candidate_id or not listing_vector:
+                continue
+            try:
+                similarities[candidate_id] = EmbeddingGenerator.cosine_similarity(
+                    preference_vector,
+                    listing_vector,
+                )
+            except (TypeError, ValueError, ZeroDivisionError):
+                continue
+        return SemanticCalibrator(min_candidates=min_candidates).calibrate(similarities)
 
     async def process_new_listings(
         self,
