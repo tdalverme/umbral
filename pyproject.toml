@@ -37,6 +37,7 @@ dependencies = [
     "httpx>=0.25.0",
     "tenacity>=8.2.0",
     "structlog>=23.2.0",
+    "osmium>=3.7.0",
 ]
 
 [project.optional-dependencies]

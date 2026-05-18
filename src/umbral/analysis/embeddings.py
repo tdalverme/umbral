@@ -452,6 +452,12 @@ class EmbeddingGenerator:
             preferences_text.append("moderno o reciclado")
         if soft.weight_green_spaces >= 0.7:
             preferences_text.append("cerca de espacios verdes")
+        if soft.weight_walkability >= 0.7:
+            preferences_text.append("muy caminable para compras cotidianas")
+        if soft.weight_urban_activity >= 0.7:
+            preferences_text.append("con vida urbana, cafes y comercios cerca")
+        if soft.noise_tolerance <= 0.3:
+            preferences_text.append("evitar ruido urbano intenso")
 
         if preferences_text:
             parts.append(f"Prefiero: {', '.join(preferences_text)}")

@@ -20,7 +20,7 @@ import structlog
 # Suprimir warnings de cleanup de asyncio en Windows
 warnings.filterwarnings("ignore", category=ResourceWarning, message=".*unclosed transport.*")
 
-from umbral.database import AnalyzedListingRepository, RawListingRepository
+from umbral.database import AnalyzedListingRepository, RawListingRepository, UrbanSignalRepository
 from umbral.analysis import EmbeddingGenerator, ListingAnalyzer
 from umbral.config import get_settings
 from umbral.models import RawListing, ListingFeatures
@@ -64,6 +64,7 @@ async def run_analysis(limit: int = 100):
     """
     raw_repo = RawListingRepository()
     analyzed_repo = AnalyzedListingRepository()
+    urban_repo = UrbanSignalRepository()
     analyzer = ListingAnalyzer()
     embedder = EmbeddingGenerator()
     
@@ -71,6 +72,7 @@ async def run_analysis(limit: int = 100):
         "processed": 0,
         "enriched": 0,
         "embedded": 0,
+        "urban_signals": 0,
         "errors": 0,
     }
 
@@ -151,6 +153,17 @@ async def run_analysis(limit: int = 100):
             else:
                 saved = analyzed_repo.create_from_dict(analyzed_data)
                 stats["enriched"] += 1
+
+            try:
+                signal_row = urban_repo.compute_for_listing({**analyzed_data, "id": saved["id"]})
+                if signal_row:
+                    stats["urban_signals"] += 1
+            except Exception as e:
+                logger.warning(
+                    "No se pudieron calcular senales urbanas",
+                    external_id=raw_listing.external_id,
+                    error=str(e),
+                )
 
             try:
                 embedding = await embedder.generate_listing_embedding(

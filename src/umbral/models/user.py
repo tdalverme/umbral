@@ -56,6 +56,9 @@ class SoftPreferences(BaseModel):
     weight_wfh_suitability: float = Field(default=0.5, ge=0, le=1)
     weight_modernity: float = Field(default=0.5, ge=0, le=1)
     weight_green_spaces: float = Field(default=0.5, ge=0, le=1)
+    weight_walkability: float = Field(default=0.5, ge=0, le=1)
+    weight_urban_activity: float = Field(default=0.5, ge=0, le=1)
+    noise_tolerance: float = Field(default=0.5, ge=0, le=1)
 
     # Descripción libre del usuario para matching semántico
     ideal_description: Optional[str] = Field(

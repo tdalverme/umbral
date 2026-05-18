@@ -10,6 +10,7 @@ Soporta múltiples proveedores: Gemini, Groq (Llama)
 """
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -466,10 +467,7 @@ Analiza este anuncio y devuelve el JSON con tu análisis."""
         """
         Crea un AnalyzedListing combinando raw data y análisis.
         """
-        try:
-            price_original = float(raw_listing.price.replace(".", "").replace(",", "."))
-        except ValueError:
-            price_original = 0.0
+        price_original = self._parse_amount(raw_listing.price) or 0.0
 
         price_usd = AnalyzedListing.calculate_price_usd(
             price_original,
@@ -477,17 +475,24 @@ Analiza este anuncio y devuelve el JSON con tu análisis."""
             self._settings.ars_to_usd_rate,
         )
 
-        try:
-            size = float(raw_listing.size_covered or raw_listing.size_total or "0")
-        except ValueError:
-            size = 0.0
+        size_total = self._parse_amount(raw_listing.size_total) or 0.0
+        size_covered = self._parse_amount(raw_listing.size_covered) or 0.0
+        size = size_covered or size_total
 
         price_per_m2 = AnalyzedListing.calculate_price_per_m2(price_usd, size)
+        maintenance_fee_usd = self._parse_maintenance_fee_usd(raw_listing.maintenance_fee)
+        total_monthly_cost_usd = price_usd
+        if raw_listing.operation_type == "alquiler":
+            total_monthly_cost_usd = round(price_usd + maintenance_fee_usd, 2)
 
         try:
             rooms = int(raw_listing.rooms)
         except ValueError:
             rooms = 1
+
+        coordinates = raw_listing.coordinates or {}
+        latitude = coordinates.get("lat")
+        longitude = coordinates.get("lng") or coordinates.get("lon")
 
         return AnalyzedListing(
             raw_listing_id=raw_listing_id,
@@ -496,14 +501,57 @@ Analiza este anuncio y devuelve el JSON con tu análisis."""
             price_original=price_original,
             price_usd=price_usd,
             price_per_m2_usd=price_per_m2,
+            maintenance_fee_usd=maintenance_fee_usd,
+            total_monthly_cost_usd=total_monthly_cost_usd,
+            size_total_m2=size_total,
+            size_covered_m2=size_covered,
             neighborhood=raw_listing.neighborhood,
             rooms=rooms,
+            latitude=latitude,
+            longitude=longitude,
             scores=analysis.scores,
             features=analysis.features,
             style_tags=analysis.style_tags,
             executive_summary=analysis.executive_summary,
             analysis_version=self._settings.analysis_version,
         )
+
+    @staticmethod
+    def _parse_amount(value) -> float | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        match = re.search(r"(\d[\d\.,]*)", text)
+        if not match:
+            return None
+        normalized = match.group(1)
+        if "," in normalized and "." in normalized:
+            if normalized.rfind(",") > normalized.rfind("."):
+                normalized = normalized.replace(".", "").replace(",", ".")
+            else:
+                normalized = normalized.replace(",", "")
+        elif "," in normalized:
+            normalized = normalized.replace(",", ".")
+        else:
+            pieces = normalized.split(".")
+            if len(pieces) > 2 or (len(pieces) == 2 and len(pieces[-1]) == 3):
+                normalized = normalized.replace(".", "")
+        try:
+            amount = float(normalized)
+        except ValueError:
+            return None
+        return amount if amount > 0 else None
+
+    def _parse_maintenance_fee_usd(self, value) -> float:
+        amount = self._parse_amount(value) or 0.0
+        if amount <= 0:
+            return 0.0
+        text = str(value or "").lower()
+        if "usd" in text or "u$s" in text:
+            return amount
+        if amount > 500:
+            return round(amount / self._settings.ars_to_usd_rate, 2)
+        return amount
 
 
 # Alias para compatibilidad con código existente

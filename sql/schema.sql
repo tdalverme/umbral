@@ -7,6 +7,7 @@
 
 -- Habilitar extensión pgvector para búsqueda semántica
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- =====================================================
 -- CAPA BRONZE: raw_listings
@@ -91,10 +92,17 @@ CREATE TABLE IF NOT EXISTS analyzed_listings (
     price_original NUMERIC NOT NULL,
     price_usd NUMERIC NOT NULL,
     price_per_m2_usd NUMERIC DEFAULT 0,
+    maintenance_fee_usd NUMERIC DEFAULT 0,
+    total_monthly_cost_usd NUMERIC DEFAULT 0,
+    size_total_m2 NUMERIC DEFAULT 0,
+    size_covered_m2 NUMERIC DEFAULT 0,
     
     -- Datos geográficos
     neighborhood TEXT NOT NULL,
     rooms INTEGER NOT NULL,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    location_geom geography(Point, 4326),
     
     -- Inteligencia extraída (JSONB)
     scores JSONB NOT NULL,
@@ -127,6 +135,9 @@ CREATE TABLE IF NOT EXISTS analyzed_listings (
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_neighborhood ON analyzed_listings(neighborhood);
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_rooms ON analyzed_listings(rooms);
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_price_usd ON analyzed_listings(price_usd);
+CREATE INDEX IF NOT EXISTS idx_analyzed_listings_total_monthly_cost ON analyzed_listings(total_monthly_cost_usd);
+CREATE INDEX IF NOT EXISTS idx_analyzed_listings_size_covered_m2 ON analyzed_listings(size_covered_m2);
+CREATE INDEX IF NOT EXISTS idx_analyzed_listings_location_geom ON analyzed_listings USING GIST(location_geom);
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_quality_score ON analyzed_listings(quality_score);
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_is_active ON analyzed_listings(is_active);
 CREATE INDEX IF NOT EXISTS idx_analyzed_listings_analyzed_at ON analyzed_listings(analyzed_at DESC);
@@ -179,6 +190,9 @@ CREATE TABLE IF NOT EXISTS users (
             "weight_wfh_suitability": 0.5,
             "weight_modernity": 0.5,
             "weight_green_spaces": 0.5,
+            "weight_walkability": 0.5,
+            "weight_urban_activity": 0.5,
+            "noise_tolerance": 0.5,
             "ideal_description": null
         }
     }',
@@ -332,6 +346,81 @@ CREATE TABLE IF NOT EXISTS personalized_match_explanations (
 
 
 -- =====================================================
+-- URBAN SIGNALS / OSM CACHE
+-- Snapshot local de OpenStreetMap y senales calculadas
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS osm_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_path TEXT NOT NULL,
+    source_hash TEXT,
+    status TEXT NOT NULL DEFAULT 'importing' CHECK (status IN ('importing', 'ready', 'failed')),
+    poi_count INTEGER NOT NULL DEFAULT 0,
+    linear_count INTEGER NOT NULL DEFAULT 0,
+    imported_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS osm_pois (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    osm_snapshot_id UUID NOT NULL REFERENCES osm_snapshots(id) ON DELETE CASCADE,
+    osm_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    name TEXT,
+    tags JSONB NOT NULL DEFAULT '{}',
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    geom geography(Point, 4326) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(osm_snapshot_id, osm_id, category)
+);
+
+CREATE TABLE IF NOT EXISTS osm_linear_features (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    osm_snapshot_id UUID NOT NULL REFERENCES osm_snapshots(id) ON DELETE CASCADE,
+    osm_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    name TEXT,
+    tags JSONB NOT NULL DEFAULT '{}',
+    geom geography(LineString, 4326) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(osm_snapshot_id, osm_id, category)
+);
+
+CREATE TABLE IF NOT EXISTS listing_urban_signals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    analyzed_listing_id UUID NOT NULL REFERENCES analyzed_listings(id) ON DELETE CASCADE,
+    osm_snapshot_id UUID REFERENCES osm_snapshots(id) ON DELETE SET NULL,
+    signals JSONB NOT NULL,
+    computed_version TEXT NOT NULL DEFAULT 'urban_signals_v1',
+    confidence NUMERIC NOT NULL DEFAULT 0 CHECK (confidence >= 0 AND confidence <= 1),
+    computed_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(analyzed_listing_id, computed_version)
+);
+
+CREATE TABLE IF NOT EXISTS market_price_benchmarks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    operation_type TEXT NOT NULL CHECK (operation_type IN ('alquiler', 'venta')),
+    neighborhood TEXT NOT NULL,
+    rooms INTEGER NOT NULL,
+    median_price_per_m2_usd NUMERIC NOT NULL,
+    p25_price_per_m2_usd NUMERIC,
+    p75_price_per_m2_usd NUMERIC,
+    sample_count INTEGER NOT NULL DEFAULT 0,
+    computed_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(operation_type, neighborhood, rooms)
+);
+
+CREATE INDEX IF NOT EXISTS idx_osm_snapshots_status_imported ON osm_snapshots(status, imported_at DESC);
+CREATE INDEX IF NOT EXISTS idx_osm_pois_snapshot_category ON osm_pois(osm_snapshot_id, category);
+CREATE INDEX IF NOT EXISTS idx_osm_pois_geom ON osm_pois USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_osm_linear_snapshot_category ON osm_linear_features(osm_snapshot_id, category);
+CREATE INDEX IF NOT EXISTS idx_osm_linear_geom ON osm_linear_features USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_listing_urban_signals_listing ON listing_urban_signals(analyzed_listing_id);
+CREATE INDEX IF NOT EXISTS idx_listing_urban_signals_json ON listing_urban_signals USING GIN(signals);
+CREATE INDEX IF NOT EXISTS idx_market_price_benchmarks_lookup ON market_price_benchmarks(operation_type, neighborhood, rooms);
+
+
+-- =====================================================
 -- FUNCIONES ÚTILES
 -- =====================================================
 
@@ -366,6 +455,71 @@ BEGIN
     ORDER BY al.embedding_vector <=> query_embedding
     LIMIT match_count;
 END;
+$$;
+
+CREATE OR REPLACE FUNCTION get_urban_distance_buckets(
+    p_latitude DOUBLE PRECISION,
+    p_longitude DOUBLE PRECISION,
+    p_snapshot_id UUID,
+    p_radius_m INTEGER DEFAULT 1200
+)
+RETURNS TABLE (
+    feature_kind TEXT,
+    category TEXT,
+    distance_m DOUBLE PRECISION
+)
+LANGUAGE sql
+STABLE
+AS $$
+    WITH origin AS (
+        SELECT ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326)::geography AS geom
+    )
+    SELECT 'poi'::TEXT, poi.category, ST_Distance(poi.geom, origin.geom)
+    FROM osm_pois poi, origin
+    WHERE poi.osm_snapshot_id = p_snapshot_id
+      AND ST_DWithin(poi.geom, origin.geom, p_radius_m)
+    UNION ALL
+    SELECT 'linear'::TEXT, lf.category, ST_Distance(lf.geom, origin.geom)
+    FROM osm_linear_features lf, origin
+    WHERE lf.osm_snapshot_id = p_snapshot_id
+      AND ST_DWithin(lf.geom, origin.geom, p_radius_m);
+$$;
+
+CREATE OR REPLACE FUNCTION refresh_market_price_benchmarks()
+RETURNS VOID
+LANGUAGE sql
+AS $$
+    INSERT INTO market_price_benchmarks (
+        operation_type,
+        neighborhood,
+        rooms,
+        median_price_per_m2_usd,
+        p25_price_per_m2_usd,
+        p75_price_per_m2_usd,
+        sample_count,
+        computed_at
+    )
+    SELECT
+        rl.operation_type,
+        al.neighborhood,
+        al.rooms,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY al.price_per_m2_usd),
+        percentile_cont(0.25) WITHIN GROUP (ORDER BY al.price_per_m2_usd),
+        percentile_cont(0.75) WITHIN GROUP (ORDER BY al.price_per_m2_usd),
+        COUNT(*),
+        NOW()
+    FROM analyzed_listings al
+    JOIN raw_listings rl ON al.raw_listing_id = rl.id
+    WHERE al.price_per_m2_usd > 0
+      AND al.is_active = TRUE
+    GROUP BY rl.operation_type, al.neighborhood, al.rooms
+    ON CONFLICT (operation_type, neighborhood, rooms)
+    DO UPDATE SET
+        median_price_per_m2_usd = EXCLUDED.median_price_per_m2_usd,
+        p25_price_per_m2_usd = EXCLUDED.p25_price_per_m2_usd,
+        p75_price_per_m2_usd = EXCLUDED.p75_price_per_m2_usd,
+        sample_count = EXCLUDED.sample_count,
+        computed_at = NOW();
 $$;
 
 
@@ -471,6 +625,11 @@ ALTER TABLE sent_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_listing_matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ingestion_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE personalized_match_explanations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE osm_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE osm_pois ENABLE ROW LEVEL SECURITY;
+ALTER TABLE osm_linear_features ENABLE ROW LEVEL SECURITY;
+ALTER TABLE listing_urban_signals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE market_price_benchmarks ENABLE ROW LEVEL SECURITY;
 
 -- Políticas permisivas para service_role (desarrollo)
 CREATE POLICY "Service role full access to raw_listings" ON raw_listings
@@ -495,6 +654,21 @@ CREATE POLICY "Service role full access to ingestion_events" ON ingestion_events
     FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
 CREATE POLICY "Service role full access to personalized_match_explanations" ON personalized_match_explanations
+    FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+CREATE POLICY "Service role full access to osm_snapshots" ON osm_snapshots
+    FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+CREATE POLICY "Service role full access to osm_pois" ON osm_pois
+    FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+CREATE POLICY "Service role full access to osm_linear_features" ON osm_linear_features
+    FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+CREATE POLICY "Service role full access to listing_urban_signals" ON listing_urban_signals
+    FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+CREATE POLICY "Service role full access to market_price_benchmarks" ON market_price_benchmarks
     FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
 
@@ -530,6 +704,9 @@ VALUES (
             "weight_wfh_suitability": 0.9,
             "weight_modernity": 0.5,
             "weight_green_spaces": 0.7,
+            "weight_walkability": 0.7,
+            "weight_urban_activity": 0.4,
+            "noise_tolerance": 0.3,
             "ideal_description": "Busco un departamento luminoso y silencioso, ideal para trabajar desde casa. Cerca de espacios verdes sería un plus."
         }
     }'

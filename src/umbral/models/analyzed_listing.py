@@ -86,10 +86,16 @@ class AnalyzedListing(BaseModel):
     price_per_m2_usd: float = Field(
         default=0.0, description="Precio por m² en USD (métrica de valor)"
     )
+    maintenance_fee_usd: float = Field(default=0.0, description="Expensas en USD")
+    total_monthly_cost_usd: float = Field(default=0.0, description="Alquiler + expensas en USD")
+    size_total_m2: float = Field(default=0.0, description="Superficie total normalizada")
+    size_covered_m2: float = Field(default=0.0, description="Superficie cubierta normalizada")
 
     # Datos geográficos normalizados
     neighborhood: str = Field(..., description="Barrio normalizado")
     rooms: int = Field(..., description="Cantidad de ambientes como int")
+    latitude: Optional[float] = Field(default=None, description="Latitud")
+    longitude: Optional[float] = Field(default=None, description="Longitud")
 
     # Inteligencia Extraída
     scores: PropertyScores = Field(..., description="Puntajes cualitativos")

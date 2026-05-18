@@ -9,16 +9,16 @@ from typing import Optional
 
 import structlog
 
-from umbral.database.supabase_client import get_supabase_client, SupabaseClient
+from umbral.database.supabase_client import SupabaseClient, get_supabase_client
 from umbral.models import (
-    RawListing,
     AnalyzedListing,
+    RawListing,
     User,
-    UserPreferences,
-    HardFilters,
     UserListingMatch,
+    UserPreferences,
 )
-from umbral.models.user import SoftPreferences, UserFeedback
+from umbral.models.user import UserFeedback
+from umbral.urban import UrbanSignalCalculator, UrbanSignalResult
 
 logger = structlog.get_logger()
 
@@ -200,7 +200,7 @@ class AnalyzedListingRepository(BaseRepository):
     def update_vibe_embedding(self, listing_id: str, vibe_embedding: list[float]) -> bool:
         """
         Actualiza el vector de vibe embedding de un listing.
-        
+
         Este embedding contiene solo executive_summary + style_tags
         para matching semántico de "vibe" con preferencias del usuario.
         """
@@ -303,7 +303,7 @@ class AnalyzedListingRepository(BaseRepository):
         query = self.client.table(self.TABLE).select(
             "*, raw_listings!inner(id, url, title, description, price, currency, location, "
             "operation_type, images, maintenance_fee, size_total, size_covered, "
-            "parking_spaces, features)"
+            "parking_spaces, features), listing_urban_signals(signals, computed_version, confidence)"
         )
 
         if hard.operation_type:
@@ -313,11 +313,14 @@ class AnalyzedListingRepository(BaseRepository):
         if hard.min_price_usd is not None:
             query = query.gte("price_usd", hard.min_price_usd)
         if hard.max_price_usd is not None:
-            query = query.lte("price_usd", hard.max_price_usd * relaxed_budget_multiplier)
+            budget_column = "total_monthly_cost_usd" if hard.operation_type == "alquiler" else "price_usd"
+            query = query.lte(budget_column, hard.max_price_usd * relaxed_budget_multiplier)
         if hard.min_rooms is not None:
             query = query.gte("rooms", hard.min_rooms)
         if hard.max_rooms is not None:
             query = query.lte("rooms", hard.max_rooms)
+        if hard.min_size_m2 is not None:
+            query = query.gte("size_covered_m2", hard.min_size_m2)
 
         # Si la columna todavia no existe en algun entorno dev, Supabase fallara:
         # esta rama es parte del future state y acompania la migracion SQL.
@@ -340,7 +343,50 @@ class AnalyzedListingRepository(BaseRepository):
             candidate["maintenance_fee"] = raw.get("maintenance_fee")
             candidate["size_total"] = raw.get("size_total")
             candidate["size_covered"] = raw.get("size_covered")
+            signals = candidate.get("listing_urban_signals") or []
+            if isinstance(signals, list) and signals:
+                candidate["urban_signals"] = signals[0].get("signals")
+            elif isinstance(signals, dict):
+                candidate["urban_signals"] = signals.get("signals")
+            candidate["market_benchmark"] = self._market_benchmark(
+                operation_type=raw.get("operation_type") or hard.operation_type,
+                neighborhood=candidate.get("neighborhood"),
+                rooms=candidate.get("rooms"),
+            )
         return candidates
+
+    def _market_benchmark(
+        self,
+        *,
+        operation_type: str | None,
+        neighborhood: str | None,
+        rooms: int | None,
+    ) -> dict | None:
+        if not operation_type or not neighborhood or rooms is None:
+            return None
+        response = (
+            self.client.table("market_price_benchmarks")
+            .select("*")
+            .eq("operation_type", operation_type)
+            .eq("neighborhood", neighborhood)
+            .eq("rooms", rooms)
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    def get_active_with_coordinates(self, limit: int = 500) -> list[dict]:
+        response = (
+            self.client.table(self.TABLE)
+            .select("id, latitude, longitude")
+            .eq("is_active", True)
+            .not_.is_("latitude", "null")
+            .not_.is_("longitude", "null")
+            .order("analyzed_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return response.data or []
 
     def get_for_user_matching(self, user_id: str) -> list[dict]:
         """
@@ -709,6 +755,128 @@ class UserListingMatchRepository(BaseRepository):
         )
         return len(response.data or []) > 0
 
+
+class UrbanSignalRepository(BaseRepository):
+    """Persistencia de snapshots OSM y senales urbanas cacheadas."""
+
+    SNAPSHOT_TABLE = "osm_snapshots"
+    POI_TABLE = "osm_pois"
+    LINEAR_TABLE = "osm_linear_features"
+    SIGNAL_TABLE = "listing_urban_signals"
+
+    def create_snapshot(self, *, source_path: str, source_hash: str | None = None) -> dict:
+        data = {"source_path": source_path, "source_hash": source_hash, "status": "importing"}
+        response = self.client.table(self.SNAPSHOT_TABLE).insert(data).execute()
+        return response.data[0] if response.data else {}
+
+    def mark_snapshot_ready(self, snapshot_id: str, *, poi_count: int, linear_count: int) -> dict:
+        response = (
+            self.client.table(self.SNAPSHOT_TABLE)
+            .update({"status": "ready", "poi_count": poi_count, "linear_count": linear_count})
+            .eq("id", snapshot_id)
+            .execute()
+        )
+        return response.data[0] if response.data else {}
+
+    def get_active_snapshot(self) -> dict | None:
+        response = (
+            self.client.table(self.SNAPSHOT_TABLE)
+            .select("*")
+            .eq("status", "ready")
+            .order("imported_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    def upsert_pois(self, rows: list[dict]) -> list[dict]:
+        if not rows:
+            return []
+        response = (
+            self.client.table(self.POI_TABLE)
+            .upsert(rows, on_conflict="osm_snapshot_id,osm_id,category")
+            .execute()
+        )
+        return response.data or []
+
+    def upsert_linear_features(self, rows: list[dict]) -> list[dict]:
+        if not rows:
+            return []
+        response = (
+            self.client.table(self.LINEAR_TABLE)
+            .upsert(rows, on_conflict="osm_snapshot_id,osm_id,category")
+            .execute()
+        )
+        return response.data or []
+
+    def get_distance_buckets(self, *, latitude: float, longitude: float, snapshot_id: str) -> dict:
+        rows = self.client.client.rpc(
+            "get_urban_distance_buckets",
+            {
+                "p_latitude": latitude,
+                "p_longitude": longitude,
+                "p_snapshot_id": snapshot_id,
+            },
+        ).execute().data or []
+        poi: dict[str, list[float]] = {}
+        linear: dict[str, list[float]] = {}
+        for row in rows:
+            target = linear if row.get("feature_kind") == "linear" else poi
+            target.setdefault(row["category"], []).append(float(row["distance_m"]))
+        return {"poi_distances": poi, "linear_distances": linear}
+
+    def upsert_listing_signals(
+        self,
+        *,
+        analyzed_listing_id: str,
+        osm_snapshot_id: str | None,
+        result: UrbanSignalResult,
+    ) -> dict:
+        data = {
+            "analyzed_listing_id": analyzed_listing_id,
+            "osm_snapshot_id": osm_snapshot_id,
+            "signals": result.signals,
+            "computed_version": result.computed_version,
+            "confidence": result.signals.get("confidence", 0.0),
+        }
+        response = (
+            self.client.table(self.SIGNAL_TABLE)
+            .upsert(data, on_conflict="analyzed_listing_id,computed_version")
+            .execute()
+        )
+        return response.data[0] if response.data else {}
+
+    def compute_for_listing(self, listing: dict) -> dict:
+        calculator = UrbanSignalCalculator()
+        listing_id = listing.get("id")
+        latitude = listing.get("latitude")
+        longitude = listing.get("longitude")
+        if not listing_id:
+            return {}
+        if latitude is None or longitude is None:
+            return self.upsert_listing_signals(
+                analyzed_listing_id=listing_id,
+                osm_snapshot_id=None,
+                result=calculator.neutral(),
+            )
+        snapshot = self.get_active_snapshot()
+        if not snapshot:
+            return self.upsert_listing_signals(
+                analyzed_listing_id=listing_id,
+                osm_snapshot_id=None,
+                result=calculator.neutral("missing_osm_snapshot"),
+            )
+        buckets = self.get_distance_buckets(
+            latitude=float(latitude),
+            longitude=float(longitude),
+            snapshot_id=snapshot["id"],
+        )
+        result = calculator.calculate(**buckets)
+        return self.upsert_listing_signals(
+            analyzed_listing_id=listing_id,
+            osm_snapshot_id=snapshot["id"],
+            result=result,
+        )
 
 class IngestionEventRepository(BaseRepository):
     """Auditoria liviana de ingestion y rechazos."""

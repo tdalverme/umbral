@@ -13,6 +13,7 @@ from umbral.database.repositories import (
     NotificationRepository,
     UserListingMatchRepository,
     IngestionEventRepository,
+    UrbanSignalRepository,
 )
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "NotificationRepository",
     "UserListingMatchRepository",
     "IngestionEventRepository",
+    "UrbanSignalRepository",
 ]

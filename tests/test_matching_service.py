@@ -54,6 +54,18 @@ def _candidate():
             "modernity": 0.7,
             "green_spaces": 0.6,
         },
+        "urban_signals": {
+            "noise_risk": 0.2,
+            "walkability": 0.85,
+            "transit_access": 0.8,
+            "green_access": 0.6,
+            "nightlife_intensity": 0.2,
+            "daily_convenience": 0.9,
+            "cafe_lifestyle": 0.6,
+            "commercial_intensity": 0.5,
+            "residential_calm": 0.75,
+            "confidence": 0.9,
+        },
     }
 
 

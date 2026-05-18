@@ -718,7 +718,10 @@ Devuelve SOLO un JSON con esta estructura exacta:
     "weight_connectivity": 0.0-1.0,
     "weight_wfh_suitability": 0.0-1.0,
     "weight_modernity": 0.0-1.0,
-    "weight_green_spaces": 0.0-1.0
+    "weight_green_spaces": 0.0-1.0,
+    "weight_walkability": 0.0-1.0,
+    "weight_urban_activity": 0.0-1.0,
+    "noise_tolerance": 0.0-1.0
 }}"""
 
         try:
@@ -759,6 +762,9 @@ Devuelve SOLO un JSON con esta estructura exacta:
                 weight_wfh_suitability=float(data.get("weight_wfh_suitability", 0.5)),
                 weight_modernity=float(data.get("weight_modernity", 0.5)),
                 weight_green_spaces=float(data.get("weight_green_spaces", 0.5)),
+                weight_walkability=float(data.get("weight_walkability", 0.5)),
+                weight_urban_activity=float(data.get("weight_urban_activity", 0.5)),
+                noise_tolerance=float(data.get("noise_tolerance", 0.5)),
             )
 
         except Exception as e:
@@ -991,14 +997,6 @@ class FeedbackHandler:
             return
 
         analyzed_listing = self.analyzed_repo.get_by_id(analyzed_listing_id)
-        if analyzed_listing and analyzed_listing.get("embedding_vector"):
-            new_vector = self._adjust_preference_vector(
-                current_vector=user.get("preference_vector"),
-                listing_vector=analyzed_listing.get("embedding_vector", []),
-                is_like=False,
-            )
-            if new_vector is not None:
-                self.user_repo.update_preference_vector(telegram_id, new_vector)
 
         feedback = UserFeedback(
             user_id=user["id"],
