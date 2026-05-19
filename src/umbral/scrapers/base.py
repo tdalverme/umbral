@@ -349,6 +349,16 @@ class BaseScraper(ABC):
                         return
                     listing = await self.scrape_listing(listing_url)
                     if listing:
+                        detected_operation_type = listing.operation_type
+                        listing.operation_type = operation_type
+                        if detected_operation_type != operation_type:
+                            logger.info(
+                                "Operacion de listing alineada con busqueda",
+                                source=self.SOURCE_NAME,
+                                listing_url=listing_url,
+                                detected_operation=detected_operation_type,
+                                requested_operation=operation_type,
+                            )
                         listing_count += 1
                         yielded += 1
                         yield listing

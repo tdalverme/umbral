@@ -155,15 +155,39 @@ class RawListingRepository(BaseRepository):
         response = query.order("scraped_at", desc=True).limit(limit).execute()
         return response.data
 
-    def get_recent(self, limit: int = 50) -> list[dict]:
+    def get_recent(
+        self,
+        limit: int = 50,
+        operation_type: Optional[str] = None,
+        neighborhoods: Optional[list[str]] = None,
+    ) -> list[dict]:
         """Obtiene los listings más recientes."""
-        response = (
-            self.client.table(self.TABLE)
-            .select("*")
-            .order("scraped_at", desc=True)
-            .limit(limit)
-            .execute()
-        )
+        query = self.client.table(self.TABLE).select("*")
+        if operation_type:
+            query = query.eq("operation_type", operation_type)
+        if neighborhoods:
+            query = query.in_("neighborhood", neighborhoods)
+
+        response = query.order("scraped_at", desc=True).limit(limit).execute()
+        return response.data
+
+    def get_unanalyzed_recent(
+        self,
+        limit: int = 50,
+        operation_type: Optional[str] = None,
+        neighborhoods: Optional[list[str]] = None,
+    ) -> list[dict]:
+        """Obtiene raw listings recientes que todavía no tienen análisis."""
+        query = self.client.table(self.TABLE).select("*, analyzed_listings!left(id)")
+        query = query.is_("analyzed_listings.id", "null")
+        if operation_type:
+            query = query.eq("operation_type", operation_type)
+        if neighborhoods:
+            query = query.in_("neighborhood", neighborhoods)
+
+        response = query.order("scraped_at", desc=True).limit(limit).execute()
+        for row in response.data:
+            row.pop("analyzed_listings", None)
         return response.data
 
 

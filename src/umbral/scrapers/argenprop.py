@@ -464,9 +464,13 @@ class ArgenPropScraper(BaseScraper):
         title_lower = (title or "").lower()
         url_lower = (url or "").lower()
 
-        if "venta" in title_lower or "/venta/" in url_lower or "-en-venta-" in url_lower:
+        if "/venta/" in url_lower or "-en-venta-" in url_lower:
             return "venta"
-        if "alquiler" in title_lower or "/alquiler/" in url_lower or "-en-alquiler-" in url_lower:
+        if "/alquiler/" in url_lower or "-en-alquiler-" in url_lower:
+            return "alquiler"
+        if "venta" in title_lower:
+            return "venta"
+        if "alquiler" in title_lower:
             return "alquiler"
 
         og_title = await page.get_attribute("meta[property='og:title']", "content")

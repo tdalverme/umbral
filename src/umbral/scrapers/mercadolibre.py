@@ -635,8 +635,9 @@ class MercadoLibreScraper(BaseScraper):
 
     def _detect_operation_type(self, url: str) -> str:
         """Detecta si es alquiler o venta desde la URL."""
-        if "/alquiler/" in url.lower():
+        url_lower = (url or "").lower()
+        if "/alquiler/" in url_lower or "-en-alquiler-" in url_lower:
             return "alquiler"
-        elif "/venta/" in url.lower():
+        elif "/venta/" in url_lower or "-en-venta-" in url_lower:
             return "venta"
         return "alquiler"  # Default

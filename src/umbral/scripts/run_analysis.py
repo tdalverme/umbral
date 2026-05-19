@@ -55,12 +55,18 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
-async def run_analysis(limit: int = 100):
+async def run_analysis(
+    limit: int = 50,
+    operation_type: str | None = None,
+    neighborhoods: list[str] | None = None,
+):
     """
     Prepara listings pendientes para matching.
 
     Args:
         limit: Máximo de listings a procesar
+        operation_type: Filtra por 'alquiler' o 'venta'
+        neighborhoods: Filtra por barrios específicos
     """
     raw_repo = RawListingRepository()
     analyzed_repo = AnalyzedListingRepository()
@@ -76,10 +82,19 @@ async def run_analysis(limit: int = 100):
         "errors": 0,
     }
 
-    logger.info("Iniciando preparacion de listings", limit=limit)
+    logger.info(
+        "Iniciando preparacion de listings",
+        limit=limit,
+        operation_type=operation_type,
+        neighborhoods=neighborhoods,
+    )
 
-    pending = raw_repo.get_recent(limit=limit)
-    logger.info(f"Listings candidatos a enrichment: {len(pending)}")
+    pending = raw_repo.get_unanalyzed_recent(
+        limit=limit,
+        operation_type=operation_type,
+        neighborhoods=neighborhoods,
+    )
+    logger.info(f"Listings sin analizar candidatos a enrichment: {len(pending)}")
 
     for raw_data in pending:
         stats["processed"] += 1
@@ -218,14 +233,32 @@ def main():
     parser.add_argument(
         "--limit",
         type=int,
-        default=100,
+        default=50,
         help="Máximo de listings a procesar",
+    )
+    parser.add_argument(
+        "--operation",
+        choices=["alquiler", "venta"],
+        default=None,
+        help="Filtra listings por operación antes de analizarlos",
+    )
+    parser.add_argument(
+        "--neighborhood",
+        action="append",
+        dest="neighborhoods",
+        help="Barrio a analizar. Se puede pasar varias veces.",
     )
 
     args = parser.parse_args()
 
     try:
-        stats = asyncio.run(run_analysis(limit=args.limit))
+        stats = asyncio.run(
+            run_analysis(
+                limit=args.limit,
+                operation_type=args.operation,
+                neighborhoods=args.neighborhoods,
+            )
+        )
         sys.exit(0 if stats["errors"] == 0 else 1)
     except KeyboardInterrupt:
         logger.info("Análisis interrumpido por usuario")
