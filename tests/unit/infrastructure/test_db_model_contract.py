@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 
+from umbral.infrastructure.db import models as _models
 from umbral.infrastructure.db.base import metadata
+
+del _models
 
 
 def test_state_columns_use_closed_postgresql_enums() -> None:

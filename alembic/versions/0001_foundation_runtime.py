@@ -89,6 +89,19 @@ CONSTRAINT_SNAPSHOT = {
     "ix_job_executions_correlation",
 }
 
+INDEX_SNAPSHOT = {
+    "ix_job_executions_state_available",
+    "ix_job_executions_state_lease",
+    "ix_job_executions_correlation",
+    "ix_job_attempts_correlation_started",
+    "ix_job_outbox_state_available",
+    "ix_job_schedules_due",
+    "ix_stored_object_versions_object_created",
+    "ix_stored_object_versions_state_created",
+    "ix_stored_object_versions_correlation",
+    "ix_runtime_surface_observed",
+}
+
 _ENUM_VALUES = {
     "actor_kind": ("system", "service", "operator"),
     "job_execution_state": (
@@ -422,7 +435,7 @@ def downgrade() -> None:
 
 
 def verify_bootstrap(bind: Any) -> bool:
-    """Verify table inventory and extensions without leaking connection details."""
+    """Verify tables, extensions, enum domains and named constraints."""
 
     if bind is None:
         return False
@@ -440,4 +453,44 @@ def verify_bootstrap(bind: Any) -> bool:
             )
         )
     }
-    return tables_ok and set(REQUIRED_EXTENSIONS).issubset(extensions)
+    enum_names = ", ".join(f"'{name}'" for name in sorted(ENUM_SNAPSHOT))
+    enums = {
+        str(row[0])
+        for row in bind.execute(
+            text(
+                "SELECT typname FROM pg_type WHERE typtype = 'e' "
+                f"AND typname IN ({enum_names})"
+            )
+        )
+    }
+    constraint_names = ", ".join(
+        f"'{name}'"
+        for name in sorted(name for name in CONSTRAINT_SNAPSHOT if not name.startswith("ix_"))
+    )
+    constraints = {
+        str(row[0])
+        for row in bind.execute(
+            text(
+                "SELECT conname FROM pg_constraint "
+                f"WHERE conname IN ({constraint_names})"
+            )
+        )
+    }
+    index_names = ", ".join(f"'{name}'" for name in sorted(INDEX_SNAPSHOT))
+    indexes = {
+        str(row[0])
+        for row in bind.execute(
+            text(
+                "SELECT indexname FROM pg_indexes "
+                f"WHERE indexname IN ({index_names})"
+            )
+        )
+    }
+    return (
+        tables_ok
+        and set(REQUIRED_EXTENSIONS).issubset(extensions)
+        and set(ENUM_SNAPSHOT).issubset(enums)
+        and set(name for name in CONSTRAINT_SNAPSHOT if not name.startswith("ix_"))
+        .issubset(constraints)
+        and INDEX_SNAPSHOT.issubset(indexes)
+    )
