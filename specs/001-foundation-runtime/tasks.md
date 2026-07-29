@@ -27,13 +27,13 @@ integraciones transversales permanecen explícitas en US4 y en el cierre.
 **Purpose**: Crear toolchains reproducibles y el layout vacío aprobado, sin
 introducir comportamiento de producto.
 
-- [ ] T001 Configurar Python `>=3.13,<3.14`, dependencias runtime/dev, grupos de pytest/Ruff/mypy y resolución reproducible en `pyproject.toml`, `.python-version` y `uv.lock`
-- [ ] T002 [P] Crear el workspace npm raíz con versión Node/npm y scripts `dev`, `build`, `lint`, `typecheck`, `test`, `test:e2e` y `api:check` en `package.json`
-- [ ] T003 Inicializar la aplicación Next.js App Router sin pantallas de producto, fijar sus dependencias y generar el lock único en `apps/web/package.json`, `apps/web/tsconfig.json`, `apps/web/next.config.ts`, `apps/web/eslint.config.mjs`, `apps/web/postcss.config.mjs` y `package-lock.json`
-- [ ] T004 [P] Crear los composition roots y paquetes vacíos aprobados mediante `src/umbral/__init__.py`, `src/umbral/domain/__init__.py`, `src/umbral/application/__init__.py`, `src/umbral/infrastructure/__init__.py`, `src/umbral/api/__init__.py`, `src/umbral/workers/__init__.py`, `src/umbral/agent/__init__.py` y `src/umbral/ops/__init__.py`
-- [ ] T005 [P] Definir servicios locales fijados para PostgreSQL 17 con PostGIS/pgvector, Redis, MinIO y OpenTelemetry Collector en `compose.yaml` e `infra/otel/collector.yaml`
-- [ ] T006 [P] Declarar archivos ignorados y ejemplos locales sin secretos reales en `.gitignore`, `.dockerignore`, `.env.example` y `apps/web/.env.example`
-- [ ] T007 Verificar instalaciones congeladas con `uv sync --frozen --all-groups` y `npm ci`, y documentar versiones/comandos comprobados en `docs/development/runtime-toolchain.md`
+- [X] T001 Configurar Python `>=3.13,<3.14`, dependencias runtime/dev, grupos de pytest/Ruff/mypy y resolución reproducible en `pyproject.toml`, `.python-version` y `uv.lock`
+- [X] T002 [P] Crear el workspace npm raíz con versión Node/npm y scripts `dev`, `build`, `lint`, `typecheck`, `test`, `test:e2e` y `api:check` en `package.json`
+- [X] T003 Inicializar la aplicación Next.js App Router sin pantallas de producto, fijar sus dependencias y generar el lock único en `apps/web/package.json`, `apps/web/tsconfig.json`, `apps/web/next.config.ts`, `apps/web/eslint.config.mjs`, `apps/web/postcss.config.mjs` y `package-lock.json`
+- [X] T004 [P] Crear los composition roots y paquetes vacíos aprobados mediante `src/umbral/__init__.py`, `src/umbral/domain/__init__.py`, `src/umbral/application/__init__.py`, `src/umbral/infrastructure/__init__.py`, `src/umbral/api/__init__.py`, `src/umbral/workers/__init__.py`, `src/umbral/agent/__init__.py` y `src/umbral/ops/__init__.py`
+- [X] T005 [P] Definir servicios locales fijados para PostgreSQL 17 con PostGIS/pgvector, Redis, MinIO y OpenTelemetry Collector en `compose.yaml` e `infra/otel/collector.yaml`
+- [X] T006 [P] Declarar archivos ignorados y ejemplos locales sin secretos reales en `.gitignore`, `.dockerignore`, `.env.example` y `apps/web/.env.example`
+- [X] T007 Verificar instalaciones congeladas con `uv sync --frozen --all-groups` y `npm ci`, y documentar versiones/comandos comprobados en `docs/development/runtime-toolchain.md`
 
 **Checkpoint**: los lockfiles se instalan desde cero y el layout coincide con
 el plan, aunque las superficies todavía no implementan comportamiento.
@@ -47,12 +47,12 @@ que usarán todas las historias.
 
 **CRITICAL**: ninguna historia comienza hasta completar esta fase.
 
-- [ ] T008 [P] Escribir fixtures positivos y negativos para dependencias directas/transitivas de domain, application, agent, API, workers e infrastructure en `tests/architecture/test_dependency_rules.py` y `tests/architecture/fixtures/`
-- [ ] T009 Hacer fallar primero T008 y luego configurar contratos de Import Linter en `pyproject.toml` y enforcement accionable en `scripts/check-architecture.ps1`
-- [ ] T010 [P] Crear fixtures compartidos de pytest/Testcontainers para PostgreSQL, Redis y MinIO, con limpieza por test y sin SQLite, en `tests/conftest.py` y `tests/support/containers.py`
-- [ ] T011 [P] Configurar Vitest, Testing Library, Playwright y axe en `apps/web/vitest.config.ts`, `apps/web/playwright.config.ts` y `apps/web/src/test/setup.ts`
-- [ ] T012 [P] Versionar matrices finitas de configuración, release y canaries sensibles en `tests/fixtures/configuration_cases.json`, `tests/fixtures/release-manifests/` y `tests/fixtures/telemetry_canaries.json`
-- [ ] T013 Integrar checks Python/web condicionales y la regla “si la superficie existe no puede quedar SKIP” en `scripts/check.ps1`, `scripts/check-python.ps1` y `scripts/check-web.ps1`
+- [X] T008 [P] Escribir fixtures positivos y negativos para dependencias directas/transitivas de domain, application, agent, API, workers e infrastructure en `tests/architecture/test_dependency_rules.py` y `tests/architecture/fixtures/`
+- [X] T009 Hacer fallar primero T008 y luego configurar contratos de Import Linter en `pyproject.toml` y enforcement accionable en `scripts/check-architecture.ps1`
+- [X] T010 [P] Crear fixtures compartidos de pytest/Testcontainers para PostgreSQL, Redis y MinIO, con limpieza por test y sin SQLite, en `tests/conftest.py` y `tests/support/containers.py`
+- [X] T011 [P] Configurar Vitest, Testing Library, Playwright y axe en `apps/web/vitest.config.ts`, `apps/web/playwright.config.ts` y `apps/web/src/test/setup.ts`
+- [X] T012 [P] Versionar matrices finitas de configuración, release y canaries sensibles en `tests/fixtures/configuration_cases.json`, `tests/fixtures/release-manifests/` y `tests/fixtures/telemetry_canaries.json`
+- [X] T013 Integrar checks Python/web condicionales y la regla “si la superficie existe no puede quedar SKIP” en `scripts/check.ps1`, `scripts/check-python.ps1` y `scripts/check-web.ps1`
 
 **Checkpoint**: los límites prohibidos fallan de forma demostrable y el harness
 puede incorporar checks de cada slice sin cambiar su punto de entrada.
@@ -74,31 +74,31 @@ accesibilidad y build en 15 minutos o menos.
 
 > Escribir T014–T020 primero y confirmar que fallan por la conducta ausente.
 
-- [ ] T014 [P] [US1] Escribir casos parametrizados para valores ausentes, mal formados, inseguros, de ejemplo, locales o secretos canary en `tests/unit/config/test_settings.py`
-- [ ] T015 [P] [US1] Escribir contract tests para esquemas, status, headers, no-store y ausencia de efectos en `/health`, `/ready` y `/version` en `tests/contract/test_runtime_api_contract.py`
-- [ ] T016 [P] [US1] Escribir tests de request/correlation UUID y problemas RFC 9457 sin eco de input en `tests/contract/test_http_correlation_and_errors.py`
-- [ ] T017 [P] [US1] Escribir tests de export OpenAPI 3.1 determinista, `operationId` estable y clasificación compatible/incompatible en `tests/contract/test_openapi_versioning.py`
-- [ ] T018 [P] [US1] Escribir el check que detecta drift entre OpenAPI publicado y cliente web generado en `tests/contract/test_generated_client.py`
-- [ ] T019 [P] [US1] Escribir tests unitarios de layout, tokens semánticos y primitives mínimas en `apps/web/src/app/page.test.tsx` y `apps/web/src/components/ui/foundation.test.tsx`
-- [ ] T020 [P] [US1] Escribir Playwright para health/version, teclado, foco, contraste, ambos temas, zoom/reflow, reduced motion y axe A/AA en `tests/e2e/web-foundation.spec.ts`
+- [X] T014 [P] [US1] Escribir casos parametrizados para valores ausentes, mal formados, inseguros, de ejemplo, locales o secretos canary en `tests/unit/config/test_settings.py`
+- [X] T015 [P] [US1] Escribir contract tests para esquemas, status, headers, no-store y ausencia de efectos en `/health`, `/ready` y `/version` en `tests/contract/test_runtime_api_contract.py`
+- [X] T016 [P] [US1] Escribir tests de request/correlation UUID y problemas RFC 9457 sin eco de input en `tests/contract/test_http_correlation_and_errors.py`
+- [X] T017 [P] [US1] Escribir tests de export OpenAPI 3.1 determinista, `operationId` estable y clasificación compatible/incompatible en `tests/contract/test_openapi_versioning.py`
+- [X] T018 [P] [US1] Escribir el check que detecta drift entre OpenAPI publicado y cliente web generado en `tests/contract/test_generated_client.py`
+- [X] T019 [P] [US1] Escribir tests unitarios de layout, tokens semánticos y primitives mínimas en `apps/web/src/app/page.test.tsx` y `apps/web/src/components/ui/foundation.test.tsx`
+- [X] T020 [P] [US1] Escribir Playwright para health/version, teclado, foco, contraste, ambos temas, zoom/reflow, reduced motion y axe A/AA en `tests/e2e/web-foundation.spec.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T021 [P] [US1] Implementar el valor inmutable de release y carga/validación del manifiesto local en `src/umbral/application/runtime/version.py`
-- [ ] T022 [P] [US1] Implementar Settings por ambiente, diagnóstico por nombre/regla y rechazo de defaults inseguros sin imprimir valores en `src/umbral/infrastructure/config/settings.py`
-- [ ] T023 [US1] Completar inventario de configuración con owner, fuente, consumidor, requiredness, formato, secreto y exposición en `docs/runbooks/configuration.md`, `.env.example` y `apps/web/.env.example`
-- [ ] T024 [P] [US1] Implementar errores tipados, respuestas `application/problem+json` y middleware request/correlation ID en `src/umbral/domain/errors.py`, `src/umbral/api/errors.py` y `src/umbral/api/middleware/correlation.py`
-- [ ] T025 [US1] Implementar el Module base de readiness con probes side-effect-free y estados `ready/degraded/not_ready` en `src/umbral/application/runtime/readiness.py`
-- [ ] T026 [US1] Implementar `/health`, `/ready` y `/version` con los schemas/headers exactos del contrato en `src/umbral/api/routers/runtime.py`
-- [ ] T027 [US1] Componer Settings, release, errores, correlación y router runtime en `src/umbral/api/dependencies.py` y `src/umbral/api/main.py`
-- [ ] T028 [US1] Crear export OpenAPI ordenado y publicar la salida de FastAPI en `scripts/export-openapi.ps1` y `contracts/openapi/v1/openapi.json`
-- [ ] T029 [US1] Configurar Hey API fijado y generar Fetch/TypeScript/SDK/TanStack sin código manual en `apps/web/openapi-ts.config.ts` y `apps/web/src/lib/api/generated/`
-- [ ] T030 [US1] Implementar wrappers de configuración server/browser y QueryClient sin duplicar DTOs en `apps/web/src/lib/api/server.ts`, `apps/web/src/lib/api/browser.ts` y `apps/web/src/lib/query/query-client.ts`
-- [ ] T031 [P] [US1] Inicializar shadcn/ui Base UI/Vega y tokens OKLCH/WCAG con button, field/input, card, alert, skeleton y spinner en `apps/web/components.json`, `apps/web/package.json`, `package-lock.json`, `apps/web/src/app/globals.css` y `apps/web/src/components/ui/`
-- [ ] T032 [US1] Implementar layout `es-AR`, skip-link, landmarks, tipografía, temas y página mínima de estado sin UI inmobiliaria en `apps/web/src/app/layout.tsx` y `apps/web/src/app/page.tsx`
-- [ ] T033 [US1] Implementar probes web side-effect-free y versión derivada del manifiesto en `apps/web/src/app/health/route.ts`, `apps/web/src/app/ready/route.ts`, `apps/web/src/app/version/route.ts` y `apps/web/src/lib/runtime/`
-- [ ] T034 [US1] Implementar drift/compatibilidad/generación y build web como gates del harness en `scripts/check-contracts.ps1`, `scripts/check-web.ps1` y `scripts/check.ps1`
-- [ ] T035 [US1] Documentar y ejecutar el recorrido independiente cronometrado, guardando comandos, release observado y resultado en `docs/runbooks/runtime-local.md` y `docs/runbooks/evidence/us1-local-start.md`
+- [X] T021 [P] [US1] Implementar el valor inmutable de release y carga/validación del manifiesto local en `src/umbral/application/runtime/version.py`
+- [X] T022 [P] [US1] Implementar Settings por ambiente, diagnóstico por nombre/regla y rechazo de defaults inseguros sin imprimir valores en `src/umbral/infrastructure/config/settings.py`
+- [X] T023 [US1] Completar inventario de configuración con owner, fuente, consumidor, requiredness, formato, secreto y exposición en `docs/runbooks/configuration.md`, `.env.example` y `apps/web/.env.example`
+- [X] T024 [P] [US1] Implementar errores tipados, respuestas `application/problem+json` y middleware request/correlation ID en `src/umbral/domain/errors.py`, `src/umbral/api/errors.py` y `src/umbral/api/middleware/correlation.py`
+- [X] T025 [US1] Implementar el Module base de readiness con probes side-effect-free y estados `ready/degraded/not_ready` en `src/umbral/application/runtime/readiness.py`
+- [X] T026 [US1] Implementar `/health`, `/ready` y `/version` con los schemas/headers exactos del contrato en `src/umbral/api/routers/runtime.py`
+- [X] T027 [US1] Componer Settings, release, errores, correlación y router runtime en `src/umbral/api/dependencies.py` y `src/umbral/api/main.py`
+- [X] T028 [US1] Crear export OpenAPI ordenado y publicar la salida de FastAPI en `scripts/export-openapi.ps1` y `contracts/openapi/v1/openapi.json`
+- [X] T029 [US1] Configurar Hey API fijado y generar Fetch/TypeScript/SDK/TanStack sin código manual en `apps/web/openapi-ts.config.ts` y `apps/web/src/lib/api/generated/`
+- [X] T030 [US1] Implementar wrappers de configuración server/browser y QueryClient sin duplicar DTOs en `apps/web/src/lib/api/server.ts`, `apps/web/src/lib/api/browser.ts` y `apps/web/src/lib/query/query-client.ts`
+- [X] T031 [P] [US1] Inicializar shadcn/ui Base UI/Vega y tokens OKLCH/WCAG con button, field/input, card, alert, skeleton y spinner en `apps/web/components.json`, `apps/web/package.json`, `package-lock.json`, `apps/web/src/app/globals.css` y `apps/web/src/components/ui/`
+- [X] T032 [US1] Implementar layout `es-AR`, skip-link, landmarks, tipografía, temas y página mínima de estado sin UI inmobiliaria en `apps/web/src/app/layout.tsx` y `apps/web/src/app/page.tsx`
+- [X] T033 [US1] Implementar probes web side-effect-free y versión derivada del manifiesto en `apps/web/src/app/health/route.ts`, `apps/web/src/app/ready/route.ts`, `apps/web/src/app/version/route.ts` y `apps/web/src/lib/runtime/`
+- [X] T034 [US1] Implementar drift/compatibilidad/generación y build web como gates del harness en `scripts/check-contracts.ps1`, `scripts/check-web.ps1` y `scripts/check.ps1`
+- [X] T035 [US1] Documentar y ejecutar el recorrido independiente cronometrado, guardando comandos, release observado y resultado en `docs/runbooks/runtime-local.md` y `docs/runbooks/evidence/us1-local-start.md`
 
 **Checkpoint**: US1 es un MVP demostrable; API y web arrancan, comparten
 release/contrato, rechazan configuración insegura y pasan accesibilidad.
@@ -119,24 +119,24 @@ producen un único cambio y un conflicto tipado.
 
 > Escribir T036–T040 primero y confirmar que fallan por la conducta ausente.
 
-- [ ] T036 [P] [US2] Escribir tests de bootstrap vacío, revisión esperada y capacidades PostGIS/pgvector en `tests/migrations/test_bootstrap_and_extensions.py`
-- [ ] T037 [P] [US2] Escribir tests de upgrade desde revisión previa, head único, downgrade vacío declarado y drift metadata/schema en `tests/migrations/test_upgrade_and_drift.py`
-- [ ] T038 [P] [US2] Escribir integración de commit, rollback, close y prohibición de commit en repositorios en `tests/integration/db/test_transactions.py`
-- [ ] T039 [P] [US2] Escribir tests de identidad/timestamps/actor/source/correlation y dos updates con la misma versión en `tests/integration/db/test_audit_and_optimistic_locking.py`
-- [ ] T040 [P] [US2] Escribir tests de conectividad, extensiones y Alembic head como probes sanitizados en `tests/integration/db/test_persistence_readiness.py`
+- [X] T036 [P] [US2] Escribir tests de bootstrap vacío, revisión esperada y capacidades PostGIS/pgvector en `tests/migrations/test_bootstrap_and_extensions.py`
+- [X] T037 [P] [US2] Escribir tests de upgrade desde revisión previa, head único, downgrade vacío declarado y drift metadata/schema en `tests/migrations/test_upgrade_and_drift.py`
+- [X] T038 [P] [US2] Escribir integración de commit, rollback, close y prohibición de commit en repositorios en `tests/integration/db/test_transactions.py`
+- [X] T039 [P] [US2] Escribir tests de identidad/timestamps/actor/source/correlation y dos updates con la misma versión en `tests/integration/db/test_audit_and_optimistic_locking.py`
+- [X] T040 [P] [US2] Escribir tests de conectividad, extensiones y Alembic head como probes sanitizados en `tests/integration/db/test_persistence_readiness.py`
 
 ### Implementation for User Story 2
 
-- [ ] T041 [P] [US2] Implementar `RecordIdentity`, `AuditActor`, `AuditContext` y `ConcurrencyConflict` como valores puros en `src/umbral/domain/audit.py` y `src/umbral/domain/errors.py`
-- [ ] T042 [US2] Definir `TransactionManager`/`UnitOfWork` y Adapter in-memory de pruebas sin repositorio genérico en `src/umbral/application/transactions.py` y `tests/fakes/transactions.py`
-- [ ] T043 [US2] Implementar naming convention, engine/session por ejecución, transacción SQLAlchemy y traducción de `StaleDataError` en `src/umbral/infrastructure/db/base.py`, `src/umbral/infrastructure/db/session.py` y `src/umbral/infrastructure/db/transaction.py`
-- [ ] T044 [P] [US2] Mapear ejecuciones, intentos, outbox y schedules con constraints/índices/versionado definidos en `src/umbral/infrastructure/db/models/jobs.py`
-- [ ] T045 [P] [US2] Mapear objetos/versiones y estados de superficie con constraints/índices/auditoría definidos en `src/umbral/infrastructure/db/models/objects.py` y `src/umbral/infrastructure/db/models/runtime.py`
-- [ ] T046 [US2] Configurar Alembic lineal, comparación de tipos/defaults y carga de metadata en `alembic.ini` y `alembic/env.py`
-- [ ] T047 [US2] Crear la revisión bootstrap transaccional con extensiones, siete tablas, verificación y downgrade sólo-vacío documentado en `alembic/versions/0001_foundation_runtime.py`
-- [ ] T048 [US2] Implementar probes PostgreSQL/Alembic/PostGIS/pgvector con códigos allowlisted en `src/umbral/infrastructure/db/readiness.py`
-- [ ] T049 [US2] Incorporar upgrade vacío/previo, head y drift al harness sin migrar durante startup en `scripts/check-migrations.ps1` y `scripts/check.ps1`
-- [ ] T050 [US2] Documentar creación, upgrade, verificación, bloqueo concurrente y compensación de cambios de datos, y registrar la prueba independiente en `docs/runbooks/data-evolution.md` y `docs/runbooks/evidence/us2-data-evolution.md`
+- [X] T041 [P] [US2] Implementar `RecordIdentity`, `AuditActor`, `AuditContext` y `ConcurrencyConflict` como valores puros en `src/umbral/domain/audit.py` y `src/umbral/domain/errors.py`
+- [X] T042 [US2] Definir `TransactionManager`/`UnitOfWork` y Adapter in-memory de pruebas sin repositorio genérico en `src/umbral/application/transactions.py` y `tests/fakes/transactions.py`
+- [X] T043 [US2] Implementar naming convention, engine/session por ejecución, transacción SQLAlchemy y traducción de `StaleDataError` en `src/umbral/infrastructure/db/base.py`, `src/umbral/infrastructure/db/session.py` y `src/umbral/infrastructure/db/transaction.py`
+- [X] T044 [P] [US2] Mapear ejecuciones, intentos, outbox y schedules con constraints/índices/versionado definidos en `src/umbral/infrastructure/db/models/jobs.py`
+- [X] T045 [P] [US2] Mapear objetos/versiones y estados de superficie con constraints/índices/auditoría definidos en `src/umbral/infrastructure/db/models/objects.py` y `src/umbral/infrastructure/db/models/runtime.py`
+- [X] T046 [US2] Configurar Alembic lineal, comparación de tipos/defaults y carga de metadata en `alembic.ini` y `alembic/env.py`
+- [X] T047 [US2] Crear la revisión bootstrap transaccional con extensiones, siete tablas, verificación y downgrade sólo-vacío documentado en `alembic/versions/0001_foundation_runtime.py`
+- [X] T048 [US2] Implementar probes PostgreSQL/Alembic/PostGIS/pgvector con códigos allowlisted en `src/umbral/infrastructure/db/readiness.py`
+- [X] T049 [US2] Incorporar upgrade vacío/previo, head y drift al harness sin migrar durante startup en `scripts/check-migrations.ps1` y `scripts/check.ps1`
+- [X] T050 [US2] Documentar creación, upgrade, verificación, bloqueo concurrente y compensación de cambios de datos, y registrar la prueba independiente en `docs/runbooks/data-evolution.md` y `docs/runbooks/evidence/us2-data-evolution.md`
 
 **Checkpoint**: US2 recrea el estado persistente sin drift, revierte
 transacciones fallidas y rechaza escrituras obsoletas.
