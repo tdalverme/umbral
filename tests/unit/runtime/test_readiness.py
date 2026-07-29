@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from umbral.application.runtime.readiness import (
     ReadinessCheck,
     ReadinessModule,
+    ReadinessProbe,
 )
 
 
@@ -13,10 +16,23 @@ def test_readiness_marks_critical_unavailable_check_as_not_ready() -> None:
         surface="api",
         release_id="foundation-local",
         probes=(
-            lambda: ReadinessCheck(
-                name="postgres", state="unavailable", critical=True, code="db.down"
+            ReadinessProbe(
+                name="postgres",
+                critical=True,
+                check=lambda: ReadinessCheck(
+                    name="postgres",
+                    state="unavailable",
+                    critical=True,
+                    code="postgres.unavailable",
+                ),
             ),
-            lambda: ReadinessCheck(name="redis", state="ready", critical=False),
+            ReadinessProbe(
+                name="redis",
+                critical=False,
+                check=lambda: ReadinessCheck(
+                    name="redis", state="ready", critical=False
+                ),
+            ),
         ),
     )
 
@@ -27,7 +43,10 @@ def test_readiness_marks_critical_unavailable_check_as_not_ready() -> None:
     assert report.release_id == "foundation-local"
     assert report.checks == (
         ReadinessCheck(
-            name="postgres", state="unavailable", critical=True, code="db.down"
+            name="postgres",
+            state="unavailable",
+            critical=True,
+            code="postgres.unavailable",
         ),
         ReadinessCheck(name="redis", state="ready", critical=False),
     )
@@ -38,11 +57,64 @@ def test_readiness_marks_noncritical_degradation_without_withdrawing_surface() -
         surface="api",
         release_id="foundation-local",
         probes=(
-            lambda: ReadinessCheck(name="runtime_config", state="ready", critical=True),
-            lambda: ReadinessCheck(
-                name="telemetry", state="degraded", critical=False, code="otel.slow"
+            ReadinessProbe(
+                name="runtime_config",
+                critical=True,
+                check=lambda: ReadinessCheck(
+                    name="runtime_config", state="ready", critical=True
+                ),
+            ),
+            ReadinessProbe(
+                name="telemetry",
+                critical=False,
+                check=lambda: ReadinessCheck(
+                    name="telemetry",
+                    state="degraded",
+                    critical=False,
+                    code="telemetry.degraded",
+                ),
             ),
         ),
     )
 
     assert module.evaluate().state == "degraded"
+
+
+@pytest.mark.parametrize(
+    ("name", "code"),
+    [
+        ("arbitrary_dependency", None),
+        ("postgres", "db.down"),
+    ],
+)
+def test_readiness_check_rejects_names_and_codes_outside_contract_allowlists(
+    name: str, code: str | None
+) -> None:
+    with pytest.raises(ValueError):
+        ReadinessCheck(name=name, state="unavailable", critical=True, code=code)
+
+
+def test_readiness_converts_a_probe_exception_to_safe_unavailable_check() -> None:
+    def failing_probe() -> ReadinessCheck:
+        raise RuntimeError("SECRET_PROBE_FAILURE")
+
+    module = ReadinessModule(
+        surface="api",
+        release_id="foundation-local",
+        probes=(
+            ReadinessProbe(name="postgres", critical=True, check=failing_probe),
+        ),
+    )
+
+    report = module.evaluate()
+
+    assert report.state == "not_ready"
+    assert report.checks == (
+        ReadinessCheck(
+            name="postgres",
+            state="unavailable",
+            critical=True,
+            code="postgres.unavailable",
+        ),
+    )
+    assert "SECRET_PROBE_FAILURE" not in repr(report)

@@ -10,6 +10,47 @@ from typing import Literal
 Surface = Literal["web", "api", "worker", "scheduler"]
 ReadinessState = Literal["ready", "degraded", "not_ready"]
 DependencyState = Literal["ready", "degraded", "unavailable"]
+_ALLOWED_CHECK_NAMES = frozenset(
+    {
+        "runtime_config",
+        "api",
+        "postgres",
+        "schema",
+        "postgis",
+        "pgvector",
+        "redis",
+        "object_storage",
+        "execution_loop",
+        "scheduling_loop",
+        "telemetry",
+    }
+)
+_ALLOWED_CHECK_CODES = frozenset(
+    {
+        "runtime_config.degraded",
+        "runtime_config.unavailable",
+        "api.degraded",
+        "api.unavailable",
+        "postgres.degraded",
+        "postgres.unavailable",
+        "schema.degraded",
+        "schema.unavailable",
+        "postgis.degraded",
+        "postgis.unavailable",
+        "pgvector.degraded",
+        "pgvector.unavailable",
+        "redis.degraded",
+        "redis.unavailable",
+        "object_storage.degraded",
+        "object_storage.unavailable",
+        "execution_loop.degraded",
+        "execution_loop.unavailable",
+        "scheduling_loop.degraded",
+        "scheduling_loop.unavailable",
+        "telemetry.degraded",
+        "telemetry.unavailable",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +62,25 @@ class ReadinessCheck:
     critical: bool
     code: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.name not in _ALLOWED_CHECK_NAMES:
+            raise ValueError("readiness check name is not allowlisted")
+        if self.code is not None and self.code not in _ALLOWED_CHECK_CODES:
+            raise ValueError("readiness check code is not allowlisted")
+
+
+@dataclass(frozen=True, slots=True)
+class ReadinessProbe:
+    """Metadata required to represent a failed probe safely."""
+
+    name: str
+    critical: bool
+    check: Callable[[], ReadinessCheck]
+
+    def __post_init__(self) -> None:
+        if self.name not in _ALLOWED_CHECK_NAMES:
+            raise ValueError("readiness probe name is not allowlisted")
+
 
 @dataclass(frozen=True, slots=True)
 class ReadinessReport:
@@ -31,9 +91,6 @@ class ReadinessReport:
     observed_at: datetime
     release_id: str
     checks: tuple[ReadinessCheck, ...]
-
-
-ReadinessProbe = Callable[[], ReadinessCheck]
 
 
 class ReadinessModule:
@@ -53,7 +110,7 @@ class ReadinessModule:
     def evaluate(self) -> ReadinessReport:
         """Aggregate the current probe values without retaining their result."""
 
-        checks = tuple(probe() for probe in self._probes)
+        checks = tuple(self._evaluate_probe(probe) for probe in self._probes)
         state = _aggregate_state(checks)
         return ReadinessReport(
             surface=self._surface,
@@ -62,6 +119,26 @@ class ReadinessModule:
             release_id=self._release_id,
             checks=checks,
         )
+
+    @staticmethod
+    def _evaluate_probe(probe: ReadinessProbe) -> ReadinessCheck:
+        try:
+            check = probe.check()
+        except Exception:
+            return ReadinessCheck(
+                name=probe.name,
+                state="unavailable",
+                critical=probe.critical,
+                code=f"{probe.name}.unavailable",
+            )
+        if check.name != probe.name or check.critical != probe.critical:
+            return ReadinessCheck(
+                name=probe.name,
+                state="unavailable",
+                critical=probe.critical,
+                code=f"{probe.name}.unavailable",
+            )
+        return check
 
 
 def _aggregate_state(checks: tuple[ReadinessCheck, ...]) -> ReadinessState:

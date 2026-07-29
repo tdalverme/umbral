@@ -10,6 +10,7 @@ from typing import Mapping
 from umbral.application.runtime.readiness import (
     ReadinessCheck,
     ReadinessModule,
+    ReadinessProbe,
 )
 from umbral.application.runtime.version import (
     ReleaseArtifact,
@@ -42,8 +43,12 @@ def build_runtime_dependencies(
         surface="api",
         release_id=release.release_id,
         probes=(
-            lambda: ReadinessCheck(
-                name="runtime_config", state="ready", critical=True
+            ReadinessProbe(
+                name="runtime_config",
+                critical=True,
+                check=lambda: ReadinessCheck(
+                    name="runtime_config", state="ready", critical=True
+                ),
             ),
         ),
     )
