@@ -1,0 +1,57 @@
+[project]
+name = "umbral"
+version = "0.1.0"
+description = "Personal housing radar"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi>=0.138,<1",
+    "uvicorn[standard]>=0.51,<1",
+    "pydantic>=2.13,<3",
+    "pydantic-settings>=2.14,<3",
+    "sqlalchemy>=2.0.51,<2.1",
+    "alembic>=1.18,<2",
+    "psycopg[binary]>=3.3.4,<4",
+    "geoalchemy2>=0.20,<0.21",
+    "pgvector>=0.5,<1",
+    "rq>=2.10,<3",
+    "redis[hiredis]>=8,<9",
+    "boto3>=1.43,<2",
+    "opentelemetry-api>=1,<2",
+    "opentelemetry-sdk>=1,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1,<2",
+    "sentry-sdk[fastapi]>=2,<3",
+]
+
+[dependency-groups]
+pytest = [
+    "pytest>=8,<9",
+    "pytest-cov>=6,<7",
+    "testcontainers[postgres,redis]>=4,<5",
+    "httpx>=0.28,<1",
+    "coverage[toml]>=7,<8",
+]
+ruff = [
+    "ruff>=0.9,<1",
+]
+mypy = [
+    "mypy>=1.14,<2",
+    "import-linter>=2,<3",
+    "boto3-stubs[s3]>=1.43,<2",
+    "types-redis>=4.6,<5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "src"
+files = ["src", "tests"]
+strict = true
