@@ -10,6 +10,19 @@ from typing import Literal
 Surface = Literal["web", "api", "worker", "scheduler"]
 ReadinessState = Literal["ready", "degraded", "not_ready"]
 DependencyState = Literal["ready", "degraded", "unavailable"]
+DependencyCheckName = Literal[
+    "runtime_config",
+    "api",
+    "postgres",
+    "schema",
+    "postgis",
+    "pgvector",
+    "redis",
+    "object_storage",
+    "execution_loop",
+    "scheduling_loop",
+    "telemetry",
+]
 _ALLOWED_CHECK_NAMES = frozenset(
     {
         "runtime_config",
@@ -57,7 +70,7 @@ _ALLOWED_CHECK_CODES = frozenset(
 class ReadinessCheck:
     """One already-observed, allowlisted dependency condition."""
 
-    name: str
+    name: DependencyCheckName
     state: DependencyState
     critical: bool
     code: str | None = None
@@ -73,7 +86,7 @@ class ReadinessCheck:
 class ReadinessProbe:
     """Metadata required to represent a failed probe safely."""
 
-    name: str
+    name: DependencyCheckName
     critical: bool
     check: Callable[[], ReadinessCheck]
 
@@ -125,19 +138,13 @@ class ReadinessModule:
         try:
             check = probe.check()
         except Exception:
-            return ReadinessCheck(
-                name=probe.name,
-                state="unavailable",
-                critical=probe.critical,
-                code=f"{probe.name}.unavailable",
-            )
-        if check.name != probe.name or check.critical != probe.critical:
-            return ReadinessCheck(
-                name=probe.name,
-                state="unavailable",
-                critical=probe.critical,
-                code=f"{probe.name}.unavailable",
-            )
+            return _unavailable_check(probe)
+        if (
+            not isinstance(check, ReadinessCheck)
+            or check.name != probe.name
+            or check.critical != probe.critical
+        ):
+            return _unavailable_check(probe)
         return check
 
 
@@ -147,3 +154,12 @@ def _aggregate_state(checks: tuple[ReadinessCheck, ...]) -> ReadinessState:
     if any(check.state != "ready" for check in checks):
         return "degraded"
     return "ready"
+
+
+def _unavailable_check(probe: ReadinessProbe) -> ReadinessCheck:
+    return ReadinessCheck(
+        name=probe.name,
+        state="unavailable",
+        critical=probe.critical,
+        code=f"{probe.name}.unavailable",
+    )

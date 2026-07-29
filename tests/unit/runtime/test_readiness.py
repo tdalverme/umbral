@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from umbral.application.runtime.readiness import (
+    DependencyCheckName,
     ReadinessCheck,
     ReadinessModule,
     ReadinessProbe,
@@ -91,7 +94,12 @@ def test_readiness_check_rejects_names_and_codes_outside_contract_allowlists(
     name: str, code: str | None
 ) -> None:
     with pytest.raises(ValueError):
-        ReadinessCheck(name=name, state="unavailable", critical=True, code=code)
+        ReadinessCheck(
+            name=cast(DependencyCheckName, name),
+            state="unavailable",
+            critical=True,
+            code=code,
+        )
 
 
 def test_readiness_converts_a_probe_exception_to_safe_unavailable_check() -> None:
@@ -118,3 +126,25 @@ def test_readiness_converts_a_probe_exception_to_safe_unavailable_check() -> Non
         ),
     )
     assert "SECRET_PROBE_FAILURE" not in repr(report)
+
+
+def test_readiness_converts_malformed_probe_result_to_safe_unavailable_check() -> None:
+    def malformed_probe() -> ReadinessCheck:
+        return object()  # type: ignore[return-value]
+
+    module = ReadinessModule(
+        surface="api",
+        release_id="foundation-local",
+        probes=(
+            ReadinessProbe(name="postgres", critical=True, check=malformed_probe),
+        ),
+    )
+
+    assert module.evaluate().checks == (
+        ReadinessCheck(
+            name="postgres",
+            state="unavailable",
+            critical=True,
+            code="postgres.unavailable",
+        ),
+    )

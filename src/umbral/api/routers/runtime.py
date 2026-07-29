@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from umbral.api.dependencies import RuntimeDependencies
+from umbral.application.runtime.readiness import DependencyCheckName
 from umbral.domain.errors import InvalidRequestError
 
 router = APIRouter(tags=["Runtime"])
@@ -26,7 +27,7 @@ class DependencyCheckResponse(BaseModel):
     """One allowlisted readiness check."""
 
     model_config = ConfigDict(extra="forbid")
-    name: str
+    name: DependencyCheckName
     state: Literal["ready", "degraded", "unavailable"]
     critical: bool
     code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_.-]{0,99}$")
