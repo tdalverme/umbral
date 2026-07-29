@@ -15,6 +15,10 @@ s\u00f3lo este inventario y sus fallos exponen exclusivamente `rule_code` y
 | `REDIS_URL` | Plataforma | secret store/Compose local | API, worker, scheduler | S\u00ed | Redis URL; `rediss` fuera de local | S\u00ed | nunca |
 | `OBJECT_STORE_BACKEND` | Plataforma | entorno de deployment | API, worker | S\u00ed | `filesystem` s\u00f3lo local; `s3` fuera de local | No | metadata permitida |
 | `OBJECT_STORE_ROOT` | Plataforma | entorno local | API, worker | Si usa filesystem | path local | No | nunca |
+| `OBJECT_STORE_BUCKET` | Plataforma | secret store/Compose local | API, worker | Si usa s3 | bucket privado | No | nunca |
+| `OBJECT_STORE_ENDPOINT_URL` | Plataforma | secret store/Compose local | API, worker | Si usa s3 | URL HTTPS fuera de local | No | nunca |
+| `OBJECT_STORE_ACCESS_KEY` | Plataforma | secret store/Compose local | API, worker | Si usa s3 | credencial del proveedor | Sí | nunca |
+| `OBJECT_STORE_SECRET_KEY` | Plataforma | secret store/Compose local | API, worker | Si usa s3 | credencial del proveedor | Sí | nunca |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Observabilidad | entorno de deployment | API, worker, scheduler, web server | S\u00ed | URL; HTTPS fuera de local | No | no exponer host |
 | `SENTRY_DSN` | Observabilidad | secret store | API, worker, scheduler, web server | Preview/production | HTTPS DSN no vac\u00edo | S\u00ed | nunca |
 | `UMBRAL_API_BASE_URL` | Plataforma | runtime server environment | web server | S\u00ed | URL privada HTTPS fuera de local | No | nunca al browser |

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+from umbral.application.objects.ports import ObjectStore
 from umbral.application.runtime.readiness import (
     ReadinessCheck,
     ReadinessModule,
@@ -18,6 +19,7 @@ from umbral.application.runtime.version import (
     load_release_manifest,
 )
 from umbral.infrastructure.config.settings import Settings
+from umbral.infrastructure.object_store.factory import build_object_store
 
 _LOCAL_RELEASE_MANIFEST = "<local>"
 
@@ -29,6 +31,7 @@ class RuntimeDependencies:
     settings: Settings
     release: ReleaseManifest
     readiness: ReadinessModule
+    object_store: ObjectStore
 
 
 def build_runtime_dependencies(
@@ -39,6 +42,7 @@ def build_runtime_dependencies(
     values = os.environ if environment is None else environment
     settings = _load_settings(values)
     release = _load_release(settings)
+    object_store = build_object_store(settings)
     readiness = ReadinessModule(
         surface="api",
         release_id=release.release_id,
@@ -52,7 +56,12 @@ def build_runtime_dependencies(
             ),
         ),
     )
-    return RuntimeDependencies(settings=settings, release=release, readiness=readiness)
+    return RuntimeDependencies(
+        settings=settings,
+        release=release,
+        readiness=readiness,
+        object_store=object_store,
+    )
 
 
 def _load_settings(environment: Mapping[str, str]) -> Settings:

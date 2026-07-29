@@ -10,11 +10,7 @@ from uuid import uuid4
 
 import pytest
 
-from umbral.application.objects.contracts import (
-    ObjectIntegrityError,
-    ObjectNotFound,
-    ObjectVersionConflict,
-)
+from umbral.application.objects.contracts import ObjectNotFound, ObjectVersionConflict
 from umbral.application.objects.service import (
     InMemoryObjectMetadataRepository,
     VersionedObjects,
@@ -45,10 +41,16 @@ def test_pending_version_becomes_available_and_only_exact_ref_is_readable(
     assert repository.get(object_id, version_id).state == "available"
     assert objects.open(ref).read() == body
     with pytest.raises(ObjectNotFound):
-        objects.open(ref.__class__(object_id, uuid4(), ref.sha256, ref.size_bytes, ref.content_type))
+        objects.open(
+            ref.__class__(
+                object_id, uuid4(), ref.sha256, ref.size_bytes, ref.content_type
+            )
+        )
 
 
-def test_same_version_retry_is_idempotent_and_conflict_is_explicit(tmp_path: Path) -> None:
+def test_same_version_retry_is_idempotent_and_conflict_is_explicit(
+    tmp_path: Path,
+) -> None:
     objects = VersionedObjects(FilesystemObjectStore(tmp_path))
     object_id, version_id = uuid4(), uuid4()
     body = b"stable"

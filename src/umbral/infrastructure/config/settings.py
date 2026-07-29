@@ -51,6 +51,18 @@ class Settings(BaseSettings):
     object_store_root: str | None = Field(
         default=None, validation_alias="OBJECT_STORE_ROOT"
     )
+    object_store_bucket: str | None = Field(
+        default=None, validation_alias="OBJECT_STORE_BUCKET"
+    )
+    object_store_endpoint_url: str | None = Field(
+        default=None, validation_alias="OBJECT_STORE_ENDPOINT_URL"
+    )
+    object_store_access_key: str | None = Field(
+        default=None, validation_alias="OBJECT_STORE_ACCESS_KEY"
+    )
+    object_store_secret_key: str | None = Field(
+        default=None, validation_alias="OBJECT_STORE_SECRET_KEY"
+    )
     otel_exporter_otlp_endpoint: str = Field(
         validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT"
     )
@@ -70,6 +82,10 @@ class Settings(BaseSettings):
             "REDIS_URL",
             "OBJECT_STORE_BACKEND",
             "OBJECT_STORE_ROOT",
+            "OBJECT_STORE_BUCKET",
+            "OBJECT_STORE_ENDPOINT_URL",
+            "OBJECT_STORE_ACCESS_KEY",
+            "OBJECT_STORE_SECRET_KEY",
             "OTEL_EXPORTER_OTLP_ENDPOINT",
             "SENTRY_DSN",
             "UMBRAL_API_BASE_URL",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -118,3 +119,22 @@ def test_corrupted_provider_bytes_are_never_returned_as_valid(tmp_path: Path) ->
         store.stat(provider_ref)
     with pytest.raises(ObjectIntegrityError):
         store.open(provider_ref)
+
+
+def test_concurrent_same_key_writes_have_one_immutable_outcome(tmp_path: Path) -> None:
+    store = FilesystemObjectStore(tmp_path)
+    body = b"concurrent immutable bytes"
+    digest, size = _declared(body)
+
+    def write() -> object:
+        return store.put_if_absent(
+            storage_key="objects/one/concurrent",
+            body=BytesIO(body),
+            sha256=digest,
+            size_bytes=size,
+            content_type="application/octet-stream",
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as workers:
+        refs = list(workers.map(lambda _: write(), range(8)))
+    assert len(set(refs)) == 1

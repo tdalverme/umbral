@@ -8,6 +8,9 @@ function apiBaseUrl(): string {
   return baseUrl;
 }
 
-export function createServerApiClient(): Client {
-  return createClient({ baseUrl: apiBaseUrl() });
+export function createServerApiClient(options?: { correlationId?: string }): Client {
+  const headers = options?.correlationId
+    ? { "X-Correlation-Id": options.correlationId }
+    : undefined;
+  return createClient({ baseUrl: apiBaseUrl(), headers });
 }

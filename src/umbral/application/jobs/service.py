@@ -7,6 +7,7 @@ application contracts can be exercised without a live PostgreSQL/Redis pair.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -102,10 +103,12 @@ class InMemoryJobRuntime:
         now: datetime | None = None,
         release_id: str = "foundation-local",
         lease_seconds: int = 60,
+        handlers: Mapping[str, object] | None = None,
     ) -> None:
         self.queue = queue
         self.release_id = release_id
         self.lease_seconds = lease_seconds
+        self.handlers = handlers
         self._now = _utc(now or datetime.now(timezone.utc))
         self._lock = RLock()
         self._executions: dict[UUID, _Execution] = {}
@@ -127,6 +130,26 @@ class InMemoryJobRuntime:
 
     def submit(self, command: SubmitJob) -> JobSnapshot:
         with self._lock:
+            if self.handlers is not None:
+                handler = self.handlers.get(command.identity.job_type)
+                if handler is None:
+                    raise ValueError(
+                        f"job handler is not registered: {command.identity.job_type}"
+                    )
+                normalizer = getattr(handler, "normalize_target", None)
+                if callable(normalizer):
+                    normalized_target = normalizer(command.identity.logical_target)
+                    if normalized_target != command.identity.logical_target:
+                        command = SubmitJob(
+                            identity=JobIdentity.create(
+                                command.identity.job_type,
+                                normalized_target,
+                                command.identity.idempotency_key,
+                            ),
+                            correlation_id=command.correlation_id,
+                            actor=command.actor,
+                            max_attempts=command.max_attempts,
+                        )
             existing_id = self._identity_index.get(command.identity.key)
             if existing_id is not None:
                 return self._snapshot(self._executions[existing_id])
@@ -237,6 +260,7 @@ class InMemoryJobRuntime:
                     attempt_number=attempt_number,
                     correlation_id=execution.correlation_id,
                     release_id=self.release_id,
+                    logical_target=execution.identity.logical_target,
                 ),
             )
 
@@ -342,6 +366,18 @@ class InMemoryJobRuntime:
     def pending_outbox_count(self) -> int:
         with self._lock:
             return sum(row.state == "pending" for row in self._outbox.values())
+
+    def rebuild_outbox(self) -> int:
+        """Mark transport rows publishable after Redis state is lost."""
+
+        with self._lock:
+            rebuilt = 0
+            for row in self._outbox.values():
+                if row.state == "published":
+                    row.state = "pending"
+                    row.error_code = None
+                    rebuilt += 1
+            return rebuilt
 
     def reap_expired(self) -> int:
         with self._lock:
@@ -472,8 +508,19 @@ def _json_object(value: Mapping[str, object]) -> dict[str, JsonScalar]:
         if not isinstance(key, str) or not _json_scalar(item):
             raise ValueError("job result must contain only JSON scalar values")
         output[key] = item
+    serialized = json.dumps(
+        output, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    if len(serialized) > 8192:
+        raise ValueError("job result exceeds the 8 KiB bound")
     return output
 
 
 def _json_scalar(value: object) -> TypeGuard[JsonScalar]:
     return value is None or isinstance(value, (str, int, float, bool))
+
+
+# Names used by composition code can refer to the reference implementation
+# without coupling callers to its storage strategy.
+JobService = InMemoryJobRuntime
+DurableJobRuntime = InMemoryJobRuntime

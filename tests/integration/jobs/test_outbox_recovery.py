@@ -37,3 +37,17 @@ def test_outbox_relay_is_safe_when_redis_is_temporarily_unavailable() -> None:
 
     assert result.failed == 1
     assert runtime.pending_outbox_count() == 1
+
+
+def test_rebuild_after_transport_loss_republishes_durable_rows() -> None:
+    queue = RecordingJobQueue()
+    runtime = InMemoryJobRuntime(queue=queue)
+    runtime.submit_simple("foundation.reference", "ref:outbox-3", str(uuid4()))
+    relay = JobOutboxRelay(runtime, queue)
+    relay.publish_due(limit=10)
+    queue.messages.clear()
+
+    result = relay.rebuild_after_transport_loss(limit=10)
+
+    assert result.published == 1
+    assert len(queue.messages) == 1

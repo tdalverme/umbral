@@ -17,6 +17,10 @@ class JobOutboxRelay:
     def publish_due(self, *, limit: int = 100) -> RelayResult:
         return self.runtime.relay_due(queue=self.queue, limit=limit)
 
+    def rebuild_after_transport_loss(self, *, limit: int = 100) -> RelayResult:
+        self.runtime.rebuild_outbox()
+        return self.publish_due(limit=limit)
+
 
 @dataclass(frozen=True, slots=True)
 class ReaperResult:

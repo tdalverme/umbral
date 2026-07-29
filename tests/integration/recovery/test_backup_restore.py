@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import pytest
+
 from umbral.ops.backup import BackupPolicy, create_backup
-from umbral.ops.restore import restore_backup
+from umbral.ops.restore import RestoreValidationError, restore_backup
 
 
 def test_backup_manifest_and_restore_beside_primary_validate_checksums(
@@ -42,3 +44,26 @@ def test_backup_manifest_and_restore_beside_primary_validate_checksums(
     assert (restored / "objects" / "one" / "v1").read_bytes() == b"recovery bytes"
     assert (restored / "database.dump").read_bytes() == database_dump
     assert result.alembic_head == "0001_foundation_runtime"
+
+
+def test_restore_rejects_tampered_object_and_primary_namespace(tmp_path: Path) -> None:
+    primary = tmp_path / "primary"
+    object_path = primary / "objects" / "one" / "v1"
+    object_path.parent.mkdir(parents=True)
+    object_path.write_bytes(b"recovery bytes")
+    backup_root = tmp_path / "recovery"
+    create_backup(source_root=primary, destination_root=backup_root)
+
+    (backup_root / "objects" / "one" / "v1").write_bytes(b"tampered")
+    with pytest.raises(RestoreValidationError):
+        restore_backup(
+            manifest_path=backup_root / "manifest.json",
+            destination_root=tmp_path / "restores",
+            namespace="drill-002",
+        )
+    with pytest.raises(RestoreValidationError):
+        restore_backup(
+            manifest_path=backup_root / "manifest.json",
+            destination_root=tmp_path / "restores",
+            namespace="primary",
+        )

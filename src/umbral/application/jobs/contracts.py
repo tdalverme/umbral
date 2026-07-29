@@ -156,13 +156,20 @@ class JobContext:
     attempt_number: int
     correlation_id: UUID
     release_id: str
+    logical_target: str | None = None
 
 
 class TransientJobError(Exception):
     """A bounded, retryable failure explicitly declared by a handler."""
 
-    def __init__(self, code: str, retry_after: timedelta | None = None) -> None:
+    def __init__(
+        self, code: str, retry_after: timedelta | int | float | None = None
+    ) -> None:
         self.code = _normalize_error_code(code)
+        if isinstance(retry_after, (int, float)):
+            if retry_after < 0:
+                raise ValueError("retry_after must be non-negative")
+            retry_after = timedelta(seconds=retry_after)
         self.retry_after = retry_after
         super().__init__(self.code)
 

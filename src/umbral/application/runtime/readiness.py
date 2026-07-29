@@ -148,6 +148,47 @@ class ReadinessModule:
         return check
 
 
+class ReadinessService:
+    """Compose isolated, side-effect-free readiness modules by surface."""
+
+    @staticmethod
+    def for_surface(
+        *,
+        surface: Surface,
+        release_id: str,
+        probes: tuple[ReadinessProbe, ...],
+    ) -> ReadinessModule:
+        return ReadinessModule(
+            surface=surface,
+            release_id=release_id,
+            probes=probes,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Heartbeat:
+    surface: Surface
+    observed_at: datetime
+
+
+class HeartbeatRegistry:
+    """In-memory heartbeat view; stale worker/scheduler entries fail closed."""
+
+    def __init__(self, *, stale_after_seconds: int = 60) -> None:
+        self._stale_after_seconds = stale_after_seconds
+        self._heartbeats: dict[Surface, Heartbeat] = {}
+
+    def observe(self, surface: Surface, *, observed_at: datetime) -> None:
+        self._heartbeats[surface] = Heartbeat(surface, observed_at)
+
+    def is_fresh(self, surface: Surface, *, now: datetime) -> bool:
+        heartbeat = self._heartbeats.get(surface)
+        if heartbeat is None:
+            return False
+        return (
+            now.astimezone(UTC) - heartbeat.observed_at.astimezone(UTC)
+        ).total_seconds() <= self._stale_after_seconds
+
 def _aggregate_state(checks: tuple[ReadinessCheck, ...]) -> ReadinessState:
     if any(check.critical and check.state != "ready" for check in checks):
         return "not_ready"

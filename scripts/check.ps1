@@ -60,6 +60,38 @@ try {
         Write-Host "[SKIP] Migraciones: no existe alembic.ini ni el directorio alembic\."
     }
 
+    $jobsSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\jobs"),
+        (Join-Path $repoRoot "tests\integration\jobs")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($jobsSurface) {
+        Invoke-ChildCheck -Name "Jobs" -Path (Join-Path $PSScriptRoot "check-jobs.ps1")
+    }
+
+    $storageSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\objects"),
+        (Join-Path $repoRoot "tests\contract\test_object_store.py")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($storageSurface) {
+        Invoke-ChildCheck -Name "Objetos" -Path (Join-Path $PSScriptRoot "check-storage.ps1")
+    }
+
+    $recoverySurface = @(
+        (Join-Path $repoRoot "src\umbral\ops\backup.py"),
+        (Join-Path $repoRoot "tests\integration\recovery")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($recoverySurface) {
+        Invoke-ChildCheck -Name "Recuperacion" -Path (Join-Path $PSScriptRoot "check-recovery.ps1")
+    }
+
+    $releaseSurface = @(
+        (Join-Path $repoRoot "contracts\release-manifest.schema.json"),
+        (Join-Path $repoRoot "src\umbral\ops\release.py")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($releaseSurface) {
+        Invoke-ChildCheck -Name "Release" -Path (Join-Path $PSScriptRoot "check-release.ps1")
+    }
+
     $contractSurfacePaths = @(
         (Join-Path $repoRoot "contracts\openapi\v1\openapi.json"),
         (Join-Path $repoRoot "scripts\check-contracts.ps1"),

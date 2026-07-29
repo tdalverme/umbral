@@ -1,4 +1,9 @@
-import { hasQueryParameters, invalidRequestResponse, jsonResponse } from "@/lib/runtime/http";
+import {
+  correlationIdFor,
+  hasQueryParameters,
+  invalidRequestResponse,
+  jsonResponse,
+} from "@/lib/runtime/http";
 import { loadRuntimeManifest, type RuntimeManifest } from "@/lib/runtime/manifest";
 
 function readyPayload(manifest: RuntimeManifest) {
@@ -36,9 +41,10 @@ function unavailablePayload() {
 
 export async function GET(request: Request): Promise<Response> {
   if (hasQueryParameters(request)) return invalidRequestResponse();
+  const correlationId = correlationIdFor(request);
   try {
-    return jsonResponse(readyPayload(await loadRuntimeManifest()));
+    return jsonResponse(readyPayload(await loadRuntimeManifest()), 200, "application/json", correlationId);
   } catch {
-    return jsonResponse(unavailablePayload(), 503);
+    return jsonResponse(unavailablePayload(), 503, "application/json", correlationId);
   }
 }

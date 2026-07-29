@@ -17,11 +17,12 @@ class RQJobQueue:
     ) -> None:
         self.queue = queue
         self.job_name = job_name
+        self.serializer = JSONSerializer()
         # RQ permits an injected serializer. Replace a pickle serializer at
         # this seam so ORM objects/secrets can never enter a message payload.
         if not isinstance(getattr(queue, "serializer", None), JSONSerializer):
             try:
-                queue.serializer = JSONSerializer()
+                queue.serializer = self.serializer
             except (AttributeError, TypeError):
                 pass
 
