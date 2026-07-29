@@ -5,6 +5,24 @@ export type ClientOptions = {
 };
 
 /**
+ * CurrentSession
+ */
+export type CurrentSession = {
+    /**
+     * Last Activity At
+     */
+    last_activity_at: string;
+    /**
+     * Roles
+     */
+    roles: Array<string>;
+    /**
+     * User Id
+     */
+    user_id: string;
+};
+
+/**
  * DependencyCheck
  *
  * One allowlisted readiness check.
@@ -29,6 +47,16 @@ export type DependencyCheck = {
 };
 
 /**
+ * HTTPValidationError
+ */
+export type HttpValidationError = {
+    /**
+     * Detail
+     */
+    detail?: Array<ValidationError>;
+};
+
+/**
  * Health
  *
  * Minimal liveness contract.
@@ -38,6 +66,30 @@ export type Health = {
      * Status
      */
     status: 'alive';
+};
+
+/**
+ * MagicLinkConfirmation
+ */
+export type MagicLinkConfirmation = {
+    /**
+     * Attempt Id
+     */
+    attempt_id: string;
+    /**
+     * Token Hash
+     */
+    token_hash: string;
+};
+
+/**
+ * MagicLinkRequest
+ */
+export type MagicLinkRequest = {
+    /**
+     * Email
+     */
+    email: string;
 };
 
 /**
@@ -153,6 +205,34 @@ export type RuntimeVersion = {
 };
 
 /**
+ * ValidationError
+ */
+export type ValidationError = {
+    /**
+     * Context
+     */
+    ctx?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Input
+     */
+    input?: unknown;
+    /**
+     * Location
+     */
+    loc: Array<string | number>;
+    /**
+     * Message
+     */
+    msg: string;
+    /**
+     * Error Type
+     */
+    type: string;
+};
+
+/**
  * ValidationIssue
  *
  * Safe field-level validation metadata for RFC 9457 problems.
@@ -172,6 +252,159 @@ export type ValidationIssue = {
  * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
  */
 export type CorrelationId = string;
+
+export type LogoutCurrentSessionData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/logout';
+};
+
+export type LogoutCurrentSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type LogoutCurrentSessionError = LogoutCurrentSessionErrors[keyof LogoutCurrentSessionErrors];
+
+export type LogoutCurrentSessionResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type LogoutCurrentSessionResponse = LogoutCurrentSessionResponses[keyof LogoutCurrentSessionResponses];
+
+export type ConfirmMagicLinkData = {
+    body: MagicLinkConfirmation;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/magic-link-confirmations';
+};
+
+export type ConfirmMagicLinkErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ConfirmMagicLinkError = ConfirmMagicLinkErrors[keyof ConfirmMagicLinkErrors];
+
+export type ConfirmMagicLinkResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ConfirmMagicLinkResponse = ConfirmMagicLinkResponses[keyof ConfirmMagicLinkResponses];
+
+export type RequestMagicLinkData = {
+    body: MagicLinkRequest;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/magic-link-requests';
+};
+
+export type RequestMagicLinkErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestMagicLinkError = RequestMagicLinkErrors[keyof RequestMagicLinkErrors];
+
+export type RequestMagicLinkResponses = {
+    /**
+     * Successful Response
+     */
+    202: unknown;
+};
+
+export type GetCurrentSessionData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/session';
+};
+
+export type GetCurrentSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCurrentSessionError = GetCurrentSessionErrors[keyof GetCurrentSessionErrors];
+
+export type GetCurrentSessionResponses = {
+    /**
+     * Successful Response
+     */
+    200: CurrentSession;
+};
+
+export type GetCurrentSessionResponse = GetCurrentSessionResponses[keyof GetCurrentSessionResponses];
+
+export type ReceiveResendEventData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/integrations/email/resend-events';
+};
+
+export type ReceiveResendEventErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ReceiveResendEventError = ReceiveResendEventErrors[keyof ReceiveResendEventErrors];
+
+export type ReceiveResendEventResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ReceiveResendEventResponse = ReceiveResendEventResponses[keyof ReceiveResendEventResponses];
 
 export type GetRuntimeHealthData = {
     body?: never;
