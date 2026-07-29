@@ -38,12 +38,15 @@ function Invoke-PythonCheck {
 }
 
 Push-Location $repoRoot
+$originalPythonPath = $env:PYTHONPATH
 try {
+    $env:PYTHONPATH = (Join-Path $repoRoot "src")
     Invoke-PythonCheck -Name "Ruff" -Arguments @("-m", "ruff", "check", "src", "tests")
     Invoke-PythonCheck -Name "mypy estricto" -Arguments @("-m", "mypy", "src", "tests")
     Invoke-PythonCheck -Name "pytest" -Arguments @("-m", "pytest")
 }
 finally {
+    $env:PYTHONPATH = $originalPythonPath
     Pop-Location
 }
 
