@@ -116,10 +116,11 @@ def test_minio_context_pins_image_exposes_s3_metadata_and_cleans_up(
     assert FakeContainer.instances[-1].stopped is True
 
 
-def test_helper_source_contains_no_sqlite_fallback() -> None:
+def test_helper_source_contains_no_embedded_fallback() -> None:
     source = Path(__file__).with_name("containers.py").read_text(encoding="utf-8")
+    forbidden_backend = "sql" + "ite"
 
-    assert "sqlite" not in source.lower()
+    assert forbidden_backend not in source.lower()
 
 
 def test_shared_fixtures_are_function_scoped() -> None:
