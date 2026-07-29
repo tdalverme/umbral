@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "api:generate": "openapi-ts -f openapi-ts.config.ts",
-    "api:check": "npm run api:generate && git diff --exit-code -- src/lib/api/generated"
+    "api:check": "openapi-ts -f openapi-ts.config.ts && git diff --exit-code -- src/lib/api/generated"
   },
   "dependencies": {
     "@tanstack/react-query": "5.101.4",
