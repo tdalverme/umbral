@@ -5,8 +5,11 @@ from __future__ import annotations
 import copy
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
+
+import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = REPOSITORY_ROOT / "contracts" / "openapi" / "v1" / "openapi.json"
@@ -79,6 +82,20 @@ def _check_compatibility(
     )
 
 
+def _write_contract_pair(
+    tmp_path: Path, baseline: dict[str, Any], candidate: dict[str, Any]
+) -> tuple[Path, Path]:
+    baseline_path = tmp_path / "baseline.json"
+    candidate_path = tmp_path / "candidate.json"
+    baseline_path.write_text(
+        json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    candidate_path.write_text(
+        json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return baseline_path, candidate_path
+
+
 def test_openapi_export_is_deterministic_openapi_31_with_stable_operation_ids(
     tmp_path: Path,
 ) -> None:
@@ -108,14 +125,7 @@ def test_optional_schema_addition_is_compatible_with_contract_major_one(
         "type": "string"
     }
 
-    baseline_path = tmp_path / "baseline.json"
-    candidate_path = tmp_path / "candidate.json"
-    baseline_path.write_text(
-        json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    candidate_path.write_text(
-        json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    baseline_path, candidate_path = _write_contract_pair(tmp_path, baseline, candidate)
 
     result = _check_compatibility(baseline_path, candidate_path)
 
@@ -129,14 +139,67 @@ def test_breaking_same_major_contract_change_is_rejected(tmp_path: Path) -> None
         "type": "integer"
     }
 
-    baseline_path = tmp_path / "baseline.json"
-    candidate_path = tmp_path / "candidate.json"
-    baseline_path.write_text(
-        json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    candidate_path.write_text(
-        json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    baseline_path, candidate_path = _write_contract_pair(tmp_path, baseline, candidate)
+
+    result = _check_compatibility(baseline_path, candidate_path)
+
+    assert result.returncode != 0
+    assert "breaking" in (result.stdout + result.stderr).lower()
+
+
+def _remove_health_path(candidate: dict[str, Any]) -> None:
+    candidate["paths"].pop("/health")
+
+
+def _remove_health_get(candidate: dict[str, Any]) -> None:
+    candidate["paths"]["/health"].pop("get")
+
+
+def _change_health_operation_id(candidate: dict[str, Any]) -> None:
+    candidate["paths"]["/health"]["get"]["operationId"] = "differentOperation"
+
+
+def _remove_health_required_status(candidate: dict[str, Any]) -> None:
+    candidate["components"]["schemas"]["Health"]["required"] = []
+
+
+def _remove_readiness_response(candidate: dict[str, Any]) -> None:
+    candidate["paths"]["/ready"]["get"]["responses"].pop("503")
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        pytest.param(_remove_health_path, id="path"),
+        pytest.param(_remove_health_get, id="method"),
+        pytest.param(_change_health_operation_id, id="operation-id"),
+        pytest.param(_remove_health_required_status, id="required-property"),
+        pytest.param(_remove_readiness_response, id="response-status"),
+    ],
+)
+def test_breaking_path_and_schema_changes_are_rejected(
+    tmp_path: Path, mutation: Callable[[dict[str, Any]], None]
+) -> None:
+    baseline = _read_contract()
+    candidate = copy.deepcopy(baseline)
+    mutation(candidate)
+    baseline_path, candidate_path = _write_contract_pair(tmp_path, baseline, candidate)
+
+    result = _check_compatibility(baseline_path, candidate_path)
+
+    assert result.returncode != 0
+    assert "breaking" in (result.stdout + result.stderr).lower()
+
+
+def test_removing_required_security_is_rejected(tmp_path: Path) -> None:
+    baseline = _read_contract()
+    baseline["components"]["securitySchemes"] = {
+        "runtimeBearer": {"scheme": "bearer", "type": "http"}
+    }
+    baseline["paths"]["/health"]["get"]["security"] = [{"runtimeBearer": []}]
+    candidate = copy.deepcopy(baseline)
+    candidate["paths"]["/health"]["get"].pop("security")
+    baseline_path, candidate_path = _write_contract_pair(tmp_path, baseline, candidate)
 
     result = _check_compatibility(baseline_path, candidate_path)
 
