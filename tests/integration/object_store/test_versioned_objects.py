@@ -38,7 +38,9 @@ def test_pending_version_becomes_available_and_only_exact_ref_is_readable(
     )
 
     assert ref.version_id == version_id
-    assert repository.get(object_id, version_id).state == "available"
+    metadata = repository.get(object_id, version_id)
+    assert metadata is not None
+    assert metadata.state == "available"
     assert objects.open(ref).read() == body
     with pytest.raises(ObjectNotFound):
         objects.open(
@@ -54,18 +56,23 @@ def test_same_version_retry_is_idempotent_and_conflict_is_explicit(
     objects = VersionedObjects(FilesystemObjectStore(tmp_path))
     object_id, version_id = uuid4(), uuid4()
     body = b"stable"
-    kwargs = {
-        "object_id": object_id,
-        "version_id": version_id,
-        "sha256": hashlib.sha256(body).hexdigest(),
-        "size_bytes": len(body),
-        "content_type": "application/octet-stream",
-    }
-    first = objects.put(body=BytesIO(body), **kwargs)
-    retry = objects.put(body=BytesIO(body), **kwargs)
+    digest = hashlib.sha256(body).hexdigest()
+
+    def put(value: bytes) -> object:
+        return objects.put(
+            object_id=object_id,
+            version_id=version_id,
+            body=BytesIO(value),
+            sha256=digest,
+            size_bytes=len(body),
+            content_type="application/octet-stream",
+        )
+
+    first = put(body)
+    retry = put(body)
     assert retry == first
     with pytest.raises(ObjectVersionConflict):
-        objects.put(body=BytesIO(b"different"), **kwargs)
+        put(b"different")
 
 
 def test_reconcile_completes_matching_pending_write_and_fails_conflict(
@@ -99,7 +106,9 @@ def test_reconcile_completes_matching_pending_write_and_fails_conflict(
     result = objects.reconcile_pending()
 
     assert result.completed == 1
-    assert repository.get(object_id, version_id).state == "available"
+    metadata = repository.get(object_id, version_id)
+    assert metadata is not None
+    assert metadata.state == "available"
 
 
 def test_pending_reads_fail_closed(tmp_path: Path) -> None:
