@@ -85,15 +85,34 @@ def test_health_is_alive_and_has_no_observable_effect_on_repeated_requests() -> 
     assert first.json() == second.json() == {"status": "alive"}
 
 
-def test_ready_returns_only_a_contract_readiness_payload() -> None:
+def test_health_rejects_unexpected_query_parameters_without_echoing_input() -> None:
+    canary = "unexpected-query-canary"
     with _runtime_client() as client:
-        response = client.get("/ready")
+        response = client.get(f"/health?probe={canary}")
 
-    assert response.status_code in {200, 503}
-    _assert_common_headers(response)
-    _assert_readiness_schema(response.json())
-    if response.status_code == 503:
-        assert 1 <= int(response.headers["retry-after"]) <= 60
+    assert response.status_code in {400, 422}
+    assert canary not in response.text
+
+
+def test_ready_repeated_requests_preserve_state_without_durable_effects() -> None:
+    with _runtime_client() as client:
+        first = client.get("/ready")
+        second = client.get("/ready")
+
+    for response in (first, second):
+        payload = response.json()
+        _assert_common_headers(response)
+        _assert_readiness_schema(payload)
+        expected_status = 503 if payload["state"] == "not_ready" else 200
+        assert response.status_code == expected_status
+        if expected_status == 503:
+            assert 1 <= int(response.headers["retry-after"]) <= 60
+
+    first_payload = first.json()
+    second_payload = second.json()
+    first_payload.pop("observed_at")
+    second_payload.pop("observed_at")
+    assert first_payload == second_payload
 
 
 def test_version_identifies_immutable_runtime_release_without_writing_state() -> None:
