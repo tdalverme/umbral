@@ -55,3 +55,116 @@ python_version = "3.13"
 mypy_path = "src"
 files = ["src", "tests"]
 strict = true
+
+[tool.importlinter]
+root_package = "umbral"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Runtime layers"
+type = "layers"
+containers = ["umbral"]
+layers = [
+    "agent | api | workers",
+    "infrastructure",
+    "application",
+    "domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain boundary"
+type = "forbidden"
+source_modules = ["umbral.domain"]
+forbidden_modules = [
+    "umbral.application",
+    "umbral.agent",
+    "umbral.api",
+    "umbral.infrastructure",
+    "umbral.workers",
+    "fastapi",
+    "pydantic",
+    "pydantic_settings",
+    "sqlalchemy",
+    "alembic",
+    "psycopg",
+    "geoalchemy2",
+    "pgvector",
+    "rq",
+    "redis",
+    "boto3",
+    "opentelemetry",
+    "sentry_sdk",
+]
+
+[[tool.importlinter.contracts]]
+name = "Application boundary"
+type = "forbidden"
+source_modules = ["umbral.application"]
+forbidden_modules = [
+    "umbral.agent",
+    "umbral.api",
+    "umbral.infrastructure",
+    "umbral.workers",
+    "fastapi",
+    "pydantic",
+    "pydantic_settings",
+    "sqlalchemy",
+    "alembic",
+    "psycopg",
+    "geoalchemy2",
+    "pgvector",
+    "rq",
+    "redis",
+    "boto3",
+    "opentelemetry",
+    "sentry_sdk",
+]
+
+[[tool.importlinter.contracts]]
+name = "Agent boundary"
+type = "forbidden"
+source_modules = ["umbral.agent"]
+forbidden_modules = [
+    "umbral.api",
+    "umbral.infrastructure",
+    "umbral.workers",
+    "fastapi",
+    "pydantic",
+    "pydantic_settings",
+    "sqlalchemy",
+    "alembic",
+    "psycopg",
+    "geoalchemy2",
+    "pgvector",
+    "rq",
+    "redis",
+    "boto3",
+]
+
+[[tool.importlinter.contracts]]
+name = "API boundary"
+type = "forbidden"
+source_modules = ["umbral.api"]
+forbidden_modules = [
+    "umbral.agent",
+    "umbral.workers",
+]
+
+[[tool.importlinter.contracts]]
+name = "Workers boundary"
+type = "forbidden"
+source_modules = ["umbral.workers"]
+forbidden_modules = [
+    "umbral.agent",
+    "umbral.api",
+]
+
+[[tool.importlinter.contracts]]
+name = "Infrastructure boundary"
+type = "forbidden"
+source_modules = ["umbral.infrastructure"]
+forbidden_modules = [
+    "umbral.agent",
+    "umbral.api",
+    "umbral.workers",
+]

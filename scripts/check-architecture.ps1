@@ -3,52 +3,59 @@ param()
 
 $ErrorActionPreference = "Stop"
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
-$sourceRoots = @(
-    (Join-Path $repoRoot "src\umbral"),
-    (Join-Path $repoRoot "umbral")
-) | Where-Object { Test-Path -LiteralPath $_ }
+$sourceRoot = Join-Path $repoRoot "src\umbral"
+$architectureTest = Join-Path $repoRoot "tests\architecture\test_dependency_rules.py"
+$pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
+$lintPath = Join-Path $repoRoot ".venv\Scripts\lint-imports.exe"
 
-if ($sourceRoots.Count -eq 0) {
-    Write-Host "[SKIP] Arquitectura: todavia no existe el paquete umbral."
-    return
+foreach ($requiredPath in @($sourceRoot, $architectureTest, $pythonPath, $lintPath)) {
+    if (-not (Test-Path -LiteralPath $requiredPath)) {
+        Write-Error ("[FAIL] Arquitectura: falta el prerequisito requerido: {0}" -f $requiredPath)
+        exit 2
+    }
 }
 
-$rules = @(
-    @{
-        Layer = "domain"
-        Pattern = "(?im)^\s*(from|import)\s+(fastapi|sqlalchemy|sqlmodel|openai|(?:src\.)?umbral\.(api|infrastructure|workers|agent))"
-        Message = "domain no puede depender de framework, DB, LLM, API, workers ni agent"
-    },
-    @{
-        Layer = "application"
-        Pattern = "(?im)^\s*(from|import)\s+(fastapi|(?:src\.)?umbral\.(api|infrastructure))"
-        Message = "application no puede depender de API ni infraestructura"
-    },
-    @{
-        Layer = "agent"
-        Pattern = "(?im)^\s*(from|import)\s+(sqlalchemy|sqlmodel|(?:src\.)?umbral\.infrastructure\.db)"
-        Message = "agent no puede acceder directamente a DB"
+Push-Location $repoRoot
+try {
+    Write-Host "[CHECK] Fixtures de arquitectura"
+    & $pythonPath -m pytest $architectureTest -q
+    $pytestExitCode = $LASTEXITCODE
+    if ($pytestExitCode -ne 0) {
+        Write-Error ("[FAIL] Fixtures de arquitectura: pytest termino con codigo {0}" -f $pytestExitCode)
+        exit $pytestExitCode
     }
-)
 
-$violations = [System.Collections.Generic.List[string]]::new()
-foreach ($sourceRoot in $sourceRoots) {
-    $files = Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Filter "*.py"
-    foreach ($file in $files) {
-        $relativePath = $file.FullName.Substring($sourceRoot.Length + 1)
-        $layer = ($relativePath -split "[\\/]")[0]
-        $content = Get-Content -LiteralPath $file.FullName -Raw
+    $previousPythonPath = $env:PYTHONPATH
+    try {
+        $srcPath = Join-Path $repoRoot "src"
+        if ([string]::IsNullOrWhiteSpace($previousPythonPath)) {
+            $env:PYTHONPATH = $srcPath
+        }
+        else {
+            $env:PYTHONPATH = $srcPath + [System.IO.Path]::PathSeparator + $previousPythonPath
+        }
 
-        foreach ($rule in $rules | Where-Object { $_.Layer -eq $layer }) {
-            if ($content -match $rule.Pattern) {
-                $violations.Add(("{0}: {1}" -f $file.FullName, $rule.Message))
-            }
+        Write-Host "[CHECK] Contratos Import Linter"
+        & $lintPath --no-cache --verbose
+        $lintExitCode = $LASTEXITCODE
+    }
+    finally {
+        if ($null -eq $previousPythonPath) {
+            Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:PYTHONPATH = $previousPythonPath
         }
     }
-}
 
-if ($violations.Count -gt 0) {
-    throw ($violations -join [Environment]::NewLine)
+    if ($lintExitCode -ne 0) {
+        Write-Error ("[FAIL] Contratos Import Linter: lint-imports termino con codigo {0}" -f $lintExitCode)
+        exit $lintExitCode
+    }
+}
+finally {
+    Pop-Location
 }
 
 Write-Host "[PASS] Direccion de dependencias"
+exit 0
