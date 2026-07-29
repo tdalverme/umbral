@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": ">=16.2.12 <17",
@@ -14,13 +17,19 @@
     "react-dom": ">=19.2.7 <20"
   },
   "devDependencies": {
+    "@axe-core/playwright": ">=4.10.0 <5",
+    "@playwright/test": ">=1.61.0 <2",
     "@tailwindcss/postcss": ">=4.3.3 <5",
+    "@testing-library/jest-dom": ">=7.0.0 <8",
+    "@testing-library/react": ">=16.3.2 <17",
     "@types/node": ">=24 <25",
     "@types/react": ">=19 <20",
     "@types/react-dom": ">=19 <20",
     "eslint": ">=10.7 <11",
     "eslint-config-next": ">=16.2.12 <17",
+    "jsdom": ">=26.1.0 <27",
     "tailwindcss": ">=4.3.3 <5",
-    "typescript": ">=6.0.2 <6.1"
+    "typescript": ">=6.0.2 <6.1",
+    "vitest": ">=5.0.0-beta.7 <6"
   }
 }

@@ -14,6 +14,9 @@
     "sharp@0.34.5": true,
     "unrs-resolver@1.12.2": true
   },
+  "devDependencies": {
+    "jsdom": ">=26.1.0 <27"
+  },
   "scripts": {
     "dev": "npm run dev --workspace @umbral/web",
     "build": "npm run build --workspace @umbral/web",
