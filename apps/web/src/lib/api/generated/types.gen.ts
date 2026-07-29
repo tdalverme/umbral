@@ -5,11 +5,11 @@ export type ClientOptions = {
 };
 
 /**
- * DependencyCheckResponse
+ * DependencyCheck
  *
  * One allowlisted readiness check.
  */
-export type DependencyCheckResponse = {
+export type DependencyCheck = {
     /**
      * Code
      */
@@ -29,11 +29,11 @@ export type DependencyCheckResponse = {
 };
 
 /**
- * HealthResponse
+ * Health
  *
  * Minimal liveness contract.
  */
-export type HealthResponse = {
+export type Health = {
     /**
      * Status
      */
@@ -41,15 +41,15 @@ export type HealthResponse = {
 };
 
 /**
- * ReadinessResponse
+ * Readiness
  *
  * Readiness response contract.
  */
-export type ReadinessResponse = {
+export type Readiness = {
     /**
      * Checks
      */
-    checks: Array<DependencyCheckResponse>;
+    checks: Array<DependencyCheck>;
     /**
      * Observed At
      */
@@ -69,11 +69,11 @@ export type ReadinessResponse = {
 };
 
 /**
- * RuntimeVersionResponse
+ * RuntimeVersion
  *
  * Immutable executing release identity.
  */
-export type RuntimeVersionResponse = {
+export type RuntimeVersion = {
     /**
      * Artifact Digest
      */
@@ -119,7 +119,7 @@ export type GetRuntimeHealthResponses = {
     /**
      * Successful Response
      */
-    200: HealthResponse;
+    200: Health;
 };
 
 export type GetRuntimeHealthResponse = GetRuntimeHealthResponses[keyof GetRuntimeHealthResponses];
@@ -135,7 +135,7 @@ export type GetRuntimeReadinessErrors = {
     /**
      * Service Unavailable
      */
-    503: ReadinessResponse;
+    503: Readiness;
 };
 
 export type GetRuntimeReadinessError = GetRuntimeReadinessErrors[keyof GetRuntimeReadinessErrors];
@@ -144,7 +144,7 @@ export type GetRuntimeReadinessResponses = {
     /**
      * Successful Response
      */
-    200: ReadinessResponse;
+    200: Readiness;
 };
 
 export type GetRuntimeReadinessResponse = GetRuntimeReadinessResponses[keyof GetRuntimeReadinessResponses];
@@ -160,7 +160,7 @@ export type GetRuntimeVersionResponses = {
     /**
      * Successful Response
      */
-    200: RuntimeVersionResponse;
+    200: RuntimeVersion;
 };
 
 export type GetRuntimeVersionResponse = GetRuntimeVersionResponses[keyof GetRuntimeVersionResponses];

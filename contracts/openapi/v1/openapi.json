@@ -1,7 +1,7 @@
 {
   "components": {
     "schemas": {
-      "DependencyCheckResponse": {
+      "DependencyCheck": {
         "additionalProperties": false,
         "description": "One allowlisted readiness check.",
         "properties": {
@@ -53,10 +53,10 @@
           "state",
           "critical"
         ],
-        "title": "DependencyCheckResponse",
+        "title": "DependencyCheck",
         "type": "object"
       },
-      "HealthResponse": {
+      "Health": {
         "additionalProperties": false,
         "description": "Minimal liveness contract.",
         "properties": {
@@ -69,16 +69,16 @@
         "required": [
           "status"
         ],
-        "title": "HealthResponse",
+        "title": "Health",
         "type": "object"
       },
-      "ReadinessResponse": {
+      "Readiness": {
         "additionalProperties": false,
         "description": "Readiness response contract.",
         "properties": {
           "checks": {
             "items": {
-              "$ref": "#/components/schemas/DependencyCheckResponse"
+              "$ref": "#/components/schemas/DependencyCheck"
             },
             "maxItems": 12,
             "title": "Checks",
@@ -122,10 +122,10 @@
           "release_id",
           "checks"
         ],
-        "title": "ReadinessResponse",
+        "title": "Readiness",
         "type": "object"
       },
-      "RuntimeVersionResponse": {
+      "RuntimeVersion": {
         "additionalProperties": false,
         "description": "Immutable executing release identity.",
         "properties": {
@@ -187,7 +187,7 @@
           "database_revision",
           "built_at"
         ],
-        "title": "RuntimeVersionResponse",
+        "title": "RuntimeVersion",
         "type": "object"
       }
     }
@@ -207,7 +207,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
+                  "$ref": "#/components/schemas/Health"
                 }
               }
             },
@@ -229,7 +229,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadinessResponse"
+                  "$ref": "#/components/schemas/Readiness"
                 }
               }
             },
@@ -239,7 +239,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadinessResponse"
+                  "$ref": "#/components/schemas/Readiness"
                 }
               }
             },
@@ -261,7 +261,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RuntimeVersionResponse"
+                  "$ref": "#/components/schemas/RuntimeVersion"
                 }
               }
             },

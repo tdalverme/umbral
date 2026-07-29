@@ -1,5 +1,6 @@
 """Contract gate for the checked-in web client generated from OpenAPI."""
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -19,6 +20,10 @@ def _run(*arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _npm_command() -> str:
+    return "npm.cmd" if os.name == "nt" else "npm"
+
+
 def test_generated_web_client_is_regenerated_without_a_diff() -> None:
     """Catch a published OpenAPI change that leaves checked-in client output stale."""
 
@@ -31,7 +36,9 @@ def test_generated_web_client_is_regenerated_without_a_diff() -> None:
         f"{GENERATED_CLIENT}; run `npm run api:generate --workspace @umbral/web`"
     )
 
-    generation = _run("npm", "run", "api:generate", "--workspace", "@umbral/web")
+    generation = _run(
+        _npm_command(), "run", "api:generate", "--workspace", "@umbral/web"
+    )
     assert generation.returncode == 0, (
         "OpenAPI client generation failed; run "
         "`npm run api:generate --workspace @umbral/web` locally.\n"

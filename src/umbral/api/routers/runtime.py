@@ -16,14 +16,14 @@ router = APIRouter(tags=["Runtime"])
 _runtime_dependencies: RuntimeDependencies | None = None
 
 
-class HealthResponse(BaseModel):
+class Health(BaseModel):
     """Minimal liveness contract."""
 
     model_config = ConfigDict(extra="forbid")
     status: Literal["alive"]
 
 
-class DependencyCheckResponse(BaseModel):
+class DependencyCheck(BaseModel):
     """One allowlisted readiness check."""
 
     model_config = ConfigDict(extra="forbid")
@@ -33,7 +33,7 @@ class DependencyCheckResponse(BaseModel):
     code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_.-]{0,99}$")
 
 
-class ReadinessResponse(BaseModel):
+class Readiness(BaseModel):
     """Readiness response contract."""
 
     model_config = ConfigDict(extra="forbid")
@@ -41,10 +41,10 @@ class ReadinessResponse(BaseModel):
     state: Literal["ready", "degraded", "not_ready"]
     observed_at: datetime
     release_id: str = Field(min_length=1, max_length=100)
-    checks: list[DependencyCheckResponse] = Field(max_length=12)
+    checks: list[DependencyCheck] = Field(max_length=12)
 
 
-class RuntimeVersionResponse(BaseModel):
+class RuntimeVersion(BaseModel):
     """Immutable executing release identity."""
 
     model_config = ConfigDict(extra="forbid")
@@ -76,23 +76,23 @@ def _assert_no_query_parameters(request: Request) -> None:
         raise InvalidRequestError()
 
 
-@router.get("/health", operation_id="getRuntimeHealth", response_model=HealthResponse)
-async def health(request: Request, response: Response) -> HealthResponse:
+@router.get("/health", operation_id="getRuntimeHealth", response_model=Health)
+async def health(request: Request, response: Response) -> Health:
     """Confirm only that this process can respond."""
 
     _assert_no_query_parameters(request)
     response.headers["Cache-Control"] = "no-store"
-    return HealthResponse(status="alive")
+    return Health(status="alive")
 
 
 @router.get(
     "/ready",
     operation_id="getRuntimeReadiness",
-    response_model=ReadinessResponse,
+    response_model=Readiness,
     response_model_exclude_none=True,
-    responses={503: {"model": ReadinessResponse}},
+    responses={503: {"model": Readiness}},
 )
-async def ready(request: Request, response: Response) -> ReadinessResponse:
+async def ready(request: Request, response: Response) -> Readiness:
     """Report this API surface's already-known readiness."""
 
     _assert_no_query_parameters(request)
@@ -101,13 +101,13 @@ async def ready(request: Request, response: Response) -> ReadinessResponse:
     if report.state == "not_ready":
         response.status_code = 503
         response.headers["Retry-After"] = "30"
-    return ReadinessResponse(
+    return Readiness(
         surface=report.surface,
         state=report.state,
         observed_at=report.observed_at,
         release_id=report.release_id,
         checks=[
-            DependencyCheckResponse(
+            DependencyCheck(
                 name=check.name,
                 state=check.state,
                 critical=check.critical,
@@ -121,15 +121,15 @@ async def ready(request: Request, response: Response) -> ReadinessResponse:
 @router.get(
     "/version",
     operation_id="getRuntimeVersion",
-    response_model=RuntimeVersionResponse,
+    response_model=RuntimeVersion,
 )
-async def version(request: Request, response: Response) -> RuntimeVersionResponse:
+async def version(request: Request, response: Response) -> RuntimeVersion:
     """Identify the immutable release backing the API surface."""
 
     _assert_no_query_parameters(request)
     response.headers["Cache-Control"] = "no-store"
     release = _dependencies().release
-    return RuntimeVersionResponse(
+    return RuntimeVersion(
         surface="api",
         release_id=release.release_id,
         git_sha=release.git_sha,

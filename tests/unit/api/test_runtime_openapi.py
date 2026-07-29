@@ -7,9 +7,9 @@ from umbral.api.main import app
 
 def test_dependency_check_name_schema_is_the_closed_contract_allowlist() -> None:
     document = app.openapi()
-    name_schema = document["components"]["schemas"]["DependencyCheckResponse"][
-        "properties"
-    ]["name"]
+    name_schema = document["components"]["schemas"]["DependencyCheck"]["properties"][
+        "name"
+    ]
 
     assert name_schema["enum"] == [
         "runtime_config",
