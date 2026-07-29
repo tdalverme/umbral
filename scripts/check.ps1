@@ -12,7 +12,16 @@ function Invoke-ChildCheck {
     )
 
     try {
+        $global:LASTEXITCODE = 0
         & $Path
+        $childSucceeded = $?
+        $childExitCode = $LASTEXITCODE
+        if ($null -eq $childExitCode) {
+            $childExitCode = 0
+        }
+        if (-not $childSucceeded -or $childExitCode -ne 0) {
+            throw ("El check hijo termino con codigo {0}." -f $childExitCode)
+        }
     }
     catch {
         Write-Host ("[FAIL] {0}: {1}" -f $Name, $_.Exception.Message) -ForegroundColor Red
@@ -24,6 +33,31 @@ Push-Location $repoRoot
 try {
     Invoke-ChildCheck -Name "Documentacion" -Path (Join-Path $PSScriptRoot "check-docs.ps1")
     Invoke-ChildCheck -Name "Arquitectura" -Path (Join-Path $PSScriptRoot "check-architecture.ps1")
+
+    $pythonSurfacePaths = @(
+        (Join-Path $repoRoot "pyproject.toml"),
+        (Join-Path $repoRoot "src\umbral"),
+        (Join-Path $repoRoot "tests")
+    )
+    $hasPythonSurface = $pythonSurfacePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($hasPythonSurface) {
+        Invoke-ChildCheck -Name "Python" -Path (Join-Path $PSScriptRoot "check-python.ps1")
+    }
+    else {
+        Write-Host "[SKIP] Python: no existe pyproject.toml, src\umbral ni tests\."
+    }
+
+    $webSurfacePaths = @(
+        (Join-Path $repoRoot "apps\web"),
+        (Join-Path $repoRoot "apps\web\package.json")
+    )
+    $hasWebSurface = $webSurfacePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($hasWebSurface) {
+        Invoke-ChildCheck -Name "Web" -Path (Join-Path $PSScriptRoot "check-web.ps1")
+    }
+    else {
+        Write-Host "[SKIP] Web: no existe apps\web ni apps\web\package.json."
+    }
 
     $specifyPath = Join-Path $repoRoot ".venv\Scripts\specify.exe"
     if (Test-Path -LiteralPath $specifyPath) {
@@ -56,42 +90,6 @@ try {
         Write-Host "[SKIP] API: todavia no existe umbral.api.main."
     }
 
-    $testFiles = @()
-    $testsPath = Join-Path $repoRoot "tests"
-    if (Test-Path -LiteralPath $testsPath) {
-        $testFiles = @(Get-ChildItem -LiteralPath $testsPath -Recurse -File -Filter "*.py")
-    }
-
-    if ($testFiles.Count -eq 0) {
-        Write-Host "[SKIP] Tests: no hay archivos Python bajo tests\."
-    }
-    else {
-        $pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
-        if (-not (Test-Path -LiteralPath $pythonPath)) {
-            $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-            if ($pythonCommand) {
-                $pythonPath = $pythonCommand.Source
-            }
-        }
-
-        if (-not (Test-Path -LiteralPath $pythonPath) -and -not (Get-Command $pythonPath -ErrorAction SilentlyContinue)) {
-            Write-Host "[SKIP] Tests: no hay Python disponible."
-        }
-        else {
-            try {
-                & $pythonPath -m pytest
-                $pytestExitCode = $LASTEXITCODE
-                if ($pytestExitCode -ne 0) {
-                    throw "pytest termino con codigo $pytestExitCode."
-                }
-                Write-Host "[PASS] Tests"
-            }
-            catch {
-                Write-Host ("[FAIL] Tests: {0}" -f $_.Exception.Message) -ForegroundColor Red
-                $failures++
-            }
-        }
-    }
 }
 finally {
     Pop-Location
