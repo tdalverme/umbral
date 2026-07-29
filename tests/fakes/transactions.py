@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from umbral.application.transactions import InMemoryUnitOfWork
+
 
 class InMemoryTransaction:
     def __init__(self, manager: InMemoryTransactionManager) -> None:
@@ -18,9 +20,11 @@ class InMemoryTransaction:
 
     def rollback(self) -> None:
         self._writes.clear()
+        self._manager._rollback()
 
     def close(self) -> None:
         self._writes.clear()
+        self._manager._close()
 
 
 class InMemoryTransactionManager:
@@ -31,9 +35,7 @@ class InMemoryTransactionManager:
         self.closed = 0
         self._active: InMemoryTransaction | None = None
 
-    def transaction(self) -> InMemoryTransaction:
-        from umbral.application.transactions import InMemoryUnitOfWork
-
+    def transaction(self) -> InMemoryUnitOfWork:
         self._active = InMemoryTransaction(self)
         return InMemoryUnitOfWork(self, self._active)
 

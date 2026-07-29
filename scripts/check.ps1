@@ -47,6 +47,19 @@ try {
         Write-Host "[SKIP] Python: no existe pyproject.toml, src\umbral ni tests\."
     }
 
+    $migrationSurfacePaths = @(
+        (Join-Path $repoRoot "alembic.ini"),
+        (Join-Path $repoRoot "alembic"),
+        (Join-Path $repoRoot "scripts\check-migrations.ps1")
+    )
+    $hasMigrationSurface = $migrationSurfacePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($hasMigrationSurface) {
+        Invoke-ChildCheck -Name "Migraciones" -Path (Join-Path $PSScriptRoot "check-migrations.ps1")
+    }
+    else {
+        Write-Host "[SKIP] Migraciones: no existe alembic.ini ni el directorio alembic\."
+    }
+
     $webSurfacePaths = @(
         (Join-Path $repoRoot "apps\web"),
         (Join-Path $repoRoot "apps\web\package.json")

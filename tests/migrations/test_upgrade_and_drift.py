@@ -33,4 +33,3 @@ def test_downgrade_policy_is_explicitly_empty_only() -> None:
     assert revision is not None
     assert revision.down_revision is None
     assert "empty" in (revision.doc or "").lower()
-

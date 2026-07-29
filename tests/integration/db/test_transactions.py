@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
 from tests.fakes.transactions import InMemoryTransactionManager
+
 from umbral.application.transactions import TransactionStateError
 
 
@@ -46,4 +46,3 @@ def test_uow_does_not_expose_repository_commit() -> None:
 
     with manager.transaction() as transaction:
         assert not hasattr(transaction, "repository_commit")
-

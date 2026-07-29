@@ -34,3 +34,21 @@ class InternalRuntimeError(ApplicationError):
             title="Internal server error",
             status=500,
         )
+
+
+class ConcurrencyConflict(ApplicationError):
+    """A versioned update lost the optimistic-lock race."""
+
+    def __init__(
+        self,
+        *,
+        expected_version: int | None,
+        actual_version: int | None,
+    ) -> None:
+        self.expected_version = expected_version
+        self.actual_version = actual_version
+        super().__init__(
+            code="concurrency.conflict",
+            title="Concurrency conflict",
+            status=409,
+        )

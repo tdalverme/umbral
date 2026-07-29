@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
-
 from tests.fakes.transactions import InMemoryVersionedRecord
+
 from umbral.domain.audit import AuditActor, AuditContext, RecordIdentity
 from umbral.domain.errors import ConcurrencyConflict
 
@@ -16,7 +16,9 @@ def test_audit_values_require_actor_source_and_correlation() -> None:
     correlation_id = uuid4()
     identity = RecordIdentity.new(now=datetime.now(timezone.utc))
     actor = AuditActor.system()
-    context = AuditContext(actor=actor, source="foundation.test", correlation_id=correlation_id)
+    context = AuditContext(
+        actor=actor, source="foundation.test", correlation_id=correlation_id
+    )
 
     assert identity.version == 1
     assert identity.id
@@ -43,4 +45,3 @@ def test_two_updates_with_same_version_yield_one_conflict() -> None:
     assert raised.value.expected_version == 1
     assert raised.value.actual_version == 2
     assert record.value == "first"
-

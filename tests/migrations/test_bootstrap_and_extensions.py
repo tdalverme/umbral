@@ -7,8 +7,9 @@ daemon does not hide the deterministic migration contract.
 
 from __future__ import annotations
 
-import importlib
-
+import importlib.util
+from pathlib import Path
+from types import ModuleType
 
 EXPECTED_TABLES = {
     "job_executions",
@@ -21,8 +22,17 @@ EXPECTED_TABLES = {
 }
 
 
+def _revision_module() -> ModuleType:
+    path = Path("alembic/versions/0001_foundation_runtime.py")
+    spec = importlib.util.spec_from_file_location("foundation_revision", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_bootstrap_revision_and_schema_inventory() -> None:
-    revision = importlib.import_module("alembic.versions.0001_foundation_runtime")
+    revision = _revision_module()
 
     assert revision.revision == "0001_foundation_runtime"
     assert revision.down_revision is None
@@ -31,9 +41,8 @@ def test_bootstrap_revision_and_schema_inventory() -> None:
 
 
 def test_bootstrap_is_transactional_and_has_explicit_empty_downgrade() -> None:
-    revision = importlib.import_module("alembic.versions.0001_foundation_runtime")
+    revision = _revision_module()
 
     assert revision.TRANSACTIONAL is True
     assert revision.DOWNGRADE_POLICY == "empty-only"
     assert callable(revision.verify_bootstrap)
-

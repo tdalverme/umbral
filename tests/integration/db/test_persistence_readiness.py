@@ -41,4 +41,3 @@ def test_persistence_probe_localizes_database_failure() -> None:
 
     assert report.state == "not_ready"
     assert report.checks["postgres"].code == "postgres.unavailable"
-
