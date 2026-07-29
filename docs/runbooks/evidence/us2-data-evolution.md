@@ -22,3 +22,12 @@ $env:PYTHONPATH = "src"
 El check de drift live queda condicionado a `DATABASE_URL`; no se marca como
 pasado cuando el servicio PostgreSQL no está disponible. El bootstrap nunca se
 ejecuta durante el arranque de API/web.
+
+## Brecha de ejecución local
+
+En esta evidencia no se ejecutó un contenedor PostgreSQL/Testcontainers: el
+entorno no expuso `DATABASE_URL` ni un daemon Docker disponible. Por eso el
+rollback transaccional sobre PostgreSQL, la comparación live de metadata y la
+verificación real de versiones `postgis`/`vector` quedan pendientes del job de
+CI/proveedor que habilite esas dependencias. Los contratos de metadata, el
+bootstrap SQL offline, el UoW y el probe sanitizado sí se ejecutan localmente.
