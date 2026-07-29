@@ -21,9 +21,9 @@ $previousPythonPath = $env:PYTHONPATH
 $pythonCode = @"
 from umbral.api.main import app
 
-paths = app.openapi().get("paths", {})
-if "/health" not in paths:
-    raise SystemExit("OpenAPI no expone /health")
+paths = app.openapi().get('paths', {})
+if '/health' not in paths:
+    raise SystemExit('OpenAPI no expone /health')
 "@
 
 try {
