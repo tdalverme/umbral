@@ -30,8 +30,8 @@ SHA-256 `290498d58755176719c79661511e4430263c7d41dbfb24f14bfb92347c1e44fe`).
 ## Secuencia verificada
 
 El recorrido cronometrado del 29 de julio de 2026 duró aproximadamente 2 min
-20 s, incluyendo el build de producción. Los comandos fueron ejecutados en el
-orden siguiente.
+15 s, incluyendo el harness completo y el build de producción con Node
+24.15.0/npm 12.0.1. Los comandos fueron ejecutados en el orden siguiente.
 
 ### 1. Probes de API
 
@@ -72,10 +72,10 @@ en `apps/web/src/lib/api/generated`.
 ```
 
 Con `NPM_EXECUTABLE` apuntando al npm 12 del preámbulo, Ruff y mypy pasaron y
-pytest terminó `85 passed` en `10.72s` (tres warnings de dependencias, sin
-fallos). Sin el override, este host resuelve el `npm.cmd` global de Node 22 y
-el caso del cliente generado falla antes de ejecutar; no es una falla del
-contrato y debe corregirse usando Node 24/npm 12.
+pytest terminó `146 passed` (tres warnings de dependencias, sin fallos). Sin
+el override, este host resuelve el `npm.cmd` global de Node 22 y el caso del
+cliente generado falla antes de ejecutar; no es una falla del contrato y debe
+corregirse usando Node 24/npm 12.
 
 ### 4. Gates web
 
@@ -85,9 +85,10 @@ npm.cmd run build --workspace @umbral/web
 ```
 
 `check-web.ps1` pasó dependencias, cliente OpenAPI, ESLint, TypeScript, Vitest
-(`12 passed`) y la colección Playwright (`6 tests` listados). El build Next
-16.2.12 también terminó correctamente; Turbopack informó únicamente el warning
-esperable de trazado amplio por la lectura dinámica del manifiesto local.
+(`13 passed`) y la colección Playwright (`6 tests` listados). El build Next
+16.2.12 también terminó correctamente en aproximadamente 67 s y generó
+`.next/standalone`; Turbopack informó únicamente el warning esperable de
+trazado amplio por la lectura dinámica del manifiesto local.
 
 ## Brechas y límites del recorrido
 

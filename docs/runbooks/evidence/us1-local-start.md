@@ -1,6 +1,6 @@
 # Evidencia US1 — arranque local de foundation-runtime
 
-**Fecha:** 2026-07-29 (America/Argentina/Buenos_Aires)  
+**Fecha:** 2026-07-29 (America/Argentina/Buenos_Aires; evidencia reconciliada al cierre)
 **Superficie:** API FastAPI + web Next.js 16.2.12  
 **Release observado:** `foundation-local` (manifiesto sentinel local); fixture
 de contrato `foundation-20260101` validada por separado.  
@@ -15,9 +15,9 @@ de contrato `foundation-20260101` validada por separado.
 | OpenAPI export | `scripts/export-openapi.ps1` | JSON 3.1 ordenado generado | 1.6 s |
 | Compatibilidad | `scripts/check-contracts.ps1` | PASS, cambios breaking rechazables | 0.9 s |
 | Cliente | `npm.cmd run api:check --workspace @umbral/web` | Hey API `0.99.0`, cinco archivos, diff limpio | 2.8 s |
-| Python | `scripts/check-python.ps1` con `NPM_EXECUTABLE` npm 12 | Ruff/mypy PASS, `85 passed` | 15.1 s |
-| Web gates | `scripts/check-web.ps1` | ESLint/TS/Vitest PASS (`12`), Playwright lista (`6`) | 19.3 s |
-| Build | `npm.cmd run build --workspace @umbral/web` | Next build PASS; warning NFT dinámico documentado | 94 s |
+| Python | `scripts/check-python.ps1` con `NPM_EXECUTABLE` npm 12 | Ruff/mypy PASS, `146 passed` | actualizado al cierre |
+| Web gates | `scripts/check-web.ps1` | ESLint/TS/Vitest PASS (`13`), Playwright lista (`6`) | actualizado al cierre |
+| Build | `npm.cmd run build --workspace @umbral/web` | Next build PASS; `.next/standalone`; warning NFT dinámico documentado | ~67 s |
 
 ## Comandos reproducibles
 
@@ -43,9 +43,8 @@ npm.cmd run api:check --workspace @umbral/web
 npm.cmd run build --workspace @umbral/web
 ```
 
-La suite focal Python terminó `49 passed` y la suite completa usada por
-`check-python.ps1` terminó `85 passed` cuando el ejecutable npm se fijó a npm
-12. La web expuso la ruta estática `/` y las rutas dinámicas `/health`,
+La suite completa usada por `check-python.ps1` terminó `146 passed` cuando el
+ejecutable npm se fijó a npm 12. La web expuso la ruta estática `/` y las rutas dinámicas `/health`,
 `/ready` y `/version` en el build.
 
 ## Brechas explícitas

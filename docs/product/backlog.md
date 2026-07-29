@@ -859,5 +859,16 @@ El orden recomendado para generar artefactos Spec Kit es:
 8. `proactive-alerts`: UM-H5-001 a UM-H5-020.
 9. `private-beta-readiness`: UM-H6-001 a UM-H6-029.
 
+### Estado de cierre de incrementos
+
+- [x] `foundation-runtime` — aceptado para cierre local; las 17 stories de
+  UM-H1-001 a UM-H1-012 y UM-H1-016 a UM-H1-020 están marcadas arriba. La
+  evidencia consolidada está en
+  `docs/runbooks/evidence/foundation-acceptance.md` y el PR es el [#1](https://github.com/tdalverme/umbral/pull/1).
+- [ ] `private-beta-identity` — siguiente incremento desbloqueado: UM-H1-023
+  y UM-H1-013 a UM-H1-015. Requiere seleccionar providers, implementar
+  invitaciones/magic links, mapear identidad externa y aplicar roles
+  deny-by-default antes de habilitar usuarios invitados.
+
 Cada incremento debe poder desplegarse, demostrarse y verificarse sin depender
 de que todo el producto este terminado.
