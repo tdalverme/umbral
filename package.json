@@ -1,0 +1,22 @@
+{
+  "name": "umbral",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=24.11 <25",
+    "npm": ">=12 <13"
+  },
+  "packageManager": "npm@12.0.1",
+  "scripts": {
+    "dev": "npm run dev --workspace @umbral/web",
+    "build": "npm run build --workspace @umbral/web",
+    "lint": "npm run lint --workspace @umbral/web",
+    "typecheck": "npm run typecheck --workspace @umbral/web",
+    "test": "npm run test --workspace @umbral/web",
+    "test:e2e": "npm run test:e2e --workspace @umbral/web",
+    "api:check": "npm run api:check --workspace @umbral/web"
+  }
+}
