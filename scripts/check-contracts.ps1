@@ -1,8 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)]
     [string]$BaselinePath,
-    [Parameter(Mandatory)]
     [string]$CandidatePath
 )
 
@@ -12,6 +10,20 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $repositoryRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path -LiteralPath $python)) {
     throw "Python environment is missing: $python"
+}
+
+if ([string]::IsNullOrWhiteSpace($BaselinePath)) {
+    $BaselinePath = Join-Path $repositoryRoot "contracts\openapi\v1\openapi.json"
+}
+
+$generatedCandidate = $false
+if ([string]::IsNullOrWhiteSpace($CandidatePath)) {
+    $CandidatePath = [System.IO.Path]::GetTempFileName()
+    $generatedCandidate = $true
+    & (Join-Path $PSScriptRoot "export-openapi.ps1") -OutputPath $CandidatePath
+    if ($LASTEXITCODE -ne 0) {
+        throw "OpenAPI export failed with exit code $LASTEXITCODE."
+    }
 }
 
 $comparisonProgram = @'
@@ -107,5 +119,12 @@ if breaks:
     raise SystemExit(1)
 '@
 
-& $python -c $comparisonProgram $BaselinePath $CandidatePath
-exit $LASTEXITCODE
+try {
+    & $python -c $comparisonProgram $BaselinePath $CandidatePath
+    exit $LASTEXITCODE
+}
+finally {
+    if ($generatedCandidate -and (Test-Path -LiteralPath $CandidatePath)) {
+        Remove-Item -LiteralPath $CandidatePath -Force
+    }
+}

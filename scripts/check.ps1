@@ -60,6 +60,19 @@ try {
         Write-Host "[SKIP] Migraciones: no existe alembic.ini ni el directorio alembic\."
     }
 
+    $contractSurfacePaths = @(
+        (Join-Path $repoRoot "contracts\openapi\v1\openapi.json"),
+        (Join-Path $repoRoot "scripts\check-contracts.ps1"),
+        (Join-Path $repoRoot "scripts\export-openapi.ps1")
+    )
+    $hasContractSurface = $contractSurfacePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($hasContractSurface) {
+        Invoke-ChildCheck -Name "Contratos OpenAPI" -Path (Join-Path $PSScriptRoot "check-contracts.ps1")
+    }
+    else {
+        Write-Host "[SKIP] Contratos OpenAPI: no existe el contrato publicado."
+    }
+
     $webSurfacePaths = @(
         (Join-Path $repoRoot "apps\web"),
         (Join-Path $repoRoot "apps\web\package.json")

@@ -115,6 +115,7 @@ foreach ($binary in $requiredBinaries) {
 Push-Location $repoRoot
 try {
     Invoke-NpmCheck -Name "dependencias del workspace" -Arguments @("ls", "--workspace", "@umbral/web", "--depth=0", "--include=dev")
+    Invoke-NpmCheck -Name "cliente OpenAPI" -Arguments @("run", "api:check", "--workspace", "@umbral/web")
     Invoke-NpmCheck -Name "lint" -Arguments @("run", "lint", "--workspace", "@umbral/web")
     Invoke-NpmCheck -Name "typecheck" -Arguments @("run", "typecheck", "--workspace", "@umbral/web")
     Invoke-NpmCheck -Name "Vitest" -Arguments @("run", "test", "--workspace", "@umbral/web", "--", "--passWithNoTests")
