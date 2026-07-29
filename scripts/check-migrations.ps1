@@ -61,7 +61,7 @@ try {
     }
     Write-Host "[PASS] Alembic offline downgrade snapshot"
 
-    & $pythonPath -c "from umbral.infrastructure.db.migrations import expected_schema; expected={'job_executions','job_attempts','job_outbox_messages','job_schedules','stored_objects','stored_object_versions','runtime_surface_status'}; actual=set(expected_schema().tables); assert actual == expected, (actual ^ expected)"
+    & $pythonPath -c "from umbral.infrastructure.db.migrations import expected_schema; expected={'job_executions','job_attempts','job_outbox_messages','job_schedules','stored_objects','stored_object_versions','runtime_surface_status','identity_invitations','product_users','external_identity_links','role_assignments','magic_link_requests','magic_link_attempts','product_sessions','access_audit_events'}; actual=set(expected_schema().tables); assert actual == expected, (actual ^ expected)"
     if ($LASTEXITCODE -ne 0) {
         throw "Foundation metadata inventory does not match the bootstrap contract."
     }

@@ -13,7 +13,13 @@ class AccessPolicyViolation(ValueError):
 @dataclass(frozen=True)
 class AccessPolicy:
     allowed_origins: tuple[str, ...]
-    public_path: str = "/health"
+    public_paths: tuple[str, ...] = (
+        "/health",
+        "/login",
+        "/auth/capture",
+        "/auth/confirm",
+        "/api/auth/magic-link-requests",
+    )
     require_access_header: bool = True
     audience: str = "umbral-runtime"
 
@@ -22,11 +28,11 @@ class AccessPolicy:
         return cls(allowed_origins=())
 
     def is_public_path(self, path: str) -> bool:
-        return path == self.public_path
+        return path in self.public_paths
 
     def assert_allowed_public_path(self, path: str) -> None:
         if not self.is_public_path(path):
-            raise AccessPolicyViolation("only the exact health path is public")
+            raise AccessPolicyViolation("path is not in the anonymous allowlist")
 
     def validate_claims(self, claims: Mapping[str, object], *, now: int) -> None:
         if claims.get("aud") != self.audience:

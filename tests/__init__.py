@@ -1,1 +1,1 @@
-"""Umbral test suite package."""
+"""Umbral test package."""

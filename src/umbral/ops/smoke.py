@@ -1,9 +1,18 @@
-"""Provider-neutral smoke checks for a release candidate."""
+"""Provider-neutral release and identity smoke checks."""
+# ruff: noqa: E501
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from umbral.application.identity.access import IdentityAccess
+from umbral.application.identity.administration import AccessAdministration
+from umbral.infrastructure.db.repositories.identity import InMemoryIdentityStore
+from umbral.infrastructure.email.recording import RecordingEmailAdapter
+from umbral.infrastructure.identity.fake import FakeIdentityProvider
 
 REQUIRED_SURFACES = ("web", "api", "worker", "scheduler")
 
@@ -26,7 +35,7 @@ class SmokeReport:
 
 
 def run_smoke(checks: Mapping[str, Callable[[], bool]]) -> SmokeReport:
-    """Run a closed set of local checks and normalize failures to stable codes."""
+    """Run a closed set of local checks and normalize failures."""
 
     required = (*REQUIRED_SURFACES, "extensions", "reference_job", "synthetic_object")
     results: list[SmokeCheck] = []
@@ -39,7 +48,14 @@ def run_smoke(checks: Mapping[str, Callable[[], bool]]) -> SmokeReport:
             passed = bool(check())
         except Exception:
             passed = False
-        results.append(
-            SmokeCheck(name, passed, "smoke.ok" if passed else "smoke.failed")
-        )
+        results.append(SmokeCheck(name, passed, "smoke.ok" if passed else "smoke.failed"))
     return SmokeReport(tuple(results))
+
+
+def run_identity_smoke() -> dict[str, str]:
+    store = InMemoryIdentityStore()
+    AccessAdministration(store).preload_invitation("smoke@example.test")
+    access = IdentityAccess(store, FakeIdentityProvider(), RecordingEmailAdapter())
+    now = datetime.now(timezone.utc)
+    access.request_magic_link(email="smoke@example.test", origin_fingerprint="smoke", correlation_id=uuid4(), now=now)
+    return {"result": "accepted", "sessions": str(len(store.sessions)), "synthetic": "true"}

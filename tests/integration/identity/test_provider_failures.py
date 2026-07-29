@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from uuid import uuid4
+
+import pytest
+
+from umbral.application.identity.access import IdentityAccess
+from umbral.application.identity.administration import AccessAdministration
+from umbral.application.identity.contracts import IdentityError
+from umbral.infrastructure.db.repositories.identity import InMemoryIdentityStore
+from umbral.infrastructure.email.recording import RecordingEmailAdapter
+from umbral.infrastructure.identity.fake import FakeIdentityProvider
+
+
+def test_provider_failure_creates_no_session_or_user() -> None:
+    store = InMemoryIdentityStore()
+    AccessAdministration(store).preload_invitation("person@example.com")
+    provider = FakeIdentityProvider()
+    provider.fail_generation = True
+    access = IdentityAccess(store, provider, RecordingEmailAdapter())
+    now = datetime.now(timezone.utc)
+    access.request_magic_link(
+        email="person@example.com",
+        origin_fingerprint="origin",
+        correlation_id=uuid4(),
+        now=now,
+    )
+    attempt = next(iter(store.attempts.values()))
+    access.issue_attempt(attempt.id, now=now)
+    assert not store.users
+    assert not store.sessions
+    assert attempt.state == "failed"
+
+
+def test_email_failure_creates_no_access_grant() -> None:
+    store = InMemoryIdentityStore()
+    AccessAdministration(store).preload_invitation("person@example.com")
+    email = RecordingEmailAdapter()
+    email.fail_send = True
+    access = IdentityAccess(store, FakeIdentityProvider(), email)
+    now = datetime.now(timezone.utc)
+    access.request_magic_link(
+        email="person@example.com",
+        origin_fingerprint="origin",
+        correlation_id=uuid4(),
+        now=now,
+    )
+    attempt = next(iter(store.attempts.values()))
+    access.issue_attempt(attempt.id, now=now)
+    assert attempt.state == "failed"
+    assert not store.users and not store.sessions
+
+
+def test_identity_verification_failure_does_not_activate_user() -> None:
+    store = InMemoryIdentityStore()
+    AccessAdministration(store).preload_invitation("person@example.com")
+    provider = FakeIdentityProvider()
+    provider.fail_verification = True
+    email = RecordingEmailAdapter()
+    access = IdentityAccess(store, provider, email)
+    now = datetime.now(timezone.utc)
+    access.request_magic_link(
+        email="person@example.com",
+        origin_fingerprint="origin",
+        correlation_id=uuid4(),
+        now=now,
+    )
+    attempt = next(iter(store.attempts.values()))
+    access.issue_attempt(attempt.id, now=now)
+    token_hash = str(email.messages[0]["capture_url"]).split("token_hash=", 1)[1]
+    with pytest.raises(IdentityError):
+        access.confirm_magic_link(attempt_id=attempt.id, token_hash=token_hash, now=now)
+    assert not store.users and not store.sessions

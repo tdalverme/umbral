@@ -1,4 +1,5 @@
 """API composition root for the foundation runtime."""
+# ruff: noqa: E501
 
 from __future__ import annotations
 
@@ -17,6 +18,9 @@ from umbral.api.errors import (
     validation_error_handler,
 )
 from umbral.api.middleware.correlation import CorrelationMiddleware
+from umbral.api.routers.auth import configure_auth_routes
+from umbral.api.routers.auth import router as auth_router
+from umbral.api.routers.email_webhooks import router as email_webhook_router
 from umbral.api.routers.runtime import configure_runtime_routes
 from umbral.api.routers.runtime import router as runtime_router
 from umbral.domain.errors import ApplicationError
@@ -152,6 +156,15 @@ def _apply_runtime_openapi_contract(document: dict[str, Any]) -> None:
         operation["responses"]["401"] = {"$ref": "#/components/responses/Unauthorized"}
         operation["responses"]["403"] = {"$ref": "#/components/responses/Forbidden"}
 
+    # Product operations use the same correlation contract as runtime probes;
+    # BFF credentials and forwarding metadata remain intentionally undocumented.
+    for path, path_item in document["paths"].items():
+        if path in path_metadata:
+            continue
+        for operation in path_item.values():
+            if isinstance(operation, dict) and "operationId" in operation:
+                operation["parameters"] = [{"$ref": "#/components/parameters/CorrelationId"}]
+
     health_response = document["paths"]["/health"]["get"]["responses"]["200"]
     health_response["description"] = "Process is alive"
     health_response["content"]["application/json"]["examples"] = {
@@ -177,13 +190,17 @@ def create_app() -> FastAPI:
     """Compose the API with validated configuration and safe transport policy."""
 
     app = FastAPI(title="Umbral Runtime API", version="1.0.0")
-    configure_runtime_routes(build_runtime_dependencies())
+    dependencies = build_runtime_dependencies()
+    configure_runtime_routes(dependencies)
+    configure_auth_routes(dependencies)
     app.add_middleware(CorrelationMiddleware)
     app.add_exception_handler(ApplicationError, application_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_error_handler)
     app.add_exception_handler(Exception, unhandled_error_handler)
     app.include_router(runtime_router)
+    app.include_router(auth_router)
+    app.include_router(email_webhook_router)
 
     def custom_openapi() -> dict[str, Any]:
         return _openapi_for_app(app)

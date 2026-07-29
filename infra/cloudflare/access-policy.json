@@ -1,8 +1,15 @@
 {
   "origin_closed": true,
   "datastores_private": true,
-  "require_access": true,
+  "require_access": false,
+  "umbral_session_protection": true,
   "jwt_audience": "umbral-runtime",
-  "public_paths": ["/health"],
+  "public_paths": [
+    "/health",
+    "/login",
+    "/auth/capture",
+    "/auth/confirm",
+    "/api/auth/magic-link-requests"
+  ],
   "bypass_methods": ["GET", "HEAD"]
 }

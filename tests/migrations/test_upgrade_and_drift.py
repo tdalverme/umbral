@@ -31,7 +31,7 @@ def _script_directory() -> ScriptDirectory:
 def test_migration_graph_has_one_linear_head() -> None:
     heads = _script_directory().get_heads()
 
-    assert heads == ["0001_foundation_runtime"]
+    assert heads == ["0002_private_beta_identity"]
 
 
 def test_bootstrap_metadata_matches_declared_schema_without_drift() -> None:

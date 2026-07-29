@@ -1,4 +1,5 @@
 """Safe, explicit configuration validation for runtime surfaces."""
+# ruff: noqa: E501
 
 from __future__ import annotations
 
@@ -71,6 +72,16 @@ class Settings(BaseSettings):
     access_audience: str | None = Field(
         default=None, validation_alias="UMBRAL_ACCESS_AUDIENCE"
     )
+    identity_provider: str = Field(default="fake", validation_alias="IDENTITY_PROVIDER")
+    identity_issuer: str = Field(default="fake://local", validation_alias="IDENTITY_ISSUER")
+    identity_capture_origin: str = Field(default="http://localhost:3000", validation_alias="IDENTITY_CAPTURE_ORIGIN")
+    email_provider: str = Field(default="recording", validation_alias="EMAIL_PROVIDER")
+    resend_api_key: str | None = Field(default=None, validation_alias="RESEND_API_KEY")
+    email_webhook_secret: str | None = Field(default=None, validation_alias="EMAIL_WEBHOOK_SECRET")
+    bff_token: str = Field(default="local-bff-token", validation_alias="UMBRAL_BFF_TOKEN")
+    identity_fingerprint_key: str = Field(default="local-identity-fingerprint-key", validation_alias="IDENTITY_FINGERPRINT_KEY")
+    session_cookie_name: str = Field(default="__Host-umbral_session", validation_alias="SESSION_COOKIE_NAME")
+    session_secure: bool = Field(default=True, validation_alias="SESSION_SECURE")
 
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
@@ -90,6 +101,16 @@ class Settings(BaseSettings):
             "SENTRY_DSN",
             "UMBRAL_API_BASE_URL",
             "UMBRAL_ACCESS_AUDIENCE",
+            "IDENTITY_PROVIDER",
+            "IDENTITY_ISSUER",
+            "IDENTITY_CAPTURE_ORIGIN",
+            "EMAIL_PROVIDER",
+            "RESEND_API_KEY",
+            "EMAIL_WEBHOOK_SECRET",
+            "UMBRAL_BFF_TOKEN",
+            "IDENTITY_FINGERPRINT_KEY",
+            "SESSION_COOKIE_NAME",
+            "SESSION_SECURE",
         }
     )
 
@@ -167,6 +188,10 @@ class Settings(BaseSettings):
         sentry = _url(values["SENTRY_DSN"], "SENTRY_DSN")
         if sentry.scheme != "https":
             raise SettingsValidationError("CONFIG_TLS_REQUIRED", "SENTRY_DSN")
+        if "SESSION_COOKIE_NAME" in values and values["SESSION_COOKIE_NAME"] != "__Host-umbral_session":
+            raise SettingsValidationError("CONFIG_COOKIE_NAME", "SESSION_COOKIE_NAME")
+        if "SESSION_SECURE" in values and values["SESSION_SECURE"].lower() not in {"1", "true", "yes"}:
+            raise SettingsValidationError("CONFIG_TLS_REQUIRED", "SESSION_SECURE")
 
     @staticmethod
     def _reject_example(value: str, field_name: str) -> None:
