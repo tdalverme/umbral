@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Index, String
+from sqlalchemy import CheckConstraint, DateTime, Index, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
@@ -39,5 +40,5 @@ class RuntimeSurfaceStatus(Base):
     observed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    checks: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    checks: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     correlation_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)

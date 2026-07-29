@@ -6,11 +6,11 @@ declared empty-database escape hatch only; later releases compensate forward.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import Any
 
 from alembic import op
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import NoInspectionAvailable
 
 from umbral.infrastructure.db.migrations import expected_schema
 
@@ -65,7 +65,10 @@ def downgrade() -> None:
         non_empty: list[str] = []
         for row in rows:
             table_name = str(row[0])
-            if bind.execute(text(f"SELECT 1 FROM {table_name} LIMIT 1")).first() is not None:
+            if (
+                bind.execute(text(f"SELECT 1 FROM {table_name} LIMIT 1")).first()
+                is not None
+            ):
                 non_empty.append(table_name)
         if non_empty:
             raise RuntimeError("foundation downgrade requires empty tables")
@@ -79,5 +82,20 @@ def verify_bootstrap(bind: Any) -> bool:
 
     if bind is None:
         return False
-    inspector = inspect(bind)
-    return _table_names().issubset(set(inspector.get_table_names()))
+    try:
+        inspector = inspect(bind)
+    except NoInspectionAvailable:
+        # Alembic's offline mode uses a mock connection that can compile DDL
+        # but cannot inspect tables; online checks verify the result.
+        return True
+    tables_ok = _table_names().issubset(set(inspector.get_table_names()))
+    extensions = {
+        str(row[0])
+        for row in bind.execute(
+            text(
+                "SELECT extname FROM pg_extension "
+                "WHERE extname IN ('postgis', 'vector')"
+            )
+        )
+    }
+    return tables_ok and set(REQUIRED_EXTENSIONS).issubset(extensions)

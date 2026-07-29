@@ -6,7 +6,6 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
-    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -17,6 +16,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -70,7 +70,7 @@ class JobExecution(IdentityAuditMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     result_summary: Mapped[dict[str, object] | None] = mapped_column(
-        JSON, nullable=True
+        JSONB, nullable=True
     )
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(

@@ -6,6 +6,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -59,7 +60,7 @@ class StoredObjectVersion(Base):
     state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
-    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     content_type: Mapped[str] = mapped_column(String(150), nullable=False)
     provider_version: Mapped[str | None] = mapped_column(String(300), nullable=True)
     failure_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
