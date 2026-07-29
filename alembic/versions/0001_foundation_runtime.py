@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy import inspect, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import NoInspectionAvailable
@@ -100,6 +100,19 @@ INDEX_SNAPSHOT = {
     "ix_stored_object_versions_state_created",
     "ix_stored_object_versions_correlation",
     "ix_runtime_surface_observed",
+}
+
+INDEX_COLUMNS_SNAPSHOT = {
+    "ix_job_executions_state_available": ("state", "available_at"),
+    "ix_job_executions_state_lease": ("state", "lease_until"),
+    "ix_job_executions_correlation": ("correlation_id",),
+    "ix_job_attempts_correlation_started": ("correlation_id", "started_at"),
+    "ix_job_outbox_state_available": ("state", "available_at"),
+    "ix_job_schedules_due": ("enabled", "next_run_at"),
+    "ix_stored_object_versions_object_created": ("object_id", "created_at"),
+    "ix_stored_object_versions_state_created": ("state", "created_at"),
+    "ix_stored_object_versions_correlation": ("correlation_id",),
+    "ix_runtime_surface_observed": ("observed_at",),
 }
 
 _ENUM_VALUES = {
@@ -454,18 +467,26 @@ def verify_bootstrap(bind: Any) -> bool:
         )
     }
     enum_names = ", ".join(f"'{name}'" for name in sorted(ENUM_SNAPSHOT))
-    enums = {
-        str(row[0])
+    enum_rows = {
+        (str(row[0]), str(row[1]))
         for row in bind.execute(
             text(
-                "SELECT typname FROM pg_type WHERE typtype = 'e' "
+                "SELECT t.typname, e.enumlabel FROM pg_type t "
+                "JOIN pg_enum e ON e.enumtypid = t.oid "
+                "WHERE t.typtype = 'e' "
                 f"AND typname IN ({enum_names})"
             )
         )
     }
+    enums = {
+        name: {label for enum_name, label in enum_rows if enum_name == name}
+        for name in ENUM_SNAPSHOT
+    }
     constraint_names = ", ".join(
         f"'{name}'"
-        for name in sorted(name for name in CONSTRAINT_SNAPSHOT if not name.startswith("ix_"))
+        for name in sorted(
+            name for name in CONSTRAINT_SNAPSHOT if not name.startswith("ix_")
+        )
     )
     constraints = {
         str(row[0])
@@ -476,21 +497,17 @@ def verify_bootstrap(bind: Any) -> bool:
             )
         )
     }
-    index_names = ", ".join(f"'{name}'" for name in sorted(INDEX_SNAPSHOT))
     indexes = {
-        str(row[0])
-        for row in bind.execute(
-            text(
-                "SELECT indexname FROM pg_indexes "
-                f"WHERE indexname IN ({index_names})"
-            )
-        )
+        str(index["name"]): tuple(index.get("column_names") or ())
+        for table_name in TABLE_SNAPSHOT
+        for index in inspector.get_indexes(table_name)
+        if index.get("name") in INDEX_SNAPSHOT
     }
     return (
         tables_ok
         and set(REQUIRED_EXTENSIONS).issubset(extensions)
-        and set(ENUM_SNAPSHOT).issubset(enums)
+        and enums == ENUM_SNAPSHOT
         and set(name for name in CONSTRAINT_SNAPSHOT if not name.startswith("ix_"))
         .issubset(constraints)
-        and INDEX_SNAPSHOT.issubset(indexes)
+        and indexes == INDEX_COLUMNS_SNAPSHOT
     )
