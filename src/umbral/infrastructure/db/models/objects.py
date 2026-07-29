@@ -22,6 +22,7 @@ from umbral.infrastructure.db.base import Base, IdentityAuditMixin
 
 class StoredObject(IdentityAuditMixin, Base):
     __tablename__ = "stored_objects"
+    __mapper_args__ = {"version_id_col": IdentityAuditMixin.version}
     __table_args__ = (
         CheckConstraint(
             "length(purpose) BETWEEN 1 AND 100", name="ck_stored_objects_purpose"

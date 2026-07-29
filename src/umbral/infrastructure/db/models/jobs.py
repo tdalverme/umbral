@@ -25,6 +25,7 @@ from umbral.infrastructure.db.base import Base, IdentityAuditMixin
 
 class JobExecution(IdentityAuditMixin, Base):
     __tablename__ = "job_executions"
+    __mapper_args__ = {"version_id_col": IdentityAuditMixin.version}
     __table_args__ = (
         UniqueConstraint(
             "job_type",
@@ -168,6 +169,7 @@ class JobOutboxMessage(Base):
 
 class JobSchedule(IdentityAuditMixin, Base):
     __tablename__ = "job_schedules"
+    __mapper_args__ = {"version_id_col": IdentityAuditMixin.version}
     __table_args__ = (
         CheckConstraint(
             "schedule_kind IN ('one_shot', 'fixed_interval')",
