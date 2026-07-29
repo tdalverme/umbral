@@ -7,6 +7,7 @@ later be consumed by the Import Linter and repository harness (T009/T013).
 
 import ast
 from collections import defaultdict, deque
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -80,7 +81,7 @@ def scan_fixture_graph(root: Path) -> FixtureGraph:
         tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                imported_names = (alias.name for alias in node.names)
+                imported_names: Iterable[str] = (alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 imported_names = _resolve_fixture_imports(node, known_layers)
             else:
