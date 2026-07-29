@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "local-valid",
+      "environment": "local",
+      "input": {
+        "UMBRAL_ENV": "local",
+        "UMBRAL_RELEASE_ID": "foundation-local",
+        "UMBRAL_RELEASE_MANIFEST": ".data/release-manifest.local.json",
+        "DATABASE_URL": "postgresql://umbral:db-canary@localhost:5432/umbral",
+        "REDIS_URL": "redis://localhost:6379/0",
+        "OBJECT_STORE_BACKEND": "filesystem",
+        "OBJECT_STORE_ROOT": ".data/objects",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
+        "SENTRY_DSN": "",
+        "UMBRAL_API_BASE_URL": "http://localhost:8000"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": true,
+        "rule_code": "CONFIG_ACCEPTED"
+      }
+    },
+    {
+      "id": "preview-valid",
+      "environment": "preview",
+      "input": {
+        "UMBRAL_ENV": "preview",
+        "UMBRAL_RELEASE_ID": "foundation-preview",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.preview.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.preview.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "preview-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": true,
+        "rule_code": "CONFIG_ACCEPTED"
+      }
+    },
+    {
+      "id": "production-valid",
+      "environment": "production",
+      "input": {
+        "UMBRAL_ENV": "production",
+        "UMBRAL_RELEASE_ID": "foundation-production",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "DATABASE_URL": "postgresql://umbral:db-canary@postgres.production.invalid:5432/umbral?sslmode=require",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.production.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.production.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o2.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.production.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "production-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": true,
+        "rule_code": "CONFIG_ACCEPTED"
+      }
+    },
+    {
+      "id": "preview-missing-required",
+      "environment": "preview",
+      "input": {
+        "UMBRAL_ENV": "preview",
+        "UMBRAL_RELEASE_ID": "foundation-preview",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.preview.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.preview.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "preview-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_REQUIRED"
+      }
+    },
+    {
+      "id": "preview-malformed-url",
+      "environment": "preview",
+      "input": {
+        "UMBRAL_ENV": "preview",
+        "UMBRAL_RELEASE_ID": "foundation-preview",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "DATABASE_URL": "not-a-url",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.preview.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.preview.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "preview-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_FORMAT"
+      }
+    },
+    {
+      "id": "preview-example-credential",
+      "environment": "preview",
+      "input": {
+        "UMBRAL_ENV": "preview",
+        "UMBRAL_RELEASE_ID": "foundation-preview",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "DATABASE_URL": "postgresql://example:example@postgres.preview.invalid:5432/umbral?sslmode=require",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.preview.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.preview.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "preview-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_EXAMPLE_VALUE"
+      }
+    },
+    {
+      "id": "preview-localhost-backend",
+      "environment": "preview",
+      "input": {
+        "UMBRAL_ENV": "preview",
+        "UMBRAL_RELEASE_ID": "foundation-preview",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "DATABASE_URL": "postgresql://umbral:db-canary@localhost:5432/umbral?sslmode=require",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.preview.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.preview.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "preview-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_PRIVATE_ENDPOINT"
+      }
+    },
+    {
+      "id": "production-filesystem-backend",
+      "environment": "production",
+      "input": {
+        "UMBRAL_ENV": "production",
+        "UMBRAL_RELEASE_ID": "foundation-production",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "DATABASE_URL": "postgresql://umbral:db-canary@postgres.production.invalid:5432/umbral?sslmode=require",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.production.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "filesystem",
+        "OBJECT_STORE_ROOT": "C:/temp/umbral",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.production.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o2.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.production.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "production-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_BACKEND"
+      }
+    },
+    {
+      "id": "preview-plaintext-external-url",
+      "environment": "preview",
+      "input": {
+        "UMBRAL_ENV": "preview",
+        "UMBRAL_RELEASE_ID": "foundation-preview",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require",
+        "REDIS_URL": "redis://umbral:redis-canary@redis.preview.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.preview.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "preview-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_TLS_REQUIRED"
+      }
+    },
+    {
+      "id": "production-public-ingress",
+      "environment": "production",
+      "input": {
+        "UMBRAL_ENV": "production",
+        "UMBRAL_RELEASE_ID": "foundation-production",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "DATABASE_URL": "postgresql://umbral:db-canary@postgres.production.invalid:5432/umbral?sslmode=require",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.production.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.production.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o2.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.public.example.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "production-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_PRIVATE_INGRESS"
+      }
+    },
+    {
+      "id": "production-missing-release-digest",
+      "environment": "production",
+      "input": {
+        "UMBRAL_ENV": "production",
+        "UMBRAL_RELEASE_ID": "foundation-production",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "DATABASE_URL": "postgresql://umbral:db-canary@postgres.production.invalid:5432/umbral?sslmode=require",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.production.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.production.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o2.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.production.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "production-audience-canary"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_RELEASE_DIGEST_REQUIRED"
+      }
+    },
+    {
+      "id": "production-unknown-setting",
+      "environment": "production",
+      "input": {
+        "UMBRAL_ENV": "production",
+        "UMBRAL_RELEASE_ID": "foundation-production",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "DATABASE_URL": "postgresql://umbral:db-canary@postgres.production.invalid:5432/umbral?sslmode=require",
+        "REDIS_URL": "rediss://umbral:redis-canary@redis.production.invalid:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.production.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o2.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "https://api.production.internal.invalid",
+        "UMBRAL_ACCESS_AUDIENCE": "production-audience-canary"
+      },
+      "overrides": {
+        "UMBRAL_UNDECLARED_OPTION": "canary-typo"
+      },
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_UNKNOWN_SETTING"
+      }
+    }
+  ]
+}

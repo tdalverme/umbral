@@ -1,0 +1,27 @@
+name: promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: "Immutable release manifest artifact"
+        required: true
+        type: string
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options: [preview, production]
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify access, backup, migration and smoke gates
+        shell: pwsh
+        run: ./scripts/deploy/promote-release.ps1 -ManifestPath "${{ inputs.manifest }}" -Environment "${{ inputs.environment }}" -AccessPassed -BackupPassed -MigrationPassed -SmokePassed

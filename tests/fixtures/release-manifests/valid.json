@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "release_id": "foundation-20260101",
+  "git_sha": "0123456789abcdef0123456789abcdef01234567",
+  "built_at": "2026-01-01T00:00:00Z",
+  "contract_major": 1,
+  "database_revision": "foundation_0001",
+  "config_schema_version": 1,
+  "artifacts": {
+    "web": {
+      "image": "ghcr.io/umbral/web:foundation-20260101",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "platform": "linux/amd64"
+    },
+    "runtime": {
+      "image": "ghcr.io/umbral/runtime:foundation-20260101",
+      "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "platform": "linux/amd64"
+    }
+  }
+}

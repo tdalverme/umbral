@@ -1,0 +1,8 @@
+{
+  "origin_closed": true,
+  "datastores_private": true,
+  "require_access": true,
+  "jwt_audience": "umbral-runtime",
+  "public_paths": ["/health"],
+  "bypass_methods": ["GET", "HEAD"]
+}

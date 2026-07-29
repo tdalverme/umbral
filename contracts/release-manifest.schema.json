@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://umbral.invalid/contracts/release-manifest.schema.json",
+  "title": "Umbral Release Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_id",
+    "git_sha",
+    "built_at",
+    "contract_major",
+    "database_revision",
+    "config_schema_version",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "release_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "git_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "built_at": { "type": "string", "format": "date-time" },
+    "contract_major": { "const": 1 },
+    "database_revision": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "config_schema_version": { "type": "integer", "minimum": 1 },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["web", "runtime"],
+      "properties": {
+        "web": { "$ref": "#/$defs/artifact" },
+        "runtime": { "$ref": "#/$defs/artifact" }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "digest", "platform"],
+      "properties": {
+        "image": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "platform": { "const": "linux/amd64" },
+        "provenance": { "type": "string", "format": "uri" }
+      }
+    }
+  }
+}

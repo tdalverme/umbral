@@ -1,0 +1,340 @@
+openapi: 3.1.0
+info:
+  title: Umbral Runtime API
+  version: 1.0.0
+  description: >-
+    Foundation operational contract. Product resources will be added below
+    /api/v1 without changing these side-effect-free probes.
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local API
+tags:
+  - name: Runtime
+security:
+  - environmentAccess: []
+paths:
+  /health:
+    get:
+      tags: [Runtime]
+      operationId: getRuntimeHealth
+      summary: Confirm that the current process can respond
+      description: >-
+        Executes no dependency check and creates no durable connection,
+        record, job or object. This is the only operation that may bypass the
+        environment access control.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Process is alive
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              examples:
+                alive:
+                  value:
+                    status: alive
+  /ready:
+    get:
+      tags: [Runtime]
+      operationId: getRuntimeReadiness
+      summary: Report readiness for one runtime surface
+      description: >-
+        Returns only allowlisted dependency names, state, criticality and
+        stable codes. A degraded response remains HTTP-ready but is rejected by
+        the release gate. A critical failure returns 503.
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Surface is ready or degraded
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+        "503":
+          description: Surface is not ready
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+                maximum: 60
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /version:
+    get:
+      tags: [Runtime]
+      operationId: getRuntimeVersion
+      summary: Identify the exact executing release and artifact
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Immutable version identity for this surface
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeVersion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+components:
+  securitySchemes:
+    environmentAccess:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Environment-level operator or service identity. It is not a product
+        user session or product authorization contract.
+  parameters:
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      description: >-
+        UUID for a multi-step operation. A valid value is preserved; when
+        absent the runtime generates one.
+      schema:
+        type: string
+        format: uuid
+  headers:
+    RequestId:
+      description: Server-generated UUID for this request
+      schema:
+        type: string
+        format: uuid
+    CorrelationId:
+      description: Preserved or server-generated operation UUID
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Unauthorized:
+      description: Missing or invalid environment identity
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Valid environment identity without access to this environment
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: alive
+    Surface:
+      type: string
+      enum: [web, api, worker, scheduler]
+    ReadinessState:
+      type: string
+      enum: [ready, degraded, not_ready]
+    DependencyState:
+      type: string
+      enum: [ready, degraded, unavailable]
+    DependencyCheck:
+      type: object
+      additionalProperties: false
+      required: [name, state, critical]
+      properties:
+        name:
+          type: string
+          enum:
+            - runtime_config
+            - api
+            - postgres
+            - schema
+            - postgis
+            - pgvector
+            - redis
+            - object_storage
+            - execution_loop
+            - scheduling_loop
+            - telemetry
+        state:
+          $ref: "#/components/schemas/DependencyState"
+        critical:
+          type: boolean
+        code:
+          type: string
+          pattern: "^[a-z][a-z0-9_.-]{0,99}$"
+    Readiness:
+      type: object
+      additionalProperties: false
+      required:
+        - surface
+        - state
+        - observed_at
+        - release_id
+        - checks
+      properties:
+        surface:
+          $ref: "#/components/schemas/Surface"
+        state:
+          $ref: "#/components/schemas/ReadinessState"
+        observed_at:
+          type: string
+          format: date-time
+        release_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        checks:
+          type: array
+          maxItems: 12
+          items:
+            $ref: "#/components/schemas/DependencyCheck"
+    RuntimeVersion:
+      type: object
+      additionalProperties: false
+      required:
+        - surface
+        - release_id
+        - git_sha
+        - artifact_digest
+        - manifest_sha256
+        - contract_major
+        - database_revision
+        - built_at
+      properties:
+        surface:
+          $ref: "#/components/schemas/Surface"
+        release_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        git_sha:
+          type: string
+          pattern: "^[0-9a-f]{40}$"
+        artifact_digest:
+          type: string
+          pattern: "^sha256:[0-9a-f]{64}$"
+        manifest_sha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        contract_major:
+          type: integer
+          const: 1
+        database_revision:
+          type: string
+          minLength: 1
+          maxLength: 64
+        built_at:
+          type: string
+          format: date-time
+    ValidationIssue:
+      type: object
+      additionalProperties: false
+      required: [field, code]
+      properties:
+        field:
+          type: string
+          description: JSON-pointer-like field path; contains no rejected value
+        code:
+          type: string
+          pattern: "^[a-z][a-z0-9_.-]{0,99}$"
+    Problem:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+        - code
+        - request_id
+        - correlation_id
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+          maxLength: 200
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          maxLength: 500
+          description: Sanitized stable explanation; never echoes input
+        instance:
+          type: string
+          description: Route template or opaque request reference; no query string
+        code:
+          type: string
+          pattern: "^[a-z][a-z0-9_.-]{0,99}$"
+        request_id:
+          type: string
+          format: uuid
+        correlation_id:
+          type: string
+          format: uuid
+        errors:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/ValidationIssue"

@@ -1,0 +1,15 @@
+{
+  "primary_bucket": "umbral-primary",
+  "recovery_bucket": "umbral-recovery",
+  "public_access": false,
+  "object_lock": {
+    "enabled": true,
+    "retention_days": 35,
+    "mode": "compliance"
+  },
+  "replication": {
+    "cadence_hours": 12,
+    "immutable_versions_only": true,
+    "checksum_manifest": true
+  }
+}

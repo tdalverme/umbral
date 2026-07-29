@@ -1,0 +1,55 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.17"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: uv sync --frozen --all-groups
+      - run: npm ci
+      - run: ./scripts/check.ps1
+        shell: pwsh
+*** Add File: D:\Tomi\dev\umbral\.worktrees\001-foundation-runtime\.github\workflows\release.yml
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, scan and attest once
+        run: |
+          docker buildx build --platform linux/amd64 --file Dockerfile.runtime --tag ghcr.io/${{ github.repository }}/runtime:${{ github.sha }} --push .
+          docker buildx build --platform linux/amd64 --file apps/web/Dockerfile --tag ghcr.io/${{ github.repository }}/web:${{ github.sha }} --push .
+      - name: Publish immutable manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest-${{ github.sha }}
+          path: contracts/release-manifest.schema.json

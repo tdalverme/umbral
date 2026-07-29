@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: umbral-web
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    autoDeploy: false
+    envVars:
+      - key: RUNTIME_ENVIRONMENT
+        sync: false
+  - type: pserv
+    name: umbral-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.runtime
+    autoDeploy: false
+  - type: worker
+    name: umbral-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.runtime
+    autoDeploy: false
+  - type: worker
+    name: umbral-scheduler
+    runtime: docker
+    dockerfilePath: ./Dockerfile.runtime
+    autoDeploy: false
+databases:
+  - name: umbral-postgres
+    plan: pro
+    postgresMajorVersion: 17
+  - name: umbral-key-value
+    plan: pro

@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: ghcr.io/pglayers/pglayers-full:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-umbral}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-umbral_local_only}
+      POSTGRES_DB: ${POSTGRES_DB:-umbral}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  redis:
+    image: redis:8.6.4-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio_local}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_local_password}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.157.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./infra/otel/collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "13133:13133"
+
+volumes:
+  postgres_data:
+  minio_data:

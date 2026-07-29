@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "expected_redaction_rule": "drop_unknown_and_sensitive_recursively",
+  "allowed_metadata_fields": [
+    "correlation_id",
+    "request_id",
+    "service_name",
+    "environment",
+    "release_id",
+    "operation",
+    "state",
+    "status_code",
+    "duration_ms",
+    "route_template",
+    "http_method",
+    "error_code",
+    "job_type",
+    "job_state",
+    "attempt_number",
+    "queue_lag_ms",
+    "object_operation",
+    "content_class"
+  ],
+  "canaries": [
+    {
+      "id": "request-body-sensitive",
+      "category": "body",
+      "input": {
+        "body": {
+          "email": "canary-person@example.invalid",
+          "address": "CANARY ADDRESS 001",
+          "listing_text": "CANARY LISTING CONTENT"
+        },
+        "metadata": {
+          "correlation_id": "00000000-0000-0000-0000-000000000001",
+          "operation": "request.create"
+        }
+      },
+      "expected": {
+        "redaction_rule": "drop_unknown_and_sensitive_recursively",
+        "retained_metadata": ["correlation_id", "operation"],
+        "redacted_paths": ["body.email", "body.address", "body.listing_text"]
+      }
+    },
+    {
+      "id": "query-and-path-sensitive",
+      "category": "query_path",
+      "input": {
+        "path": "/api/v1/listings/CANARY-LISTING-001",
+        "query": {
+          "city": "CANARY CITY",
+          "budget": "CANARY-BUDGET"
+        },
+        "metadata": {
+          "correlation_id": "00000000-0000-0000-0000-000000000002",
+          "route_template": "/api/v1/listings/{listing_id}"
+        }
+      },
+      "expected": {
+        "redaction_rule": "drop_unknown_and_sensitive_recursively",
+        "retained_metadata": ["correlation_id", "route_template"],
+        "redacted_paths": ["path", "query.city", "query.budget"]
+      }
+    },
+    {
+      "id": "headers-and-cookies-sensitive",
+      "category": "headers_cookies",
+      "input": {
+        "headers": {
+          "Authorization": "Bearer canary-token-not-real",
+          "X-Forwarded-For": "203.0.113.42",
+          "X-Canary-Header": "canary-header-value"
+        },
+        "cookies": {
+          "session": "canary-cookie-not-real"
+        },
+        "metadata": {
+          "correlation_id": "00000000-0000-0000-0000-000000000003",
+          "http_method": "GET"
+        }
+      },
+      "expected": {
+        "redaction_rule": "drop_unknown_and_sensitive_recursively",
+        "retained_metadata": ["correlation_id", "http_method"],
+        "redacted_paths": ["headers.Authorization", "headers.X-Forwarded-For", "headers.X-Canary-Header", "cookies.session"]
+      }
+    },
+    {
+      "id": "job-target-and-error-sensitive",
+      "category": "job_error",
+      "input": {
+        "job": {
+          "target": "CANARY USER TARGET",
+          "input": {
+            "email": "job-canary@example.invalid"
+          },
+          "exception": "CANARY EXCEPTION WITH PRIVATE DETAILS"
+        },
+        "metadata": {
+          "correlation_id": "00000000-0000-0000-0000-000000000004",
+          "job_type": "foundation.reference",
+          "job_state": "failed"
+        }
+      },
+      "expected": {
+        "redaction_rule": "drop_unknown_and_sensitive_recursively",
+        "retained_metadata": ["correlation_id", "job_type", "job_state"],
+        "redacted_paths": ["job.target", "job.input", "job.exception"]
+      }
+    },
+    {
+      "id": "object-key-and-provider-error-sensitive",
+      "category": "object_error",
+      "input": {
+        "object": {
+          "key": "objects/CANARY-OBJECT-001/CANARY-VERSION-001",
+          "provider_response": "CANARY PROVIDER RESPONSE",
+          "content": "CANARY OBJECT CONTENT"
+        },
+        "metadata": {
+          "correlation_id": "00000000-0000-0000-0000-000000000005",
+          "object_operation": "put",
+          "content_class": "synthetic"
+        }
+      },
+      "expected": {
+        "redaction_rule": "drop_unknown_and_sensitive_recursively",
+        "retained_metadata": ["correlation_id", "object_operation", "content_class"],
+        "redacted_paths": ["object.key", "object.provider_response", "object.content"]
+      }
+    },
+    {
+      "id": "database-exception-sensitive",
+      "category": "database_error",
+      "input": {
+        "database": {
+          "exception": "CANARY database exception with bound value",
+          "sql": "SELECT canary_secret FROM private_table WHERE id = CANARY-ID",
+          "bound_values": {
+            "id": "CANARY-ID"
+          }
+        },
+        "metadata": {
+          "correlation_id": "00000000-0000-0000-0000-000000000006",
+          "error_code": "DB_UNAVAILABLE"
+        }
+      },
+      "expected": {
+        "redaction_rule": "drop_unknown_and_sensitive_recursively",
+        "retained_metadata": ["correlation_id", "error_code"],
+        "redacted_paths": ["database.exception", "database.sql", "database.bound_values"]
+      }
+    },
+    {
+      "id": "release-failure-sensitive",
+      "category": "release_failure",
+      "input": {
+        "release": {
+          "digest": "sha256:CANARY-NOT-A-REAL-DIGEST",
+          "manifest_path": "/run/secrets/CANARY-release-manifest.json",
+          "failure": "CANARY RELEASE FAILURE DETAILS"
+        },
+        "metadata": {
+          "correlation_id": "00000000-0000-0000-0000-000000000007",
+          "release_id": "foundation-canary",
+          "state": "rejected"
+        }
+      },
+      "expected": {
+        "redaction_rule": "drop_unknown_and_sensitive_recursively",
+        "retained_metadata": ["correlation_id", "release_id", "state"],
+        "redacted_paths": ["release.digest", "release.manifest_path", "release.failure"]
+      }
+    },
+    {
+      "id": "access-control-failure-sensitive",
+      "category": "access_failure",
+      "input": {
+        "access": {
+          "audience": "CANARY ACCESS AUDIENCE",
+          "subject": "canary-operator@example.invalid",
+          "token": "canary-access-token-not-real",
+          "failure": "CANARY ACCESS FAILURE DETAILS"
+        },
+        "metadata": {
+          "correlation_id": "00000000-0000-0000-0000-000000000008",
+          "service_name": "web",
+          "status_code": 403
+        }
+      },
+      "expected": {
+        "redaction_rule": "drop_unknown_and_sensitive_recursively",
+        "retained_metadata": ["correlation_id", "service_name", "status_code"],
+        "redacted_paths": ["access.audience", "access.subject", "access.token", "access.failure"]
+      }
+    }
+  ]
+}
