@@ -1,0 +1,278 @@
+{
+  "components": {
+    "schemas": {
+      "DependencyCheckResponse": {
+        "additionalProperties": false,
+        "description": "One allowlisted readiness check.",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "critical": {
+            "title": "Critical",
+            "type": "boolean"
+          },
+          "name": {
+            "enum": [
+              "runtime_config",
+              "api",
+              "postgres",
+              "schema",
+              "postgis",
+              "pgvector",
+              "redis",
+              "object_storage",
+              "execution_loop",
+              "scheduling_loop",
+              "telemetry"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "ready",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "state",
+          "critical"
+        ],
+        "title": "DependencyCheckResponse",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "description": "Minimal liveness contract.",
+        "properties": {
+          "status": {
+            "const": "alive",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "additionalProperties": false,
+        "description": "Readiness response contract.",
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/DependencyCheckResponse"
+            },
+            "maxItems": 12,
+            "title": "Checks",
+            "type": "array"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "release_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Release Id",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "ready",
+              "degraded",
+              "not_ready"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "surface": {
+            "enum": [
+              "web",
+              "api",
+              "worker",
+              "scheduler"
+            ],
+            "title": "Surface",
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "state",
+          "observed_at",
+          "release_id",
+          "checks"
+        ],
+        "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "RuntimeVersionResponse": {
+        "additionalProperties": false,
+        "description": "Immutable executing release identity.",
+        "properties": {
+          "artifact_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Artifact Digest",
+            "type": "string"
+          },
+          "built_at": {
+            "format": "date-time",
+            "title": "Built At",
+            "type": "string"
+          },
+          "contract_major": {
+            "const": 1,
+            "title": "Contract Major",
+            "type": "integer"
+          },
+          "database_revision": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Database Revision",
+            "type": "string"
+          },
+          "git_sha": {
+            "pattern": "^[0-9a-f]{40}$",
+            "title": "Git Sha",
+            "type": "string"
+          },
+          "manifest_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifest Sha256",
+            "type": "string"
+          },
+          "release_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Release Id",
+            "type": "string"
+          },
+          "surface": {
+            "enum": [
+              "web",
+              "api",
+              "worker",
+              "scheduler"
+            ],
+            "title": "Surface",
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "release_id",
+          "git_sha",
+          "artifact_digest",
+          "manifest_sha256",
+          "contract_major",
+          "database_revision",
+          "built_at"
+        ],
+        "title": "RuntimeVersionResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Umbral Runtime API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "description": "Confirm only that this process can respond.",
+        "operationId": "getRuntimeHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "Runtime"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "description": "Report this API surface's already-known readiness.",
+        "operationId": "getRuntimeReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Ready",
+        "tags": [
+          "Runtime"
+        ]
+      }
+    },
+    "/version": {
+      "get": {
+        "description": "Identify the immutable release backing the API surface.",
+        "operationId": "getRuntimeVersion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeVersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Version",
+        "tags": [
+          "Runtime"
+        ]
+      }
+    }
+  }
+}

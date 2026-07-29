@@ -9,15 +9,19 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "api:generate": "openapi-ts -f openapi-ts.config.ts",
+    "api:check": "npm run api:generate && git diff --exit-code -- src/lib/api/generated"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.101.4",
     "next": ">=16.2.12 <17",
     "react": ">=19.2.7 <20",
     "react-dom": ">=19.2.7 <20"
   },
   "devDependencies": {
     "@axe-core/playwright": ">=4.10.0 <5",
+    "@hey-api/openapi-ts": "0.99.0",
     "@playwright/test": ">=1.61.0 <2",
     "@tailwindcss/postcss": ">=4.3.3 <5",
     "@testing-library/jest-dom": ">=7.0.0 <8",

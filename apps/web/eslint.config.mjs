@@ -10,5 +10,11 @@ export default defineConfig([
       react: { version: "19.2" },
     },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  globalIgnores([
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "src/lib/api/generated/**",
+  ]),
 ]);
