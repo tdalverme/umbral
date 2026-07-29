@@ -117,6 +117,64 @@ def _resolve_fixture_imports(
     return tuple(alias.name for alias in node.names if alias.name in known_layers)
 
 
+_PRODUCTION_ROOT = ("src", "umbral")
+
+
+def _find_production_imports(root: Path) -> list[str]:
+    """Find fixture files importing the production package without importing it."""
+
+    production_imports = []
+    for source in sorted(root.rglob("*.py")):
+        if source.name == "__init__.py":
+            continue
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        if any(
+            _is_production_import(source, root, node)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Import, ast.ImportFrom))
+        ):
+            production_imports.append(source.relative_to(root).as_posix())
+    return production_imports
+
+
+def _is_production_import(
+    source: Path,
+    root: Path,
+    node: ast.Import | ast.ImportFrom,
+) -> bool:
+    return any(
+        _is_production_module(module)
+        for module in _imported_modules(source, root, node)
+    )
+
+
+def _imported_modules(
+    source: Path,
+    root: Path,
+    node: ast.Import | ast.ImportFrom,
+) -> tuple[str, ...]:
+    if isinstance(node, ast.Import):
+        return tuple(alias.name for alias in node.names)
+
+    module_parts = tuple((node.module or "").split(".")) if node.module else ()
+    if node.level:
+        package_parts = source.relative_to(root).parts[:-1]
+        base_length = max(0, len(package_parts) - node.level + 1)
+        module_parts = package_parts[:base_length] + module_parts
+
+    base_module = ".".join(module_parts)
+    imported_modules = [base_module] if base_module else []
+    imported_modules.extend(
+        f"{base_module}.{alias.name}" if base_module else alias.name
+        for alias in node.names
+    )
+    return tuple(imported_modules)
+
+
+def _is_production_module(module: str) -> bool:
+    return tuple(module.split(".")[: len(_PRODUCTION_ROOT)]) == _PRODUCTION_ROOT
+
+
 def _transitive_violations(
     adjacency: dict[str, set[str]], direct: list[DependencyViolation]
 ) -> list[DependencyViolation]:
@@ -186,11 +244,23 @@ def test_transitive_forbidden_fixture_reports_the_full_path() -> None:
 
 
 def test_fixtures_do_not_import_production_modules() -> None:
-    production_imports = []
-    for source in FIXTURES.rglob("*.py"):
-        if source.name == "__init__.py":
-            continue
-        if "src.umbral" in source.read_text(encoding="utf-8"):
-            production_imports.append(source.relative_to(FIXTURES).as_posix())
+    assert _find_production_imports(FIXTURES) == []
 
-    assert production_imports == []
+
+def test_production_import_guard_catches_from_src_alias(tmp_path: Path) -> None:
+    fixture = tmp_path / "fixture.py"
+    fixture.write_text("from src import umbral as production\n", encoding="utf-8")
+
+    assert _find_production_imports(tmp_path) == ["fixture.py"]
+
+
+def test_production_import_guard_catches_relative_production_import(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "src"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    fixture = package / "fixture.py"
+    fixture.write_text("from . import umbral\n", encoding="utf-8")
+
+    assert _find_production_imports(tmp_path) == ["src/fixture.py"]
