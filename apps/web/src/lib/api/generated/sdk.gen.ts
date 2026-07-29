@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionResponses } from './types.gen';
+import type { GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -19,22 +19,30 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 };
 
 /**
- * Health
+ * Confirm that the current process can respond
  *
- * Confirm only that this process can respond.
+ * Executes no dependency check and creates no durable connection, record, job or object. This is the only operation that may bypass the environment access control.
  */
 export const getRuntimeHealth = <ThrowOnError extends boolean = false>(options?: Options<GetRuntimeHealthData, ThrowOnError>): RequestResult<GetRuntimeHealthResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetRuntimeHealthResponses, unknown, ThrowOnError>({ url: '/health', ...options });
 
 /**
- * Ready
+ * Report readiness for one runtime surface
  *
- * Report this API surface's already-known readiness.
+ * Returns only allowlisted dependency names, state, criticality and stable codes. A degraded response remains HTTP-ready but is rejected by the release gate. A critical failure returns 503.
  */
-export const getRuntimeReadiness = <ThrowOnError extends boolean = false>(options?: Options<GetRuntimeReadinessData, ThrowOnError>): RequestResult<GetRuntimeReadinessResponses, GetRuntimeReadinessErrors, ThrowOnError> => (options?.client ?? client).get<GetRuntimeReadinessResponses, GetRuntimeReadinessErrors, ThrowOnError>({ url: '/ready', ...options });
+export const getRuntimeReadiness = <ThrowOnError extends boolean = false>(options?: Options<GetRuntimeReadinessData, ThrowOnError>): RequestResult<GetRuntimeReadinessResponses, GetRuntimeReadinessErrors, ThrowOnError> => (options?.client ?? client).get<GetRuntimeReadinessResponses, GetRuntimeReadinessErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/ready',
+    ...options
+});
 
 /**
- * Version
+ * Identify the exact executing release and artifact
  *
  * Identify the immutable release backing the API surface.
  */
-export const getRuntimeVersion = <ThrowOnError extends boolean = false>(options?: Options<GetRuntimeVersionData, ThrowOnError>): RequestResult<GetRuntimeVersionResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetRuntimeVersionResponses, unknown, ThrowOnError>({ url: '/version', ...options });
+export const getRuntimeVersion = <ThrowOnError extends boolean = false>(options?: Options<GetRuntimeVersionData, ThrowOnError>): RequestResult<GetRuntimeVersionResponses, GetRuntimeVersionErrors, ThrowOnError> => (options?.client ?? client).get<GetRuntimeVersionResponses, GetRuntimeVersionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/version',
+    ...options
+});

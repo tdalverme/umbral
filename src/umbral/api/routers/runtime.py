@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -58,6 +59,29 @@ class RuntimeVersion(BaseModel):
     built_at: datetime
 
 
+class ValidationIssue(BaseModel):
+    """Safe field-level validation metadata for RFC 9457 problems."""
+
+    model_config = ConfigDict(extra="forbid")
+    field: str
+    code: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,99}$")
+
+
+class Problem(BaseModel):
+    """Sanitized RFC 9457 problem details contract."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: str = Field(json_schema_extra={"format": "uri"})
+    title: str = Field(max_length=200)
+    status: int = Field(ge=400, le=599)
+    detail: str | None = Field(default=None, max_length=500)
+    instance: str | None = None
+    code: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,99}$")
+    request_id: UUID
+    correlation_id: UUID
+    errors: list[ValidationIssue] | None = Field(default=None, max_length=50)
+
+
 def configure_runtime_routes(dependencies: RuntimeDependencies) -> None:
     """Bind immutable dependencies once in the composition root."""
 
@@ -90,7 +114,19 @@ async def health(request: Request, response: Response) -> Health:
     operation_id="getRuntimeReadiness",
     response_model=Readiness,
     response_model_exclude_none=True,
-    responses={503: {"model": Readiness}},
+    responses={
+        401: {
+            "model": Problem,
+            "description": "Missing or invalid environment identity",
+        },
+        403: {
+            "model": Problem,
+            "description": (
+                "Valid environment identity without access to this environment"
+            ),
+        },
+        503: {"model": Readiness},
+    },
 )
 async def ready(request: Request, response: Response) -> Readiness:
     """Report this API surface's already-known readiness."""
@@ -122,6 +158,18 @@ async def ready(request: Request, response: Response) -> Readiness:
     "/version",
     operation_id="getRuntimeVersion",
     response_model=RuntimeVersion,
+    responses={
+        401: {
+            "model": Problem,
+            "description": "Missing or invalid environment identity",
+        },
+        403: {
+            "model": Problem,
+            "description": (
+                "Valid environment identity without access to this environment"
+            ),
+        },
+    },
 )
 async def version(request: Request, response: Response) -> RuntimeVersion:
     """Identify the immutable release backing the API surface."""

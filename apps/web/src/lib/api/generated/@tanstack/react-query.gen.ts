@@ -4,7 +4,7 @@ import { type DefaultError, queryOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
 import { getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, type Options } from '../sdk.gen';
-import type { GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionResponse } from '../types.gen';
+import type { GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -42,9 +42,9 @@ const createQueryKey = <TOptions extends Options>(id: string, options?: TOptions
 export const getRuntimeHealthQueryKey = (options?: Options<GetRuntimeHealthData>) => createQueryKey('getRuntimeHealth', options);
 
 /**
- * Health
+ * Confirm that the current process can respond
  *
- * Confirm only that this process can respond.
+ * Executes no dependency check and creates no durable connection, record, job or object. This is the only operation that may bypass the environment access control.
  */
 export const getRuntimeHealthOptions = (options?: Options<GetRuntimeHealthData>) => queryOptions<GetRuntimeHealthResponse, DefaultError, GetRuntimeHealthResponse, ReturnType<typeof getRuntimeHealthQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -62,9 +62,9 @@ export const getRuntimeHealthOptions = (options?: Options<GetRuntimeHealthData>)
 export const getRuntimeReadinessQueryKey = (options?: Options<GetRuntimeReadinessData>) => createQueryKey('getRuntimeReadiness', options);
 
 /**
- * Ready
+ * Report readiness for one runtime surface
  *
- * Report this API surface's already-known readiness.
+ * Returns only allowlisted dependency names, state, criticality and stable codes. A degraded response remains HTTP-ready but is rejected by the release gate. A critical failure returns 503.
  */
 export const getRuntimeReadinessOptions = (options?: Options<GetRuntimeReadinessData>) => queryOptions<GetRuntimeReadinessResponse, GetRuntimeReadinessError, GetRuntimeReadinessResponse, ReturnType<typeof getRuntimeReadinessQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -82,11 +82,11 @@ export const getRuntimeReadinessOptions = (options?: Options<GetRuntimeReadiness
 export const getRuntimeVersionQueryKey = (options?: Options<GetRuntimeVersionData>) => createQueryKey('getRuntimeVersion', options);
 
 /**
- * Version
+ * Identify the exact executing release and artifact
  *
  * Identify the immutable release backing the API surface.
  */
-export const getRuntimeVersionOptions = (options?: Options<GetRuntimeVersionData>) => queryOptions<GetRuntimeVersionResponse, DefaultError, GetRuntimeVersionResponse, ReturnType<typeof getRuntimeVersionQueryKey>>({
+export const getRuntimeVersionOptions = (options?: Options<GetRuntimeVersionData>) => queryOptions<GetRuntimeVersionResponse, GetRuntimeVersionError, GetRuntimeVersionResponse, ReturnType<typeof getRuntimeVersionQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
         const { data } = await getRuntimeVersion({
             ...options,

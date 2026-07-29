@@ -1,5 +1,71 @@
 {
   "components": {
+    "headers": {
+      "CorrelationId": {
+        "description": "Preserved or server-generated operation UUID",
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "RequestId": {
+        "description": "Server-generated UUID for this request",
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      }
+    },
+    "parameters": {
+      "CorrelationId": {
+        "description": "UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.",
+        "in": "header",
+        "name": "X-Correlation-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "Forbidden": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "description": "Valid environment identity without access to this environment",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        }
+      },
+      "Unauthorized": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "description": "Missing or invalid environment identity",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestId"
+          }
+        }
+      }
+    },
     "schemas": {
       "DependencyCheck": {
         "additionalProperties": false,
@@ -70,6 +136,91 @@
           "status"
         ],
         "title": "Health",
+        "type": "object"
+      },
+      "Problem": {
+        "additionalProperties": false,
+        "description": "Sanitized RFC 9457 problem details contract.",
+        "properties": {
+          "code": {
+            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "format": "uuid",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ValidationIssue"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "status": {
+            "maximum": 599.0,
+            "minimum": 400.0,
+            "title": "Status",
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "format": "uri",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "request_id",
+          "correlation_id"
+        ],
+        "title": "Problem",
         "type": "object"
       },
       "Readiness": {
@@ -189,10 +340,40 @@
         ],
         "title": "RuntimeVersion",
         "type": "object"
+      },
+      "ValidationIssue": {
+        "additionalProperties": false,
+        "description": "Safe field-level validation metadata for RFC 9457 problems.",
+        "properties": {
+          "code": {
+            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "code"
+        ],
+        "title": "ValidationIssue",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "environmentAccess": {
+        "bearerFormat": "JWT",
+        "description": "Environment-level operator or service identity. It is not a product user session or product authorization contract.",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
   "info": {
+    "description": "Foundation operational contract. Product resources will be added below /api/v1 without changing these side-effect-free probes.",
     "title": "Umbral Runtime API",
     "version": "1.0.0"
   },
@@ -200,21 +381,48 @@
   "paths": {
     "/health": {
       "get": {
-        "description": "Confirm only that this process can respond.",
+        "description": "Executes no dependency check and creates no durable connection, record, job or object. This is the only operation that may bypass the environment access control.",
         "operationId": "getRuntimeHealth",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
+                "examples": {
+                  "alive": {
+                    "value": {
+                      "status": "alive"
+                    }
+                  }
+                },
                 "schema": {
                   "$ref": "#/components/schemas/Health"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Process is alive",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
-        "summary": "Health",
+        "security": [],
+        "summary": "Confirm that the current process can respond",
         "tags": [
           "Runtime"
         ]
@@ -222,8 +430,13 @@
     },
     "/ready": {
       "get": {
-        "description": "Report this API surface's already-known readiness.",
+        "description": "Returns only allowlisted dependency names, state, criticality and stable codes. A degraded response remains HTTP-ready but is rejected by the release gate. A critical failure returns 503.",
         "operationId": "getRuntimeReadiness",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -233,7 +446,27 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Surface is ready or degraded",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "503": {
             "content": {
@@ -243,10 +476,31 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Surface is not ready",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "schema": {
+                  "maximum": 60,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
-        "summary": "Ready",
+        "summary": "Report readiness for one runtime surface",
         "tags": [
           "Runtime"
         ]
@@ -256,6 +510,11 @@
       "get": {
         "description": "Identify the immutable release backing the API surface.",
         "operationId": "getRuntimeVersion",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -265,14 +524,50 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Immutable version identity for this surface",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         },
-        "summary": "Version",
+        "summary": "Identify the exact executing release and artifact",
         "tags": [
           "Runtime"
         ]
       }
     }
-  }
+  },
+  "security": [
+    {
+      "environmentAccess": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Local API",
+      "url": "http://127.0.0.1:8000"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Runtime"
+    }
+  ]
 }
