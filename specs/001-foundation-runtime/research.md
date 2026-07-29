@@ -257,8 +257,12 @@ Baseline:
 | ESLint | `>=10,<11` |
 | Tailwind CSS | `>=4.3,<5` |
 | TanStack Query | `>=5.101,<6` |
-| Vitest | `>=5,<6` |
+| Vitest | `>=4.1,<5` |
 | Playwright | `>=1.61,<2` |
+
+Vitest uses the published stable 4.1 line for the foundation runtime. Revisit
+this band and migrate to `>=5,<6` when a stable Vitest 5 release is available;
+do not use a prerelease in the reproducible baseline.
 
 Initialize shadcn/ui with Base UI, the restrained Vega preset, CSS variables
 and OKLCH semantic tokens. Add only button, field/input, card, alert, skeleton
@@ -589,4 +593,3 @@ substitutes cannot reproduce.
 - [Playwright accessibility testing](https://playwright.dev/docs/accessibility-testing)
 - [WCAG 2.2](https://www.w3.org/TR/WCAG22/)
 - [Next.js testing guidance](https://nextjs.org/docs/app/guides/testing)
-

@@ -15,7 +15,8 @@
     "unrs-resolver@1.12.2": true
   },
   "devDependencies": {
-    "jsdom": ">=26.1.0 <27"
+    "jsdom": ">=26.1.0 <27",
+    "vitest": ">=4.1.10 <5"
   },
   "scripts": {
     "dev": "npm run dev --workspace @umbral/web",
