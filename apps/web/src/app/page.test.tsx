@@ -6,9 +6,8 @@ import Page from "./page";
 
 describe("foundation page", () => {
   it("provides an es-AR document, a keyboard skip link, and one main landmark", () => {
-    const { container } = render(createElement(RootLayout, null, createElement(Page)));
-
-    expect(container.querySelector("html")).toHaveAttribute("lang", "es-AR");
+    render(createElement(RootLayout, null, createElement(Page)));
+    expect(document.documentElement).toHaveAttribute("lang", "es-AR");
     expect(screen.getByRole("link", { name: /saltar al contenido principal/i })).toHaveAttribute(
       "href",
       "#main-content",

@@ -13,6 +13,7 @@ export default defineConfig({
     },
   },
   test: {
+    globals: true,
     environment: "jsdom",
     setupFiles: [path.resolve(webRoot, "src/test/setup.ts")],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
