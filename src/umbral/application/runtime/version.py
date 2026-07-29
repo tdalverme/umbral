@@ -95,7 +95,7 @@ def load_release_manifest(path: Path) -> ReleaseManifest:
 def _validate_manifest_fields(raw: Mapping[str, Any]) -> None:
     if set(raw) != _REQUIRED_MANIFEST_FIELDS:
         raise ReleaseManifestValidationError("fields")
-    if raw["schema_version"] != 1:
+    if not _is_exact_integer(raw["schema_version"], 1):
         raise ReleaseManifestValidationError("schema_version")
     release_id = _string(raw["release_id"], "release_id")
     if not _RELEASE_ID_PATTERN.fullmatch(release_id):
@@ -105,12 +105,20 @@ def _validate_manifest_fields(raw: Mapping[str, Any]) -> None:
         raise ReleaseManifestValidationError("git_sha")
     built_at = _string(raw["built_at"], "built_at")
     try:
-        datetime.fromisoformat(built_at.replace("Z", "+00:00"))
+        timestamp = datetime.fromisoformat(built_at.replace("Z", "+00:00"))
     except ValueError as error:
         raise ReleaseManifestValidationError("built_at") from error
-    if raw["contract_major"] != 1:
+    offset = timestamp.utcoffset()
+    if (
+        timestamp.tzinfo is None
+        or offset is None
+        or offset.total_seconds() != 0
+    ):
+        raise ReleaseManifestValidationError("built_at")
+    if not _is_exact_integer(raw["contract_major"], 1):
         raise ReleaseManifestValidationError("contract_major")
-    if not _string(raw["database_revision"], "database_revision"):
+    database_revision = _string(raw["database_revision"], "database_revision")
+    if not 1 <= len(database_revision) <= 64:
         raise ReleaseManifestValidationError("database_revision")
     if _integer(raw["config_schema_version"], "config_schema_version") < 1:
         raise ReleaseManifestValidationError("config_schema_version")
@@ -125,7 +133,7 @@ def _release_artifact(value: Any, field_name: str) -> ReleaseArtifact:
     if set(raw) not in permitted_fields:
         raise ReleaseManifestValidationError(field_name)
     image = _string(raw.get("image"), f"{field_name}.image")
-    if len(image) > 300:
+    if not 1 <= len(image) <= 300:
         raise ReleaseManifestValidationError(f"{field_name}.image")
     digest = _string(raw.get("digest"), f"{field_name}.digest")
     if not _DIGEST_PATTERN.fullmatch(digest):
@@ -162,3 +170,7 @@ def _integer(value: Any, field_name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool):
         raise ReleaseManifestValidationError(field_name)
     return value
+
+
+def _is_exact_integer(value: Any, expected: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value == expected
