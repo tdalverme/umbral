@@ -21,7 +21,7 @@ def _run(*arguments: str) -> subprocess.CompletedProcess[str]:
 
 
 def _npm_command() -> str:
-    return "npm.cmd" if os.name == "nt" else "npm"
+    return os.environ.get("NPM_EXECUTABLE", "npm.cmd" if os.name == "nt" else "npm")
 
 
 def test_generated_web_client_is_regenerated_without_a_diff() -> None:
