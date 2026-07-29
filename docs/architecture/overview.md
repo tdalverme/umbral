@@ -2,6 +2,14 @@
 
 Umbral se organiza como un monolito modular con capas claras. La prioridad de la V1 es aprender rapido sin perder trazabilidad: cada recomendacion debe poder reconstruirse desde el perfil usado, el snapshot del listing, las features disponibles, la version de scoring y la evidencia citada.
 
+## Foundation runtime implementado
+
+La base ejecutable añade probes `/health`, `/ready`, `/version`, PostgreSQL y
+Alembic con siete tablas, runtime de jobs at-least-once, object versions
+inmutables, backup/restore beside-primary, señales metadata-only y gates de
+manifest/promoción. Redis es transporte reconstruible; PostgreSQL y los
+manifiestos son fuente de verdad operativa.
+
 ## Stack decidido para la beta
 
 - Product UI: Next.js App Router, TypeScript, shadcn/ui, Tailwind, TanStack Query y MapLibre.
@@ -21,6 +29,8 @@ Product UI
 Infrastructure adapters
   -> implementan puertos de application/domain
 ```
+
+La dirección se verifica con Import Linter en `scripts/check-architecture.ps1`.
 
 El dominio no debe importar FastAPI, clientes de LLM, SQLAlchemy, workers ni detalles de storage. La infraestructura implementa puertos para persistencia, retrieval, notificaciones, object storage, geocoding y observabilidad.
 

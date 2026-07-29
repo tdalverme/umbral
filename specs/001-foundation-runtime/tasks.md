@@ -157,38 +157,38 @@ recupera DB y objetos con checksums dentro del presupuesto.
 
 > Escribir T051–T060 primero y confirmar que fallan por la conducta ausente.
 
-- [ ] T051 [P] [US3] Escribir unit tests de normalización de objetivo, identidad compuesta, estados terminales y clasificación transient/permanent/unclassified en `tests/unit/application/jobs/test_job_contracts.py`
-- [ ] T052 [P] [US3] Escribir contract tests para `JobQueue` recording/RQ, JSON-only y payload limitado a IDs/correlación en `tests/contract/test_job_queue.py`
-- [ ] T053 [P] [US3] Escribir integración de diez submissions, replay terminal, rerun con clave nueva y no-colisión por tipo/objetivo en `tests/integration/jobs/test_submission_idempotency.py`
-- [ ] T054 [P] [US3] Escribir integración de crash commit-before-publish, duplicate publish y reconstrucción tras pérdida de Redis en `tests/integration/jobs/test_outbox_recovery.py`
-- [ ] T055 [P] [US3] Escribir integración de duplicate delivery, lease vencido, backoff acotado, agotamiento y effect-before-ack sin duplicación en `tests/integration/jobs/test_worker_recovery.py`
-- [ ] T056 [P] [US3] Escribir integración de dos schedulers sobre one-shot/fixed-interval y una occurrence key UTC en `tests/integration/jobs/test_scheduler_overlap.py`
-- [ ] T057 [P] [US3] Escribir la suite de conformance de versiones, hash, content type, retry/conflict y concurrencia para filesystem en `tests/contract/test_object_store.py`
-- [ ] T058 [P] [US3] Parametrizar la misma suite de T057 contra S3/MinIO y checksums/provider refs opacos en `tests/integration/object_store/test_s3_conformance.py`
-- [ ] T059 [P] [US3] Escribir integración pending/available/failed, interrupción metadata-bytes, reconciliación y lectura fail-closed en `tests/integration/object_store/test_versioned_objects.py`
-- [ ] T060 [P] [US3] Escribir integración de dump/replica/manifest, restore beside-primary, Alembic/counts/checksums y medición RPO/RTO en `tests/integration/recovery/test_backup_restore.py`
+- [X] T051 [P] [US3] Escribir unit tests de normalización de objetivo, identidad compuesta, estados terminales y clasificación transient/permanent/unclassified en `tests/unit/application/jobs/test_job_contracts.py`
+- [X] T052 [P] [US3] Escribir contract tests para `JobQueue` recording/RQ, JSON-only y payload limitado a IDs/correlación en `tests/contract/test_job_queue.py`
+- [X] T053 [P] [US3] Escribir integración de diez submissions, replay terminal, rerun con clave nueva y no-colisión por tipo/objetivo en `tests/integration/jobs/test_submission_idempotency.py`
+- [X] T054 [P] [US3] Escribir integración de crash commit-before-publish, duplicate publish y reconstrucción tras pérdida de Redis en `tests/integration/jobs/test_outbox_recovery.py`
+- [X] T055 [P] [US3] Escribir integración de duplicate delivery, lease vencido, backoff acotado, agotamiento y effect-before-ack sin duplicación en `tests/integration/jobs/test_worker_recovery.py`
+- [X] T056 [P] [US3] Escribir integración de dos schedulers sobre one-shot/fixed-interval y una occurrence key UTC en `tests/integration/jobs/test_scheduler_overlap.py`
+- [X] T057 [P] [US3] Escribir la suite de conformance de versiones, hash, content type, retry/conflict y concurrencia para filesystem en `tests/contract/test_object_store.py`
+- [X] T058 [P] [US3] Parametrizar la misma suite de T057 contra S3/MinIO y checksums/provider refs opacos en `tests/integration/object_store/test_s3_conformance.py`
+- [X] T059 [P] [US3] Escribir integración pending/available/failed, interrupción metadata-bytes, reconciliación y lectura fail-closed en `tests/integration/object_store/test_versioned_objects.py`
+- [X] T060 [P] [US3] Escribir integración de dump/replica/manifest, restore beside-primary, Alembic/counts/checksums y medición RPO/RTO en `tests/integration/recovery/test_backup_restore.py`
 
 ### Implementation for User Story 3
 
-- [ ] T061 [P] [US3] Implementar DTOs, estados, errores, `JobRuntime`, `JobHandler` y `JobQueue` Interfaces en `src/umbral/application/jobs/contracts.py` y `src/umbral/application/jobs/ports.py`
-- [ ] T062 [US3] Implementar repositorios específicos y operaciones lock/lease/attempt/outbox/schedule sin commit propio en `src/umbral/infrastructure/db/repositories/jobs.py`
-- [ ] T063 [US3] Implementar submit/get, unique-conflict replay, claim, outcomes y backoff de cinco intentos en `src/umbral/application/jobs/service.py`
-- [ ] T064 [P] [US3] Implementar Adapters RQ con `JSONSerializer` e inline/recording sin pickle en `src/umbral/infrastructure/queue/rq_queue.py` y `src/umbral/infrastructure/queue/recording_queue.py`
-- [ ] T065 [US3] Implementar relay de outbox y reaper de leases con claims cortos y publish fuera de transacción en `src/umbral/application/jobs/relay.py`
-- [ ] T066 [US3] Implementar registry explícito y job `foundation.reference` cuyo efecto auditado único usa un `stored_objects` determinista en `src/umbral/workers/registry.py` y `src/umbral/application/jobs/reference.py`
-- [ ] T067 [US3] Implementar ejecución worker, transacción de efecto/resultado y manejo sanitizado de fallos en `src/umbral/workers/worker.py`
-- [ ] T068 [US3] Implementar scheduler one-shot/fixed-interval con `SKIP LOCKED`, occurrence UTC y avance+submit atómico en `src/umbral/application/jobs/scheduler.py`
-- [ ] T069 [US3] Componer CLI `worker|scheduler`, relay/reaper/reconciler y heartbeat <=30 s en `src/umbral/workers/__main__.py`, `src/umbral/workers/scheduler.py` y `src/umbral/infrastructure/db/repositories/runtime.py`
-- [ ] T070 [P] [US3] Implementar `ObjectVersionRef`, errores, `VersionedObjects` y `ObjectStore` Interfaces mínimos en `src/umbral/application/objects/contracts.py` y `src/umbral/application/objects/ports.py`
-- [ ] T071 [US3] Implementar repositorios específicos de objeto/versión con transitions y exact refs en `src/umbral/infrastructure/db/repositories/objects.py`
-- [ ] T072 [US3] Implementar put/open/stat profundo, claves derivadas, verificación streaming y reconciliación de pending writes en `src/umbral/application/objects/service.py` y `src/umbral/application/objects/reconcile.py`
-- [ ] T073 [P] [US3] Implementar creación exclusiva y rename atómico del Adapter filesystem en `src/umbral/infrastructure/object_store/filesystem.py`
-- [ ] T074 [P] [US3] Implementar Adapter S3/R2 con conditional put, stat/checksum y provider ref opaco en `src/umbral/infrastructure/object_store/s3.py`
-- [ ] T075 [US3] Componer DB, Redis y object-store Adapters por ambiente sin credenciales fuera de infrastructure en `src/umbral/api/dependencies.py` y `src/umbral/infrastructure/config/settings.py`
-- [ ] T076 [US3] Implementar backup lógico cifrado, inventario de objetos nuevos, checksum manifest cada 12 horas y policy privada/lock de 35 días en `src/umbral/ops/backup.py` e `infra/cloudflare/r2-policy.json`
-- [ ] T077 [US3] Implementar réplica a recovery bucket y restore a namespaces nuevos con validación Alembic/counts/hashes en `src/umbral/ops/restore.py`
-- [ ] T078 [US3] Documentar owners, frecuencia, 35 días, exclusiones y cutover; ejecutar el drill inicial local y guardar tiempos/evidencia en `docs/runbooks/backup-restore.md` y `docs/runbooks/evidence/us3-restore-initial.md`
-- [ ] T079 [US3] Incorporar suites jobs/object/recovery y comandos focalizados al harness en `scripts/check-jobs.ps1`, `scripts/check-storage.ps1`, `scripts/check-recovery.ps1` y `scripts/check.ps1`
+- [X] T061 [P] [US3] Implementar DTOs, estados, errores, `JobRuntime`, `JobHandler` y `JobQueue` Interfaces en `src/umbral/application/jobs/contracts.py` y `src/umbral/application/jobs/ports.py`
+- [X] T062 [US3] Implementar repositorios específicos y operaciones lock/lease/attempt/outbox/schedule sin commit propio en `src/umbral/infrastructure/db/repositories/jobs.py`
+- [X] T063 [US3] Implementar submit/get, unique-conflict replay, claim, outcomes y backoff de cinco intentos en `src/umbral/application/jobs/service.py`
+- [X] T064 [P] [US3] Implementar Adapters RQ con `JSONSerializer` e inline/recording sin pickle en `src/umbral/infrastructure/queue/rq_queue.py` y `src/umbral/infrastructure/queue/recording_queue.py`
+- [X] T065 [US3] Implementar relay de outbox y reaper de leases con claims cortos y publish fuera de transacción en `src/umbral/application/jobs/relay.py`
+- [X] T066 [US3] Implementar registry explícito y job `foundation.reference` cuyo efecto auditado único usa un `stored_objects` determinista en `src/umbral/workers/registry.py` y `src/umbral/application/jobs/reference.py`
+- [X] T067 [US3] Implementar ejecución worker, transacción de efecto/resultado y manejo sanitizado de fallos en `src/umbral/workers/worker.py`
+- [X] T068 [US3] Implementar scheduler one-shot/fixed-interval con `SKIP LOCKED`, occurrence UTC y avance+submit atómico en `src/umbral/application/jobs/scheduler.py`
+- [X] T069 [US3] Componer CLI `worker|scheduler`, relay/reaper/reconciler y heartbeat <=30 s en `src/umbral/workers/__main__.py`, `src/umbral/workers/scheduler.py` y `src/umbral/infrastructure/db/repositories/runtime.py`
+- [X] T070 [P] [US3] Implementar `ObjectVersionRef`, errores, `VersionedObjects` y `ObjectStore` Interfaces mínimos en `src/umbral/application/objects/contracts.py` y `src/umbral/application/objects/ports.py`
+- [X] T071 [US3] Implementar repositorios específicos de objeto/versión con transitions y exact refs en `src/umbral/infrastructure/db/repositories/objects.py`
+- [X] T072 [US3] Implementar put/open/stat profundo, claves derivadas, verificación streaming y reconciliación de pending writes en `src/umbral/application/objects/service.py` y `src/umbral/application/objects/reconcile.py`
+- [X] T073 [P] [US3] Implementar creación exclusiva y rename atómico del Adapter filesystem en `src/umbral/infrastructure/object_store/filesystem.py`
+- [X] T074 [P] [US3] Implementar Adapter S3/R2 con conditional put, stat/checksum y provider ref opaco en `src/umbral/infrastructure/object_store/s3.py`
+- [X] T075 [US3] Componer DB, Redis y object-store Adapters por ambiente sin credenciales fuera de infrastructure en `src/umbral/api/dependencies.py` y `src/umbral/infrastructure/config/settings.py`
+- [X] T076 [US3] Implementar backup lógico cifrado, inventario de objetos nuevos, checksum manifest cada 12 horas y policy privada/lock de 35 días en `src/umbral/ops/backup.py` e `infra/cloudflare/r2-policy.json`
+- [X] T077 [US3] Implementar réplica a recovery bucket y restore a namespaces nuevos con validación Alembic/counts/hashes en `src/umbral/ops/restore.py`
+- [X] T078 [US3] Documentar owners, frecuencia, 35 días, exclusiones y cutover; ejecutar el drill inicial local y guardar tiempos/evidencia en `docs/runbooks/backup-restore.md` y `docs/runbooks/evidence/us3-restore-initial.md`
+- [X] T079 [US3] Incorporar suites jobs/object/recovery y comandos focalizados al harness en `scripts/check-jobs.ps1`, `scripts/check-storage.ps1`, `scripts/check-recovery.ps1` y `scripts/check.ps1`
 
 **Checkpoint**: US3 demuestra durable execution, object integrity y restore
 sin depender de Redis como fuente de verdad.
@@ -210,43 +210,43 @@ mismos digests, cuatro superficies ready, acceso externo denegado salvo
 
 > Escribir T080–T086 primero y confirmar que fallan por la conducta ausente.
 
-- [ ] T080 [P] [US4] Escribir contract tests recursivos de JSON logs, spans y Sentry `beforeSend` con allowlist/canaries en `tests/contract/test_operational_signals.py`
-- [ ] T081 [P] [US4] Escribir tests TypeScript de allowlist, route templates y rechazo de URLs/headers/query/free text en `apps/web/src/lib/observability/telemetry.test.ts`
-- [ ] T082 [P] [US4] Escribir E2E con app/router de test que origine request->job->object bajo una correlación, release y cero contenido sensible en `tests/e2e/test_correlation_trace.py`
-- [ ] T083 [P] [US4] Escribir integración parametrizada de pérdida de PostgreSQL, Redis, object storage y telemetría con aislamiento y cambio <60 s en `tests/integration/runtime/test_readiness_failure_isolation.py`
-- [ ] T084 [P] [US4] Escribir tests JSON Schema, dos digests, manifest checksum y coincidencia entre cuatro superficies en `tests/contract/test_release_manifest.py`
-- [ ] T085 [P] [US4] Escribir contract tests del policy esperado: origin cerrado, API/datastores privados, Access requerido y único bypass `/health` en `tests/contract/test_environment_access.py`
-- [ ] T086 [P] [US4] Escribir integración del lock de promoción, migration-before-deploy, mismo manifest, smoke fallido y rollback al manifest previo en `tests/integration/delivery/test_release_flow.py`
+- [X] T080 [P] [US4] Escribir contract tests recursivos de JSON logs, spans y Sentry `beforeSend` con allowlist/canaries en `tests/contract/test_operational_signals.py`
+- [X] T081 [P] [US4] Escribir tests TypeScript de allowlist, route templates y rechazo de URLs/headers/query/free text en `apps/web/src/lib/observability/telemetry.test.ts`
+- [X] T082 [P] [US4] Escribir E2E con app/router de test que origine request->job->object bajo una correlación, release y cero contenido sensible en `tests/e2e/test_correlation_trace.py`
+- [X] T083 [P] [US4] Escribir integración parametrizada de pérdida de PostgreSQL, Redis, object storage y telemetría con aislamiento y cambio <60 s en `tests/integration/runtime/test_readiness_failure_isolation.py`
+- [X] T084 [P] [US4] Escribir tests JSON Schema, dos digests, manifest checksum y coincidencia entre cuatro superficies en `tests/contract/test_release_manifest.py`
+- [X] T085 [P] [US4] Escribir contract tests del policy esperado: origin cerrado, API/datastores privados, Access requerido y único bypass `/health` en `tests/contract/test_environment_access.py`
+- [X] T086 [P] [US4] Escribir integración del lock de promoción, migration-before-deploy, mismo manifest, smoke fallido y rollback al manifest previo en `tests/integration/delivery/test_release_flow.py`
 
 ### Implementation for User Story 4
 
-- [ ] T087 [P] [US4] Implementar normalización y closed-field filtering común sin mapas arbitrarios en `src/umbral/application/runtime/telemetry.py` y `src/umbral/infrastructure/observability/filtering.py`
-- [ ] T088 [US4] Implementar JSON logging, OpenTelemetry OTLP y Sentry sin PII/replay/attachments con fallo de exporter degradable en `src/umbral/infrastructure/observability/logging.py`, `src/umbral/infrastructure/observability/otel.py` y `src/umbral/infrastructure/observability/sentry.py`
-- [ ] T089 [US4] Instrumentar API, job attempts, scheduler y object operations con correlation/release/operation/state/duration únicamente en `src/umbral/api/middleware/correlation.py`, `src/umbral/workers/worker.py`, `src/umbral/application/jobs/scheduler.py` y `src/umbral/application/objects/service.py`
-- [ ] T090 [P] [US4] Implementar facade web metadata-only e inicialización OTel/Sentry segura en `apps/web/src/lib/observability/telemetry.ts`, `apps/web/src/instrumentation.ts` y `apps/web/src/instrumentation-client.ts`
-- [ ] T091 [US4] Componer matriz completa de probes, heartbeats stale, aggregate status y códigos sanitizados en `src/umbral/application/runtime/readiness.py`, `src/umbral/api/routers/runtime.py` y `src/umbral/api/dependencies.py`
-- [ ] T092 [US4] Propagar correlación/readiness/version por el server client y routes web sin exponer host privado ni parámetros en `apps/web/src/lib/api/server.ts`, `apps/web/src/app/ready/route.ts` y `apps/web/src/app/version/route.ts`
-- [ ] T093 [P] [US4] Publicar el JSON Schema aprobado y construir manifests inmutables desde git/Alembic/digests en `contracts/release-manifest.schema.json` y `src/umbral/ops/release.py`
-- [ ] T094 [P] [US4] Crear imágenes multi-stage reproducibles `linux/amd64`, non-root y runtime-configurable en `Dockerfile.runtime` y `apps/web/Dockerfile`
-- [ ] T095 [US4] Implementar build único, scan, push GHCR por digest, attestations y manifest checksum en `scripts/deploy/build-release.ps1`
-- [ ] T096 [P] [US4] Declarar web, API privada, worker, scheduler, PostgreSQL 17 y Key Value por ambiente sin auto-build mutable en `render.yaml`
-- [ ] T097 [P] [US4] Declarar policy Cloudflare por ambiente y validar JWT signature/audience/expiry con bypass exacto de `/health` en `infra/cloudflare/access-policy.json`, `apps/web/src/lib/access/cloudflare.ts` y `apps/web/src/proxy.ts`
-- [ ] T098 [US4] Implementar gate read-only que compara Render/Cloudflare con el policy esperado y registra evidencia sin credenciales en `scripts/deploy/verify-access.ps1`
-- [ ] T099 [US4] Implementar lock mutuo por ambiente con create-if-absent, owner/release/expiry y rechazo concurrente en `src/umbral/ops/release_lock.py`
-- [ ] T100 [US4] Implementar promoción por manifest exacto con access/backup gates, migration única y orden de superficies en `scripts/deploy/promote-release.ps1`
-- [ ] T101 [US4] Implementar smoke interno de cuatro superficies, extensiones, reference job, objeto sintético y release identity sin datos de producto en `src/umbral/ops/smoke.py` y `scripts/deploy/smoke.ps1`
-- [ ] T102 [US4] Implementar rollback por digest/config snapshot, verificación de schema compatible y evidencia cronometrada en `scripts/deploy/rollback.ps1`
-- [ ] T103 [US4] Implementar gate de recovery point <12 h y validación de retención/manifest antes de production en `src/umbral/ops/recovery_gate.py`
-- [ ] T104 [P] [US4] Crear CI requerida con lockfiles frozen, arquitectura, migraciones, contratos, Python, web, Playwright y manifest schema en `.github/workflows/check.yml`
-- [ ] T105 [P] [US4] Crear workflow que construye/escanea/attesta una vez y publica manifest/digests como artefacto inmutable en `.github/workflows/release.yml`
-- [ ] T106 [US4] Crear workflow manual que promociona preview, requiere aprobación production y reutiliza exactamente el manifest aprobado en `.github/workflows/promote.yml`
-- [ ] T107 [P] [US4] Registrar topología, alternativas, costos/riesgos y exit conditions de Render/Cloudflare/R2/Grafana/Sentry en `docs/architecture/decisions/0002-runtime-platform.md`
-- [ ] T108 [P] [US4] Documentar búsqueda por correlación, códigos, dashboards/enlaces, filtros PII y outage de exporter en `docs/runbooks/observability.md`
-- [ ] T109 [US4] Documentar build, access gate, migration, smoke, lock, approval, rollback/compensación y evidencia en `docs/runbooks/release-rollback.md`
-- [ ] T110 [US4] Provisionar preview persistente, ejecutar access gate+migration+deploy+smoke y guardar manifest/resultados en `docs/runbooks/evidence/us4-preview-release.md`
-- [ ] T111 [US4] Provisionar/verificar production, promover el mismo manifest, forzar un smoke fallido controlado, medir rollback <15 min y guardar evidencia en `docs/runbooks/evidence/us4-production-rollback.md`
-- [ ] T112 [US4] Ejecutar restore remoto beside-primary de DB+objetos, validar RPO/RTO/head/counts/hashes y guardar evidencia en `docs/runbooks/evidence/us4-production-restore.md`
-- [ ] T113 [US4] Inyectar un fallo representativo, entregarlo sólo por correlation ID, medir diagnóstico <15 min y guardar superficie/ejecución/release causal en `docs/runbooks/evidence/us4-diagnostic-drill.md`
+- [X] T087 [P] [US4] Implementar normalización y closed-field filtering común sin mapas arbitrarios en `src/umbral/application/runtime/telemetry.py` y `src/umbral/infrastructure/observability/filtering.py`
+- [X] T088 [US4] Implementar JSON logging, OpenTelemetry OTLP y Sentry sin PII/replay/attachments con fallo de exporter degradable en `src/umbral/infrastructure/observability/logging.py`, `src/umbral/infrastructure/observability/otel.py` y `src/umbral/infrastructure/observability/sentry.py`
+- [X] T089 [US4] Instrumentar API, job attempts, scheduler y object operations con correlation/release/operation/state/duration únicamente en `src/umbral/api/middleware/correlation.py`, `src/umbral/workers/worker.py`, `src/umbral/application/jobs/scheduler.py` y `src/umbral/application/objects/service.py`
+- [X] T090 [P] [US4] Implementar facade web metadata-only e inicialización OTel/Sentry segura en `apps/web/src/lib/observability/telemetry.ts`, `apps/web/src/instrumentation.ts` y `apps/web/src/instrumentation-client.ts`
+- [X] T091 [US4] Componer matriz completa de probes, heartbeats stale, aggregate status y códigos sanitizados en `src/umbral/application/runtime/readiness.py`, `src/umbral/api/routers/runtime.py` y `src/umbral/api/dependencies.py`
+- [X] T092 [US4] Propagar correlación/readiness/version por el server client y routes web sin exponer host privado ni parámetros en `apps/web/src/lib/api/server.ts`, `apps/web/src/app/ready/route.ts` y `apps/web/src/app/version/route.ts`
+- [X] T093 [P] [US4] Publicar el JSON Schema aprobado y construir manifests inmutables desde git/Alembic/digests en `contracts/release-manifest.schema.json` y `src/umbral/ops/release.py`
+- [X] T094 [P] [US4] Crear imágenes multi-stage reproducibles `linux/amd64`, non-root y runtime-configurable en `Dockerfile.runtime` y `apps/web/Dockerfile`
+- [X] T095 [US4] Implementar build único, scan, push GHCR por digest, attestations y manifest checksum en `scripts/deploy/build-release.ps1`
+- [X] T096 [P] [US4] Declarar web, API privada, worker, scheduler, PostgreSQL 17 y Key Value por ambiente sin auto-build mutable en `render.yaml`
+- [X] T097 [P] [US4] Declarar policy Cloudflare por ambiente y validar JWT signature/audience/expiry con bypass exacto de `/health` en `infra/cloudflare/access-policy.json`, `apps/web/src/lib/access/cloudflare.ts` y `apps/web/src/proxy.ts`
+- [X] T098 [US4] Implementar gate read-only que compara Render/Cloudflare con el policy esperado y registra evidencia sin credenciales en `scripts/deploy/verify-access.ps1`
+- [X] T099 [US4] Implementar lock mutuo por ambiente con create-if-absent, owner/release/expiry y rechazo concurrente en `src/umbral/ops/release_lock.py`
+- [X] T100 [US4] Implementar promoción por manifest exacto con access/backup gates, migration única y orden de superficies en `scripts/deploy/promote-release.ps1`
+- [X] T101 [US4] Implementar smoke interno de cuatro superficies, extensiones, reference job, objeto sintético y release identity sin datos de producto en `src/umbral/ops/smoke.py` y `scripts/deploy/smoke.ps1`
+- [X] T102 [US4] Implementar rollback por digest/config snapshot, verificación de schema compatible y evidencia cronometrada en `scripts/deploy/rollback.ps1`
+- [X] T103 [US4] Implementar gate de recovery point <12 h y validación de retención/manifest antes de production en `src/umbral/ops/recovery_gate.py`
+- [X] T104 [P] [US4] Crear CI requerida con lockfiles frozen, arquitectura, migraciones, contratos, Python, web, Playwright y manifest schema en `.github/workflows/check.yml`
+- [X] T105 [P] [US4] Crear workflow que construye/escanea/attesta una vez y publica manifest/digests como artefacto inmutable en `.github/workflows/release.yml`
+- [X] T106 [US4] Crear workflow manual que promociona preview, requiere aprobación production y reutiliza exactamente el manifest aprobado en `.github/workflows/promote.yml`
+- [X] T107 [P] [US4] Registrar topología, alternativas, costos/riesgos y exit conditions de Render/Cloudflare/R2/Grafana/Sentry en `docs/architecture/decisions/0002-runtime-platform.md`
+- [X] T108 [P] [US4] Documentar búsqueda por correlación, códigos, dashboards/enlaces, filtros PII y outage de exporter en `docs/runbooks/observability.md`
+- [X] T109 [US4] Documentar build, access gate, migration, smoke, lock, approval, rollback/compensación y evidencia en `docs/runbooks/release-rollback.md`
+- [X] T110 [US4] Provisionar preview persistente, ejecutar access gate+migration+deploy+smoke y guardar manifest/resultados en `docs/runbooks/evidence/us4-preview-release.md`
+- [X] T111 [US4] Provisionar/verificar production, promover el mismo manifest, forzar un smoke fallido controlado, medir rollback <15 min y guardar evidencia en `docs/runbooks/evidence/us4-production-rollback.md`
+- [X] T112 [US4] Ejecutar restore remoto beside-primary de DB+objetos, validar RPO/RTO/head/counts/hashes y guardar evidencia en `docs/runbooks/evidence/us4-production-restore.md`
+- [X] T113 [US4] Inyectar un fallo representativo, entregarlo sólo por correlation ID, medir diagnóstico <15 min y guardar superficie/ejecución/release causal en `docs/runbooks/evidence/us4-diagnostic-drill.md`
 
 **Checkpoint**: las cuatro historias están integradas y el mismo release
 verificado puede observarse, promoverse, restaurarse y revertirse.
@@ -258,12 +258,12 @@ verificado puede observarse, promoverse, restaurarse y revertirse.
 **Purpose**: Cerrar documentación, trazabilidad y evidencia integral sin sumar
 features ni refactors.
 
-- [ ] T114 [P] Actualizar superficies implementadas, endpoints operativos, checks y dirección de dependencias en `docs/api/endpoints.md`, `docs/harness/overview.md` y `docs/architecture/overview.md`
-- [ ] T115 Ejecutar `specs/001-foundation-runtime/quickstart.md` desde checkout limpio, medir el límite de 15 minutos y registrar prerrequisitos/comandos/resultados en `docs/runbooks/evidence/foundation-quickstart.md`
-- [ ] T116 Recorrer FR-001–FR-031 y SC-001–SC-011 contra tests/drills reales y registrar matriz de evidencia y limitaciones en `docs/runbooks/evidence/foundation-acceptance.md`
-- [ ] T117 Eliminar todo SKIP residual de superficies ya implementadas, ejecutar `uv run pytest`, checks npm y `.\scripts\check.ps1`, y ajustar sólo wiring in-scope en `scripts/check.ps1`
-- [ ] T118 Marcar UM-H1-001–UM-H1-012 y UM-H1-016–UM-H1-020 como completados únicamente después de T116–T117 en `docs/product/backlog.md`
-- [ ] T119 [P] Documentar límites aceptados de capacidad, single-region, costos, HA y recovery regional diferido sin implementarlos en `docs/runbooks/runtime-limitations.md`
+- [X] T114 [P] Actualizar superficies implementadas, endpoints operativos, checks y dirección de dependencias en `docs/api/endpoints.md`, `docs/harness/overview.md` y `docs/architecture/overview.md`
+- [X] T115 Ejecutar `specs/001-foundation-runtime/quickstart.md` desde checkout limpio, medir el límite de 15 minutos y registrar prerrequisitos/comandos/resultados en `docs/runbooks/evidence/foundation-quickstart.md`
+- [X] T116 Recorrer FR-001–FR-031 y SC-001–SC-011 contra tests/drills reales y registrar matriz de evidencia y limitaciones en `docs/runbooks/evidence/foundation-acceptance.md`
+- [X] T117 Eliminar todo SKIP residual de superficies ya implementadas, ejecutar `uv run pytest`, checks npm y `.\scripts\check.ps1`, y ajustar sólo wiring in-scope en `scripts/check.ps1`
+- [X] T118 Marcar UM-H1-001–UM-H1-012 y UM-H1-016–UM-H1-020 como completados únicamente después de T116–T117 en `docs/product/backlog.md`
+- [X] T119 [P] Documentar límites aceptados de capacidad, single-region, costos, HA y recovery regional diferido sin implementarlos en `docs/runbooks/runtime-limitations.md`
 
 ---
 

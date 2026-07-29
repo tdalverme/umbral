@@ -22,13 +22,20 @@ check requerido. Cada resultado se marca como `PASS`, `FAIL` o `SKIP`.
 | --- | --- | --- |
 | Documentacion | Siempre | Archivos requeridos, limite de `AGENTS.md`, placeholders de la constitucion y tabla de endpoints. |
 | Arquitectura | Cuando existe `src/umbral` o `umbral` | Imports prohibidos desde dominio, aplicacion y agent. |
-| Spec Kit | Si existe `.venv/Scripts/specify.exe` | Estado de la instalacion e integraciones. |
+| Spec Kit | Si existe `.venv/Scripts/specify.exe` | Estado de la instalacion e integraciones; en este host queda como prerrequisito ausente. |
 | API | Cuando existe `umbral.api.main` | Import de la app y presencia de `/health` en OpenAPI. |
+| Migraciones | Cuando existe Alembic | Snapshot offline, downgrade empty-only y drift live si hay `DATABASE_URL`. |
+| Jobs | Cuando existe `application/jobs` | Contratos, cola JSON, idempotencia, leases, scheduler y worker. |
+| Objetos | Cuando existe `application/objects` | Conformance filesystem/S3 fake y versiones exactas. |
+| Recuperación | Cuando existe `ops/backup.py` | Manifest, checksums, restore beside-primary y RPO/RTO. |
+| Release | Cuando existe manifest schema | Manifest, access policy, lock y gates locales. |
+| Web | Cuando existe `apps/web` | Cliente OpenAPI, lint, TypeScript, Vitest y colección Playwright. |
 | Tests | Cuando hay `.py` bajo `tests/` | Suite automatizada mediante `pytest`. |
 
-Los `SKIP` actuales son esperados porque la aplicacion todavia no esta
-scaffolded. Cuando aparezca cada superficie, el mismo comando debe empezar a
-verificarla sin cambiar el workflow del equipo.
+El único `SKIP` esperado en este checkout es Spec Kit sin el ejecutable local y
+el drift live de PostgreSQL sin `DATABASE_URL`; ambos son prerrequisitos
+documentados, no superficies silenciosamente omitidas. Docker, MinIO, Render,
+Cloudflare y R2 requieren servicios/credenciales explícitos.
 
 ## Regla de crecimiento
 

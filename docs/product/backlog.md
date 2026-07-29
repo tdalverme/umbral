@@ -186,43 +186,43 @@ operativos; preview/produccion desplegables; telemetria y checks verificados.
 
 ## Epica H1.1 - Estructura y contratos
 
-- [ ] **UM-H1-001 [P0] [APP] Crear el esqueleto del monolito modular** — Separa
+- [x] **UM-H1-001 [P0] [APP] Crear el esqueleto del monolito modular** — Separa
   dominio, aplicacion, agent, infraestructura, API y workers bajo `src/umbral`;
   los checks de arquitectura rechazan imports prohibidos.
-- [ ] **UM-H1-002 [P0] [WEB] Crear la aplicacion Next.js App Router** — Usa
+- [x] **UM-H1-002 [P0] [WEB] Crear la aplicacion Next.js App Router** — Usa
   TypeScript, linting, testing, alias de imports y estructura por slices de
   producto sin duplicar reglas del backend.
-- [ ] **UM-H1-003 [P0] [WEB] Inicializar shadcn/ui y tokens semanticos** —
+- [x] **UM-H1-003 [P0] [WEB] Inicializar shadcn/ui y tokens semanticos** —
   Registra `components.json`, base/preset elegido, tipografia, tema,
   accesibilidad y primitives minimas sin construir pantallas especulativas.
   Depende de UM-H1-002.
-- [ ] **UM-H1-004 [P0] [APP] Establecer versionado de contratos HTTP** — Publica
+- [x] **UM-H1-004 [P0] [APP] Establecer versionado de contratos HTTP** — Publica
   OpenAPI estable, errores tipados, request/correlation id y estrategia de
   compatibilidad.
-- [ ] **UM-H1-005 [P0] [WEB] Generar cliente tipado desde OpenAPI** — La web no
+- [x] **UM-H1-005 [P0] [WEB] Generar cliente tipado desde OpenAPI** — La web no
   mantiene DTOs manuales divergentes y el check detecta contratos
   desactualizados. Depende de UM-H1-004.
-- [ ] **UM-H1-006 [P0] [PLAT] Implementar configuracion y secretos por ambiente**
+- [x] **UM-H1-006 [P0] [PLAT] Implementar configuracion y secretos por ambiente**
   — Valida settings al iniciar, separa local/preview/produccion y evita defaults
   inseguros o secretos en logs.
 
 ## Epica H1.2 - Persistencia y ejecucion asincronica
 
-- [ ] **UM-H1-007 [P0] [PLAT] Provisionar Postgres, PostGIS y pgvector** —
+- [x] **UM-H1-007 [P0] [PLAT] Provisionar Postgres, PostGIS y pgvector** —
   Verifica extensiones y conectividad en local y ambientes remotos.
-- [ ] **UM-H1-008 [P0] [APP] Configurar SQLAlchemy 2 y Alembic** — Incluye
+- [x] **UM-H1-008 [P0] [APP] Configurar SQLAlchemy 2 y Alembic** — Incluye
   convencion de metadata, transacciones, migracion inicial y check de drift.
   Depende de UM-H1-007.
-- [ ] **UM-H1-009 [P0] [APP] Definir primitives persistentes de identidad y
+- [x] **UM-H1-009 [P0] [APP] Definir primitives persistentes de identidad y
   auditoria** — Incluye ids, timestamps, version optimista, actor, source y
   metadata de correlacion reutilizables sin acoplar dominio a SQLAlchemy.
   Depende de UM-H1-008.
-- [ ] **UM-H1-010 [P0] [PLAT] Provisionar Redis y runtime de workers** — Ejecuta
+- [x] **UM-H1-010 [P0] [PLAT] Provisionar Redis y runtime de workers** — Ejecuta
   un job idempotente, registra estado/reintentos y soporta scheduler simple.
-- [ ] **UM-H1-011 [P0] [PLAT] Implementar adapter de object storage** — Ofrece
+- [x] **UM-H1-011 [P0] [PLAT] Implementar adapter de object storage** — Ofrece
   put/get versionado, hash, content type y adapter local de prueba; no expone
   credenciales a dominio.
-- [ ] **UM-H1-012 [P1] [OPS] Definir politica de backup y restauracion** —
+- [x] **UM-H1-012 [P1] [OPS] Definir politica de backup y restauracion** —
   Especifica RPO/RTO de beta, alcance de Postgres/storage y procedimiento
   verificable. Depende de UM-H1-007 y UM-H1-011.
 
@@ -241,18 +241,18 @@ operativos; preview/produccion desplegables; telemetria y checks verificados.
 - [ ] **UM-H1-015 [P0] [TRUST] Implementar roles minimos** — Distingue usuario,
   operador y administrador, con deny-by-default y pruebas de acceso cruzado.
   Depende de UM-H1-014.
-- [ ] **UM-H1-016 [P0] [PLAT] Añadir logs estructurados y correlacion** — Une
+- [x] **UM-H1-016 [P0] [PLAT] Añadir logs estructurados y correlacion** — Une
   request, job, import, recommendation run, graph run y notification sin
   registrar contenido sensible por defecto.
-- [ ] **UM-H1-017 [P0] [PLAT] Instrumentar OpenTelemetry y Sentry** — Captura
+- [x] **UM-H1-017 [P0] [PLAT] Instrumentar OpenTelemetry y Sentry** — Captura
   latencia, errores y trazas entre web, API y workers con filtros de PII.
   Depende de UM-H1-016.
-- [ ] **UM-H1-018 [P0] [APP] Publicar health, readiness y version** — Readiness
+- [x] **UM-H1-018 [P0] [APP] Publicar health, readiness y version** — Readiness
   comprueba dependencias criticas sin ejecutar efectos ni revelar secretos.
-- [ ] **UM-H1-019 [P0] [PLAT] Automatizar el harness en CI** — Ejecuta docs,
+- [x] **UM-H1-019 [P0] [PLAT] Automatizar el harness en CI** — Ejecuta docs,
   arquitectura, migraciones, contratos, frontend build y tests disponibles;
   bloquea merge ante fallos.
-- [ ] **UM-H1-020 [P0] [PLAT] Crear despliegues preview y produccion** —
+- [x] **UM-H1-020 [P0] [PLAT] Crear despliegues preview y produccion** —
   Versiona artefactos, ejecuta migraciones de forma controlada y ofrece smoke
   test y rollback documentado. Depende de UM-H1-006 a UM-H1-019.
 - [ ] **UM-H1-021 [P1] [OPS] Crear dashboard tecnico inicial** — Muestra salud,
