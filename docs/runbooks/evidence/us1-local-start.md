@@ -1,31 +1,63 @@
-# Evidencia US1 — inicio local
+# Evidencia US1 — arranque local de foundation-runtime
 
-Fecha de ejecución: 2026-07-29 (America/Argentina/Buenos_Aires)
+**Fecha:** 2026-07-29 (America/Argentina/Buenos_Aires)  
+**Superficie:** API FastAPI + web Next.js 16.2.12  
+**Release observado:** `foundation-local` (manifiesto sentinel local); fixture
+de contrato `foundation-20260101` validada por separado.  
+**Resultado:** PASS para los gates ejecutados; sin efectos persistentes.
 
-## Release y configuración
+## Registro cronometrado
 
-- Manifiesto: `tests/fixtures/release-manifests/valid.json`.
-- `release_id`: `foundation-20260101`.
-- `git_sha`: `0123456789abcdef0123456789abcdef01234567`.
-- `artifact_digest`: `sha256:1111111111111111111111111111111111111111111111111111111111111111`.
-- `contract_major`: `1`.
-- El recorrido API/web usa el mismo manifiesto; los defaults `foundation-local`
-  sólo se usan para que el proceso pueda iniciar sin configuración explícita.
+| Paso | Comando | Resultado observado | Tiempo aproximado |
+| --- | --- | --- | ---: |
+| Toolchain | `node --version`, `npm.cmd --version`, `python --version` | Node `v24.15.0`, npm `12.0.1`, Python `3.13.14` | <1 s |
+| API probes | `PYTHONPATH=src python -c ... TestClient ...` | `/health=200`, `/ready=200`, `/version=200`; `no-store`; `foundation-local` | 2.2 s |
+| OpenAPI export | `scripts/export-openapi.ps1` | JSON 3.1 ordenado generado | 1.6 s |
+| Compatibilidad | `scripts/check-contracts.ps1` | PASS, cambios breaking rechazables | 0.9 s |
+| Cliente | `npm.cmd run api:check --workspace @umbral/web` | Hey API `0.99.0`, cinco archivos, diff limpio | 2.8 s |
+| Python | `scripts/check-python.ps1` con `NPM_EXECUTABLE` npm 12 | Ruff/mypy PASS, `85 passed` | 15.1 s |
+| Web gates | `scripts/check-web.ps1` | ESLint/TS/Vitest PASS (`12`), Playwright lista (`6`) | 19.3 s |
+| Build | `npm.cmd run build --workspace @umbral/web` | Next build PASS; warning NFT dinámico documentado | 94 s |
 
-## Checks ejecutados
+## Comandos reproducibles
 
-| Check | Resultado |
-| --- | --- |
-| `scripts/check.ps1` con Node 24.15.0/npm 12.0.1 | PASS |
-| Ruff, mypy estricto y pytest | PASS — 85 tests |
-| Contratos OpenAPI 3.1, compatibilidad y client drift | PASS |
-| Alembic head/metadata y SQL offline | PASS; drift live omitido sin `DATABASE_URL` |
-| ESLint, TypeScript y Vitest | PASS — 12 tests |
-| Colección Playwright | PASS — 6 tests enumerados |
-| `/health`, `/ready`, `/version` API | PASS; no-store y sin efectos observables |
-| Rutas web `/health`, `/ready`, `/version` | PASS; manifiesto local y sin llamadas externas |
+```powershell
+$env:PATH = (Join-Path (Get-Location) '._tmp_npm12') + ';' + $env:PATH
+$env:NPM_EXECUTABLE = (Join-Path (Get-Location) '._tmp_npm12\npm.cmd')
 
-El recorrido completo terminó sin fallos bloqueantes. No se ejecutó un browser
-real ni se iniciaron contenedores en este entorno; por eso las pruebas de
-Playwright se dejaron recolectadas y la comprobación PostgreSQL/PostGIS/pgvector
-se mantiene como gate del entorno con servicios.
+$env:PYTHONPATH = 'src'
+.\.venv\Scripts\python.exe -m pytest `
+  tests\contract\test_runtime_api_contract.py `
+  tests\contract\test_http_correlation_and_errors.py `
+  tests\contract\test_openapi_versioning.py `
+  tests\contract\test_generated_client.py `
+  tests\unit\config\test_settings.py `
+  tests\unit\runtime\test_version.py `
+  tests\unit\runtime\test_readiness.py -q
+
+.\scripts\export-openapi.ps1 -OutputPath contracts\openapi\v1\openapi.json
+.\scripts\check-contracts.ps1
+npm.cmd run api:check --workspace @umbral/web
+.\scripts\check-python.ps1
+.\scripts\check-web.ps1
+npm.cmd run build --workspace @umbral/web
+```
+
+La suite focal Python terminó `49 passed` y la suite completa usada por
+`check-python.ps1` terminó `85 passed` cuando el ejecutable npm se fijó a npm
+12. La web expuso la ruta estática `/` y las rutas dinámicas `/health`,
+`/ready` y `/version` en el build.
+
+## Brechas explícitas
+
+1. La colección Playwright se enumeró (`6 tests`) pero no se ejecutó: falta un
+   servidor web iniciado con un manifiesto montado y un navegador en esta
+   sesión.
+2. No se usó Docker porque el binario no está instalado; por eso no hay
+   evidencia de PostgreSQL/Redis/object storage reales en este arranque.
+3. El entorno Windows requiere seleccionar Node 24/npm 12 antes de ejecutar el
+   harness. El `npm.cmd` global de Node 22 produce un error `EPERM` al resolver
+   `C:\Users\Usuario`; con el wrapper npm 12 todos los gates anteriores pasan.
+4. El warning de Turbopack sobre NFT amplio proviene de la ruta configurable del
+   manifiesto y no cambia el resultado de build; debe revisarse al empaquetar
+   una imagen de release.

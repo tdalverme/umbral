@@ -1,45 +1,102 @@
 # Recorrido local del runtime
 
-Este recorrido valida el slice `foundation-runtime` desde un checkout local.
-Requiere Python 3.13, Node 24.15.0/npm 12.0.1 y las dependencias instaladas
-con los lockfiles. No levanta PostgreSQL, Redis ni MinIO para las pruebas de
-contrato; las probes de infraestructura fallan cerrado si esos servicios no
-están disponibles.
+Este recorrido verifica el arranque independiente de la API y la web para
+`foundation-runtime`. No crea búsquedas, listings, trabajos ni objetos; las
+pruebas de API usan el `TestClient` y las pruebas web se limitan a contratos y
+colección Playwright.
 
-## Comandos
+## Precondiciones
 
-Desde la raíz del repositorio:
+Ejecutar desde la raíz del repositorio con Python 3.13, Node.js 24.15.0 y npm
+12.0.1. En el equipo usado para esta evidencia, los wrappers temporales de
+Node/npm viven en `._tmp_npm12`; en una máquina con Node 24/npm 12 instalados
+directamente no hace falta el prefijo de PATH.
 
 ```powershell
-.venv\Scripts\Activate.ps1
-.\scripts\check.ps1
+$env:PATH = (Join-Path (Get-Location) '._tmp_npm12') + ';' + $env:PATH
+$env:NPM_EXECUTABLE = (Join-Path (Get-Location) '._tmp_npm12\npm.cmd')
+node --version       # v24.15.0
+npm.cmd --version    # 12.0.1
+.\.venv\Scripts\python.exe --version  # Python 3.13.14
+```
+
+El recorrido local de la API usa el manifiesto sentinel `<local>` de la
+composición (`release_id=foundation-local`, `database_revision=local` y
+`manifest_sha256` de ceros). La validación de archivo y el cliente generado se
+ejercitan además contra
+`tests/fixtures/release-manifests/valid.json` (`foundation-20260101`,
+SHA-256 `290498d58755176719c79661511e4430263c7d41dbfb24f14bfb92347c1e44fe`).
+
+## Secuencia verificada
+
+El recorrido cronometrado del 29 de julio de 2026 duró aproximadamente 2 min
+20 s, incluyendo el build de producción. Los comandos fueron ejecutados en el
+orden siguiente.
+
+### 1. Probes de API
+
+```powershell
+$env:PYTHONPATH = 'src'
+@'
+from fastapi.testclient import TestClient
+from umbral.api.main import app
+
+client = TestClient(app)
+for path in ('/health', '/ready', '/version'):
+    response = client.get(path)
+    print(path, response.status_code, response.json())
+'@ | .\.venv\Scripts\python.exe -
+```
+
+Resultado observado: `/health` y `/ready` devolvieron `200`, `/version`
+devolvió `200`, todos con `Cache-Control: no-store`; el release observado fue
+`foundation-local` y el cuerpo de health fue exactamente
+`{"status":"alive"}`.
+
+### 2. Contrato OpenAPI y cliente generado
+
+```powershell
+.\scripts\export-openapi.ps1 -OutputPath contracts\openapi\v1\openapi.json
 .\scripts\check-contracts.ps1
-.\scripts\check-migrations.ps1
-.\scripts\check-api.ps1
 npm.cmd run api:check --workspace @umbral/web
 ```
 
-El harness ejecuta Ruff, mypy, pytest, arquitectura, migraciones, drift de
-OpenAPI/client, ESLint, TypeScript, Vitest y la colección Playwright. Para
-probar el cliente en un host con varios Node instalados, `NPM_EXECUTABLE` puede
-apuntar al `npm.cmd` de npm 12; en un checkout normal basta con tener Node 24 y
-npm 12 en `PATH`.
+Los tres comandos terminaron con código `0`. La exportación y regeneración
+fueron deterministas: Hey API `0.99.0` escribió cinco archivos y no quedó diff
+en `apps/web/src/lib/api/generated`.
 
-## Identidad observada
+### 3. Gates Python
 
-Para una ejecución reproducible, configurar `UMBRAL_RELEASE_MANIFEST` y las
-variables de entorno del ejemplo con el mismo manifiesto validado. El API y
-las rutas web deben devolver el mismo `release_id`, `git_sha`, `artifact_digest`
-y `contract_major`; el manifiesto local de referencia es
-`tests/fixtures/release-manifests/valid.json`.
+```powershell
+.\scripts\check-python.ps1
+```
 
-La liveness `/health` no consulta dependencias ni escribe estado. `/ready` y
-`/version` sólo leen configuración/manifiesto, responden `Cache-Control:
-no-store` y devuelven request/correlation IDs en el API.
+Con `NPM_EXECUTABLE` apuntando al npm 12 del preámbulo, Ruff y mypy pasaron y
+pytest terminó `85 passed` en `10.72s` (tres warnings de dependencias, sin
+fallos). Sin el override, este host resuelve el `npm.cmd` global de Node 22 y
+el caso del cliente generado falla antes de ejecutar; no es una falla del
+contrato y debe corregirse usando Node 24/npm 12.
 
-## Resultado y límites
+### 4. Gates web
 
-Guardar el resultado cronometrado y el release observado en
-`docs/runbooks/evidence/us1-local-start.md`. Si no hay Docker, registrar la
-omisión en vez de crear servicios simulados: la verificación de esquema
-PostgreSQL/PostGIS/pgvector queda pendiente para el entorno con `DATABASE_URL`.
+```powershell
+.\scripts\check-web.ps1
+npm.cmd run build --workspace @umbral/web
+```
+
+`check-web.ps1` pasó dependencias, cliente OpenAPI, ESLint, TypeScript, Vitest
+(`12 passed`) y la colección Playwright (`6 tests` listados). El build Next
+16.2.12 también terminó correctamente; Turbopack informó únicamente el warning
+esperable de trazado amplio por la lectura dinámica del manifiesto local.
+
+## Brechas y límites del recorrido
+
+- Playwright se verificó con `--list`; no se ejecutaron navegadores ni smoke
+  E2E porque no se levantó un servidor web con un manifiesto de release montado.
+  La evidencia E2E completa queda para el recorrido de despliegue.
+- `docker` no está instalado en este host (`docker --version` no se reconoce),
+  por lo que no se iniciaron PostgreSQL, Redis ni object storage. Las probes de
+  este recorrido son locales y no sustituyen los checks de infraestructura.
+- La lectura del manifiesto web es de sólo lectura y no realiza fetch, conexión
+  durable ni escritura. Un manifiesto ausente hace que `/ready` devuelva
+  `503/not_ready` y `/version` un problema sanitizado `503`.
