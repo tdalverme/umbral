@@ -13,4 +13,5 @@ class JsonTelemetryLogger:
         self._stream = stream
 
     def emit(self, signal: TelemetrySignal) -> None:
-        self._stream.write(json.dumps(signal.attributes(), separators=(",", ":")) + "\n")
+        encoded = json.dumps(signal.attributes(), separators=(",", ":"))
+        self._stream.write(encoded + "\n")

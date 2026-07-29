@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
-
 import sentry_sdk
 
 from umbral.infrastructure.observability.filtering import filter_sentry_event
@@ -13,4 +10,10 @@ from umbral.infrastructure.observability.filtering import filter_sentry_event
 def initialize_sentry(dsn: str | None, release: str) -> None:
     if not dsn:
         return
-    sentry_sdk.init(dsn=dsn, release=release, send_default_pii=False, attach_stacktrace=False, before_send=filter_sentry_event)
+    sentry_sdk.init(
+        dsn=dsn,
+        release=release,
+        send_default_pii=False,
+        attach_stacktrace=False,
+        before_send=filter_sentry_event,
+    )

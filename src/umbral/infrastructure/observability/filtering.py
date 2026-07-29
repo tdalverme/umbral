@@ -17,11 +17,15 @@ def filter_attributes(attributes: Mapping[str, object]) -> dict[str, str | int]:
     return {
         key: value
         for key, value in attributes.items()
-        if key in _ALLOWED and isinstance(value, (str, int)) and not isinstance(value, bool)
+        if key in _ALLOWED
+        and isinstance(value, (str, int))
+        and not isinstance(value, bool)
     }
 
 
-def filter_sentry_event(event: Mapping[str, Any], hint: object | None = None) -> dict[str, object] | None:
+def filter_sentry_event(
+    event: Mapping[str, Any], hint: object | None = None
+) -> dict[str, object] | None:
     """Keep provider events metadata-only; never preserve exception/request data."""
     tags = event.get("tags")
     safe_tags = filter_attributes(tags) if isinstance(tags, Mapping) else {}
