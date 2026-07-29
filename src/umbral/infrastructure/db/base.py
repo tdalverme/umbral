@@ -6,18 +6,29 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, Integer, MetaData, String
+from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
-    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    # Constraint names are explicitly declared in each mapping and already
+    # carry the table prefix; preserving them avoids duplicate prefixes.
+    "ck": "%(constraint_name)s",
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
 
 metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+ACTOR_KIND = ENUM(
+    "system",
+    "service",
+    "operator",
+    name="actor_kind",
+    create_type=True,
+)
 
 
 class Base(DeclarativeBase):
@@ -38,7 +49,7 @@ class IdentityAuditMixin:
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     actor_kind: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="system"
+        ACTOR_KIND, nullable=False, default="system"
     )
     actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source: Mapped[str] = mapped_column(String(128), nullable=False)

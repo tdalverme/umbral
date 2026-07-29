@@ -14,10 +14,19 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from umbral.infrastructure.db.base import Base, IdentityAuditMixin
+from umbral.infrastructure.db.base import ACTOR_KIND, Base, IdentityAuditMixin
+
+OBJECT_VERSION_STATE = ENUM(
+    "pending",
+    "available",
+    "failed",
+    name="object_version_state",
+    create_type=True,
+)
 
 
 class StoredObject(IdentityAuditMixin, Base):
@@ -58,7 +67,9 @@ class StoredObjectVersion(Base):
         ForeignKey("stored_objects.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    state: Mapped[str] = mapped_column(
+        OBJECT_VERSION_STATE, nullable=False, default="pending"
+    )
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -71,7 +82,7 @@ class StoredObjectVersion(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    actor_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_kind: Mapped[str] = mapped_column(ACTOR_KIND, nullable=False)
     actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source: Mapped[str] = mapped_column(String(128), nullable=False)
     correlation_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)

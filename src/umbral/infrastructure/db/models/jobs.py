@@ -16,11 +16,45 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
 from umbral.infrastructure.db.base import Base, IdentityAuditMixin
+
+JOB_EXECUTION_STATE = ENUM(
+    "pending",
+    "queued",
+    "running",
+    "succeeded",
+    "retry_wait",
+    "failed",
+    name="job_execution_state",
+    create_type=True,
+)
+JOB_ATTEMPT_STATE = ENUM(
+    "running",
+    "succeeded",
+    "transient_failure",
+    "permanent_failure",
+    "abandoned",
+    name="job_attempt_state",
+    create_type=True,
+)
+JOB_OUTBOX_STATE = ENUM(
+    "pending",
+    "publishing",
+    "published",
+    "failed",
+    name="job_outbox_state",
+    create_type=True,
+)
+SCHEDULE_KIND = ENUM(
+    "one_shot",
+    "fixed_interval",
+    name="schedule_kind",
+    create_type=True,
+)
 
 
 class JobExecution(IdentityAuditMixin, Base):
@@ -60,7 +94,9 @@ class JobExecution(IdentityAuditMixin, Base):
     job_type: Mapped[str] = mapped_column(String(100), nullable=False)
     logical_target: Mapped[str] = mapped_column(String(300), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
-    state: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    state: Mapped[str] = mapped_column(
+        JOB_EXECUTION_STATE, nullable=False, default="pending"
+    )
     attempt_count: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     max_attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=5)
     available_at: Mapped[datetime] = mapped_column(
@@ -106,7 +142,9 @@ class JobAttempt(Base):
     ordinal: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     transport_message_id: Mapped[str] = mapped_column(String(200), nullable=False)
     worker_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    state: Mapped[str] = mapped_column(String(24), nullable=False, default="running")
+    state: Mapped[str] = mapped_column(
+        JOB_ATTEMPT_STATE, nullable=False, default="running"
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -142,7 +180,9 @@ class JobOutboxMessage(Base):
         nullable=False,
     )
     attempt_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    state: Mapped[str] = mapped_column(
+        JOB_OUTBOX_STATE, nullable=False, default="pending"
+    )
     available_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -188,7 +228,7 @@ class JobSchedule(IdentityAuditMixin, Base):
 
     job_type: Mapped[str] = mapped_column(String(100), nullable=False)
     logical_target: Mapped[str] = mapped_column(String(300), nullable=False)
-    schedule_kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    schedule_kind: Mapped[str] = mapped_column(SCHEDULE_KIND, nullable=False)
     interval_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     next_run_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

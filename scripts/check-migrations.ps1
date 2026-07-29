@@ -31,6 +31,36 @@ try {
         throw "Alembic heads failed with exit code $LASTEXITCODE."
     }
 
+    $ErrorActionPreference = "Continue"
+    $upgradeSql = @(& $pythonPath -m alembic upgrade head --sql 2>&1)
+    $upgradeExitCode = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+    if ($upgradeExitCode -ne 0) {
+        throw "Alembic offline upgrade failed with exit code $upgradeExitCode."
+    }
+    $upgradeSqlText = $upgradeSql -join "`n"
+    foreach ($requiredSql in @("CREATE TYPE actor_kind", "CREATE TABLE job_executions", "CREATE TABLE runtime_surface_status")) {
+        if ($upgradeSqlText -notmatch [regex]::Escape($requiredSql)) {
+            throw "Offline upgrade SQL is missing required operation: $requiredSql"
+        }
+    }
+    Write-Host "[PASS] Alembic offline upgrade snapshot"
+
+    $ErrorActionPreference = "Continue"
+    $downgradeSql = @(& $pythonPath -m alembic downgrade 0001_foundation_runtime:base --sql 2>&1)
+    $downgradeExitCode = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+    if ($downgradeExitCode -ne 0) {
+        throw "Alembic offline downgrade failed with exit code $downgradeExitCode."
+    }
+    $downgradeSqlText = $downgradeSql -join "`n"
+    foreach ($requiredSql in @("DROP TABLE runtime_surface_status", "DROP TYPE IF EXISTS actor_kind")) {
+        if ($downgradeSqlText -notmatch [regex]::Escape($requiredSql)) {
+            throw "Offline downgrade SQL is missing required operation: $requiredSql"
+        }
+    }
+    Write-Host "[PASS] Alembic offline downgrade snapshot"
+
     & $pythonPath -c "from umbral.infrastructure.db.migrations import expected_schema; expected={'job_executions','job_attempts','job_outbox_messages','job_schedules','stored_objects','stored_object_versions','runtime_surface_status'}; actual=set(expected_schema().tables); assert actual == expected, (actual ^ expected)"
     if ($LASTEXITCODE -ne 0) {
         throw "Foundation metadata inventory does not match the bootstrap contract."
