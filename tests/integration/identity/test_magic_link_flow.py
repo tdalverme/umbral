@@ -10,6 +10,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, func, select
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from tests.support.containers import ServiceConnection
@@ -19,6 +20,7 @@ from umbral.application.identity.contracts import IdentityError
 from umbral.domain.identity.models import (
     AccessAuditEvent,
     ExternalIdentityLink,
+    MagicLinkAttempt,
     ProductUser,
 )
 from umbral.infrastructure.db.models.identity import (
@@ -51,7 +53,7 @@ def _issue(
     access: IdentityAccess,
     store: InMemoryIdentityStore,
     mail: RecordingEmailAdapter,
-) -> tuple[object, str]:
+) -> tuple[MagicLinkAttempt, str]:
     attempt_id = next(reversed(store.attempts))
     attempt = store.attempts[attempt_id]
     access.issue_attempt(attempt.id, now=NOW)
@@ -206,18 +208,18 @@ def test_application_transaction_rolls_back_request_and_audit() -> None:
     assert store.audits == []
 
 
-def _migrated_session(connection: ServiceConnection) -> Session:
+def _migrated_session(connection: ServiceConnection) -> tuple[Session, Engine]:
     config = Config("alembic.ini")
     config.set_main_option("sqlalchemy.url", connection.url)
     command.upgrade(config, "head")
     engine = create_engine(connection.url)
-    return Session(engine)
+    return Session(engine), engine
 
 
 def test_postgres_invitation_preload_and_rate_limit(
     postgres_container: ServiceConnection,
 ) -> None:
-    session = _migrated_session(postgres_container)
+    session, engine = _migrated_session(postgres_container)
     try:
         invitation = IdentityInvitation(
             normalized_email="person@example.com",
@@ -258,7 +260,6 @@ def test_postgres_invitation_preload_and_rate_limit(
             session.scalar(select(func.count()).select_from(MagicLinkRequestRow)) == 4
         )
     finally:
-        engine = session.get_bind()
         session.close()
         engine.dispose()
 
@@ -266,7 +267,7 @@ def test_postgres_invitation_preload_and_rate_limit(
 def test_postgres_transaction_rolls_back_request_and_audit(
     postgres_container: ServiceConnection,
 ) -> None:
-    session = _migrated_session(postgres_container)
+    session, engine = _migrated_session(postgres_container)
     request_id = uuid4()
     event_id = uuid4()
     try:
@@ -307,6 +308,5 @@ def test_postgres_transaction_rolls_back_request_and_audit(
             .where(AccessAuditEventRow.id == event_id)
         ) == 0
     finally:
-        engine = session.get_bind()
         session.close()
         engine.dispose()
