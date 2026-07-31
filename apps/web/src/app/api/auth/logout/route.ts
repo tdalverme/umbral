@@ -7,11 +7,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     method: "POST",
     headers: { Cookie: request.headers.get("cookie") || "" },
   });
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: {
-      "Cache-Control": "private, no-store",
-      ...(response.headers.get("set-cookie") ? { "Set-Cookie": response.headers.get("set-cookie")! } : {}),
-    },
-  });
+  const headers = new Headers({ "Cache-Control": "private, no-store" });
+  const setCookie = response.headers.get("set-cookie");
+  if (setCookie) headers.set("Set-Cookie", setCookie);
+  if (response.status === 204) return new NextResponse(null, { status: 204, headers });
+  return new NextResponse(await response.text(), { status: response.status, headers });
 }

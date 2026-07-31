@@ -6,6 +6,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   if (isPublicHealthPath(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.UMBRAL_E2E_BYPASS_ACCESS === "1"
+  ) {
+    return NextResponse.next();
+  }
   const token = request.headers.get("cf-access-jwt-assertion");
   const publicKey = process.env.CF_ACCESS_PUBLIC_KEY;
   const valid =

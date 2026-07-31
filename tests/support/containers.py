@@ -25,7 +25,8 @@ MINIO_PORT = 9000
 MINIO_CONSOLE_PORT = 9001
 
 POSTGRES_USER = "umbral"
-POSTGRES_PASSWORD = "umbral_local_only"
+# pglayers rejects passwords that contain the database username.
+POSTGRES_PASSWORD = "local_pg_password_2026"
 POSTGRES_DATABASE = "umbral"
 MINIO_ROOT_USER = "minio_local"
 MINIO_ROOT_PASSWORD = "minio_local_password"
