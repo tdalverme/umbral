@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
-from typing import Protocol, TypeVar
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, contextmanager
+from typing import Any, Protocol, TypeVar
 
 SessionT = TypeVar("SessionT")
 
@@ -28,6 +29,25 @@ class TransactionManager(Protocol[SessionT]):
     """Port used by application services to open transaction scopes."""
 
     def transaction(self) -> AbstractContextManager[UnitOfWork[SessionT]]: ...
+
+
+@contextmanager
+def transaction_scope(
+    manager: TransactionManager[Any] | None,
+) -> Iterator[UnitOfWork[Any] | None]:
+    """Open the supplied transaction manager or a no-op local scope.
+
+    Application services can use this helper without knowing whether the
+    composition root supplied the SQLAlchemy transaction adapter or a local
+    in-memory runtime.  The manager, when present, remains the sole owner of
+    commit and rollback.
+    """
+
+    if manager is None:
+        yield None
+        return
+    with manager.transaction() as transaction:
+        yield transaction
 
 
 class _TransactionAdapter(Protocol):

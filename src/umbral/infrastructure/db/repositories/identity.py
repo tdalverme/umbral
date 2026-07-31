@@ -10,6 +10,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -82,6 +85,32 @@ class InMemoryIdentityStore:
     def recent_requests(self, fingerprint: bytes, *, now: datetime, field: str) -> int:
         threshold = now.astimezone(timezone.utc) - timedelta(minutes=15)
         return sum(1 for item in self.requests.values() if getattr(item, field) == fingerprint and item.requested_at > threshold)
+
+    @contextmanager
+    def transaction(self) -> Iterator[InMemoryIdentityStore]:
+        """Provide rollback semantics for local identity composition tests."""
+
+        with self.lock:
+            invitations = deepcopy(self.invitations)
+            users = deepcopy(self.users)
+            links = deepcopy(self.links)
+            roles = deepcopy(self.roles)
+            requests = deepcopy(self.requests)
+            attempts = deepcopy(self.attempts)
+            sessions = deepcopy(self.sessions)
+            audits = deepcopy(self.audits)
+            try:
+                yield self
+            except Exception:
+                self.invitations = invitations
+                self.users = users
+                self.links = links
+                self.roles = roles
+                self.requests = requests
+                self.attempts = attempts
+                self.sessions = sessions
+                self.audits = audits
+                raise
 
 
 class PostgresIdentityRepository:

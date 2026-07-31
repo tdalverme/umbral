@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from datetime import datetime, timezone
 
 import pytest
+import pytest_asyncio
+
 from tests.support import containers
 
 
@@ -30,3 +33,19 @@ def minio_container() -> Iterator[containers.ServiceConnection]:
 
     with containers.minio_container() as connection:
         yield connection
+
+
+@pytest_asyncio.fixture
+async def identity_now() -> AsyncIterator[datetime]:
+    """Stable async clock fixture for identity API/browser-boundary tests."""
+
+    yield datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Mark identity paths so CI can run the focused slice deterministically."""
+
+    marker = pytest.mark.identity
+    for item in items:
+        if "identity" in item.nodeid:
+            item.add_marker(marker)

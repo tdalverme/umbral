@@ -18,7 +18,15 @@ class AccessControl:
     def __init__(self, store: IdentityStore) -> None:
         self.store = store
 
-    def authorize(self, token: str, *, action: str, resource_owner_id: UUID | None, now: datetime) -> CurrentPrincipal:
+    def authorize(
+        self,
+        token: str,
+        *,
+        action: str,
+        resource_owner_id: UUID | None,
+        now: datetime,
+        correlation_id: UUID | None = None,
+    ) -> CurrentPrincipal:
         now = now.astimezone(timezone.utc)
         digest = hashlib.sha256(token.encode()).digest()
         with self.store.lock:
@@ -27,24 +35,50 @@ class AccessControl:
                 raise IdentityError("auth.session_required", status=401, recovery="sign_in")
             user = self.store.users.get(session.product_user_id)
             if session.revoked_at is not None:
-                self._audit(False, "session_revoked", action, user.id if user else None, session.id)
+                self._audit(False, "session_revoked", action, user.id if user else None, session.id, correlation_id=correlation_id)
                 raise IdentityError("auth.session_required", status=401, recovery="sign_in")
             if session.is_idle_expired(now):
                 session.revoked_at = now
                 session.revocation_reason = "idle_timeout"
-                self._audit(False, "session_idle_expired", action, user.id if user else None, session.id)
+                self._audit(False, "session_idle_expired", action, user.id if user else None, session.id, correlation_id=correlation_id)
                 raise IdentityError("auth.session_required", status=401, recovery="sign_in")
             if user is None or user.status != "active":
-                self._audit(False, "user_inactive", action, user.id if user else None, session.id)
+                self._audit(False, "user_inactive", action, user.id if user else None, session.id, correlation_id=correlation_id)
                 raise IdentityError("auth.access_denied", status=403, recovery="contact_support")
             roles = self.store.active_roles(user.id)
             decision = authorize_roles(roles=roles, action=action, actor_id=user.id, owner_id=resource_owner_id)
             if not decision.allowed:
-                self._audit(False, decision.reason, action, user.id, session.id)
+                self._audit(False, decision.reason, action, user.id, session.id, correlation_id=correlation_id)
                 raise IdentityError("auth.access_denied", status=403, recovery="contact_support")
             session.last_activity_at = now
-            self._audit(True, "eligible", action, user.id, session.id)
+            self._audit(True, "eligible", action, user.id, session.id, correlation_id=correlation_id)
             return CurrentPrincipal(user.id, tuple(sorted(roles)), session.last_activity_at)
 
-    def _audit(self, allowed: bool, reason: str, action: str, user_id: UUID | None, session_id: UUID) -> None:
-        self.store.audits.append(AccessAuditEvent(uuid4(), "authorization.allowed.v1" if allowed else "authorization.denied.v1", "allowed" if allowed else "denied", reason, uuid4(), datetime.now(timezone.utc), actor_user_id=user_id, subject_user_id=user_id, session_id=session_id, action=action, policy_version="identity-policy.v1"))
+    def _audit(
+        self,
+        allowed: bool,
+        reason: str,
+        action: str,
+        user_id: UUID | None,
+        session_id: UUID,
+        *,
+        correlation_id: UUID | None,
+    ) -> None:
+        event = AccessAuditEvent(
+            uuid4(),
+            "authorization.allowed.v1" if allowed else "authorization.denied.v1",
+            "allowed" if allowed else "denied",
+            reason,
+            correlation_id or uuid4(),
+            datetime.now(timezone.utc),
+            actor_user_id=user_id,
+            subject_user_id=user_id,
+            session_id=session_id,
+            action=action,
+            policy_version="identity-policy.v1",
+        )
+        append_audit = getattr(self.store, "append_audit", None)
+        if callable(append_audit):
+            append_audit(event)
+        else:
+            self.store.audits.append(event)

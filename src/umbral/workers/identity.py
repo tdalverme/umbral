@@ -26,7 +26,11 @@ class IdentityMagicLinkIssueHandler:
 
     def run(self, context: JobContext) -> Mapping[str, JsonScalar]:
         attempt_id = UUID(context.logical_target)
-        self.access.issue_attempt(attempt_id, now=datetime.now(timezone.utc))
+        self.access.issue_attempt(
+            attempt_id,
+            now=datetime.now(timezone.utc),
+            correlation_id=context.correlation_id,
+        )
         return {"attempt_id": str(attempt_id), "result": "processed"}
 
 

@@ -75,3 +75,6 @@ class ResendEmailAdapter:
             return {key: str(payload[key]) for key in ("id", "type", "email_id") if key in payload}
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             raise IdentityError("auth.webhook_invalid", status=400, recovery="none") from exc
+
+    def health(self) -> str:
+        return "ready" if self._sender is not None else "unavailable"

@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
@@ -26,6 +27,8 @@ from umbral.application.identity.ports import (
 )
 from umbral.application.jobs.contracts import SubmitJob
 from umbral.application.jobs.ports import JobRuntime
+from umbral.application.transactions import TransactionManager, transaction_scope
+from umbral.domain.audit import AuditContext
 from umbral.domain.identity.email import normalize_email
 from umbral.domain.identity.events import validate_event
 from umbral.domain.identity.models import (
@@ -43,13 +46,14 @@ from umbral.domain.identity.models import (
 class IdentityAccess:
     """Deep module hiding provider, limiter and session state transitions."""
 
-    def __init__(self, store: IdentityStore, provider: IdentityProofPort, email: EmailPort, *, environment: str = "local", capture_origin: str = "http://localhost:3000", job_runtime: JobRuntime | None = None) -> None:
+    def __init__(self, store: IdentityStore, provider: IdentityProofPort, email: EmailPort, *, environment: str = "local", capture_origin: str = "http://localhost:3000", job_runtime: JobRuntime | None = None, transaction_manager: TransactionManager[Any] | None = None) -> None:
         self.store = store
         self.provider = provider
         self.email = email
         self.environment = environment
         self.capture_origin = capture_origin.rstrip("/")
         self.job_runtime = job_runtime
+        self.transaction_manager = transaction_manager
         self.processed_provider_events: set[tuple[str, str]] = set()
 
     def process_email_webhook(
@@ -64,7 +68,7 @@ class IdentityAccess:
         if not event_id:
             raise IdentityError("auth.webhook_invalid", status=400, recovery="none")
         key = (self.email.provider, event_id)
-        with self.store.lock:
+        with self._transaction():
             if key in self.processed_provider_events:
                 return False
             self.processed_provider_events.add(key)
@@ -104,7 +108,7 @@ class IdentityAccess:
             normalized = email.strip().lower()[:320]
         email_fingerprint = self.store.fingerprint(normalized)
         origin_digest = self.store.fingerprint(origin_fingerprint)
-        with self.store.lock:
+        with self._transaction():
             email_count = self.store.recent_requests(email_fingerprint, now=now, field="email_fingerprint")
             origin_count = self.store.recent_requests(origin_digest, now=now, field="origin_fingerprint")
             invitation = self.store.invitation_for_email(normalized)
@@ -130,7 +134,7 @@ class IdentityAccess:
             self.store.attempts[attempt.id] = attempt
             if self.job_runtime is not None:
                 try:
-                    self.job_runtime.submit(
+                    submission = self.job_runtime.submit(
                         SubmitJob.create(
                             job_type="identity.magic_link.issue",
                             logical_target=str(attempt.id),
@@ -138,6 +142,7 @@ class IdentityAccess:
                             correlation_id=correlation_id,
                         )
                     )
+                    attempt.job_execution_id = submission.execution_id
                 except Exception:
                     attempt.state = "failed"
                     attempt.failure_reason = "job_submission_failed"
@@ -150,12 +155,21 @@ class IdentityAccess:
                     )
             return MagicLinkRequestResult()
 
-    def issue_attempt(self, attempt_id: UUID, *, now: datetime) -> None:
+    def issue_attempt(
+        self,
+        attempt_id: UUID,
+        *,
+        now: datetime,
+        correlation_id: UUID | None = None,
+    ) -> None:
         now = utc(now)
-        with self.store.lock:
+        with self._transaction():
             attempt = self.store.attempts.get(attempt_id)
             if attempt is None or attempt.state != "pending":
                 return
+            request = self.store.requests[attempt.request_id]
+            if correlation_id is not None and request.correlation_id != correlation_id:
+                raise IdentityError("auth.request_invalid", status=400, recovery="none")
             invitation = self.store.invitations.get(attempt.invitation_id) if attempt.invitation_id else None
             user = self.store.users.get(attempt.product_user_id) if attempt.product_user_id else None
             email = invitation.normalized_email if invitation else user.normalized_email if user else None
@@ -177,13 +191,13 @@ class IdentityAccess:
                 raise IdentityError("auth.link_unavailable", status=503, recovery="retry_later")
             acceptance = self.email.send_magic_link(attempt_id=attempt_id, normalized_email=email, capture_url=generated.capture_url, expires_at=generated.expires_at, idempotency_key=f"identity.magic-link/{attempt_id}", now=now)
         except IdentityError as exc:
-            with self.store.lock:
+            with self._transaction():
                 attempt = self.store.attempts[attempt_id]
                 attempt.state = "failed"
                 attempt.failure_reason = "provider_unavailable" if exc.code.endswith("provider_unavailable") else "provider_rejected"
                 self._audit("magic_link.issue_failed.v1", "failed", attempt.failure_reason, self.store.requests[attempt.request_id].correlation_id, attempt_id=attempt_id)
             return
-        with self.store.lock:
+        with self._transaction():
             attempt = self.store.attempts[attempt_id]
             current = self.store.current_attempt(invitation_id=attempt.invitation_id, product_user_id=attempt.product_user_id)
             if current and current.id != attempt.id:
@@ -235,7 +249,7 @@ class IdentityAccess:
             or not proof.subject
             or not proof.verified_email
         ):
-            with self.store.lock:
+            with self._transaction():
                 current_attempt = self.store.attempts.get(attempt_id)
                 if current_attempt is not None:
                     self._audit(
@@ -253,7 +267,7 @@ class IdentityAccess:
             normalized = normalize_email(proof.verified_email).value
         except ValueError as exc:
             raise access_denied() from exc
-        with self.store.lock:
+        with self._transaction():
             attempt = self.store.attempts[attempt_id]
             if not attempt.current_and_valid(now):
                 raise link_unavailable("link_consumed")
@@ -293,22 +307,57 @@ class IdentityAccess:
             self._audit("session.started.v1", "accepted", "eligible", self.store.requests[attempt.request_id].correlation_id, subject_user_id=user.id, attempt_id=attempt_id, session_id=session.id)
             return SessionResult(session.id, user.id, token, now)
 
-    def principal(self, token: str, *, now: datetime, action: str = "auth.session.read") -> CurrentPrincipal:
+    def principal(
+        self,
+        token: str,
+        *,
+        now: datetime,
+        action: str = "auth.session.read",
+        correlation_id: UUID | None = None,
+    ) -> CurrentPrincipal:
         from umbral.application.identity.authorization import AccessControl
 
-        return AccessControl(self.store).authorize(token, action=action, resource_owner_id=None, now=now)
+        return AccessControl(self.store).authorize(
+            token,
+            action=action,
+            resource_owner_id=None,
+            now=now,
+            correlation_id=correlation_id,
+        )
 
-    def logout(self, token: str, *, now: datetime) -> None:
+    def logout(self, token: str, *, now: datetime, correlation_id: UUID | None = None) -> None:
         digest = hashlib.sha256(token.encode()).digest()
-        with self.store.lock:
+        with self._transaction():
             session = next((item for item in self.store.sessions.values() if secrets.compare_digest(item.token_digest, digest)), None)
             if session is None:
                 return
             if session.revoked_at is None:
                 session.revoked_at = utc(now)
                 session.revocation_reason = "logout"
-                self._audit("session.ended.v1", "accepted", "logout", uuid4(), subject_user_id=session.product_user_id, session_id=session.id)
+                self._audit("session.ended.v1", "accepted", "logout", correlation_id or uuid4(), subject_user_id=session.product_user_id, session_id=session.id)
+
+    @contextmanager
+    def _transaction(self) -> Iterator[None]:
+        """Compose the foundation transaction with the local store lock."""
+
+        with transaction_scope(self.transaction_manager):
+            store_transaction = getattr(self.store, "transaction", None)
+            if callable(store_transaction):
+                with store_transaction():
+                    yield
+            else:
+                with self.store.lock:
+                    yield
 
     def _audit(self, event_type: str, result: str, reason: str, correlation_id: UUID, *, subject_user_id: UUID | None = None, request_id: UUID | None = None, attempt_id: UUID | None = None, session_id: UUID | None = None, action: str | None = None, provider: str | None = None, provider_event_id: str | None = None) -> None:
+        AuditContext.system(
+            source=event_type.replace(".", "_")[:128],
+            correlation_id=correlation_id,
+        )
         validate_event(event_type=event_type, result=result, reason=reason, fields={"subject_user_id": subject_user_id, "request_id": request_id, "attempt_id": attempt_id, "session_id": session_id, "action": action, "provider": provider, "provider_event_id": provider_event_id})
-        self.store.audits.append(AccessAuditEvent(uuid4(), event_type, result, reason, correlation_id, datetime.now(timezone.utc), subject_user_id=subject_user_id, request_id=request_id, attempt_id=attempt_id, session_id=session_id, action=action, policy_version="identity-policy.v1" if action else None, provider=provider, provider_event_id=provider_event_id))
+        event = AccessAuditEvent(uuid4(), event_type, result, reason, correlation_id, datetime.now(timezone.utc), subject_user_id=subject_user_id, request_id=request_id, attempt_id=attempt_id, session_id=session_id, action=action, policy_version="identity-policy.v1" if action else None, provider=provider, provider_event_id=provider_event_id)
+        append_audit = getattr(self.store, "append_audit", None)
+        if callable(append_audit):
+            append_audit(event)
+        else:
+            self.store.audits.append(event)

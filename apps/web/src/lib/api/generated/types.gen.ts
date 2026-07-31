@@ -39,7 +39,7 @@ export type DependencyCheck = {
     /**
      * Name
      */
-    name: 'runtime_config' | 'api' | 'postgres' | 'schema' | 'postgis' | 'pgvector' | 'redis' | 'object_storage' | 'execution_loop' | 'scheduling_loop' | 'telemetry';
+    name: 'runtime_config' | 'api' | 'postgres' | 'schema' | 'postgis' | 'pgvector' | 'redis' | 'object_storage' | 'execution_loop' | 'scheduling_loop' | 'telemetry' | 'identity_provider' | 'email_provider';
     /**
      * State
      */

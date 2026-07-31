@@ -8,8 +8,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:identity": "vitest run src/lib/auth",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:identity": "playwright test ../../tests/e2e/identity.spec.ts",
     "api:generate": "openapi-ts -f openapi-ts.config.ts",
     "api:check": "openapi-ts -f openapi-ts.config.ts && node scripts/check-generated-client.mjs"
   },

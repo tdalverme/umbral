@@ -56,3 +56,6 @@ class SupabaseIdentityAdapter:
 
     def revoke_provider_session(self, handle: str) -> None:
         return None
+
+    def health(self) -> str:
+        return "ready" if self._generate is not None and self._verify is not None else "unavailable"

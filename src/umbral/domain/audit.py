@@ -73,6 +73,16 @@ class AuditContext:
     source: str
     correlation_id: UUID
 
+    @classmethod
+    def system(cls, *, source: str, correlation_id: UUID) -> AuditContext:
+        """Create the bounded provenance used by system-owned mutations."""
+
+        return cls(
+            actor=AuditActor.system(),
+            source=source,
+            correlation_id=correlation_id,
+        )
+
     def __post_init__(self) -> None:
         if not self.source or len(self.source) > 128:
             raise ValueError("source must be 1..128 characters")

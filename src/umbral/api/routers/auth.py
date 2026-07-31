@@ -131,7 +131,7 @@ async def get_current_session(request: Request, x_umbral_bff_token: str | None =
         token = request.cookies.get(_deps().settings.session_cookie_name)
         if not token:
             raise IdentityError("auth.session_required", status=401, recovery="sign_in")
-        principal = _deps().access_control.authorize(token, action="auth.session.read", resource_owner_id=None, now=datetime.now(timezone.utc))
+        principal = _deps().access_control.authorize(token, action="auth.session.read", resource_owner_id=None, now=datetime.now(timezone.utc), correlation_id=x_correlation_id)
         return CurrentSession(
             user_id=principal.user_id,
             roles=principal.roles,
@@ -147,10 +147,9 @@ async def logout(request: Request, response: Response, x_umbral_bff_token: str |
         _check_bff(x_umbral_bff_token)
         token = request.cookies.get(_deps().settings.session_cookie_name)
         if token:
-            _deps().identity_access.logout(token, now=datetime.now(timezone.utc))
+            _deps().identity_access.logout(token, now=datetime.now(timezone.utc), correlation_id=x_correlation_id)
     except IdentityError as error:
         return _problem(error, request)
     response.delete_cookie(_deps().settings.session_cookie_name, path="/")
     response.headers["Cache-Control"] = "private, no-store"
     return response
-

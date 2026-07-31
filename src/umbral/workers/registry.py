@@ -44,6 +44,11 @@ class JobRegistry:
     def get(self, job_type: str) -> JobHandler | None:
         return self._handlers.get(job_type)
 
+    def as_mapping(self) -> Mapping[str, JobHandler]:
+        """Expose the immutable composition result to a job runtime."""
+
+        return dict(self._handlers)
+
     def require(self, job_type: str) -> JobHandler:
         handler = self.get(job_type)
         if handler is None:

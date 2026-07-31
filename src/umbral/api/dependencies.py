@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Literal, Mapping, cast
 
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.identity.administration import AccessAdministration
@@ -17,6 +17,7 @@ from umbral.application.runtime.readiness import (
     ReadinessCheck,
     ReadinessModule,
     ReadinessProbe,
+    login_dependency_probes,
 )
 from umbral.application.runtime.version import (
     ReleaseArtifact,
@@ -27,6 +28,7 @@ from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.repositories.identity import InMemoryIdentityStore
 from umbral.infrastructure.identity.registry import build_identity_registry
 from umbral.infrastructure.object_store.factory import build_object_store
+from umbral.infrastructure.observability.otel import record_dependency_metric
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 
 _LOCAL_RELEASE_MANIFEST = "<local>"
@@ -73,6 +75,20 @@ def build_runtime_dependencies(
                     name="runtime_config", state="ready", critical=True
                 ),
             ),
+            *login_dependency_probes(
+                identity=lambda: _provider_readiness(
+                    "identity_provider",
+                    identity_registry.identity,
+                    settings.environment,
+                    release.release_id,
+                ),
+                email=lambda: _provider_readiness(
+                    "email_provider",
+                    identity_registry.email,
+                    settings.environment,
+                    release.release_id,
+                ),
+            ),
         ),
     )
     return RuntimeDependencies(
@@ -85,6 +101,37 @@ def build_runtime_dependencies(
         access_control=AccessControl(identity_store),
         administration=AccessAdministration(identity_store),
         job_runtime=job_runtime,
+    )
+
+
+def _provider_readiness(
+    name: Literal["identity_provider", "email_provider"],
+    provider: object,
+    environment: Literal["local", "preview", "production"],
+    release_id: str,
+) -> ReadinessCheck:
+    """Observe provider capability without making it a session dependency."""
+
+    health = getattr(provider, "health", None)
+    raw_state = health() if callable(health) else "ready"
+    if getattr(provider, "fail_generation", False) or getattr(
+        provider, "fail_verification", False
+    ) or getattr(provider, "fail_send", False):
+        raw_state = "degraded"
+    state = cast(Literal["ready", "degraded", "unavailable"], raw_state)
+    if state not in {"ready", "degraded", "unavailable"}:
+        state = "unavailable"
+    record_dependency_metric(
+        dependency=name,
+        state=state,
+        environment=environment,
+        release_id=release_id,
+    )
+    return ReadinessCheck(
+        name=name,
+        state=state,
+        critical=False,
+        code=None if state == "ready" else f"{name}.{state}",
     )
 
 

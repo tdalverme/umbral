@@ -117,6 +117,7 @@ class MagicLinkAttempt:
     subject_kind: SubjectKind
     invitation_id: UUID | None
     product_user_id: UUID | None
+    job_execution_id: UUID | None = None
     state: AttemptState = "pending"
     provider_generated_at: datetime | None = None
     issued_at: datetime | None = None

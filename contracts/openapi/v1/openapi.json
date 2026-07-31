@@ -128,7 +128,9 @@
               "object_storage",
               "execution_loop",
               "scheduling_loop",
-              "telemetry"
+              "telemetry",
+              "identity_provider",
+              "email_provider"
             ],
             "title": "Name",
             "type": "string"

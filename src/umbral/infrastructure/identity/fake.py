@@ -69,3 +69,6 @@ class FakeIdentityProvider:
 
     def revoke_provider_session(self, handle: str) -> None:
         self.revoked.append(handle)
+
+    def health(self) -> str:
+        return "degraded" if self.fail_generation or self.fail_verification else "ready"

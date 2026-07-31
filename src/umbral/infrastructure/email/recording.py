@@ -60,3 +60,6 @@ class RecordingEmailAdapter:
             return {key: str(data[key]) for key in ("id", "type", "email_id") if key in data}
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             raise IdentityError("auth.webhook_invalid", status=400, recovery="none") from exc
+
+    def health(self) -> str:
+        return "degraded" if self.fail_send else "ready"
