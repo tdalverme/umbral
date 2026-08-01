@@ -10,12 +10,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+import yaml
 
 from umbral.ops.release import ReleaseManifest
 from umbral.ops.release_lock import ReleaseLock, ReleaseLockBusy
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 PROMOTE_SCRIPT = REPOSITORY_ROOT / "scripts" / "deploy" / "promote-release.ps1"
+PROMOTE_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "promote.yml"
 
 
 def _manifest(path: Path) -> str:
@@ -152,3 +154,74 @@ def test_failed_gate_aborts_before_the_railway_image_switch(
         completed.stdout + completed.stderr
     )
     assert not invocation_log.exists()
+
+
+def test_config_gate_aborts_before_the_railway_image_switch(tmp_path: Path) -> None:
+    """A Railway contract violation must fail before a service image is mutated."""
+    manifest = tmp_path / "release-manifest.json"
+    _manifest(manifest)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["artifacts"]["web"]["platform"] = "linux/arm64"
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    checksum = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    invocation_log = tmp_path / "railway.log"
+    fake_npx = tmp_path / "npx.cmd"
+    fake_npx.write_text(
+        "@echo called>> \"%FAKE_RAILWAY_LOG%\"\r\nexit /b 1\r\n",
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-File",
+            str(PROMOTE_SCRIPT),
+            "-ManifestPath",
+            str(manifest),
+            "-ManifestSha256",
+            checksum,
+            "-Environment",
+            "preview",
+            "-AccessPassed",
+            "-BackupPassed",
+            "-MigrationPassed",
+            "-SmokePassed",
+        ],
+        cwd=REPOSITORY_ROOT,
+        env=os.environ
+        | {
+            "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_RAILWAY_LOG": str(invocation_log),
+            "RAILWAY_TOKEN": "project-token",
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "platform" in (completed.stdout + completed.stderr).lower()
+    assert not invocation_log.exists()
+
+
+def test_promotion_downloads_the_named_release_run_artifact() -> None:
+    """A missing release run ID could select an unrelated latest artifact."""
+    workflow = yaml.load(
+        PROMOTE_WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader
+    )
+    inputs = workflow["on"]["workflow_dispatch"]["inputs"]
+    download = next(
+        step
+        for step in workflow["jobs"]["promote"]["steps"]
+        if step.get("uses") == "actions/download-artifact@v4"
+    )
+
+    assert workflow["permissions"]["actions"] == "read"
+    assert inputs["release_run_id"]["required"] == "true"
+    assert download["with"] == {
+        "name": "${{ inputs.manifest }}",
+        "path": "artifacts/release",
+        "github-token": "${{ github.token }}",
+        "run-id": "${{ inputs.release_run_id }}",
+    }

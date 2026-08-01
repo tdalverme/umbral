@@ -15,6 +15,11 @@ from umbral.ops.smoke import run_smoke
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 PROMOTE_SCRIPT = REPOSITORY_ROOT / "scripts" / "deploy" / "promote-release.ps1"
+SET_IMAGES_SCRIPT = REPOSITORY_ROOT / "scripts" / "deploy" / "set-railway-images.ps1"
+WAIT_SERVICES_SCRIPT = (
+    REPOSITORY_ROOT / "scripts" / "deploy" / "wait-railway-services.ps1"
+)
+SMOKE_SCRIPT = REPOSITORY_ROOT / "scripts" / "deploy" / "smoke.ps1"
 
 
 def _release_manifest(path: Path) -> str:
@@ -57,6 +62,10 @@ if \"%~1\"==\"--service\" set service=%~2
 shift
 goto next
 :done
+if not "%FAKE_RAILWAY_EDIT_RESPONSE%"=="" (
+  echo %FAKE_RAILWAY_EDIT_RESPONSE%
+  exit /b 0
+)
 echo %* | findstr /C:\"deployment list\" >nul
 if not errorlevel 1 (
   echo [{\"id\":\"deployment-!service!\",\"status\":\"SUCCESS\"}]
@@ -87,6 +96,21 @@ def _promotion_command(manifest: Path, checksum: str, evidence: Path) -> list[st
         "-SmokePassed",
         "-EvidencePath",
         str(evidence),
+    ]
+
+
+def _switch_command(manifest: Path, checksum: str) -> list[str]:
+    return [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        str(SET_IMAGES_SCRIPT),
+        "-ManifestPath",
+        str(manifest),
+        "-ManifestSha256",
+        checksum,
+        "-Environment",
+        "preview",
     ]
 
 
@@ -237,3 +261,130 @@ def test_promotion_rejects_manifest_schema_drift_before_calling_railway(
     assert completed.returncode != 0
     assert "schema" in (completed.stdout + completed.stderr).lower()
     assert not invocation_log.exists()
+
+
+def test_railway_image_switch_rejects_a_nested_deployment_id(
+    tmp_path: Path,
+) -> None:
+    """A deployment ID outside the modeled top-level response is ambiguous."""
+    manifest = tmp_path / "release-manifest.json"
+    checksum = _release_manifest(manifest)
+    _fake_railway_cli(tmp_path)
+
+    completed = subprocess.run(
+        _switch_command(manifest, checksum),
+        cwd=REPOSITORY_ROOT,
+        env=os.environ
+        | {
+            "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+            "RAILWAY_TOKEN": "project-token",
+            "FAKE_RAILWAY_LOG": str(tmp_path / "railway.log"),
+            "FAKE_RAILWAY_EDIT_RESPONSE": '{"operation":{"deploymentId":"nested"}}',
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "deployment ID" in (completed.stdout + completed.stderr)
+
+
+def test_railway_image_switch_rejects_multiple_top_level_deployment_ids(
+    tmp_path: Path,
+) -> None:
+    """Two explicit response IDs are no safer than selecting the latest deployment."""
+    manifest = tmp_path / "release-manifest.json"
+    checksum = _release_manifest(manifest)
+    _fake_railway_cli(tmp_path)
+
+    completed = subprocess.run(
+        _switch_command(manifest, checksum),
+        cwd=REPOSITORY_ROOT,
+        env=os.environ
+        | {
+            "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+            "RAILWAY_TOKEN": "project-token",
+            "FAKE_RAILWAY_LOG": str(tmp_path / "railway.log"),
+            "FAKE_RAILWAY_EDIT_RESPONSE": (
+                '{"deploymentId":"one","deployment_id":"two"}'
+            ),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "deployment ID" in (completed.stdout + completed.stderr)
+
+
+def test_railway_wait_rejects_skipped_deployment_without_waiting(
+    tmp_path: Path,
+) -> None:
+    """A skipped exact deployment is terminal and must not consume the timeout."""
+    (tmp_path / "npx.cmd").write_text(
+        "@echo [{\"id\":\"deployment-web\",\"status\":\"SKIPPED\"}]\r\n",
+        encoding="utf-8",
+    )
+    deployment_ids = json.dumps(
+        {
+            "web": "deployment-web",
+            "api": "deployment-api",
+            "worker": "deployment-worker",
+            "scheduler": "deployment-scheduler",
+        }
+    )
+
+    completed = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-File",
+            str(WAIT_SERVICES_SCRIPT),
+            "-Environment",
+            "preview",
+            "-DeploymentIdsJson",
+            deployment_ids,
+            "-TimeoutSeconds",
+            "1",
+            "-PollSeconds",
+            "1",
+        ],
+        cwd=REPOSITORY_ROOT,
+        env=os.environ | {"PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}"},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "SKIPPED" in (completed.stdout + completed.stderr)
+
+
+def test_smoke_accepts_an_absolute_manifest_path() -> None:
+    """Artifact download paths are absolute when handed from workflow PowerShell."""
+    manifest = (
+        REPOSITORY_ROOT
+        / "tests"
+        / "fixtures"
+        / "release-manifests"
+        / "valid.json"
+    )
+
+    completed = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-File",
+            str(SMOKE_SCRIPT),
+            "-ManifestPath",
+            str(manifest),
+        ],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr

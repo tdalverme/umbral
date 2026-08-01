@@ -7,6 +7,10 @@ on:
         description: "Immutable release artifact name"
         required: true
         type: string
+      release_run_id:
+        description: "GitHub Actions run ID that produced the release artifact"
+        required: true
+        type: string
       environment:
         description: "Target environment"
         required: true
@@ -14,6 +18,7 @@ on:
         options: [preview, production]
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -26,6 +31,8 @@ jobs:
         with:
           name: ${{ inputs.manifest }}
           path: artifacts/release
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.release_run_id }}
       - name: Install pinned Railway CLI
         run: npx @railway/cli@5.27.2 --version
       - name: Verify gates and promote immutable Railway images

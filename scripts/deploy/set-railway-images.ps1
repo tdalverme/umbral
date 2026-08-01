@@ -19,24 +19,14 @@ function Require-AllowedProperties($Value, [string[]]$Required, [string[]]$Allow
 }
 
 function Get-DeploymentId($Value) {
-    if ($null -eq $Value) { return $null }
-    foreach ($property in @("deploymentId", "deployment_id")) {
-        if ($null -ne $Value.PSObject.Properties[$property] -and -not [string]::IsNullOrWhiteSpace([string]$Value.$property)) {
-            return [string]$Value.$property
-        }
+    if ($Value -isnot [pscustomobject]) { return $null }
+    $properties = @($Value.PSObject.Properties.Name)
+    if ($properties.Count -ne 1 -or $properties[0] -notin @("deploymentId", "deployment_id")) {
+        return $null
     }
-    foreach ($property in $Value.PSObject.Properties) {
-        if ($property.Value -is [System.Collections.IEnumerable] -and $property.Value -isnot [string]) {
-            foreach ($item in $property.Value) {
-                $deploymentId = Get-DeploymentId $item
-                if ($deploymentId) { return $deploymentId }
-            }
-        } elseif ($property.Value -is [pscustomobject]) {
-            $deploymentId = Get-DeploymentId $property.Value
-            if ($deploymentId) { return $deploymentId }
-        }
-    }
-    return $null
+    $deploymentId = [string]$Value.($properties[0])
+    if ([string]::IsNullOrWhiteSpace($deploymentId)) { return $null }
+    return $deploymentId
 }
 
 if ([string]::IsNullOrWhiteSpace($env:RAILWAY_TOKEN) -and [string]::IsNullOrWhiteSpace($env:RAILWAY_API_TOKEN)) {
@@ -88,7 +78,7 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ($LASTEXITCODE -ne 0) { throw ("Railway image update failed for {0}." -f $service) }
     $deploymentId = Get-DeploymentId ($response | ConvertFrom-Json)
     if ([string]::IsNullOrWhiteSpace($deploymentId)) {
-        throw ("Railway did not return a deployment ID for {0}." -f $service)
+        throw ("Railway returned an ambiguous deployment ID for {0}." -f $service)
     }
     $deploymentIds[$service] = $deploymentId
 }

@@ -28,7 +28,7 @@ while ($pending.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline) {
             [void]$pending.Remove($service)
             continue
         }
-        if ($deployment.status -in @("FAILED", "CRASHED", "REMOVED")) {
+        if ($deployment.status -in @("FAILED", "CRASHED", "REMOVED", "SKIPPED", "CANCELED", "CANCELLED", "ERROR")) {
             throw ("Railway deployment {0} for {1} finished with {2}." -f $expectedId, $service, $deployment.status)
         }
     }

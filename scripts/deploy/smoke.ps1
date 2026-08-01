@@ -4,7 +4,11 @@ param([Parameter(Mandatory = $true)] [string]$ManifestPath)
 $ErrorActionPreference = "Stop"
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
-$manifestFullPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $ManifestPath))
+$manifestFullPath = if ([System.IO.Path]::IsPathRooted($ManifestPath)) {
+    [System.IO.Path]::GetFullPath($ManifestPath)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $repoRoot $ManifestPath))
+}
 $manifest = Get-Content -Raw -LiteralPath $manifestFullPath | ConvertFrom-Json
 foreach ($artifactName in @("web", "runtime")) {
     $artifact = $manifest.artifacts.$artifactName
