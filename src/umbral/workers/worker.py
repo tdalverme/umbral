@@ -8,7 +8,7 @@ from typing import Callable
 from uuid import UUID
 
 from umbral.application.jobs.contracts import JobContext, JsonScalar
-from umbral.application.jobs.service import InMemoryJobRuntime
+from umbral.application.jobs.ports import JobRuntime
 from umbral.application.runtime.telemetry import TelemetrySignal
 
 Handler = Callable[[JobContext], Mapping[str, JsonScalar]]
@@ -17,7 +17,7 @@ Handler = Callable[[JobContext], Mapping[str, JsonScalar]]
 class InMemoryWorker:
     def __init__(
         self,
-        runtime: InMemoryJobRuntime,
+        runtime: JobRuntime,
         handlers: Mapping[str, Handler | object],
         *,
         worker_id: str,

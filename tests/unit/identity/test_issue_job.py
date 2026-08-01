@@ -31,6 +31,7 @@ def test_eligible_request_submits_only_attempt_reference() -> None:
         now=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
     assert len(runtime.submissions) == 1
+    assert runtime.relay_due().published == 1
     assert queue.messages[0].payload.keys() == {
         "execution_id",
         "attempt_number",

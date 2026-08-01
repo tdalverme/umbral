@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import cast
 from uuid import uuid4
 
 from tests.integration.jobs.conftest import JobRuntimeFactory
 
 from umbral.application.jobs.contracts import JobContext, JobState, TransientJobError
-from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.workers.worker import InMemoryWorker
 
@@ -27,7 +25,7 @@ def test_duplicate_delivery_and_effect_before_ack_do_not_duplicate_effect(
     execution = runtime.submit_simple("foundation.reference", "ref:1", str(uuid4()))
     runtime.relay_due()
     worker = InMemoryWorker(
-        cast(InMemoryJobRuntime, runtime),
+        runtime,
         {"foundation.reference": handler},
         worker_id="w1",
     )
@@ -57,7 +55,7 @@ def test_transient_failure_is_bounded_and_lease_can_be_reaped(
     execution = runtime.submit_simple("foundation.reference", "ref:2", str(uuid4()))
     runtime.relay_due()
     worker = InMemoryWorker(
-        cast(InMemoryJobRuntime, runtime),
+        runtime,
         {"foundation.reference": handler},
         worker_id="w1",
     )
@@ -70,3 +68,21 @@ def test_transient_failure_is_bounded_and_lease_can_be_reaped(
 
     assert calls == 5
     assert runtime.get(execution.execution_id).state is JobState.SUCCEEDED
+
+
+def test_expired_claim_cannot_record_an_outcome(
+    job_runtime_factory: JobRuntimeFactory,
+) -> None:
+    queue = RecordingJobQueue()
+    runtime = job_runtime_factory(queue)
+    execution = runtime.submit_simple("foundation.reference", "ref:lease", str(uuid4()))
+    runtime.relay_due()
+    claim = runtime.claim(
+        execution_id=execution.execution_id, attempt_number=1, worker_id="worker"
+    )
+    assert claim is not None
+
+    runtime.advance_time(timedelta(seconds=61))
+    snapshot = runtime.record_outcome(claim, {"ok": True})
+
+    assert snapshot.state is JobState.RUNNING

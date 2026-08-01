@@ -21,6 +21,7 @@ from umbral.application.jobs.contracts import (
     SubmitJob,
     TransientJobError,
 )
+from umbral.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 
@@ -124,3 +125,33 @@ def test_schedule_tick_locks_one_due_occurrence_across_instances(
         counts = list(executor.map(tick, range(2)))
 
     assert sum(counts) == 1
+
+
+def test_expired_relay_owner_cannot_mark_and_a_new_relay_reclaims(
+    runtime_factory: RuntimeFactory,
+) -> None:
+    class CountingQueue(RecordingJobQueue):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def publish(self, **kwargs: object) -> str:
+            self.calls += 1
+            return super().publish(**kwargs)  # type: ignore[arg-type]
+
+    queue = CountingQueue()
+    runtime = runtime_factory(queue=queue)
+    execution = runtime.submit(_command())
+    owner = "relay:crashed"
+    with runtime._session_factory() as session:  # noqa: SLF001 - crash boundary setup
+        row = SqlAlchemyJobRepository(session).claim_outbox(
+            owner=owner, now=NOW, lease_seconds=30, limit=1
+        )[0]
+        message_id = row.id
+        session.commit()
+
+    runtime.advance_time(timedelta(seconds=31))
+    assert not runtime._finish_outbox(message_id, owner, published=True)  # noqa: SLF001
+    assert runtime.relay_due().published == 1
+    assert queue.calls == 1
+    assert runtime.get(execution.execution_id).state is JobState.QUEUED

@@ -3,13 +3,11 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from threading import Barrier
-from typing import cast
 
 from tests.integration.jobs.conftest import JobRuntimeFactory
 
 from umbral.application.jobs.contracts import SubmitJob
 from umbral.application.jobs.scheduler import InMemoryScheduler
-from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 
 
@@ -26,7 +24,7 @@ def test_two_schedulers_emit_one_utc_occurrence(
         next_run_at=now - timedelta(seconds=1),
     )
     schedulers = [
-        InMemoryScheduler(cast(InMemoryJobRuntime, runtime), scheduler_id=f"s-{i}")
+        InMemoryScheduler(runtime, scheduler_id=f"s-{i}")
         for i in range(2)
     ]
     barrier = Barrier(2)

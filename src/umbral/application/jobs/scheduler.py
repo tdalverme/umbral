@@ -6,11 +6,11 @@ from datetime import datetime, timezone
 
 from umbral.application.runtime.telemetry import TelemetrySignal
 
-from .service import InMemoryJobRuntime
+from .ports import JobRuntime
 
 
 class InMemoryScheduler:
-    def __init__(self, runtime: InMemoryJobRuntime, *, scheduler_id: str) -> None:
+    def __init__(self, runtime: JobRuntime, *, scheduler_id: str) -> None:
         self.runtime = runtime
         self.scheduler_id = scheduler_id
         self.last_heartbeat: datetime | None = None

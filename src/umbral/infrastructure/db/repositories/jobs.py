@@ -235,6 +235,7 @@ class SqlAlchemyJobRepository:
                 .where(
                     JobOutboxMessage.state == "pending",
                     JobOutboxMessage.available_at <= timestamp,
+                    JobOutboxMessage.publish_attempts < 100,
                 )
                 .order_by(JobOutboxMessage.available_at)
                 .limit(limit)
@@ -273,7 +274,13 @@ class SqlAlchemyJobRepository:
         now: datetime | None = None,
     ) -> None:
         timestamp = _utc(now or datetime.now(timezone.utc))
-        row.state = "pending"
+        if row.publish_attempts >= 100:
+            row.state = "failed"
+        else:
+            row.state = "pending"
+            row.available_at = timestamp + timedelta(
+                seconds=min(300, 1 << max(0, row.publish_attempts - 1))
+            )
         row.error_code = error_code
         row.lease_owner = None
         row.lease_until = None

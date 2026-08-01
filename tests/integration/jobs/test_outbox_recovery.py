@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import cast
+from datetime import timedelta
 from uuid import uuid4
 
 from tests.integration.jobs.conftest import JobRuntimeFactory
 
 from umbral.application.jobs.relay import JobOutboxRelay
-from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 
 
@@ -19,7 +18,7 @@ def test_outbox_relay_rebuilds_transport_after_publish_interruption(
         "foundation.reference", "ref:outbox", str(uuid4())
     )
     queue.messages.clear()
-    relay = JobOutboxRelay(cast(InMemoryJobRuntime, runtime), queue)
+    relay = JobOutboxRelay(runtime, queue)
 
     relay.publish_due(limit=10)
     relay.publish_due(limit=10)
@@ -38,7 +37,7 @@ def test_outbox_relay_is_safe_when_redis_is_temporarily_unavailable(
     queue = FailingQueue()
     runtime = job_runtime_factory(queue)
     runtime.submit_simple("foundation.reference", "ref:outbox-2", str(uuid4()))
-    relay = JobOutboxRelay(cast(InMemoryJobRuntime, runtime), queue)
+    relay = JobOutboxRelay(runtime, queue)
 
     result = relay.publish_due(limit=10)
 
@@ -52,7 +51,7 @@ def test_rebuild_after_transport_loss_republishes_durable_rows(
     queue = RecordingJobQueue()
     runtime = job_runtime_factory(queue)
     runtime.submit_simple("foundation.reference", "ref:outbox-3", str(uuid4()))
-    relay = JobOutboxRelay(cast(InMemoryJobRuntime, runtime), queue)
+    relay = JobOutboxRelay(runtime, queue)
     relay.publish_due(limit=10)
     queue.messages.clear()
 
@@ -60,3 +59,28 @@ def test_rebuild_after_transport_loss_republishes_durable_rows(
 
     assert result.published == 1
     assert len(queue.messages) == 1
+
+
+def test_publish_failures_are_bounded_without_overflow(
+    job_runtime_factory: JobRuntimeFactory,
+) -> None:
+    class CountingFailureQueue(RecordingJobQueue):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def publish(self, **kwargs: object) -> str:
+            self.calls += 1
+            raise RuntimeError("queue unavailable")
+
+    queue = CountingFailureQueue()
+    runtime = job_runtime_factory(queue)
+    runtime.submit_simple("foundation.reference", "ref:bounded", str(uuid4()))
+
+    for _ in range(100):
+        assert runtime.relay_due(limit=1).failed == 1
+        runtime.advance_time(timedelta(minutes=6))
+
+    assert queue.calls == 100
+    assert runtime.pending_outbox_count() == 0
+    assert runtime.relay_due(limit=1).failed == 0

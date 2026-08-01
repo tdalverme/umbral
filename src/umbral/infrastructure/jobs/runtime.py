@@ -159,6 +159,8 @@ class SqlAlchemyJobRuntime:
                 or execution.state != "running"
                 or execution.attempt_count != claim.attempt_number
                 or execution.lease_owner != claim.worker_id
+                or execution.lease_until is None
+                or execution.lease_until <= self.now
             ):
                 session.rollback()
                 return _snapshot(execution)
@@ -335,7 +337,13 @@ class SqlAlchemyJobRuntime:
         with self._session_factory() as session:
             repository = SqlAlchemyJobRepository(session)
             row = repository.outbox_for_update(message_id)
-            if row is None or row.state != "publishing" or row.lease_owner != owner:
+            if (
+                row is None
+                or row.state != "publishing"
+                or row.lease_owner != owner
+                or row.lease_until is None
+                or row.lease_until <= self.now
+            ):
                 session.rollback()
                 return False
             if published:
