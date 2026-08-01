@@ -1,8 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { isPublicHealthPath, verifyAccessJwt } from "./lib/access/cloudflare";
+import { resolveWebAccessMode } from "./lib/access/policy";
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
+  const accessMode = resolveWebAccessMode(process.env.UMBRAL_ACCESS_MODE);
+  if (accessMode === null) {
+    return new NextResponse("Access required", { status: 401 });
+  }
+  if (accessMode === "product_session") {
+    return NextResponse.next();
+  }
   if (isPublicHealthPath(request.nextUrl.pathname)) {
     return NextResponse.next();
   }

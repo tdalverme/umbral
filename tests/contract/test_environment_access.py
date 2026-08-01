@@ -2,10 +2,49 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+from pathlib import Path
+
 import pytest
 
 from umbral.infrastructure.config.settings import Settings
 from umbral.ops.access import AccessPolicy, AccessPolicyViolation
+
+
+def test_beta_web_access_contract_keeps_api_private() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-File",
+            str(repo_root / "scripts" / "deploy" / "verify-access.ps1"),
+        ],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "policy": "infra\\cloudflare\\access-policy.json",
+        "access_mode": "product_session",
+        "web_public_domain": True,
+        "api_public_domain": False,
+        "datastores_private_or_managed": True,
+        "umbral_session_protection": True,
+        "public_paths": [
+            "/health",
+            "/login",
+            "/auth/capture",
+            "/auth/confirm",
+            "/api/auth/magic-link-requests",
+            "/api/webhooks/email",
+        ],
+        "credentials_observed": False,
+    }
 
 
 def test_only_health_is_public_and_origins_are_closed() -> None:
