@@ -2,7 +2,7 @@
 
 **Date**: 2026-08-01
 
-**Status**: Approved architecture; pending written-spec review
+**Status**: Approved
 
 **Scope**: Persistent preview/private-beta deployment for the
 `private-beta-identity` increment
