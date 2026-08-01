@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from umbral.application.jobs.ports import JobQueue
+from umbral.application.jobs.ports import JobQueue, RelayResult
 
-from .service import InMemoryJobRuntime, RelayResult
+from .service import InMemoryJobRuntime
 
 
 class JobOutboxRelay:

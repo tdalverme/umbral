@@ -3,11 +3,26 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
 from .contracts import JobContext, JobIdentity, JobSnapshot, JsonScalar, SubmitJob
+
+
+@dataclass(frozen=True, slots=True)
+class JobClaim:
+    execution_id: UUID
+    attempt_number: int
+    worker_id: str
+    context: JobContext
+
+
+@dataclass(frozen=True, slots=True)
+class RelayResult:
+    published: int = 0
+    failed: int = 0
 
 
 class JobQueue(Protocol):

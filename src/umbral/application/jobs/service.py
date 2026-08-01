@@ -26,7 +26,7 @@ from .contracts import (
     SubmitJob,
     classify_failure,
 )
-from .ports import JobQueue
+from .ports import JobClaim, JobQueue, RelayResult
 
 
 @dataclass(slots=True)
@@ -65,19 +65,6 @@ class _Execution:
     lease_owner: str | None = None
     lease_until: datetime | None = None
     attempts: list[_Attempt] = field(default_factory=list)
-
-
-@dataclass(frozen=True, slots=True)
-class JobClaim:
-    execution_id: UUID
-    attempt_number: int
-    context: JobContext
-
-
-@dataclass(frozen=True, slots=True)
-class RelayResult:
-    published: int = 0
-    failed: int = 0
 
 
 @dataclass(slots=True)
@@ -169,9 +156,9 @@ class InMemoryJobRuntime:
                 attempt_number=1,
                 available_at=self._now,
             )
-            # Publish eagerly for local/recording adapters while retaining a
-            # pending outbox row.  The relay can safely rebuild it after a
-            # crash or transport loss.
+            # The local recording queue is a synchronous test adapter.  The
+            # durable row remains pending so relay recovery has identical
+            # behavior after a simulated transport loss.
             try:
                 self.queue.publish(
                     execution_id=execution.execution_id,
@@ -255,6 +242,7 @@ class InMemoryJobRuntime:
             return JobClaim(
                 execution_id=execution_id,
                 attempt_number=attempt_number,
+                worker_id=worker_id,
                 context=JobContext(
                     execution_id=execution_id,
                     attempt_number=attempt_number,

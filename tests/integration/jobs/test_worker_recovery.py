@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import cast
 from uuid import uuid4
+
+from tests.integration.jobs.conftest import JobRuntimeFactory
 
 from umbral.application.jobs.contracts import JobContext, JobState, TransientJobError
 from umbral.application.jobs.service import InMemoryJobRuntime
@@ -9,9 +12,11 @@ from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.workers.worker import InMemoryWorker
 
 
-def test_duplicate_delivery_and_effect_before_ack_do_not_duplicate_effect() -> None:
+def test_duplicate_delivery_and_effect_before_ack_do_not_duplicate_effect(
+    job_runtime_factory: JobRuntimeFactory,
+) -> None:
     queue = RecordingJobQueue()
-    runtime = InMemoryJobRuntime(queue=queue)
+    runtime = job_runtime_factory(queue)
     effects: list[str] = []
 
     def handler(context: JobContext) -> dict[str, bool]:
@@ -20,7 +25,12 @@ def test_duplicate_delivery_and_effect_before_ack_do_not_duplicate_effect() -> N
         return {"ok": True}
 
     execution = runtime.submit_simple("foundation.reference", "ref:1", str(uuid4()))
-    worker = InMemoryWorker(runtime, {"foundation.reference": handler}, worker_id="w1")
+    runtime.relay_due()
+    worker = InMemoryWorker(
+        cast(InMemoryJobRuntime, runtime),
+        {"foundation.reference": handler},
+        worker_id="w1",
+    )
     message = queue.messages[0]
 
     worker.process(message)
@@ -30,9 +40,11 @@ def test_duplicate_delivery_and_effect_before_ack_do_not_duplicate_effect() -> N
     assert runtime.get(execution.execution_id).state is JobState.SUCCEEDED
 
 
-def test_transient_failure_is_bounded_and_lease_can_be_reaped() -> None:
+def test_transient_failure_is_bounded_and_lease_can_be_reaped(
+    job_runtime_factory: JobRuntimeFactory,
+) -> None:
     queue = RecordingJobQueue()
-    runtime = InMemoryJobRuntime(queue=queue)
+    runtime = job_runtime_factory(queue)
     calls = 0
 
     def handler(context: JobContext) -> dict[str, bool]:
@@ -43,7 +55,12 @@ def test_transient_failure_is_bounded_and_lease_can_be_reaped() -> None:
         return {"ok": True}
 
     execution = runtime.submit_simple("foundation.reference", "ref:2", str(uuid4()))
-    worker = InMemoryWorker(runtime, {"foundation.reference": handler}, worker_id="w1")
+    runtime.relay_due()
+    worker = InMemoryWorker(
+        cast(InMemoryJobRuntime, runtime),
+        {"foundation.reference": handler},
+        worker_id="w1",
+    )
 
     for _ in range(4):
         worker.process(queue.messages[-1])
