@@ -12,8 +12,18 @@ from umbral.infrastructure.email.recording import RecordingEmailAdapter
 from umbral.infrastructure.identity.fake import FakeIdentityProvider
 
 
-def _service() -> tuple[IdentityAccess, InMemoryIdentityStore]:
-    store = InMemoryIdentityStore()
+class _AttemptSaveSpy(InMemoryIdentityStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attempt_save_calls = 0
+
+    def save_attempt(self, attempt: object) -> None:
+        self.attempt_save_calls += 1
+        super().save_attempt(attempt)  # type: ignore[arg-type]
+
+
+def _service() -> tuple[IdentityAccess, _AttemptSaveSpy]:
+    store = _AttemptSaveSpy()
     AccessAdministration(store).preload_invitation("person@example.com")
     return access_with_recording_jobs(store, FakeIdentityProvider(), RecordingEmailAdapter()), store
 
@@ -32,6 +42,7 @@ def test_email_limit_is_exact_and_does_not_create_attempt() -> None:
     runtime = service.job_runtime
     assert runtime is not None
     submissions_before = len(runtime.submissions)
+    attempts_before = store.attempt_save_calls
     service.request_magic_link(
         email="person@example.com",
         origin_fingerprint="same",
@@ -39,6 +50,7 @@ def test_email_limit_is_exact_and_does_not_create_attempt() -> None:
         now=now,
     )
     assert len(runtime.submissions) == submissions_before
+    assert store.attempt_save_calls == attempts_before
     assert requested_attempt(service, store) == third
     assert store.audit_events()[-1].reason == "email_rate_limited"
     service.request_magic_link(

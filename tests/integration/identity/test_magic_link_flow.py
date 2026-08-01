@@ -23,6 +23,7 @@ from umbral.domain.identity.models import (
     ExternalIdentityLink,
     MagicLinkAttempt,
     ProductUser,
+    RoleAssignment,
 )
 from umbral.infrastructure.db.models.identity import (
     AccessAuditEvent as AccessAuditEventRow,
@@ -38,13 +39,23 @@ from umbral.infrastructure.db.repositories.identity import (
 from umbral.infrastructure.email.recording import RecordingEmailAdapter
 from umbral.infrastructure.identity.fake import FakeIdentityProvider
 
+
+class _RoleSaveSpy(InMemoryIdentityStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.role_save_calls = 0
+
+    def save_role(self, role: RoleAssignment) -> None:
+        self.role_save_calls += 1
+        super().save_role(role)
+
 NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
 def _new_access(
     email: str = "person@example.com",
-) -> tuple[IdentityAccess, InMemoryIdentityStore, RecordingEmailAdapter]:
-    store = InMemoryIdentityStore()
+) -> tuple[IdentityAccess, _RoleSaveSpy, RecordingEmailAdapter]:
+    store = _RoleSaveSpy()
     AccessAdministration(store).preload_invitation(email)
     mail = RecordingEmailAdapter()
     return access_with_recording_jobs(store, FakeIdentityProvider(), mail), store, mail
@@ -85,7 +96,10 @@ def test_first_activation_creates_one_user_link_and_role() -> None:
         store.session_by_digest(hashlib.sha256(session.token.encode()).digest())
         is not None
     )
-    assert len(store.exportable_identities()) == 1
+    identities = store.exportable_identities()
+    assert len(identities) == 1
+    assert len(identities[0][1]) == 1
+    assert store.role_save_calls == 1
     assert store.session_count() == 1
 
 
@@ -230,6 +244,14 @@ def test_application_transaction_rolls_back_request_and_audit() -> None:
         )
 
     assert store.audit_events() == ()
+    assert (
+        store.recent_requests(
+            store.fingerprint("unknown@example.com"),
+            now=NOW,
+            field="email_fingerprint",
+        )
+        == 0
+    )
 
 
 def _migrated_session(connection: ServiceConnection) -> tuple[Session, Engine]:
