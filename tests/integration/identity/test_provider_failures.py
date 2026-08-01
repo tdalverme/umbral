@@ -72,3 +72,36 @@ def test_identity_verification_failure_does_not_activate_user() -> None:
     with pytest.raises(IdentityError):
         access.confirm_magic_link(attempt_id=attempt.id, token_hash=token_hash, now=now)
     assert not store.users and not store.sessions
+
+
+def test_provider_sign_out_failure_prevents_any_local_identity_mutation() -> None:
+    class FailingRevocationProvider(FakeIdentityProvider):
+        def revoke_provider_session(self, handle: str) -> None:
+            raise IdentityError(
+                "auth.provider_unavailable", status=503, recovery="retry_later"
+            )
+
+    store = InMemoryIdentityStore()
+    invitation = AccessAdministration(store).preload_invitation("person@example.com")
+    provider = FailingRevocationProvider()
+    email = RecordingEmailAdapter()
+    access = IdentityAccess(store, provider, email)
+    now = datetime.now(timezone.utc)
+    access.request_magic_link(
+        email="person@example.com",
+        origin_fingerprint="origin",
+        correlation_id=uuid4(),
+        now=now,
+    )
+    attempt = next(iter(store.attempts.values()))
+    access.issue_attempt(attempt.id, now=now)
+    token_hash = str(email.messages[0]["capture_url"]).split("token_hash=", 1)[1]
+
+    with pytest.raises(IdentityError) as error:
+        access.confirm_magic_link(attempt_id=attempt.id, token_hash=token_hash, now=now)
+
+    assert error.value.code == "auth.provider_unavailable"
+    assert attempt.state == "issued"
+    assert invitation.status == "active"
+    assert not store.users and not store.links
+    assert not store.roles and not store.sessions

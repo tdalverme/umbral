@@ -267,6 +267,13 @@ class IdentityAccess:
             normalized = normalize_email(proof.verified_email).value
         except ValueError as exc:
             raise access_denied() from exc
+        if proof.revocation_handle is not None:
+            try:
+                self.provider.revoke_provider_session(proof.revocation_handle)
+            except Exception as exc:
+                raise IdentityError(
+                    "auth.provider_unavailable", status=503, recovery="retry_later"
+                ) from exc
         with self._transaction():
             attempt = self.store.attempts[attempt_id]
             if not attempt.current_and_valid(now):

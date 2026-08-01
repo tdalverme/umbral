@@ -10,7 +10,10 @@ from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.email.recording import RecordingEmailAdapter
 from umbral.infrastructure.email.resend import ResendEmailAdapter
 from umbral.infrastructure.identity.fake import FakeIdentityProvider
-from umbral.infrastructure.identity.supabase import SupabaseIdentityAdapter
+from umbral.infrastructure.identity.supabase import (
+    SupabaseIdentityAdapter,
+    build_supabase_client,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,15 +48,23 @@ class IdentityProviderRegistry:
 
 def build_identity_registry(settings: Settings) -> IdentityProviderRegistry:
     if settings.identity_provider == "supabase":
+        if not settings.supabase_url or not settings.supabase_secret_key:
+            raise ValueError("SUPABASE_URL and SUPABASE_SECRET_KEY are required")
         identity: IdentityProofPort = SupabaseIdentityAdapter(
             issuer=settings.identity_issuer,
             capture_origin=settings.identity_capture_origin,
+            client=build_supabase_client(
+                url=settings.supabase_url,
+                secret_key=settings.supabase_secret_key,
+            ),
         )
-    else:
+    elif settings.identity_provider == "fake" and settings.environment == "local":
         identity = FakeIdentityProvider(
             issuer=settings.identity_issuer,
             capture_origin=settings.identity_capture_origin,
         )
+    else:
+        raise ValueError("identity provider is unavailable outside local development")
     email: EmailPort = RecordingEmailAdapter()
     if settings.email_provider == "resend" and settings.resend_api_key:
         email = ResendEmailAdapter(
