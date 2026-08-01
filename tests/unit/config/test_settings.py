@@ -100,3 +100,22 @@ def test_configuration_fixture_covers_required_invalid_setting_categories() -> N
     assert expected_rule_codes <= {
         case["expected"]["rule_code"] for case in REJECTED_CASES
     }
+
+
+@pytest.mark.parametrize(
+    "supabase_url",
+    ["http://bpwgyvetbneghrtxcadm.supabase.co", "https://other.supabase.co"],
+)
+def test_preview_rejects_supabase_url_outside_the_configured_project(
+    supabase_url: str,
+) -> None:
+    values = _case_environment(
+        next(case for case in ACCEPTED_CASES if case["id"] == "preview-valid")
+    )
+    values["SUPABASE_URL"] = supabase_url
+
+    with pytest.raises(SettingsValidationError) as raised:
+        Settings.from_environment(values)
+
+    assert raised.value.rule_code == "CONFIG_FORMAT"
+    assert raised.value.field_name == "SUPABASE_URL"

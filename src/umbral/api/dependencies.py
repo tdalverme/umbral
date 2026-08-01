@@ -140,7 +140,7 @@ def _load_settings(environment: Mapping[str, str]) -> Settings:
         key: value
         for key, value in environment.items()
         if key.startswith(
-            ("UMBRAL_", "DATABASE_", "REDIS_", "OBJECT_STORE_", "OTEL_", "SENTRY_", "IDENTITY_", "EMAIL_", "RESEND_", "SESSION_")
+            ("UMBRAL_", "DATABASE_", "REDIS_", "OBJECT_STORE_", "OTEL_", "SENTRY_", "IDENTITY_", "SUPABASE_", "EMAIL_", "RESEND_", "SESSION_")
         )
     }
     if not values:

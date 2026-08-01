@@ -12,6 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "preview", "production"]
 _DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}$")
+_SUPABASE_PROJECT_HOST = "bpwgyvetbneghrtxcadm.supabase.co"
 _REQUIRED_FIELDS = (
     "UMBRAL_ENV",
     "UMBRAL_RELEASE_ID",
@@ -249,6 +250,12 @@ class Settings(BaseSettings):
                 raise SettingsValidationError("CONFIG_REQUIRED", field_name)
         if not values["SUPABASE_SECRET_KEY"].startswith("sb_secret_"):
             raise SettingsValidationError("CONFIG_FORMAT", "SUPABASE_SECRET_KEY")
+        supabase = _url(values["SUPABASE_URL"], "SUPABASE_URL")
+        if (
+            supabase.scheme != "https"
+            or supabase.hostname != _SUPABASE_PROJECT_HOST
+        ):
+            raise SettingsValidationError("CONFIG_FORMAT", "SUPABASE_URL")
 
     @staticmethod
     def _reject_example(value: str, field_name: str) -> None:
