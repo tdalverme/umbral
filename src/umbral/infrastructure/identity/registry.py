@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, cast
 from urllib.parse import urlparse
+
+import resend
 
 from umbral.application.identity.ports import EmailPort, IdentityProofPort
 from umbral.infrastructure.config.settings import Settings
@@ -66,12 +69,24 @@ def build_identity_registry(settings: Settings) -> IdentityProviderRegistry:
     else:
         raise ValueError("identity provider is unavailable outside local development")
     email: EmailPort = RecordingEmailAdapter()
-    if settings.email_provider == "resend" and settings.resend_api_key:
+    if settings.email_provider == "resend":
+        if (
+            not settings.resend_api_key
+            or not settings.resend_from_email
+            or not settings.email_webhook_secret
+        ):
+            raise ValueError(
+                "Resend API key, sender email, and webhook secret are required"
+            )
+        resend.api_key = settings.resend_api_key
         email = ResendEmailAdapter(
-            api_key=settings.resend_api_key,
-            webhook_secret=(
-                settings.email_webhook_secret or settings.resend_api_key
-            ).encode(),
+            sender_email=settings.resend_from_email,
+            webhook_secret=settings.email_webhook_secret,
+            sender=lambda params, options: cast(
+                dict[str, object],
+                cast(Any, resend.Emails.send)(params, options),
+            ),
+            verifier=lambda options: cast(Any, resend.Webhooks.verify)(options),
         )
     return IdentityProviderRegistry(
         identity=identity,
