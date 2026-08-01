@@ -21,7 +21,7 @@ GREEN was observed after the minimal adapter implementation: `3 passed` for the 
 - `ruff check src/umbral/application/identity src/umbral/infrastructure/db/repositories/identity.py tests/contract/test_identity_store.py`: passed.
 - `rg -n "store\.(invitations|users|links|roles|requests|attempts|sessions|audits|lock)" src/umbral/application/identity`: no matches.
 - Focal contract: `3 passed`.
-- Full Task 4 non-container command (`-k "not postgres"`): `46 passed, 2 deselected`. The two deselected tests are precisely the PostgreSQL container tests in `test_magic_link_flow.py`; Docker access to `//./pipe/docker_engine` is denied locally.
+- Full Task 4 non-container command (`-k "not postgres"`): `46 passed, 2 deselected`. The two intentionally unexecuted Docker nodes are `tests/integration/identity/test_magic_link_flow.py::test_postgres_invitation_preload_and_rate_limit` and `tests/integration/identity/test_magic_link_flow.py::test_postgres_transaction_rolls_back_request_and_audit`; Docker access to `//./pipe/docker_engine` is denied locally.
 
 ## Self-review / concerns
 
