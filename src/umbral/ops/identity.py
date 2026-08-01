@@ -25,14 +25,14 @@ def export_identity_snapshot(store: IdentityStore) -> list[dict[str, object]]:
     """Export stable product identity references without email or bearer data."""
 
     rows: list[dict[str, object]] = []
-    for user, links in store.exportable_identities():
+    for user, identity_links in store.exportable_identities():
         links = [
             {
                 "provider": link.provider,
                 "issuer": link.provider_issuer,
                 "subject": link.provider_subject,
             }
-            for link in links
+            for link in identity_links
         ]
         rows.append(
             {
