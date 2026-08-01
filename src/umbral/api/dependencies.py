@@ -6,30 +6,25 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Mapping, cast
+from typing import Mapping
 
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.identity.administration import AccessAdministration
 from umbral.application.identity.authorization import AccessControl
-from umbral.application.jobs.service import InMemoryJobRuntime
+from umbral.application.identity.ports import IdentityStore
+from umbral.application.jobs.ports import JobRuntime
 from umbral.application.objects.ports import ObjectStore
-from umbral.application.runtime.readiness import (
-    ReadinessCheck,
-    ReadinessModule,
-    ReadinessProbe,
-    login_dependency_probes,
-)
+from umbral.application.runtime.readiness import ReadinessModule
 from umbral.application.runtime.version import (
     ReleaseArtifact,
     ReleaseManifest,
     load_release_manifest,
 )
 from umbral.infrastructure.config.settings import Settings
-from umbral.infrastructure.db.repositories.identity import InMemoryIdentityStore
-from umbral.infrastructure.identity.registry import build_identity_registry
-from umbral.infrastructure.object_store.factory import build_object_store
-from umbral.infrastructure.observability.otel import record_dependency_metric
-from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
+from umbral.infrastructure.runtime.composition import (
+    RuntimeCompositionFactories,
+    compose_runtime,
+)
 
 _LOCAL_RELEASE_MANIFEST = "<local>"
 
@@ -42,96 +37,36 @@ class RuntimeDependencies:
     release: ReleaseManifest
     readiness: ReadinessModule
     object_store: ObjectStore
-    identity_store: InMemoryIdentityStore
+    identity_store: IdentityStore
     identity_access: IdentityAccess
     access_control: AccessControl
     administration: AccessAdministration
-    job_runtime: InMemoryJobRuntime | None = None
+    job_runtime: JobRuntime | None = None
 
 
 def build_runtime_dependencies(
     environment: Mapping[str, str] | None = None,
+    *,
+    factories: RuntimeCompositionFactories | None = None,
 ) -> RuntimeDependencies:
     """Build local-safe defaults or validate an explicitly configured runtime."""
 
     values = os.environ if environment is None else environment
     settings = _load_settings(values)
     release = _load_release(settings)
-    object_store = build_object_store(settings)
-    identity_store = InMemoryIdentityStore(fingerprint_key=settings.identity_fingerprint_key.encode())
-    identity_registry = build_identity_registry(settings)
-    identity_access = IdentityAccess(identity_store, identity_registry.identity, identity_registry.email, environment=settings.environment, capture_origin=settings.identity_capture_origin)
-    job_queue = RecordingJobQueue()
-    job_runtime = InMemoryJobRuntime(queue=job_queue)
-    identity_access.job_runtime = job_runtime
-    readiness = ReadinessModule(
-        surface="api",
-        release_id=release.release_id,
-        probes=(
-            ReadinessProbe(
-                name="runtime_config",
-                critical=True,
-                check=lambda: ReadinessCheck(
-                    name="runtime_config", state="ready", critical=True
-                ),
-            ),
-            *login_dependency_probes(
-                identity=lambda: _provider_readiness(
-                    "identity_provider",
-                    identity_registry.identity,
-                    settings.environment,
-                    release.release_id,
-                ),
-                email=lambda: _provider_readiness(
-                    "email_provider",
-                    identity_registry.email,
-                    settings.environment,
-                    release.release_id,
-                ),
-            ),
-        ),
+    composition = compose_runtime(
+        settings=settings, release=release, factories=factories
     )
     return RuntimeDependencies(
         settings=settings,
         release=release,
-        readiness=readiness,
-        object_store=object_store,
-        identity_store=identity_store,
-        identity_access=identity_access,
-        access_control=AccessControl(identity_store),
-        administration=AccessAdministration(identity_store),
-        job_runtime=job_runtime,
-    )
-
-
-def _provider_readiness(
-    name: Literal["identity_provider", "email_provider"],
-    provider: object,
-    environment: Literal["local", "preview", "production"],
-    release_id: str,
-) -> ReadinessCheck:
-    """Observe provider capability without making it a session dependency."""
-
-    health = getattr(provider, "health", None)
-    raw_state = health() if callable(health) else "ready"
-    if getattr(provider, "fail_generation", False) or getattr(
-        provider, "fail_verification", False
-    ) or getattr(provider, "fail_send", False):
-        raw_state = "degraded"
-    state = cast(Literal["ready", "degraded", "unavailable"], raw_state)
-    if state not in {"ready", "degraded", "unavailable"}:
-        state = "unavailable"
-    record_dependency_metric(
-        dependency=name,
-        state=state,
-        environment=environment,
-        release_id=release_id,
-    )
-    return ReadinessCheck(
-        name=name,
-        state=state,
-        critical=False,
-        code=None if state == "ready" else f"{name}.{state}",
+        readiness=composition.readiness,
+        object_store=composition.object_store,
+        identity_store=composition.identity_store,
+        identity_access=composition.identity_access,
+        access_control=composition.access_control,
+        administration=composition.administration,
+        job_runtime=composition.job_runtime,
     )
 
 
