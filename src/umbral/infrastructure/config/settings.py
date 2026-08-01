@@ -69,14 +69,24 @@ class Settings(BaseSettings):
     )
     sentry_dsn: str | None = Field(default=None, validation_alias="SENTRY_DSN")
     api_base_url: str = Field(validation_alias="UMBRAL_API_BASE_URL")
+    access_mode: Literal["product_session", "cloudflare"] = Field(
+        default="cloudflare", validation_alias="UMBRAL_ACCESS_MODE"
+    )
     access_audience: str | None = Field(
         default=None, validation_alias="UMBRAL_ACCESS_AUDIENCE"
     )
     identity_provider: str = Field(default="fake", validation_alias="IDENTITY_PROVIDER")
+    supabase_url: str | None = Field(default=None, validation_alias="SUPABASE_URL")
+    supabase_secret_key: str | None = Field(
+        default=None, validation_alias="SUPABASE_SECRET_KEY"
+    )
     identity_issuer: str = Field(default="fake://local", validation_alias="IDENTITY_ISSUER")
     identity_capture_origin: str = Field(default="http://localhost:3000", validation_alias="IDENTITY_CAPTURE_ORIGIN")
     email_provider: str = Field(default="recording", validation_alias="EMAIL_PROVIDER")
     resend_api_key: str | None = Field(default=None, validation_alias="RESEND_API_KEY")
+    resend_from_email: str | None = Field(
+        default=None, validation_alias="RESEND_FROM_EMAIL"
+    )
     email_webhook_secret: str | None = Field(default=None, validation_alias="EMAIL_WEBHOOK_SECRET")
     bff_token: str = Field(default="local-bff-token", validation_alias="UMBRAL_BFF_TOKEN")
     identity_fingerprint_key: str = Field(default="local-identity-fingerprint-key", validation_alias="IDENTITY_FINGERPRINT_KEY")
@@ -100,12 +110,16 @@ class Settings(BaseSettings):
             "OTEL_EXPORTER_OTLP_ENDPOINT",
             "SENTRY_DSN",
             "UMBRAL_API_BASE_URL",
+            "UMBRAL_ACCESS_MODE",
             "UMBRAL_ACCESS_AUDIENCE",
             "IDENTITY_PROVIDER",
+            "SUPABASE_URL",
+            "SUPABASE_SECRET_KEY",
             "IDENTITY_ISSUER",
             "IDENTITY_CAPTURE_ORIGIN",
             "EMAIL_PROVIDER",
             "RESEND_API_KEY",
+            "RESEND_FROM_EMAIL",
             "EMAIL_WEBHOOK_SECRET",
             "UMBRAL_BFF_TOKEN",
             "IDENTITY_FINGERPRINT_KEY",
@@ -164,15 +178,31 @@ class Settings(BaseSettings):
                 raise SettingsValidationError("CONFIG_PRIVATE_ENDPOINT", field_name)
         if values["OBJECT_STORE_BACKEND"] != "s3":
             raise SettingsValidationError("CONFIG_BACKEND", "OBJECT_STORE_BACKEND")
-        if redis.scheme != "rediss":
+        railway_redis = (
+            environment == "preview"
+            and redis.scheme == "redis"
+            and (redis.hostname or "").endswith(".railway.internal")
+        )
+        if redis.scheme != "rediss" and not railway_redis:
             raise SettingsValidationError("CONFIG_TLS_REQUIRED", "REDIS_URL")
         if otel.scheme != "https":
             raise SettingsValidationError(
                 "CONFIG_TLS_REQUIRED", "OTEL_EXPORTER_OTLP_ENDPOINT"
             )
-        if api.scheme != "https" or not (api.hostname or "").endswith(
+        railway_api = (
+            environment == "preview"
+            and api.scheme == "http"
+            and (api.hostname or "").endswith(".railway.internal")
+        )
+        if not railway_api and api.scheme == "http" and (api.hostname or "").endswith(
             ".internal.invalid"
         ):
+            raise SettingsValidationError(
+                "CONFIG_PRIVATE_INGRESS", "UMBRAL_API_BASE_URL"
+            )
+        if not railway_api and api.scheme != "https":
+            raise SettingsValidationError("CONFIG_TLS_REQUIRED", "UMBRAL_API_BASE_URL")
+        if not railway_api and not (api.hostname or "").endswith(".internal.invalid"):
             raise SettingsValidationError(
                 "CONFIG_PRIVATE_INGRESS", "UMBRAL_API_BASE_URL"
             )
@@ -182,16 +212,43 @@ class Settings(BaseSettings):
             )
         if not _DIGEST_PATTERN.fullmatch(values["UMBRAL_RELEASE_DIGEST"]):
             raise SettingsValidationError("CONFIG_FORMAT", "UMBRAL_RELEASE_DIGEST")
-        for field_name in ("SENTRY_DSN", "UMBRAL_ACCESS_AUDIENCE"):
+        for field_name in ("SENTRY_DSN",):
             if not values.get(field_name, "").strip():
                 raise SettingsValidationError("CONFIG_REQUIRED", field_name)
+        access_mode = values.get("UMBRAL_ACCESS_MODE", "cloudflare")
+        if access_mode not in {"product_session", "cloudflare"}:
+            raise SettingsValidationError("CONFIG_FORMAT", "UMBRAL_ACCESS_MODE")
+        if access_mode == "cloudflare" and not values.get(
+            "UMBRAL_ACCESS_AUDIENCE", ""
+        ).strip():
+            raise SettingsValidationError("CONFIG_REQUIRED", "UMBRAL_ACCESS_AUDIENCE")
         sentry = _url(values["SENTRY_DSN"], "SENTRY_DSN")
         if sentry.scheme != "https":
             raise SettingsValidationError("CONFIG_TLS_REQUIRED", "SENTRY_DSN")
-        if "SESSION_COOKIE_NAME" in values and values["SESSION_COOKIE_NAME"] != "__Host-umbral_session":
+        if environment == "preview":
+            cls._validate_preview_providers(values)
+        if values.get("SESSION_COOKIE_NAME", "__Host-umbral_session") != "__Host-umbral_session":
             raise SettingsValidationError("CONFIG_COOKIE_NAME", "SESSION_COOKIE_NAME")
-        if "SESSION_SECURE" in values and values["SESSION_SECURE"].lower() not in {"1", "true", "yes"}:
+        if values.get("SESSION_SECURE", "true").lower() not in {"1", "true", "yes"}:
             raise SettingsValidationError("CONFIG_TLS_REQUIRED", "SESSION_SECURE")
+
+    @classmethod
+    def _validate_preview_providers(cls, values: Mapping[str, str]) -> None:
+        if values.get("IDENTITY_PROVIDER", "fake") != "supabase":
+            raise SettingsValidationError("CONFIG_PROVIDER", "IDENTITY_PROVIDER")
+        if values.get("EMAIL_PROVIDER", "recording") != "resend":
+            raise SettingsValidationError("CONFIG_PROVIDER", "EMAIL_PROVIDER")
+        for field_name in (
+            "SUPABASE_URL",
+            "SUPABASE_SECRET_KEY",
+            "RESEND_API_KEY",
+            "RESEND_FROM_EMAIL",
+            "EMAIL_WEBHOOK_SECRET",
+        ):
+            if not values.get(field_name, "").strip():
+                raise SettingsValidationError("CONFIG_REQUIRED", field_name)
+        if not values["SUPABASE_SECRET_KEY"].startswith("sb_secret_"):
+            raise SettingsValidationError("CONFIG_FORMAT", "SUPABASE_SECRET_KEY")
 
     @staticmethod
     def _reject_example(value: str, field_name: str) -> None:

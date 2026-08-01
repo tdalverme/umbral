@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 import pytest
+
 from umbral.infrastructure.config.settings import Settings, SettingsValidationError
 
 
@@ -46,7 +47,10 @@ def _secret_canaries(case: ConfigurationCase) -> set[str]:
         "DATABASE_URL",
         "REDIS_URL",
         "SENTRY_DSN",
+        "SUPABASE_SECRET_KEY",
         "UMBRAL_ACCESS_AUDIENCE",
+        "RESEND_API_KEY",
+        "EMAIL_WEBHOOK_SECRET",
     }
     return {
         value
@@ -88,6 +92,7 @@ def test_configuration_fixture_covers_required_invalid_setting_categories() -> N
         "CONFIG_BACKEND",
         "CONFIG_TLS_REQUIRED",
         "CONFIG_PRIVATE_INGRESS",
+        "CONFIG_PROVIDER",
         "CONFIG_RELEASE_DIGEST_REQUIRED",
         "CONFIG_UNKNOWN_SETTING",
     }

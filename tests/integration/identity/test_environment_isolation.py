@@ -6,29 +6,36 @@ from umbral.infrastructure.config.settings import Settings, SettingsValidationEr
 from umbral.infrastructure.identity.registry import build_identity_registry
 
 
-def _settings(environment: str, *, origin: str) -> Settings:
-    return Settings.model_validate(
+def _preview_settings(*, origin: str) -> Settings:
+    return Settings.from_environment(
         {
-            "UMBRAL_ENV": environment,
-            "UMBRAL_RELEASE_ID": f"{environment}-test",
-            "UMBRAL_RELEASE_MANIFEST": "<local>",
-            "DATABASE_URL": "postgresql://user:pass@db.invalid/app",
-            "REDIS_URL": "redis://redis.invalid/0",
-            "OBJECT_STORE_BACKEND": "filesystem",
-            "OBJECT_STORE_ROOT": ".data",
-            "OTEL_EXPORTER_OTLP_ENDPOINT": "http://otel.invalid",
-            "UMBRAL_API_BASE_URL": "http://api.invalid",
-            "IDENTITY_PROVIDER": "fake",
-            "IDENTITY_ISSUER": f"fake://{environment}",
+            "UMBRAL_ENV": "preview",
+            "UMBRAL_RELEASE_ID": "preview-test",
+            "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release.json",
+            "UMBRAL_RELEASE_DIGEST": "sha256:" + "a" * 64,
+            "DATABASE_URL": "postgresql://user:pass@db.preview.invalid/app",
+            "REDIS_URL": "redis://redis.railway.internal/0",
+            "OBJECT_STORE_BACKEND": "s3",
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid",
+            "SENTRY_DSN": "https://sentry.invalid/1",
+            "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000",
+            "UMBRAL_ACCESS_MODE": "product_session",
+            "IDENTITY_PROVIDER": "supabase",
+            "SUPABASE_URL": "https://project.supabase.co",
+            "SUPABASE_SECRET_KEY": "sb_secret_test_value",
+            "IDENTITY_ISSUER": "https://project.supabase.co/auth/v1",
             "IDENTITY_CAPTURE_ORIGIN": origin,
-            "EMAIL_PROVIDER": "recording",
+            "EMAIL_PROVIDER": "resend",
+            "RESEND_API_KEY": "re_test_value",
+            "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>",
+            "EMAIL_WEBHOOK_SECRET": "whsec_test_value",
         }
     )
 
 
 def test_provider_registry_keeps_environment_redirect_allowlist() -> None:
     registry = build_identity_registry(
-        _settings("preview", origin="https://preview.umbral.invalid")
+        _preview_settings(origin="https://preview.umbral.invalid")
     )
     registry.policy.assert_capture_url("https://preview.umbral.invalid/auth/capture?x=1")
     with pytest.raises(ValueError):

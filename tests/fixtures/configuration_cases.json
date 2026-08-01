@@ -31,17 +31,137 @@
         "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
         "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
         "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require",
-        "REDIS_URL": "rediss://umbral:redis-canary@redis.preview.invalid:6379/0",
+        "REDIS_URL": "redis://redis.railway.internal:6379/0",
         "OBJECT_STORE_BACKEND": "s3",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces",
         "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1",
-        "UMBRAL_API_BASE_URL": "https://api.preview.internal.invalid",
-        "UMBRAL_ACCESS_AUDIENCE": "preview-audience-canary"
+        "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000",
+        "UMBRAL_ACCESS_MODE": "product_session",
+        "IDENTITY_PROVIDER": "supabase",
+        "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co",
+        "SUPABASE_SECRET_KEY": "sb_secret_test_value",
+        "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1",
+        "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app",
+        "EMAIL_PROVIDER": "resend",
+        "RESEND_API_KEY": "re_test_value",
+        "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>",
+        "EMAIL_WEBHOOK_SECRET": "whsec_test_value"
       },
       "overrides": {},
       "expected": {
         "accepted": true,
         "rule_code": "CONFIG_ACCEPTED"
+      }
+    },
+    {
+      "id": "preview-fake-identity-provider",
+      "environment": "preview",
+      "input": {"UMBRAL_ENV": "preview", "UMBRAL_RELEASE_ID": "foundation-preview", "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json", "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require", "REDIS_URL": "redis://redis.railway.internal:6379/0", "OBJECT_STORE_BACKEND": "s3", "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces", "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1", "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000", "UMBRAL_ACCESS_MODE": "product_session", "IDENTITY_PROVIDER": "fake", "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co", "SUPABASE_SECRET_KEY": "sb_secret_test_value", "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1", "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app", "EMAIL_PROVIDER": "resend", "RESEND_API_KEY": "re_test_value", "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>", "EMAIL_WEBHOOK_SECRET": "whsec_test_value"},
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_PROVIDER"
+      }
+    },
+    {
+      "id": "preview-recording-email-provider",
+      "environment": "preview",
+      "input": {"UMBRAL_ENV": "preview", "UMBRAL_RELEASE_ID": "foundation-preview", "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json", "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require", "REDIS_URL": "redis://redis.railway.internal:6379/0", "OBJECT_STORE_BACKEND": "s3", "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces", "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1", "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000", "UMBRAL_ACCESS_MODE": "product_session", "IDENTITY_PROVIDER": "supabase", "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co", "SUPABASE_SECRET_KEY": "sb_secret_test_value", "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1", "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app", "EMAIL_PROVIDER": "recording", "RESEND_API_KEY": "re_test_value", "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>", "EMAIL_WEBHOOK_SECRET": "whsec_test_value"},
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_PROVIDER"
+      }
+    },
+    {
+      "id": "preview-missing-supabase-secret-key",
+      "environment": "preview",
+      "input": {"UMBRAL_ENV": "preview", "UMBRAL_RELEASE_ID": "foundation-preview", "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json", "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require", "REDIS_URL": "redis://redis.railway.internal:6379/0", "OBJECT_STORE_BACKEND": "s3", "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces", "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1", "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000", "UMBRAL_ACCESS_MODE": "product_session", "IDENTITY_PROVIDER": "supabase", "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co", "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1", "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app", "EMAIL_PROVIDER": "resend", "RESEND_API_KEY": "re_test_value", "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>", "EMAIL_WEBHOOK_SECRET": "whsec_test_value"},
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_REQUIRED"
+      }
+    },
+    {
+      "id": "preview-non-secret-supabase-key",
+      "environment": "preview",
+      "input": {"UMBRAL_ENV": "preview", "UMBRAL_RELEASE_ID": "foundation-preview", "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json", "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require", "REDIS_URL": "redis://redis.railway.internal:6379/0", "OBJECT_STORE_BACKEND": "s3", "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces", "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1", "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000", "UMBRAL_ACCESS_MODE": "product_session", "IDENTITY_PROVIDER": "supabase", "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co", "SUPABASE_SECRET_KEY": "eyJ_test_value", "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1", "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app", "EMAIL_PROVIDER": "resend", "RESEND_API_KEY": "re_test_value", "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>", "EMAIL_WEBHOOK_SECRET": "whsec_test_value"},
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_FORMAT"
+      }
+    },
+    {
+      "id": "preview-missing-resend-from-email",
+      "environment": "preview",
+      "input": {"UMBRAL_ENV": "preview", "UMBRAL_RELEASE_ID": "foundation-preview", "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json", "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require", "REDIS_URL": "redis://redis.railway.internal:6379/0", "OBJECT_STORE_BACKEND": "s3", "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces", "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1", "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000", "UMBRAL_ACCESS_MODE": "product_session", "IDENTITY_PROVIDER": "supabase", "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co", "SUPABASE_SECRET_KEY": "sb_secret_test_value", "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1", "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app", "EMAIL_PROVIDER": "resend", "RESEND_API_KEY": "re_test_value", "EMAIL_WEBHOOK_SECRET": "whsec_test_value"},
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_REQUIRED"
+      }
+    },
+    {
+      "id": "preview-arbitrary-private-api-hostname",
+      "environment": "preview",
+      "input": {"UMBRAL_ENV": "preview", "UMBRAL_RELEASE_ID": "foundation-preview", "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json", "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require", "REDIS_URL": "redis://redis.railway.internal:6379/0", "OBJECT_STORE_BACKEND": "s3", "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces", "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1", "UMBRAL_API_BASE_URL": "http://api.preview.internal.invalid:8000", "UMBRAL_ACCESS_MODE": "product_session", "IDENTITY_PROVIDER": "supabase", "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co", "SUPABASE_SECRET_KEY": "sb_secret_test_value", "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1", "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app", "EMAIL_PROVIDER": "resend", "RESEND_API_KEY": "re_test_value", "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>", "EMAIL_WEBHOOK_SECRET": "whsec_test_value"},
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_PRIVATE_INGRESS"
+      }
+    },
+    {
+      "id": "preview-public-plaintext-redis",
+      "environment": "preview",
+      "input": {"UMBRAL_ENV": "preview", "UMBRAL_RELEASE_ID": "foundation-preview", "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json", "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require", "REDIS_URL": "redis://redis.preview.invalid:6379/0", "OBJECT_STORE_BACKEND": "s3", "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces", "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1", "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000", "UMBRAL_ACCESS_MODE": "product_session", "IDENTITY_PROVIDER": "supabase", "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co", "SUPABASE_SECRET_KEY": "sb_secret_test_value", "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1", "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app", "EMAIL_PROVIDER": "resend", "RESEND_API_KEY": "re_test_value", "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>", "EMAIL_WEBHOOK_SECRET": "whsec_test_value"},
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_TLS_REQUIRED"
+      }
+    },
+    {
+      "id": "preview-insecure-session-cookie",
+      "environment": "preview",
+      "input": {"UMBRAL_ENV": "preview", "UMBRAL_RELEASE_ID": "foundation-preview", "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json", "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require", "REDIS_URL": "redis://redis.railway.internal:6379/0", "OBJECT_STORE_BACKEND": "s3", "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces", "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1", "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000", "UMBRAL_ACCESS_MODE": "product_session", "IDENTITY_PROVIDER": "supabase", "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co", "SUPABASE_SECRET_KEY": "sb_secret_test_value", "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1", "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app", "EMAIL_PROVIDER": "resend", "RESEND_API_KEY": "re_test_value", "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>", "EMAIL_WEBHOOK_SECRET": "whsec_test_value", "SESSION_SECURE": "false"},
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_TLS_REQUIRED"
+      }
+    },
+    {
+      "id": "preview-cloudflare-without-audience",
+      "environment": "preview",
+      "input": {
+        "UMBRAL_ENV": "preview",
+        "UMBRAL_RELEASE_ID": "foundation-preview",
+        "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release-manifest.json",
+        "UMBRAL_RELEASE_DIGEST": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "DATABASE_URL": "postgresql://umbral:db-canary@postgres.preview.invalid:5432/umbral?sslmode=require",
+        "REDIS_URL": "redis://redis.railway.internal:6379/0",
+        "OBJECT_STORE_BACKEND": "s3",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid/v1/traces",
+        "SENTRY_DSN": "https://canary@o1.ingest.sentry.invalid/1",
+        "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000",
+        "UMBRAL_ACCESS_MODE": "cloudflare",
+        "IDENTITY_PROVIDER": "supabase",
+        "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co",
+        "SUPABASE_SECRET_KEY": "sb_secret_test_value",
+        "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1",
+        "IDENTITY_CAPTURE_ORIGIN": "https://umbral-beta.up.railway.app",
+        "EMAIL_PROVIDER": "resend",
+        "RESEND_API_KEY": "re_test_value",
+        "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>",
+        "EMAIL_WEBHOOK_SECRET": "whsec_test_value"
+      },
+      "overrides": {},
+      "expected": {
+        "accepted": false,
+        "rule_code": "CONFIG_REQUIRED"
       }
     },
     {

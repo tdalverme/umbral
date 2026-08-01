@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from umbral.infrastructure.config.settings import Settings
 from umbral.ops.access import AccessPolicy, AccessPolicyViolation
 
 
@@ -43,3 +44,32 @@ def test_jwt_claims_must_match_audience_and_expiry() -> None:
         policy.validate_claims(
             {"aud": "umbral-runtime", "exp": 1_800_000_000}, now=1_900_000_000
         )
+
+
+def test_preview_product_session_mode_does_not_require_cloudflare_audience() -> None:
+    settings = Settings.from_environment(
+        {
+            "UMBRAL_ENV": "preview",
+            "UMBRAL_RELEASE_ID": "preview-test",
+            "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release.json",
+            "UMBRAL_RELEASE_DIGEST": "sha256:" + "a" * 64,
+            "DATABASE_URL": "postgresql://user:pass@db.preview.invalid/app",
+            "REDIS_URL": "redis://redis.railway.internal/0",
+            "OBJECT_STORE_BACKEND": "s3",
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid",
+            "SENTRY_DSN": "https://sentry.invalid/1",
+            "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000",
+            "UMBRAL_ACCESS_MODE": "product_session",
+            "IDENTITY_PROVIDER": "supabase",
+            "SUPABASE_URL": "https://project.supabase.co",
+            "SUPABASE_SECRET_KEY": "sb_secret_test_value",
+            "IDENTITY_ISSUER": "https://project.supabase.co/auth/v1",
+            "IDENTITY_CAPTURE_ORIGIN": "https://preview.umbral.invalid",
+            "EMAIL_PROVIDER": "resend",
+            "RESEND_API_KEY": "re_test_value",
+            "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>",
+            "EMAIL_WEBHOOK_SECRET": "whsec_test_value",
+        }
+    )
+
+    assert settings.access_mode == "product_session"
