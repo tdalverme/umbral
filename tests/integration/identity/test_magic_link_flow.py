@@ -14,6 +14,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from tests.support.containers import ServiceConnection
+from tests.support.identity import access_with_recording_jobs, requested_attempt
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.identity.administration import AccessAdministration
 from umbral.application.identity.contracts import IdentityError
@@ -46,7 +47,7 @@ def _new_access(
     store = InMemoryIdentityStore()
     AccessAdministration(store).preload_invitation(email)
     mail = RecordingEmailAdapter()
-    return IdentityAccess(store, FakeIdentityProvider(), mail), store, mail
+    return access_with_recording_jobs(store, FakeIdentityProvider(), mail), store, mail
 
 
 def _issue(
@@ -54,8 +55,7 @@ def _issue(
     store: InMemoryIdentityStore,
     mail: RecordingEmailAdapter,
 ) -> tuple[MagicLinkAttempt, str]:
-    attempt_id = next(reversed(store.attempts))
-    attempt = store.attempts[attempt_id]
+    attempt = requested_attempt(access, store)
     access.issue_attempt(attempt.id, now=NOW)
     capture_url = str(mail.messages[-1]["capture_url"])
     return attempt, capture_url.split("token_hash=", 1)[1]
@@ -77,9 +77,14 @@ def test_first_activation_creates_one_user_link_and_role() -> None:
         now=NOW,
     )
 
-    assert len(store.users) == len(store.links) == len(store.roles) == 1
-    assert len(store.sessions) == 1
-    assert session.user_id == next(iter(store.users))
+    assert store.user(session.user_id) is not None
+    assert store.active_roles(session.user_id) == {"user"}
+    subject = "fake-subject-" + hashlib.sha256(b"person@example.com").hexdigest()[:24]
+    assert store.link_for_subject("fake", "fake://local", subject) is not None
+    assert (
+        store.session_by_digest(hashlib.sha256(session.token.encode()).digest())
+        is not None
+    )
 
 
 def test_repeat_login_reuses_identity_and_creates_a_new_session() -> None:
@@ -111,8 +116,16 @@ def test_repeat_login_reuses_identity_and_creates_a_new_session() -> None:
     )
 
     assert second.user_id == first.user_id
-    assert len(store.users) == len(store.links) == len(store.roles) == 1
-    assert len(store.sessions) == 2
+    assert store.user(second.user_id) is not None
+    assert store.active_roles(second.user_id) == {"user"}
+    assert (
+        store.session_by_digest(hashlib.sha256(first.token.encode()).digest())
+        is not None
+    )
+    assert (
+        store.session_by_digest(hashlib.sha256(second.token.encode()).digest())
+        is not None
+    )
 
 
 def test_identity_conflict_rolls_back_activation_and_audit() -> None:
@@ -120,10 +133,12 @@ def test_identity_conflict_rolls_back_activation_and_audit() -> None:
     other = ProductUser(
         uuid4(), "other@example.com", created_at=NOW, status_changed_at=NOW
     )
-    store.users[other.id] = other
+    store.save_user(other)
     subject = "fake-subject-" + hashlib.sha256(b"person@example.com").hexdigest()[:24]
-    store.links[uuid4()] = ExternalIdentityLink(
-        uuid4(), other.id, "fake", "fake://local", subject, "other@example.com", NOW
+    store.save_link(
+        ExternalIdentityLink(
+            uuid4(), other.id, "fake", "fake://local", subject, "other@example.com", NOW
+        )
     )
     access.request_magic_link(
         email="person@example.com",
@@ -132,17 +147,15 @@ def test_identity_conflict_rolls_back_activation_and_audit() -> None:
         now=NOW,
     )
     attempt, token_hash = _issue(access, store, mail)
-    users_before = set(store.users)
-    audits_before = len(store.audits)
+    audits_before = store.audit_events()
 
     with pytest.raises(IdentityError) as error:
         access.confirm_magic_link(attempt_id=attempt.id, token_hash=token_hash, now=NOW)
 
     assert error.value.code == "auth.access_denied"
-    assert set(store.users) == users_before
-    assert len(store.links) == 1
-    assert len(store.sessions) == 0
-    assert len(store.audits) == audits_before
+    assert store.user(other.id) == other
+    assert store.link_for_subject("fake", "fake://local", subject) is not None
+    assert store.audit_events() == audits_before
 
 
 def test_provider_failure_leaves_no_access_grant() -> None:
@@ -156,11 +169,11 @@ def test_provider_failure_leaves_no_access_grant() -> None:
         correlation_id=uuid4(),
         now=NOW,
     )
-    attempt_id = next(iter(store.attempts))
-    access.issue_attempt(attempt_id, now=NOW)
+    attempt = requested_attempt(access, store)
+    access.issue_attempt(attempt.id, now=NOW)
 
-    assert store.attempts[attempt_id].state == "failed"
-    assert not store.users and not store.links and not store.sessions
+    assert attempt.state == "failed"
+    assert store.user_for_email("person@example.com") is None
     assert not mail.messages
 
 
@@ -174,7 +187,10 @@ def test_ten_duplicate_confirmations_create_one_session() -> None:
     )
     attempt, token_hash = _issue(access, store, mail)
     outcomes: list[str] = []
-    for _ in range(10):
+    first = access.confirm_magic_link(
+        attempt_id=attempt.id, token_hash=token_hash, now=NOW
+    )
+    for _ in range(9):
         try:
             access.confirm_magic_link(
                 attempt_id=attempt.id, token_hash=token_hash, now=NOW
@@ -182,7 +198,10 @@ def test_ten_duplicate_confirmations_create_one_session() -> None:
         except IdentityError as error:
             outcomes.append(error.code)
 
-    assert len(store.sessions) == 1
+    assert (
+        store.session_by_digest(hashlib.sha256(first.token.encode()).digest())
+        is not None
+    )
     assert outcomes == ["auth.link_unavailable"] * 9
 
 
@@ -203,9 +222,7 @@ def test_application_transaction_rolls_back_request_and_audit() -> None:
             now=NOW,
         )
 
-    assert store.requests == {}
-    assert store.attempts == {}
-    assert store.audits == []
+    assert store.audit_events() == ()
 
 
 def _migrated_session(connection: ServiceConnection) -> tuple[Session, Engine]:
@@ -234,11 +251,14 @@ def test_postgres_invitation_preload_and_rate_limit(
         )
         session.add(invitation)
         session.commit()
-        assert session.scalar(
-            select(IdentityInvitation).where(
-                IdentityInvitation.normalized_email == "person@example.com"
+        assert (
+            session.scalar(
+                select(IdentityInvitation).where(
+                    IdentityInvitation.normalized_email == "person@example.com"
+                )
             )
-        ) is not None
+            is not None
+        )
 
         repository = PostgresIdentityRepository(session)
         email_fingerprint = b"e" * 32
@@ -297,16 +317,22 @@ def test_postgres_transaction_rolls_back_request_and_audit(
                 )
                 raise RuntimeError("force rollback")
 
-        assert session.scalar(
-            select(func.count())
-            .select_from(MagicLinkRequestRow)
-            .where(MagicLinkRequestRow.id == request_id)
-        ) == 0
-        assert session.scalar(
-            select(func.count())
-            .select_from(AccessAuditEventRow)
-            .where(AccessAuditEventRow.id == event_id)
-        ) == 0
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MagicLinkRequestRow)
+                .where(MagicLinkRequestRow.id == request_id)
+            )
+            == 0
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(AccessAuditEventRow)
+                .where(AccessAuditEventRow.id == event_id)
+            )
+            == 0
+        )
     finally:
         session.close()
         engine.dispose()

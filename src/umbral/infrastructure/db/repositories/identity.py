@@ -64,7 +64,14 @@ class InMemoryIdentityStore:
         return hmac.new(self._key, value.encode(), hashlib.sha256).digest()
 
     def invitation_for_email(self, email: str) -> Invitation | None:
-        return next((item for item in self._invitations.values() if item.normalized_email == email), None)
+        return next(
+            (
+                item
+                for item in self._invitations.values()
+                if item.normalized_email == email
+            ),
+            None,
+        )
 
     def invitation(self, invitation_id: UUID) -> Invitation | None:
         return self._invitations.get(invitation_id)
@@ -76,25 +83,53 @@ class InMemoryIdentityStore:
         return self._users.get(user_id)
 
     def user_for_email(self, email: str) -> ProductUser | None:
-        return next((item for item in self._users.values() if item.normalized_email == email), None)
+        return next(
+            (item for item in self._users.values() if item.normalized_email == email),
+            None,
+        )
 
     def save_user(self, user: ProductUser) -> None:
         self._users[user.id] = user
 
-    def link_for_subject(self, provider: str, issuer: str, subject: str) -> ExternalIdentityLink | None:
-        return next((item for item in self._links.values() if item.provider == provider and item.provider_issuer == issuer and item.provider_subject == subject), None)
+    def link_for_subject(
+        self, provider: str, issuer: str, subject: str
+    ) -> ExternalIdentityLink | None:
+        return next(
+            (
+                item
+                for item in self._links.values()
+                if item.provider == provider
+                and item.provider_issuer == issuer
+                and item.provider_subject == subject
+            ),
+            None,
+        )
 
     def save_link(self, link: ExternalIdentityLink) -> None:
         self._links[link.id] = link
 
     def active_roles(self, user_id: UUID) -> set[str]:
-        return {item.role for item in self._roles.values() if item.product_user_id == user_id and item.active}
+        return {
+            item.role
+            for item in self._roles.values()
+            if item.product_user_id == user_id and item.active
+        }
 
     def active_role(self, user_id: UUID, role: str) -> RoleAssignment | None:
-        return next((item for item in self._roles.values() if item.product_user_id == user_id and item.role == role and item.active), None)
+        return next(
+            (
+                item
+                for item in self._roles.values()
+                if item.product_user_id == user_id and item.role == role and item.active
+            ),
+            None,
+        )
 
     def has_active_administrator(self) -> bool:
-        return any(item.role == "administrator" and item.active for item in self._roles.values())
+        return any(
+            item.role == "administrator" and item.active
+            for item in self._roles.values()
+        )
 
     def save_role(self, role: RoleAssignment) -> None:
         self._roles[role.id] = role
@@ -105,24 +140,35 @@ class InMemoryIdentityStore:
     def request(self, request_id: UUID) -> MagicLinkRequest | None:
         return self._requests.get(request_id)
 
-    def current_attempt(self, *, invitation_id: UUID | None = None, product_user_id: UUID | None = None) -> MagicLinkAttempt | None:
-        candidates = [item for item in self._attempts.values() if item.state == "issued"]
+    def current_attempt(
+        self, *, invitation_id: UUID | None = None, product_user_id: UUID | None = None
+    ) -> MagicLinkAttempt | None:
+        candidates = [
+            item for item in self._attempts.values() if item.state == "issued"
+        ]
         if invitation_id is not None:
-            candidates = [item for item in candidates if item.invitation_id == invitation_id]
+            candidates = [
+                item for item in candidates if item.invitation_id == invitation_id
+            ]
         if product_user_id is not None:
-            candidates = [item for item in candidates if item.product_user_id == product_user_id]
-        return max(candidates, key=lambda item: item.issued_at or datetime.min.replace(tzinfo=timezone.utc), default=None)
-
-    def latest_attempt(self) -> MagicLinkAttempt | None:
+            candidates = [
+                item for item in candidates if item.product_user_id == product_user_id
+            ]
         return max(
-            self._attempts.values(),
-            key=lambda item: self._requests[item.request_id].requested_at,
+            candidates,
+            key=lambda item: (
+                item.issued_at or datetime.min.replace(tzinfo=timezone.utc)
+            ),
             default=None,
         )
 
     def recent_requests(self, fingerprint: bytes, *, now: datetime, field: str) -> int:
         threshold = now.astimezone(timezone.utc) - timedelta(minutes=15)
-        return sum(1 for item in self._requests.values() if getattr(item, field) == fingerprint and item.requested_at > threshold)
+        return sum(
+            1
+            for item in self._requests.values()
+            if getattr(item, field) == fingerprint and item.requested_at > threshold
+        )
 
     def save_attempt(self, attempt: MagicLinkAttempt) -> None:
         self._attempts[attempt.id] = attempt
@@ -131,10 +177,24 @@ class InMemoryIdentityStore:
         return self._attempts.get(attempt_id)
 
     def attempt_for_provider_message(self, message_id: str) -> MagicLinkAttempt | None:
-        return next((item for item in self._attempts.values() if item.provider_message_id == message_id), None)
+        return next(
+            (
+                item
+                for item in self._attempts.values()
+                if item.provider_message_id == message_id
+            ),
+            None,
+        )
 
     def session_by_digest(self, digest: bytes) -> ProductSession | None:
-        return next((item for item in self._sessions.values() if hmac.compare_digest(item.token_digest, digest)), None)
+        return next(
+            (
+                item
+                for item in self._sessions.values()
+                if hmac.compare_digest(item.token_digest, digest)
+            ),
+            None,
+        )
 
     def save_session(self, session: ProductSession) -> None:
         self._sessions[session.id] = session
@@ -142,7 +202,9 @@ class InMemoryIdentityStore:
     def append_audit(self, event: AccessAuditEvent) -> None:
         self._audits.append(event)
 
-    def append_provider_audit_once(self, provider: str, event_id: str, audit_event: AccessAuditEvent | None) -> bool:
+    def append_provider_audit_once(
+        self, provider: str, event_id: str, audit_event: AccessAuditEvent | None
+    ) -> bool:
         key = (provider, event_id)
         if key in self._provider_events:
             return False
@@ -174,13 +236,15 @@ class InMemoryIdentityStore:
         return len(self._sessions)
 
     def purge_requests_before(self, cutoff: datetime) -> int:
-        expired = [key for key, item in self._requests.items() if item.purge_after <= cutoff]
+        expired = [
+            key for key, item in self._requests.items() if item.purge_after <= cutoff
+        ]
         for key in expired:
             del self._requests[key]
         return len(expired)
 
     @contextmanager
-    def transaction(self) -> Iterator[InMemoryIdentityStore]:
+    def transaction(self) -> Iterator[None]:
         """Provide rollback semantics for local identity composition tests."""
 
         with self._lock:
@@ -194,7 +258,7 @@ class InMemoryIdentityStore:
             audits = deepcopy(self._audits)
             provider_events = deepcopy(self._provider_events)
             try:
-                yield self
+                yield
             except Exception:
                 self._invitations = invitations
                 self._users = users
@@ -250,7 +314,9 @@ class PostgresIdentityRepository:
         now = self.database_now()
         window = text("current_timestamp - interval '15 minutes'")
         email_count = self._count_recent("email_fingerprint", email_fingerprint, window)
-        origin_count = self._count_recent("origin_fingerprint", origin_fingerprint, window)
+        origin_count = self._count_recent(
+            "origin_fingerprint", origin_fingerprint, window
+        )
         allowed = email_count < email_limit and origin_count < origin_limit
         self.session.add(
             MagicLinkRequestRow(
@@ -276,7 +342,11 @@ class PostgresIdentityRepository:
         return int(value or 0)
 
     def find_user_by_email(self, normalized_email: str) -> ProductUserRow | None:
-        return self.session.scalar(select(ProductUserRow).where(ProductUserRow.normalized_email == normalized_email))
+        return self.session.scalar(
+            select(ProductUserRow).where(
+                ProductUserRow.normalized_email == normalized_email
+            )
+        )
 
     def current_roles(self, user_id: UUID) -> set[str]:
         rows = self.session.scalars(
@@ -288,7 +358,11 @@ class PostgresIdentityRepository:
         return set(rows)
 
     def session_by_digest(self, token_digest: bytes) -> ProductSessionRow | None:
-        return self.session.scalar(select(ProductSessionRow).where(ProductSessionRow.token_digest == token_digest))
+        return self.session.scalar(
+            select(ProductSessionRow).where(
+                ProductSessionRow.token_digest == token_digest
+            )
+        )
 
     def append_audit(self, event: AccessAuditEvent) -> None:
         """Stage one append-only audit row; the caller owns commit/rollback."""

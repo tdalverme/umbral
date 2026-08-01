@@ -283,6 +283,9 @@ class IdentityAccess:
             with self._transaction():
                 current_attempt = self.store.attempt(attempt_id)
                 if current_attempt is not None:
+                    request = self.store.request(current_attempt.request_id)
+                    if request is None:
+                        raise link_unavailable()
                     self._audit(
                         "identity.conflict.v1",
                         "denied",
@@ -290,7 +293,7 @@ class IdentityAccess:
                         if proof.provider != self.provider.provider
                         or proof.issuer != self.provider.issuer
                         else "missing_verified_attribute",
-                        self.store.request(current_attempt.request_id).correlation_id,
+                        request.correlation_id,
                         attempt_id=attempt_id,
                     )
             raise access_denied()
@@ -309,19 +312,22 @@ class IdentityAccess:
             attempt = self.store.attempt(attempt_id)
             if attempt is None:
                 raise link_unavailable()
+            request = self.store.request(attempt.request_id)
+            if request is None:
+                raise link_unavailable()
             if not attempt.current_and_valid(now):
                 raise link_unavailable("link_consumed")
             user = self.store.user(attempt.product_user_id) if attempt.product_user_id else None
             invitation = self.store.invitation(attempt.invitation_id) if attempt.invitation_id else None
             existing_link = self.store.link_for_subject(proof.provider, proof.issuer, proof.subject)
             if existing_link and (user is None or existing_link.product_user_id != user.id):
-                self._audit("identity.conflict.v1", "denied", "subject_conflict", self.store.request(attempt.request_id).correlation_id, attempt_id=attempt_id)
+                self._audit("identity.conflict.v1", "denied", "subject_conflict", request.correlation_id, attempt_id=attempt_id)
                 raise access_denied()
             if user and user.normalized_email != normalized:
-                self._audit("identity.conflict.v1", "denied", "email_mismatch", self.store.request(attempt.request_id).correlation_id, attempt_id=attempt_id)
+                self._audit("identity.conflict.v1", "denied", "email_mismatch", request.correlation_id, attempt_id=attempt_id)
                 raise access_denied()
             if invitation and (invitation.status != "active" or invitation.normalized_email != normalized):
-                self._audit("identity.conflict.v1", "denied", "not_eligible", self.store.request(attempt.request_id).correlation_id, attempt_id=attempt_id)
+                self._audit("identity.conflict.v1", "denied", "not_eligible", request.correlation_id, attempt_id=attempt_id)
                 raise access_denied()
             if user is None:
                 user = ProductUser(uuid4(), normalized, status="active", created_at=now, status_changed_at=now)
@@ -333,11 +339,11 @@ class IdentityAccess:
                     invitation.accepted_user_id = user.id
                     invitation.accepted_at = now
                     self.store.save_invitation(invitation)
-                self._audit("user.activated.v1", "accepted", "eligible", self.store.request(attempt.request_id).correlation_id, subject_user_id=user.id, attempt_id=attempt_id)
+                self._audit("user.activated.v1", "accepted", "eligible", request.correlation_id, subject_user_id=user.id, attempt_id=attempt_id)
             if existing_link is None:
                 link = ExternalIdentityLink(uuid4(), user.id, proof.provider, proof.issuer, proof.subject, normalized, proof.verified_at)
                 self.store.save_link(link)
-                self._audit("identity.linked.v1", "accepted", "eligible", self.store.request(attempt.request_id).correlation_id, subject_user_id=user.id, attempt_id=attempt_id)
+                self._audit("identity.linked.v1", "accepted", "eligible", request.correlation_id, subject_user_id=user.id, attempt_id=attempt_id)
             attempt.state = "consumed"
             attempt.consumed_at = now
             self.store.save_attempt(attempt)
@@ -345,8 +351,8 @@ class IdentityAccess:
             digest = hashlib.sha256(token.encode()).digest()
             session = ProductSession(uuid4(), user.id, attempt.id, digest, now)
             self.store.save_session(session)
-            self._audit("magic_link.consumed.v1", "accepted", "link_consumed", self.store.request(attempt.request_id).correlation_id, subject_user_id=user.id, attempt_id=attempt_id, session_id=session.id)
-            self._audit("session.started.v1", "accepted", "eligible", self.store.request(attempt.request_id).correlation_id, subject_user_id=user.id, attempt_id=attempt_id, session_id=session.id)
+            self._audit("magic_link.consumed.v1", "accepted", "link_consumed", request.correlation_id, subject_user_id=user.id, attempt_id=attempt_id, session_id=session.id)
+            self._audit("session.started.v1", "accepted", "eligible", request.correlation_id, subject_user_id=user.id, attempt_id=attempt_id, session_id=session.id)
             return SessionResult(session.id, user.id, token, now)
 
     def principal(
@@ -395,5 +401,33 @@ class IdentityAccess:
         validate_event(event_type=event_type, result=result, reason=reason, fields={"subject_user_id": subject_user_id, "request_id": request_id, "attempt_id": attempt_id, "session_id": session_id, "action": action, "provider": provider, "provider_event_id": provider_event_id})
         return AccessAuditEvent(uuid4(), event_type, result, reason, correlation_id, datetime.now(timezone.utc), subject_user_id=subject_user_id, request_id=request_id, attempt_id=attempt_id, session_id=session_id, action=action, policy_version="identity-policy.v1" if action else None, provider=provider, provider_event_id=provider_event_id)
 
-    def _audit(self, *args: object, **kwargs: object) -> None:
-        self.store.append_audit(self._new_audit(*args, **kwargs))
+    def _audit(
+        self,
+        event_type: str,
+        result: str,
+        reason: str,
+        correlation_id: UUID,
+        *,
+        subject_user_id: UUID | None = None,
+        request_id: UUID | None = None,
+        attempt_id: UUID | None = None,
+        session_id: UUID | None = None,
+        action: str | None = None,
+        provider: str | None = None,
+        provider_event_id: str | None = None,
+    ) -> None:
+        self.store.append_audit(
+            self._new_audit(
+                event_type,
+                result,
+                reason,
+                correlation_id,
+                subject_user_id=subject_user_id,
+                request_id=request_id,
+                attempt_id=attempt_id,
+                session_id=session_id,
+                action=action,
+                provider=provider,
+                provider_event_id=provider_event_id,
+            )
+        )

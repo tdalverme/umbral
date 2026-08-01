@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from tests.fakes.transactions import InMemoryTransactionManager
+from tests.support.identity import requested_attempt
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.domain.identity.models import Invitation
@@ -37,8 +38,7 @@ def test_identity_request_commits_attempt_job_and_audit_with_one_correlation() -
         now=now,
     )
 
-    attempt = store.latest_attempt()
-    assert attempt is not None
+    attempt = requested_attempt(access, store)
     submission = runtime.submissions[0]
     assert transaction_manager.commits == 1
     assert transaction_manager.rollbacks == 0
