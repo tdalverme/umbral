@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
@@ -14,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 
 from tests.support.containers import ServiceConnection
 from umbral.application.identity.access import IdentityAccess
+from umbral.application.identity.authorization import AccessControl
 from umbral.application.identity.contracts import IdentityError
 from umbral.domain.identity.models import (
     AccessAuditEvent,
@@ -22,6 +24,7 @@ from umbral.domain.identity.models import (
     MagicLinkRequest,
     ProductSession,
     ProductUser,
+    RoleAssignment,
 )
 from umbral.infrastructure.db.repositories.identity import SqlAlchemyIdentityStore
 from umbral.infrastructure.email.recording import RecordingEmailAdapter
@@ -39,11 +42,16 @@ def store_factory(postgres_container: ServiceConnection):
     config.set_main_option("sqlalchemy.url", postgres_container.url)
     command.upgrade(config, "head")
     engine = create_engine(postgres_container.url)
-    factory = sessionmaker(engine)
-    try:
-        yield lambda: SqlAlchemyIdentityStore(
-            factory, fingerprint_key=b"postgres-test-key", environment="test"
+
+    def new_store() -> SqlAlchemyIdentityStore:
+        return SqlAlchemyIdentityStore(
+            sessionmaker(engine),
+            fingerprint_key=b"postgres-test-key",
+            environment="test",
         )
+
+    try:
+        yield new_store
     finally:
         engine.dispose()
 
@@ -130,6 +138,25 @@ def test_provider_dedupe_is_atomic_across_store_instances(store_factory) -> None
     assert reader.audit_events() == (event,)
 
 
+def test_ignored_provider_event_is_validated_and_deduplicated(store_factory) -> None:
+    """Catches restart-unsafe ignored webhooks or an unregistered audit claim."""
+
+    store = store_factory()
+    with store.transaction():
+        assert store.append_provider_audit_once("email", "evt-ignored", None)
+    restarted = store_factory()
+    with restarted.transaction():
+        assert not restarted.append_provider_audit_once("email", "evt-ignored", None)
+
+    events = store_factory().audit_events()
+    assert len(events) == 1
+    assert (events[0].event_type, events[0].result, events[0].reason) == (
+        "provider.event_ignored.v1",
+        "observed",
+        "ignored",
+    )
+
+
 def test_transaction_rollback_leaves_no_identity_or_audit_row(store_factory) -> None:
     """Catches a store that commits one part of an access decision independently."""
 
@@ -152,6 +179,39 @@ def test_transaction_rollback_leaves_no_identity_or_audit_row(store_factory) -> 
 
     restarted = store_factory()
     assert restarted.invitation(invitation.id) is None
+    assert restarted.audit_events() == ()
+
+
+def test_nested_rollback_preserves_outer_transaction(store_factory) -> None:
+    """Catches nested failures that leak inner rows into an outer commit."""
+
+    store = store_factory()
+    outer = Invitation.new("outer@example.com")
+    inner = Invitation.new("inner@example.com")
+    event = AccessAuditEvent(
+        uuid4(),
+        "invitation.preloaded.v1",
+        "accepted",
+        "eligible",
+        uuid4(),
+        NOW,
+        invitation_id=inner.id,
+    )
+
+    with store.transaction():
+        store.save_invitation(outer)
+        with pytest.raises(RuntimeError, match="inner"):
+            with store.transaction():
+                store.save_invitation(inner)
+                store.append_audit(event)
+                raise RuntimeError("inner")
+        assert store.invitation(outer.id) == outer
+        assert store.invitation(inner.id) is None
+        assert store.audit_events() == ()
+
+    restarted = store_factory()
+    assert restarted.invitation(outer.id) == outer
+    assert restarted.invitation(inner.id) is None
     assert restarted.audit_events() == ()
 
 
@@ -209,3 +269,108 @@ def test_concurrent_confirmation_consumes_one_attempt_once(store_factory) -> Non
     assert len(successful) == 1
     assert outcomes.count("auth.link_unavailable") == 1
     assert store_factory().session_count() == 1
+
+
+def test_concurrent_issuance_serializes_an_empty_subject(store_factory) -> None:
+    """Catches two issuers both seeing no current attempt for one invitation."""
+
+    class BarrierEmail(RecordingEmailAdapter):
+        def __init__(self) -> None:
+            super().__init__()
+            self._barrier = Barrier(2)
+
+        def send_magic_link(self, **kwargs):  # type: ignore[no-untyped-def]
+            acceptance = super().send_magic_link(**kwargs)
+            self._barrier.wait(timeout=5)
+            return acceptance
+
+    store = store_factory()
+    invitation = Invitation.new("issuance@example.com")
+    first_request = _request()
+    second_request = _request()
+    first = MagicLinkAttempt(
+        uuid4(), first_request.id, "invitation", invitation.id, None
+    )
+    second = MagicLinkAttempt(
+        uuid4(), second_request.id, "invitation", invitation.id, None
+    )
+    with store.transaction():
+        store.save_invitation(invitation)
+        store.save_request(first_request)
+        store.save_request(second_request)
+        store.save_attempt(first)
+        store.save_attempt(second)
+
+    access = IdentityAccess(store, FakeIdentityProvider(), BarrierEmail())
+
+    def issue(attempt_id):  # type: ignore[no-untyped-def]
+        access.issue_attempt(attempt_id, now=NOW)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(issue, (first.id, second.id)))
+
+    states = {
+        store_factory().attempt(first.id).state,
+        store_factory().attempt(second.id).state,
+    }
+    assert states == {"issued", "superseded"}
+
+
+def test_authorization_activity_and_audit_commit_and_rollback_together(
+    store_factory,
+) -> None:
+    """Catches activity updates committing when their authorization audit rolls back."""
+
+    import hashlib
+
+    store = store_factory()
+    user = ProductUser(
+        uuid4(), "activity@example.com", created_at=NOW, status_changed_at=NOW
+    )
+    request = _request()
+    attempt = MagicLinkAttempt(
+        uuid4(), request.id, "product_user", None, user.id, state="consumed"
+    )
+    token = "activity-token"
+    session = ProductSession(
+        uuid4(), user.id, attempt.id, hashlib.sha256(token.encode()).digest(), NOW
+    )
+    with store.transaction():
+        store.save_user(user)
+        store.save_request(request)
+        store.save_attempt(attempt)
+        store.save_role(RoleAssignment(uuid4(), user.id, "user", NOW))
+        store.save_session(session)
+
+    activity_at = NOW + timedelta(minutes=1)
+    AccessControl(store).authorize(
+        token,
+        action="auth.session.read",
+        resource_owner_id=None,
+        now=activity_at,
+    )
+    reader = store_factory()
+    assert (
+        reader.session_by_digest(session.token_digest).last_activity_at == activity_at
+    )
+    assert reader.audit_events()[-1].event_type == "authorization.allowed.v1"
+    before_audits = reader.audit_events()
+
+    class FailingAuditAccessControl(AccessControl):
+        def _audit(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            raise RuntimeError("audit failure")
+
+    with pytest.raises(RuntimeError, match="audit failure"):
+        FailingAuditAccessControl(store_factory()).authorize(
+            token,
+            action="auth.session.read",
+            resource_owner_id=None,
+            now=NOW + timedelta(minutes=2),
+        )
+
+    rolled_back = store_factory()
+    assert (
+        rolled_back.session_by_digest(session.token_digest).last_activity_at
+        == activity_at
+    )
+    assert rolled_back.audit_events() == before_audits

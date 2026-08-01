@@ -5,10 +5,41 @@ from uuid import uuid4
 
 from tests.support.identity import access_with_recording_jobs, requested_attempt
 from umbral.application.identity.administration import AccessAdministration
+from umbral.domain.identity.models import (
+    IdentityExportLink,
+    IdentityExportRecord,
+    IdentityReport,
+)
 from umbral.infrastructure.db.repositories.identity import InMemoryIdentityStore
 from umbral.infrastructure.email.recording import RecordingEmailAdapter
 from umbral.infrastructure.identity.fake import FakeIdentityProvider
-from umbral.ops.identity import export_identity_snapshot
+from umbral.ops.identity import build_access_report, export_identity_snapshot
+
+
+class _ProjectedIdentityStore:
+    def identity_report(self) -> IdentityReport:
+        return IdentityReport(
+            event_counts=(("authorization.allowed.v1", 2),),
+            reason_counts=(("eligible", 2),),
+            user_count=1,
+            session_count=1,
+        )
+
+    def exportable_identity_views(self) -> tuple[IdentityExportRecord, ...]:
+        return (
+            IdentityExportRecord(
+                user_id=uuid4(),
+                status="active",
+                roles=("user",),
+                links=(IdentityExportLink("provider", "issuer", "subject"),),
+            ),
+        )
+
+    def audit_events(self):  # type: ignore[no-untyped-def]
+        raise AssertionError("operator report must use the aggregate projection")
+
+    def exportable_identities(self):  # type: ignore[no-untyped-def]
+        raise AssertionError("operator export must use the batch projection")
 
 
 def test_identity_export_contains_only_stable_internal_references() -> None:
@@ -35,3 +66,21 @@ def test_identity_export_contains_only_stable_internal_references() -> None:
     assert exported and exported[0]["roles"] == ["user"]
     assert "normalized_email" not in str(exported)
     assert "token" not in str(exported).lower()
+
+
+def test_operator_reporting_uses_read_only_projections() -> None:
+    """Catches report paths that load all audits or issue one role query per user."""
+
+    store = _ProjectedIdentityStore()
+
+    assert build_access_report(store) == {
+        "events": {"authorization.allowed.v1": 2},
+        "reasons": {"eligible": 2},
+        "users": 1,
+        "sessions": 1,
+    }
+    exported = export_identity_snapshot(store)
+    assert exported[0]["roles"] == ["user"]
+    assert exported[0]["links"] == [
+        {"provider": "provider", "issuer": "issuer", "subject": "subject"}
+    ]

@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from umbral.domain.identity.models import (
         AccessAuditEvent,
         ExternalIdentityLink,
+        IdentityExportRecord,
+        IdentityReport,
         Invitation,
         MagicLinkAttempt,
         MagicLinkRequest,
@@ -119,6 +121,10 @@ class IdentityStore(Protocol):
     ) -> bool: ...
 
     def audit_events(self) -> tuple[AccessAuditEvent, ...]: ...
+
+    def identity_report(self) -> IdentityReport: ...
+
+    def exportable_identity_views(self) -> tuple[IdentityExportRecord, ...]: ...
 
     def exportable_identities(
         self,

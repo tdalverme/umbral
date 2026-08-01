@@ -12,6 +12,7 @@ EVENT_RESULTS: dict[str, frozenset[str]] = {
     "magic_link.issued.v1": frozenset({"accepted"}),
     "magic_link.issue_failed.v1": frozenset({"failed"}),
     "magic_link.delivery_observed.v1": frozenset({"observed"}),
+    "provider.event_ignored.v1": frozenset({"observed"}),
     "magic_link.expired.v1": frozenset({"denied"}),
     "magic_link.superseded.v1": frozenset({"denied"}),
     "magic_link.consumed.v1": frozenset({"accepted"}),
@@ -41,6 +42,7 @@ REASONS = frozenset(
         "action_unknown", "role_unknown", "role_not_allowed", "owner_missing",
         "owner_ambiguous", "owner_mismatch", "logout", "administrator_change",
         "zero_admin_bootstrap", "eligible", "provider_signature_invalid",
+        "ignored",
     }
 )
 

@@ -45,7 +45,9 @@ class ProductUser:
     status: UserStatus = "active"
     disabled_reason: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    status_changed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    status_changed_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
     def disable(self, reason: str, *, now: datetime) -> None:
         if not reason or len(reason) > 100:
@@ -157,3 +159,30 @@ class AccessAuditEvent:
     policy_version: str | None = None
     provider: str | None = None
     provider_event_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityReport:
+    """Bounded aggregate facts for operator-only reporting."""
+
+    event_counts: tuple[tuple[str, int], ...]
+    reason_counts: tuple[tuple[str, int], ...]
+    user_count: int
+    session_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityExportLink:
+    provider: str
+    issuer: str
+    subject: str
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityExportRecord:
+    """Stable, non-secret identity references for operator export."""
+
+    user_id: UUID
+    status: UserStatus
+    roles: tuple[str, ...]
+    links: tuple[IdentityExportLink, ...]

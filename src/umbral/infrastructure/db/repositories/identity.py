@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import threading
+from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -22,9 +23,13 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from umbral.domain.identity.events import validate_event
 from umbral.domain.identity.models import (
     AccessAuditEvent,
     ExternalIdentityLink,
+    IdentityExportLink,
+    IdentityExportRecord,
+    IdentityReport,
     Invitation,
     MagicLinkAttempt,
     MagicLinkRequest,
@@ -81,7 +86,8 @@ class SqlAlchemyIdentityStore:
     def transaction(self) -> Iterator[None]:
         existing = self._active_session.get()
         if existing is not None:
-            yield
+            with existing.begin_nested():
+                yield
             return
         session = self._session_factory()
         token = self._active_session.set(session)
@@ -412,6 +418,7 @@ class SqlAlchemyIdentityStore:
     def current_attempt(
         self, *, invitation_id: UUID | None = None, product_user_id: UUID | None = None
     ) -> MagicLinkAttempt | None:
+        self._lock_attempt_subjects(invitation_id, product_user_id)
         query = select(MagicLinkAttemptRow).where(MagicLinkAttemptRow.state == "issued")
         if invitation_id is not None:
             query = query.where(MagicLinkAttemptRow.invitation_id == invitation_id)
@@ -423,6 +430,23 @@ class SqlAlchemyIdentityStore:
         with self._read_session() as session:
             row = session.scalar(query)
             return self._attempt(row) if row else None
+
+    def _lock_attempt_subjects(
+        self, invitation_id: UUID | None, product_user_id: UUID | None
+    ) -> None:
+        session = self._active_session.get()
+        if session is None:
+            return
+        keys = []
+        if invitation_id is not None:
+            keys.append(f"identity-attempt:invitation:{invitation_id}")
+        if product_user_id is not None:
+            keys.append(f"identity-attempt:user:{product_user_id}")
+        for key in sorted(keys):
+            session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+                {"lock_key": key},
+            )
 
     def save_attempt(self, attempt: MagicLinkAttempt) -> None:
         self._upsert(
@@ -554,6 +578,12 @@ class SqlAlchemyIdentityStore:
             provider=provider,
             provider_event_id=event_id,
         )
+        validate_event(
+            event_type=event.event_type,
+            result=event.result,
+            reason=event.reason,
+            fields={"provider": provider, "provider_event_id": event_id},
+        )
         values = self._audit_fields(event, self._environment)
         values["provider"] = provider
         values["provider_event_id"] = event_id
@@ -575,6 +605,74 @@ class SqlAlchemyIdentityStore:
                     )
                 )
             )
+
+    def identity_report(self) -> IdentityReport:
+        with self._read_session() as session:
+            event_counts = tuple(
+                (event_type, int(count))
+                for event_type, count in session.execute(
+                    select(AccessAuditEventRow.event_type, func.count())
+                    .group_by(AccessAuditEventRow.event_type)
+                    .order_by(AccessAuditEventRow.event_type)
+                )
+            )
+            reason_counts = tuple(
+                (reason, int(count))
+                for reason, count in session.execute(
+                    select(AccessAuditEventRow.reason, func.count())
+                    .group_by(AccessAuditEventRow.reason)
+                    .order_by(AccessAuditEventRow.reason)
+                )
+            )
+            user_count = int(
+                session.scalar(select(func.count()).select_from(ProductUserRow)) or 0
+            )
+            session_count = int(
+                session.scalar(select(func.count()).select_from(ProductSessionRow)) or 0
+            )
+        return IdentityReport(event_counts, reason_counts, user_count, session_count)
+
+    def exportable_identity_views(self) -> tuple[IdentityExportRecord, ...]:
+        with self._read_session() as session:
+            users = tuple(
+                session.execute(
+                    select(ProductUserRow.id, ProductUserRow.status).order_by(
+                        ProductUserRow.id
+                    )
+                )
+            )
+            roles_by_user: dict[UUID, list[str]] = {}
+            for user_id, role in session.execute(
+                select(RoleAssignmentRow.product_user_id, RoleAssignmentRow.role)
+                .where(RoleAssignmentRow.revoked_at.is_(None))
+                .order_by(RoleAssignmentRow.product_user_id, RoleAssignmentRow.role)
+            ):
+                roles_by_user.setdefault(user_id, []).append(role)
+            links_by_user: dict[UUID, list[IdentityExportLink]] = {}
+            for user_id, provider, issuer, subject in session.execute(
+                select(
+                    ExternalIdentityLinkRow.product_user_id,
+                    ExternalIdentityLinkRow.provider,
+                    ExternalIdentityLinkRow.provider_issuer,
+                    ExternalIdentityLinkRow.provider_subject,
+                ).order_by(
+                    ExternalIdentityLinkRow.product_user_id,
+                    ExternalIdentityLinkRow.provider,
+                    ExternalIdentityLinkRow.provider_subject,
+                )
+            ):
+                links_by_user.setdefault(user_id, []).append(
+                    IdentityExportLink(provider, issuer, subject)
+                )
+        return tuple(
+            IdentityExportRecord(
+                user_id=user_id,
+                status=cast(Any, status),
+                roles=tuple(roles_by_user.get(user_id, [])),
+                links=tuple(links_by_user.get(user_id, [])),
+            )
+            for user_id, status in users
+        )
 
     def exportable_identities(
         self,
@@ -803,6 +901,41 @@ class InMemoryIdentityStore:
 
     def audit_events(self) -> tuple[AccessAuditEvent, ...]:
         return tuple(self._audits)
+
+    def identity_report(self) -> IdentityReport:
+        return IdentityReport(
+            event_counts=tuple(
+                sorted(Counter(event.event_type for event in self._audits).items())
+            ),
+            reason_counts=tuple(
+                sorted(Counter(event.reason for event in self._audits).items())
+            ),
+            user_count=len(self._users),
+            session_count=len(self._sessions),
+        )
+
+    def exportable_identity_views(self) -> tuple[IdentityExportRecord, ...]:
+        return tuple(
+            IdentityExportRecord(
+                user_id=user.id,
+                status=user.status,
+                roles=tuple(sorted(self.active_roles(user.id))),
+                links=tuple(
+                    IdentityExportLink(
+                        link.provider, link.provider_issuer, link.provider_subject
+                    )
+                    for link in sorted(
+                        (
+                            link
+                            for link in self._links.values()
+                            if link.product_user_id == user.id
+                        ),
+                        key=lambda link: (link.provider, link.provider_subject),
+                    )
+                ),
+            )
+            for user in sorted(self._users.values(), key=lambda user: str(user.id))
+        )
 
     def exportable_identities(
         self,
