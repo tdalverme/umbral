@@ -40,11 +40,32 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_MIGRATION_URL: ${{ secrets.NEON_DIRECT_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          OBJECT_STORE_BUCKET: ${{ secrets.OBJECT_STORE_BUCKET }}
+          OBJECT_STORE_ENDPOINT_URL: ${{ secrets.OBJECT_STORE_ENDPOINT_URL }}
+          OBJECT_STORE_ACCESS_KEY: ${{ secrets.OBJECT_STORE_ACCESS_KEY }}
+          OBJECT_STORE_SECRET_KEY: ${{ secrets.OBJECT_STORE_SECRET_KEY }}
+          R2_RECOVERY_BUCKET: ${{ secrets.R2_RECOVERY_BUCKET }}
+          R2_RECOVERY_ACCESS_KEY_ID: ${{ secrets.R2_RECOVERY_ACCESS_KEY_ID }}
+          R2_RECOVERY_SECRET_ACCESS_KEY: ${{ secrets.R2_RECOVERY_SECRET_ACCESS_KEY }}
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          IDENTITY_ISSUER: ${{ secrets.IDENTITY_ISSUER }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
           $manifest = Get-Item artifacts/release/release-manifest.json
           $checksum = (Get-Content -Raw "${manifest}.sha256").Trim()
           $null = ./scripts/deploy/verify-access.ps1
-          ./scripts/check-recovery.ps1
-          ./scripts/check-migrations.ps1
+          $null = ./scripts/deploy/validate-railway-config.ps1 -ManifestPath $manifest.FullName
+          $backupEvidence = "artifacts/release/preview-backup-evidence.json"
+          ./scripts/deploy/backup-preview.ps1 -ManifestPath $manifest.FullName -EvidencePath $backupEvidence
+          ./scripts/deploy/migrate-preview.ps1 -ManifestPath $manifest.FullName -BackupEvidencePath $backupEvidence
+          ./scripts/deploy/check-preview-dependencies.ps1 -ManifestPath $manifest.FullName -EvidencePath "artifacts/release/preview-dependency-evidence.json"
+          $switch = ./scripts/deploy/set-railway-images.ps1 -ManifestPath $manifest.FullName -ManifestSha256 $checksum -Environment "${{ inputs.environment }}" | ConvertFrom-Json
+          $null = ./scripts/deploy/wait-railway-services.ps1 -Environment "${{ inputs.environment }}" -DeploymentIdsJson ($switch.deployment_ids | ConvertTo-Json -Compress)
           $null = ./scripts/deploy/smoke.ps1 -ManifestPath $manifest.FullName
-          ./scripts/deploy/promote-release.ps1 -ManifestPath $manifest.FullName -ManifestSha256 $checksum -Environment "${{ inputs.environment }}" -AccessPassed -BackupPassed -MigrationPassed -SmokePassed
