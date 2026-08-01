@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+from fastapi.testclient import TestClient
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.metrics import MeterProvider
@@ -13,8 +15,11 @@ from opentelemetry.sdk.trace import TracerProvider
 from pytest import MonkeyPatch
 
 from umbral.infrastructure.config.settings import Settings
-from umbral.infrastructure.observability.otel import initialize_otel
-from umbral.infrastructure.observability.runtime import ObservabilityRuntime
+from umbral.infrastructure.observability.otel import _endpoint_for, initialize_otel
+from umbral.infrastructure.observability.runtime import (
+    ObservabilityHandle,
+    ObservabilityRuntime,
+)
 from umbral.infrastructure.observability.sentry import initialize_sentry
 
 
@@ -27,6 +32,19 @@ class _CapturedProvider:
 class _ExporterConfig:
     endpoint: str
     headers: dict[str, str]
+
+
+@dataclass
+class _FlushingProvider:
+    force_flush_calls: int = 0
+    shutdown_calls: int = 0
+
+    def force_flush(self) -> bool:
+        self.force_flush_calls += 1
+        return True
+
+    def shutdown(self) -> None:
+        self.shutdown_calls += 1
 
 
 def _settings() -> Settings:
@@ -169,7 +187,7 @@ def test_otel_uses_bounded_resource_and_standard_signal_configuration(
         providers.append(provider)
         return provider
 
-    assert initialize_otel(
+    handle = initialize_otel(
         endpoint="https://otel.preview.invalid",
         resource_attributes={
             "service.name": "umbral",
@@ -184,6 +202,7 @@ def test_otel_uses_bounded_resource_and_standard_signal_configuration(
         trace_provider_setter=lambda _: None,
         meter_provider_setter=lambda _: None,
     )
+    assert handle is not None
 
     assert captured == {
         "trace": _ExporterConfig(
@@ -205,6 +224,127 @@ def test_otel_uses_bounded_resource_and_standard_signal_configuration(
     ] * 2
     for provider in providers:
         provider.shutdown()
+
+
+def test_otel_uses_signal_specific_endpoints_as_is_and_normalizes_legacy_base(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, _ExporterConfig] = {}
+    monkeypatch.setenv(
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "https://collector.invalid/custom-traces"
+    )
+    monkeypatch.setenv(
+        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "https://collector.invalid/custom-metrics"
+    )
+
+    def trace_exporter(
+        *, endpoint: str | None, headers: dict[str, str] | None
+    ) -> OTLPSpanExporter:
+        assert endpoint is not None
+        assert headers is not None
+        captured["trace"] = _ExporterConfig(endpoint, headers)
+        return OTLPSpanExporter(endpoint=endpoint, headers=headers)
+
+    def metric_exporter(
+        *, endpoint: str | None, headers: dict[str, str] | None
+    ) -> OTLPMetricExporter:
+        assert endpoint is not None
+        assert headers is not None
+        captured["metric"] = _ExporterConfig(endpoint, headers)
+        return OTLPMetricExporter(endpoint=endpoint, headers=headers)
+
+    handle = initialize_otel(
+        endpoint="https://otel.preview.invalid/v1/traces",
+        resource_attributes={"service.name": "umbral"},
+        trace_exporter_factory=trace_exporter,
+        metric_exporter_factory=metric_exporter,
+        trace_provider_setter=lambda _: None,
+        meter_provider_setter=lambda _: None,
+    )
+    assert handle is not None
+    handle.shutdown()
+
+    assert captured == {
+        "trace": _ExporterConfig(
+            "https://collector.invalid/custom-traces", {},
+        ),
+        "metric": _ExporterConfig(
+            "https://collector.invalid/custom-metrics", {},
+        ),
+    }
+
+
+def test_otel_normalizes_legacy_trace_suffix_without_doubling_paths() -> None:
+    assert _endpoint_for(
+        "traces", "https://otel.preview.invalid/v1/traces"
+    ) == "https://otel.preview.invalid/v1/traces"
+    assert _endpoint_for(
+        "metrics", "https://otel.preview.invalid/v1/traces"
+    ) == "https://otel.preview.invalid/v1/metrics"
+
+
+def test_runtime_flushes_and_shuts_down_each_provider_once() -> None:
+    tracer = _FlushingProvider()
+    meter = _FlushingProvider()
+    runtime = ObservabilityRuntime(
+        initialize_otel=lambda **_: ObservabilityHandle(tracer, meter),
+        initialize_sentry=lambda *_: True,
+    )
+
+    runtime.initialize(_settings())
+    runtime.force_flush()
+    runtime.shutdown()
+    runtime.shutdown()
+
+    assert tracer.force_flush_calls == meter.force_flush_calls == 1
+    assert tracer.shutdown_calls == meter.shutdown_calls == 1
+
+
+def test_runtime_shutdown_swallows_provider_failures_without_output(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FailingProvider:
+        def force_flush(self) -> bool:
+            raise RuntimeError("https://collector.invalid/?token=secret")
+
+        def shutdown(self) -> None:
+            raise RuntimeError("https://collector.invalid/?token=secret")
+
+    runtime = ObservabilityRuntime(
+        initialize_otel=lambda **_: ObservabilityHandle(
+            FailingProvider(), FailingProvider()
+        ),
+        initialize_sentry=lambda *_: True,
+    )
+
+    runtime.initialize(_settings())
+
+    assert runtime.shutdown() is False
+    captured = capsys.readouterr()
+    assert "collector.invalid" not in captured.out + captured.err
+
+
+def test_api_lifespan_initializes_and_shuts_down_observability_once(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    import umbral.api.main as api_main
+
+    initialized: list[Settings] = []
+    shut_down: list[None] = []
+    monkeypatch.setattr(api_main, "initialize_observability", initialized.append)
+    monkeypatch.setattr(
+        api_main,
+        "shutdown_observability",
+        lambda: shut_down.append(None),
+        raising=False,
+    )
+
+    app = api_main.create_app()
+
+    assert initialized == []
+    with TestClient(app):
+        assert len(initialized) == 1
+    assert shut_down == [None]
 
 
 def test_sentry_disables_default_pii_and_scrubs_transaction_events() -> None:

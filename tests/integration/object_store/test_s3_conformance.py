@@ -89,10 +89,22 @@ def test_s3_provider_refs_survive_adapter_reconstruction() -> None:
         "/objects/one/v1",
         "https://private.invalid/objects/one/v1",
         "unknown/one/v1",
+        1,
+        None,
+        ["objects", "one", "v1"],
     ],
 )
-def test_s3_rejects_non_durable_provider_references(value: str) -> None:
+def test_s3_rejects_non_durable_provider_references(value: object) -> None:
     store = S3ObjectStore(client=_FakeS3(), bucket="private")
+    reference = (
+        ProviderObjectRef(value) if isinstance(value, str) else _unsafe_ref(value)
+    )
 
     with pytest.raises(ObjectNotFound):
-        store.stat(ProviderObjectRef(value))
+        store.stat(reference)
+
+
+def _unsafe_ref(value: object) -> ProviderObjectRef:
+    reference = object.__new__(ProviderObjectRef)
+    object.__setattr__(reference, "value", value)
+    return reference

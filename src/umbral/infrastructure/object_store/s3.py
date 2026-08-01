@@ -214,6 +214,8 @@ def _is_conditional_unsupported(error: Exception) -> bool:
 
 
 def _validate_key(storage_key: str) -> str:
+    if not isinstance(storage_key, str):
+        raise ValueError("storage key must be an opaque relative path")
     parts = storage_key.split("/")
     if (
         not storage_key

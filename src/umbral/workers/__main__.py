@@ -8,6 +8,7 @@ import sys
 import time
 from typing import Any
 
+from umbral.infrastructure.observability.runtime import shutdown_observability
 from umbral.workers.scheduler import (
     DEFAULT_DUE_WORK_LIMIT,
     HEARTBEAT_INTERVAL_SECONDS,
@@ -63,6 +64,8 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
     except Exception:
         print(f"{args.command} failed", file=sys.stderr)
         return 1
+    finally:
+        shutdown_observability()
 
 
 if __name__ == "__main__":

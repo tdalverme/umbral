@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
@@ -24,7 +26,10 @@ from umbral.api.routers.email_webhooks import router as email_webhook_router
 from umbral.api.routers.runtime import configure_runtime_routes
 from umbral.api.routers.runtime import router as runtime_router
 from umbral.domain.errors import ApplicationError
-from umbral.infrastructure.observability.runtime import initialize_observability
+from umbral.infrastructure.observability.runtime import (
+    initialize_observability,
+    shutdown_observability,
+)
 
 _RUNTIME_DESCRIPTION = (
     "Foundation operational contract. Product resources will be added below "
@@ -190,9 +195,21 @@ def _openapi_for_app(app: FastAPI) -> dict[str, Any]:
 def create_app() -> FastAPI:
     """Compose the API with validated configuration and safe transport policy."""
 
-    app = FastAPI(title="Umbral Runtime API", version="1.0.0")
     dependencies = build_runtime_dependencies()
-    initialize_observability(dependencies.settings)
+
+    @asynccontextmanager
+    async def observability_lifespan(_: FastAPI) -> AsyncIterator[None]:
+        initialize_observability(dependencies.settings)
+        try:
+            yield
+        finally:
+            shutdown_observability()
+
+    app = FastAPI(
+        title="Umbral Runtime API",
+        version="1.0.0",
+        lifespan=observability_lifespan,
+    )
     configure_runtime_routes(dependencies)
     configure_auth_routes(dependencies)
     app.add_middleware(CorrelationMiddleware)

@@ -215,7 +215,7 @@ def test_scheduler_once_runs_durable_steps_in_order_and_returns_summary() -> Non
 
 
 def test_scheduler_once_emits_a_bounded_summary(
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     runtime = _SchedulerRuntime()
     dependencies = SimpleNamespace(
@@ -225,11 +225,20 @@ def test_scheduler_once_emits_a_bounded_summary(
         identity_store=_RetentionStore(runtime.events),
     )
 
+    shutdowns: list[None] = []
+    monkeypatch.setattr(
+        workers_cli,
+        "shutdown_observability",
+        lambda: shutdowns.append(None),
+        raising=False,
+    )
+
     assert main(["scheduler-once"], dependencies=dependencies) == 0
     assert capsys.readouterr().out == (
         '{"failed":0,"published":4,"purged_requests":3,"reaped_jobs":1,'
         '"reclaimed_outbox":2,"scheduled":2}\n'
     )
+    assert shutdowns == [None]
 
 
 def test_scheduler_once_exits_nonzero_without_exposing_dependency_error(

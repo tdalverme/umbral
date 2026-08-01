@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Mapping
+from threading import RLock
 from typing import Any, Literal
 
 from opentelemetry import metrics, trace
@@ -25,6 +26,31 @@ _DEPENDENCIES = frozenset({"identity_provider", "email_provider"})
 _STATES = frozenset({"ready", "degraded", "unavailable"})
 
 
+class ObservabilityHandle:
+    """One safely closable pair of globally registered OTel providers."""
+
+    def __init__(self, tracer_provider: object, meter_provider: object) -> None:
+        self._providers = (tracer_provider, meter_provider)
+        self._lock = RLock()
+        self._flushed = False
+        self._shutdown = False
+
+    def force_flush(self) -> bool:
+        with self._lock:
+            if self._flushed or self._shutdown:
+                return True
+            self._flushed = True
+            return _call_providers(self._providers, "force_flush")
+
+    def shutdown(self) -> bool:
+        with self._lock:
+            if self._shutdown:
+                return True
+            self.force_flush()
+            self._shutdown = True
+            return _call_providers(self._providers, "shutdown")
+
+
 def initialize_otel(
     *,
     endpoint: str,
@@ -39,7 +65,7 @@ def initialize_otel(
     meter_provider_setter: Callable[[metrics.MeterProvider], None] = (
         metrics.set_meter_provider
     ),
-) -> bool:
+) -> ObservabilityHandle | None:
     """Install bounded OTLP HTTP providers, treating configuration as optional."""
 
     try:
@@ -65,15 +91,24 @@ def initialize_otel(
         trace_provider_setter(tracer_provider)
         meter_provider_setter(meter_provider)
     except Exception:
-        return False
-    return True
+        return None
+    return ObservabilityHandle(tracer_provider, meter_provider)
 
 
 def _endpoint_for(signal: str, configured_endpoint: str) -> str:
     signal_endpoint = os.getenv(f"OTEL_EXPORTER_OTLP_{signal.upper()}_ENDPOINT")
     if signal_endpoint:
         return signal_endpoint
-    return f"{configured_endpoint.rstrip('/')}/v1/{signal}"
+    return f"{_generic_endpoint_base(configured_endpoint)}/v1/{signal}"
+
+
+def _generic_endpoint_base(configured_endpoint: str) -> str:
+    endpoint = configured_endpoint.rstrip("/")
+    for signal in ("traces", "metrics", "logs"):
+        suffix = f"/v1/{signal}"
+        if endpoint.endswith(suffix):
+            return endpoint.removesuffix(suffix)
+    return endpoint
 
 
 def _headers_for(signal: str) -> dict[str, str]:
@@ -82,6 +117,21 @@ def _headers_for(signal: str) -> dict[str, str]:
         os.getenv(f"OTEL_EXPORTER_OTLP_{signal}_HEADERS", "")
     )
     return {**generic, **specific}
+
+
+def _call_providers(providers: tuple[object, object], method_name: str) -> bool:
+    successful = True
+    for provider in providers:
+        method = getattr(provider, method_name, None)
+        if not callable(method):
+            successful = False
+            continue
+        try:
+            if method() is False:
+                successful = False
+        except Exception:
+            successful = False
+    return successful
 
 
 def record_signal(signal: TelemetrySignal) -> None:
