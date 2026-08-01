@@ -305,9 +305,15 @@ class SqlAlchemyJobRepository:
             )
         )
         for row in rows:
-            row.state = "pending"
-            row.error_code = None
+            if row.publish_attempts >= 100:
+                row.state = "failed"
+                row.error_code = "queue.publish_exhausted"
+            else:
+                row.state = "pending"
+                row.error_code = None
             row.published_at = None
+            row.lease_owner = None
+            row.lease_until = None
         self.session.flush()
         return len(rows)
 
@@ -327,7 +333,11 @@ class SqlAlchemyJobRepository:
             )
         )
         for row in rows:
-            row.state = "pending"
+            if row.publish_attempts >= 100:
+                row.state = "failed"
+                row.error_code = "queue.publish_exhausted"
+            else:
+                row.state = "pending"
             row.lease_owner = None
             row.lease_until = None
             row.updated_at = timestamp

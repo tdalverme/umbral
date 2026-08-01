@@ -363,22 +363,32 @@ class InMemoryJobRuntime:
 
         with self._lock:
             rebuilt = 0
-            for row in list(self._outbox.values())[:limit]:
-                if row.state == "published":
+            eligible = [
+                row for row in self._outbox.values() if row.state == "published"
+            ]
+            for row in eligible[:limit]:
+                if row.publish_attempts >= 100:
+                    row.state = "failed"
+                    row.error_code = "queue.publish_exhausted"
+                else:
                     row.state = "pending"
                     row.error_code = None
-                    rebuilt += 1
+                rebuilt += 1
             return rebuilt
 
     def reap_expired(self, *, limit: int = 100) -> int:
         with self._lock:
             count = 0
-            for execution in list(self._executions.values())[:limit]:
+            eligible = [
+                execution
+                for execution in self._executions.values()
                 if (
                     execution.state is JobState.RUNNING
                     and execution.lease_until is not None
                     and execution.lease_until <= self._now
-                ):
+                )
+            ]
+            for execution in eligible[:limit]:
                     self._abandon_locked(execution)
                     count += 1
             return count

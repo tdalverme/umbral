@@ -86,3 +86,20 @@ def test_expired_claim_cannot_record_an_outcome(
     snapshot = runtime.record_outcome(claim, {"ok": True})
 
     assert snapshot.state is JobState.RUNNING
+
+
+def test_reaper_limits_expired_rows_after_filtering(
+    job_runtime_factory: JobRuntimeFactory,
+) -> None:
+    runtime = job_runtime_factory(RecordingJobQueue())
+    runtime.submit_simple("foundation.reference", "ref:pending", str(uuid4()))
+    expired = runtime.submit_simple("foundation.reference", "ref:expired", str(uuid4()))
+    runtime.relay_due()
+    claim = runtime.claim(
+        execution_id=expired.execution_id, attempt_number=1, worker_id="worker"
+    )
+    assert claim is not None
+
+    runtime.advance_time(timedelta(seconds=61))
+
+    assert runtime.reap_expired(limit=1) == 1

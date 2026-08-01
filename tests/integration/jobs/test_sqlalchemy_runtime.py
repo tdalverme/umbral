@@ -21,6 +21,7 @@ from umbral.application.jobs.contracts import (
     SubmitJob,
     TransientJobError,
 )
+from umbral.infrastructure.db.models.jobs import JobOutboxMessage
 from umbral.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
@@ -155,3 +156,61 @@ def test_expired_relay_owner_cannot_mark_and_a_new_relay_reclaims(
     assert runtime.relay_due().published == 1
     assert queue.calls == 1
     assert runtime.get(execution.execution_id).state is JobState.QUEUED
+
+
+def test_second_runtime_recovers_after_relay_crashes_post_claim(
+    runtime_factory: RuntimeFactory,
+) -> None:
+    class CrashOnceQueue(RecordingJobQueue):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def publish(self, **kwargs: object) -> str:
+            self.calls += 1
+            if self.calls == 1:
+                raise KeyboardInterrupt("simulated process death")
+            return super().publish(**kwargs)  # type: ignore[arg-type]
+
+    queue = CrashOnceQueue()
+    first = runtime_factory(queue=queue)
+    execution = first.submit(_command())
+    with pytest.raises(KeyboardInterrupt, match="simulated process death"):
+        first.relay_due()
+
+    second = runtime_factory(queue=queue)
+    second.advance_time(timedelta(seconds=31))
+    assert second.relay_due().published == 1
+    assert queue.calls == 2
+    assert second.get(execution.execution_id).state is JobState.QUEUED
+
+
+def test_max_attempt_outbox_recovery_is_terminal(
+    runtime_factory: RuntimeFactory,
+) -> None:
+    runtime = runtime_factory()
+    runtime.submit(_command())
+    with runtime._session_factory() as session:  # noqa: SLF001
+        row = session.query(JobOutboxMessage).one()
+        row.publish_attempts = 99
+        session.commit()
+        row = SqlAlchemyJobRepository(session).claim_outbox(
+            owner="relay:100", now=NOW, limit=1
+        )[0]
+        message_id = row.id
+        session.commit()
+
+    runtime.advance_time(timedelta(seconds=31))
+    result = runtime.relay_due()
+    assert (result.published, result.failed) == (0, 0)
+    with runtime._session_factory() as session:  # noqa: SLF001
+        check_row = session.get(JobOutboxMessage, message_id)
+        assert check_row is not None and check_row.state == "failed"
+        assert check_row.error_code == "queue.publish_exhausted"
+        check_row.state = "published"
+        session.commit()
+
+    assert runtime.rebuild_outbox() == 1
+    with runtime._session_factory() as session:  # noqa: SLF001
+        check_row = session.get(JobOutboxMessage, message_id)
+        assert check_row is not None and check_row.state == "failed"
