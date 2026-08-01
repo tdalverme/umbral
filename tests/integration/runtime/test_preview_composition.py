@@ -49,12 +49,12 @@ def test_preview_runtime_composes_only_durable_concrete_adapters() -> None:
         _preview_environment(), factories=_preview_factories()
     )
 
-    assert isinstance(dependencies.identity_store, SqlAlchemyIdentityStore)
-    assert isinstance(dependencies.job_runtime, SqlAlchemyJobRuntime)
-    assert isinstance(dependencies.job_runtime.queue, RQJobQueue)
-    assert isinstance(dependencies.object_store, S3ObjectStore)
-    assert isinstance(dependencies.identity_access.provider, SupabaseIdentityAdapter)
-    assert isinstance(dependencies.identity_access.email, ResendEmailAdapter)
+    assert type(dependencies.identity_store) is SqlAlchemyIdentityStore
+    assert type(dependencies.job_runtime) is SqlAlchemyJobRuntime
+    assert type(dependencies.job_runtime.queue) is RQJobQueue
+    assert type(dependencies.object_store) is S3ObjectStore
+    assert type(dependencies.identity_access.provider) is SupabaseIdentityAdapter
+    assert type(dependencies.identity_access.email) is ResendEmailAdapter
 
 
 @pytest.mark.parametrize(
@@ -66,6 +66,13 @@ def test_preview_runtime_composes_only_durable_concrete_adapters() -> None:
         "filesystem",
         "fake",
         "recording_email",
+        "runtime_queue_mismatch",
+        "subclass_identity_store",
+        "subclass_queue",
+        "subclass_runtime",
+        "subclass_object_store",
+        "subclass_identity_provider",
+        "subclass_email",
     ),
 )
 def test_preview_runtime_rejects_every_local_or_recording_adapter(
@@ -110,7 +117,7 @@ def test_preview_provider_outage_only_degrades_new_login_capability() -> None:
         _preview_environment(),
         factories=_preview_factories(
             identity_registry=lambda settings: _registry(
-                identity=_UnavailableSupabase(), email=_resend_email()
+                identity=_unavailable_supabase(), email=_resend_email()
             )
         ),
     )
@@ -123,18 +130,6 @@ def test_preview_provider_outage_only_degrades_new_login_capability() -> None:
     )
     assert identity_check.critical is False
     assert identity_check.state == "unavailable"
-
-
-class _UnavailableSupabase(SupabaseIdentityAdapter):
-    def __init__(self) -> None:
-        super().__init__(
-            issuer="https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1",
-            capture_origin="https://preview.umbral.invalid",
-            client=_Client(),
-        )
-
-    def health(self) -> str:
-        return "unavailable"
 
 
 def _preview_factories(
@@ -206,7 +201,96 @@ def _preview_factories_for(adapter_kind: str) -> RuntimeCompositionFactories:
                 identity=_supabase_identity(), email=RecordingEmailAdapter()
             )
         )
+    if adapter_kind == "runtime_queue_mismatch":
+        return _preview_factories(
+            job_runtime=lambda provider, queue, release_id: SqlAlchemyJobRuntime(
+                provider.session_factory,
+                queue=RecordingJobQueue(),
+                release_id=release_id,
+            )
+        )
+    if adapter_kind == "subclass_identity_store":
+        return _preview_factories(
+            identity_store=lambda settings, provider: _SubclassIdentityStore(
+                provider.session_factory,
+                fingerprint_key=settings.identity_fingerprint_key.encode(),
+                environment=settings.environment,
+            )
+        )
+    if adapter_kind == "subclass_queue":
+        return _preview_factories(
+            job_queue=lambda connection: _SubclassRQQueue(_Queue())
+        )
+    if adapter_kind == "subclass_runtime":
+        return _preview_factories(
+            job_runtime=lambda provider, queue, release_id: _SubclassJobRuntime(
+                provider.session_factory, queue=queue, release_id=release_id
+            )
+        )
+    if adapter_kind == "subclass_object_store":
+        return _preview_factories(
+            object_store=lambda settings: _SubclassS3ObjectStore(
+                client=object(), bucket="preview"
+            )
+        )
+    if adapter_kind == "subclass_identity_provider":
+        return _preview_factories(
+            identity_registry=lambda settings: _registry(
+                identity=_SubclassSupabase(), email=_resend_email()
+            )
+        )
+    if adapter_kind == "subclass_email":
+        return _preview_factories(
+            identity_registry=lambda settings: _registry(
+                identity=_supabase_identity(), email=_SubclassResend()
+            )
+        )
     raise AssertionError(f"unknown adapter kind: {adapter_kind}")
+
+
+class _SubclassIdentityStore(SqlAlchemyIdentityStore):
+    def fingerprint(self, value: str) -> bytes:
+        return super().fingerprint(value)
+
+
+class _SubclassRQQueue(RQJobQueue):
+    def publish(self, **kwargs: Any) -> str:
+        return super().publish(**kwargs)
+
+
+class _SubclassJobRuntime(SqlAlchemyJobRuntime):
+    def relay_due(self, **kwargs: Any) -> Any:
+        return super().relay_due(**kwargs)
+
+
+class _SubclassS3ObjectStore(S3ObjectStore):
+    def stat(self, provider_ref: Any) -> Any:
+        return super().stat(provider_ref)
+
+
+class _SubclassSupabase(SupabaseIdentityAdapter):
+    def __init__(self) -> None:
+        super().__init__(
+            issuer="https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1",
+            capture_origin="https://preview.umbral.invalid",
+            client=_Client(),
+        )
+
+    def health(self) -> str:
+        return "ready"
+
+
+class _SubclassResend(ResendEmailAdapter):
+    def __init__(self) -> None:
+        super().__init__(
+            sender_email="Umbral <onboarding@resend.dev>",
+            webhook_secret="whsec_test",
+            sender=lambda params, options: {"id": "test"},
+            verifier=lambda options: {},
+        )
+
+    def health(self) -> str:
+        return "ready"
 
 
 def _registry(
@@ -233,6 +317,12 @@ def _supabase_identity() -> SupabaseIdentityAdapter:
         capture_origin="https://preview.umbral.invalid",
         client=_Client(),
     )
+
+
+def _unavailable_supabase() -> SupabaseIdentityAdapter:
+    identity = _supabase_identity()
+    setattr(identity, "health", lambda: "unavailable")
+    return identity
 
 
 def _resend_email() -> ResendEmailAdapter:

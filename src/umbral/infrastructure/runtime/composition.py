@@ -250,13 +250,14 @@ def _assert_preview_adapters(
 ) -> None:
     """Fail startup before a preview surface can use a local/test double."""
 
-    if not (
-        isinstance(identity_store, SqlAlchemyIdentityStore)
-        and isinstance(job_queue, RQJobQueue)
-        and isinstance(job_runtime, SqlAlchemyJobRuntime)
-        and isinstance(object_store, S3ObjectStore)
-        and isinstance(registry.identity, SupabaseIdentityAdapter)
-        and isinstance(registry.email, ResendEmailAdapter)
+    if (
+        type(identity_store) is not SqlAlchemyIdentityStore
+        or type(job_queue) is not RQJobQueue
+        or type(job_runtime) is not SqlAlchemyJobRuntime
+        or type(object_store) is not S3ObjectStore
+        or type(registry.identity) is not SupabaseIdentityAdapter
+        or type(registry.email) is not ResendEmailAdapter
+        or job_runtime.queue is not job_queue
     ):
         raise ValueError("preview runtime requires durable adapters")
 
