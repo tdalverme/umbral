@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       manifest:
-        description: "Immutable release manifest artifact"
+        description: "Immutable release artifact name"
         required: true
         type: string
       environment:
@@ -22,6 +22,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify access, backup, migration and smoke gates
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.manifest }}
+          path: artifacts/release
+      - name: Install pinned Railway CLI
+        run: npx @railway/cli@5.27.2 --version
+      - name: Verify gates and promote immutable Railway images
         shell: pwsh
-        run: ./scripts/deploy/promote-release.ps1 -ManifestPath "${{ inputs.manifest }}" -Environment "${{ inputs.environment }}" -AccessPassed -BackupPassed -MigrationPassed -SmokePassed
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+        run: |
+          $manifest = Get-Item artifacts/release/release-manifest.json
+          $checksum = (Get-Content -Raw "${manifest}.sha256").Trim()
+          $null = ./scripts/deploy/verify-access.ps1
+          ./scripts/check-recovery.ps1
+          ./scripts/check-migrations.ps1
+          $null = ./scripts/deploy/smoke.ps1 -ManifestPath $manifest.FullName
+          ./scripts/deploy/promote-release.ps1 -ManifestPath $manifest.FullName -ManifestSha256 $checksum -Environment "${{ inputs.environment }}" -AccessPassed -BackupPassed -MigrationPassed -SmokePassed

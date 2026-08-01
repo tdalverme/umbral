@@ -18,6 +18,9 @@ if ($GitSha -notmatch $shaPattern) { throw "GitSha must be a 40-character lowerc
 if ($WebDigest -notmatch $digestPattern -or $RuntimeDigest -notmatch $digestPattern) {
     throw "Artifact digests must be immutable sha256 references."
 }
+if ([string]::IsNullOrWhiteSpace($WebImage) -or [string]::IsNullOrWhiteSpace($RuntimeImage) -or $WebImage.Contains("@") -or $RuntimeImage.Contains("@")) {
+    throw "Artifact images must be mutable registry names without a digest."
+}
 if ($ConfigSchemaVersion -lt 1) { throw "ConfigSchemaVersion must be positive." }
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
@@ -40,5 +43,6 @@ $manifest = [ordered]@{
 $json = $manifest | ConvertTo-Json -Depth 8
 [System.IO.File]::WriteAllText($manifestFullPath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 $checksum = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestFullPath).Hash.ToLowerInvariant()
+[System.IO.File]::WriteAllText("$manifestFullPath.sha256", $checksum + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 Write-Output ("manifest={0}" -f $manifestFullPath)
 Write-Output ("manifest_sha256={0}" -f $checksum)
