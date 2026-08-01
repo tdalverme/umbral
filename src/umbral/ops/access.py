@@ -19,6 +19,7 @@ class AccessPolicy:
         "/auth/capture",
         "/auth/confirm",
         "/api/auth/magic-link-requests",
+        "/api/webhooks/email",
     )
     require_access_header: bool = True
     audience: str = "umbral-runtime"

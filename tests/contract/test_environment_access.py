@@ -51,6 +51,7 @@ def test_only_health_is_public_and_origins_are_closed() -> None:
     policy = AccessPolicy.default()
 
     assert policy.is_public_path("/health")
+    assert policy.is_public_path("/api/webhooks/email")
     assert not policy.is_public_path("/ready")
     assert not policy.is_public_path("/api/v1/search")
     assert policy.allowed_origins == ()
