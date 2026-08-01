@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Literal
+import os
+from collections.abc import Callable, Mapping
+from typing import Any, Literal
 
 from opentelemetry import metrics, trace
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.util.re import parse_env_headers
 
 from umbral.application.runtime.telemetry import TelemetrySignal
 
@@ -13,6 +23,65 @@ DependencyState = Literal["ready", "degraded", "unavailable"]
 Environment = Literal["local", "preview", "production"]
 _DEPENDENCIES = frozenset({"identity_provider", "email_provider"})
 _STATES = frozenset({"ready", "degraded", "unavailable"})
+
+
+def initialize_otel(
+    *,
+    endpoint: str,
+    resource_attributes: Mapping[str, str],
+    trace_exporter_factory: Callable[..., Any] = OTLPSpanExporter,
+    metric_exporter_factory: Callable[..., Any] = OTLPMetricExporter,
+    tracer_provider_factory: Callable[..., TracerProvider] = TracerProvider,
+    meter_provider_factory: Callable[..., MeterProvider] = MeterProvider,
+    trace_provider_setter: Callable[[trace.TracerProvider], None] = (
+        trace.set_tracer_provider
+    ),
+    meter_provider_setter: Callable[[metrics.MeterProvider], None] = (
+        metrics.set_meter_provider
+    ),
+) -> bool:
+    """Install bounded OTLP HTTP providers, treating configuration as optional."""
+
+    try:
+        resource = Resource(dict(resource_attributes))
+        trace_exporter = trace_exporter_factory(
+            endpoint=_endpoint_for("traces", endpoint),
+            headers=_headers_for("TRACES"),
+        )
+        metric_exporter = metric_exporter_factory(
+            endpoint=_endpoint_for("metrics", endpoint),
+            headers=_headers_for("METRICS"),
+        )
+        tracer_provider = tracer_provider_factory(
+            resource=resource,
+            shutdown_on_exit=False,
+        )
+        tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+        meter_provider = meter_provider_factory(
+            resource=resource,
+            metric_readers=[PeriodicExportingMetricReader(metric_exporter)],
+            shutdown_on_exit=False,
+        )
+        trace_provider_setter(tracer_provider)
+        meter_provider_setter(meter_provider)
+    except Exception:
+        return False
+    return True
+
+
+def _endpoint_for(signal: str, configured_endpoint: str) -> str:
+    signal_endpoint = os.getenv(f"OTEL_EXPORTER_OTLP_{signal.upper()}_ENDPOINT")
+    if signal_endpoint:
+        return signal_endpoint
+    return f"{configured_endpoint.rstrip('/')}/v1/{signal}"
+
+
+def _headers_for(signal: str) -> dict[str, str]:
+    generic = parse_env_headers(os.getenv("OTEL_EXPORTER_OTLP_HEADERS", ""))
+    specific = parse_env_headers(
+        os.getenv(f"OTEL_EXPORTER_OTLP_{signal}_HEADERS", "")
+    )
+    return {**generic, **specific}
 
 
 def record_signal(signal: TelemetrySignal) -> None:

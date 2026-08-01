@@ -14,7 +14,7 @@ from umbral.infrastructure.db.repositories.identity import SqlAlchemyIdentitySto
 from umbral.infrastructure.db.session import SessionProvider
 from umbral.infrastructure.identity.registry import build_identity_registry
 from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
-from umbral.infrastructure.observability.sentry import initialize_sentry
+from umbral.infrastructure.observability.runtime import initialize_observability
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
 from umbral.workers.registry import JobRegistry
 from umbral.workers.registry import build_identity_registry as build_job_registry
@@ -41,7 +41,7 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
     """Compose one real process without passing provider clients through jobs."""
 
     active_settings = settings or _load_settings()
-    initialize_sentry(active_settings.sentry_dsn, active_settings.release_id)
+    initialize_observability(active_settings)
     session_provider = SessionProvider(active_settings.database_url)
     identity_store = SqlAlchemyIdentityStore(
         session_provider.session_factory,

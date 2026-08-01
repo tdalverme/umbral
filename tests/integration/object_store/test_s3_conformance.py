@@ -10,6 +10,9 @@ import hashlib
 from io import BytesIO
 from typing import Any
 
+import pytest
+
+from umbral.application.objects.contracts import ObjectNotFound, ProviderObjectRef
 from umbral.infrastructure.object_store.s3 import S3ObjectStore
 
 
@@ -58,7 +61,7 @@ class _FakeS3:
         return result
 
 
-def test_s3_provider_refs_are_opaque_and_conform_to_filesystem_outcomes() -> None:
+def test_s3_provider_refs_survive_adapter_reconstruction() -> None:
     client = _FakeS3()
     store = S3ObjectStore(client=client, bucket="private")
     body = b"remote bytes"
@@ -71,7 +74,25 @@ def test_s3_provider_refs_are_opaque_and_conform_to_filesystem_outcomes() -> Non
         content_type="application/octet-stream",
     )
 
-    assert "private" not in ref.value
-    assert "objects/one/v1" not in ref.value
-    assert store.stat(ref).sha256 == digest
-    assert store.open(ref).read() == body
+    recovered = S3ObjectStore(client=client, bucket="private")
+
+    assert ref.value == "objects/one/v1"
+    assert repr(ref) == "ProviderObjectRef(<opaque>)"
+    assert recovered.stat(ref).sha256 == digest
+    assert recovered.open(ref).read() == body
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "objects/../v1",
+        "/objects/one/v1",
+        "https://private.invalid/objects/one/v1",
+        "unknown/one/v1",
+    ],
+)
+def test_s3_rejects_non_durable_provider_references(value: str) -> None:
+    store = S3ObjectStore(client=_FakeS3(), bucket="private")
+
+    with pytest.raises(ObjectNotFound):
+        store.stat(ProviderObjectRef(value))

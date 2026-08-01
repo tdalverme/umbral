@@ -1,0 +1,228 @@
+"""Composition contracts for optional, redacted operational telemetry."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import MetricReader
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from pytest import MonkeyPatch
+
+from umbral.infrastructure.config.settings import Settings
+from umbral.infrastructure.observability.otel import initialize_otel
+from umbral.infrastructure.observability.runtime import ObservabilityRuntime
+from umbral.infrastructure.observability.sentry import initialize_sentry
+
+
+@dataclass
+class _CapturedProvider:
+    resource_attributes: dict[str, str]
+
+
+@dataclass(frozen=True)
+class _ExporterConfig:
+    endpoint: str
+    headers: dict[str, str]
+
+
+def _settings() -> Settings:
+    return Settings.from_environment(
+        {
+            "UMBRAL_ENV": "preview",
+            "UMBRAL_RELEASE_ID": "preview-20260801",
+            "UMBRAL_RELEASE_MANIFEST": "/run/secrets/release.json",
+            "UMBRAL_RELEASE_DIGEST": "sha256:" + "a" * 64,
+            "DATABASE_URL": "postgresql://user:pass@db.preview.invalid/app",
+            "REDIS_URL": "redis://redis.railway.internal/0",
+            "OBJECT_STORE_BACKEND": "s3",
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid",
+            "SENTRY_DSN": "https://sentry.invalid/1",
+            "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000",
+            "UMBRAL_ACCESS_MODE": "product_session",
+            "IDENTITY_PROVIDER": "supabase",
+            "SUPABASE_URL": "https://bpwgyvetbneghrtxcadm.supabase.co",
+            "SUPABASE_SECRET_KEY": "sb_secret_test_value",
+            "IDENTITY_ISSUER": "https://bpwgyvetbneghrtxcadm.supabase.co/auth/v1",
+            "IDENTITY_CAPTURE_ORIGIN": "https://preview.umbral.invalid",
+            "EMAIL_PROVIDER": "resend",
+            "RESEND_API_KEY": "re_test_value",
+            "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>",
+            "EMAIL_WEBHOOK_SECRET": "whsec_test_value",
+        }
+    )
+
+
+def test_runtime_initializes_safe_observability_once_without_affecting_product(
+) -> None:
+    captured: list[_CapturedProvider] = []
+    sentry_calls: list[tuple[str | None, str]] = []
+
+    def initialize_otel(
+        *, endpoint: str, resource_attributes: dict[str, str]
+    ) -> bool:
+        del endpoint
+        captured.append(_CapturedProvider(resource_attributes))
+        return True
+
+    def initialize_sentry(dsn: str | None, release: str) -> bool:
+        sentry_calls.append((dsn, release))
+        return True
+
+    runtime = ObservabilityRuntime(
+        initialize_otel=initialize_otel,
+        initialize_sentry=initialize_sentry,
+    )
+
+    first = runtime.initialize(_settings())
+    second = runtime.initialize(_settings())
+
+    assert first == second
+    assert first.diagnostics == ()
+    assert captured == [
+        _CapturedProvider(
+            {
+                "service.name": "umbral",
+                "deployment.environment.name": "preview",
+                "service.version": "preview-20260801",
+                "umbral.release.digest": "sha256:" + "a" * 64,
+            }
+        )
+    ]
+    assert sentry_calls == [("https://sentry.invalid/1", "preview-20260801")]
+
+
+def test_runtime_keeps_product_composition_available_when_exporters_fail() -> None:
+    runtime = ObservabilityRuntime(
+        initialize_otel=lambda **_: False,
+        initialize_sentry=lambda *_: False,
+    )
+
+    diagnostics = runtime.initialize(_settings())
+
+    assert diagnostics.diagnostics == (
+        "observability.otlp_unavailable",
+        "observability.sentry_unavailable",
+    )
+
+
+def test_otel_uses_bounded_resource_and_standard_signal_configuration(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, _ExporterConfig] = {}
+    resources: list[dict[str, str]] = []
+    providers: list[TracerProvider | MeterProvider] = []
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_HEADERS", "shared=one,override=generic")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "override=traces")
+
+    def trace_exporter(
+        *, endpoint: str | None, headers: dict[str, str] | None
+    ) -> OTLPSpanExporter:
+        assert endpoint is not None
+        assert headers is not None
+        captured["trace"] = _ExporterConfig(endpoint, headers)
+        return OTLPSpanExporter(endpoint=endpoint, headers=headers)
+
+    def metric_exporter(
+        *, endpoint: str | None, headers: dict[str, str] | None
+    ) -> OTLPMetricExporter:
+        assert endpoint is not None
+        assert headers is not None
+        captured["metric"] = _ExporterConfig(endpoint, headers)
+        return OTLPMetricExporter(endpoint=endpoint, headers=headers)
+
+    def tracer_provider(
+        *, resource: Resource, shutdown_on_exit: bool
+    ) -> TracerProvider:
+        resources.append(
+            {
+                key: value
+                for key, value in resource.attributes.items()
+                if isinstance(value, str)
+            }
+        )
+        provider = TracerProvider(resource=resource, shutdown_on_exit=shutdown_on_exit)
+        providers.append(provider)
+        return provider
+
+    def meter_provider(
+        *,
+        resource: Resource,
+        metric_readers: list[MetricReader],
+        shutdown_on_exit: bool,
+    ) -> MeterProvider:
+        resources.append(
+            {
+                key: value
+                for key, value in resource.attributes.items()
+                if isinstance(value, str)
+            }
+        )
+        provider = MeterProvider(
+            resource=resource,
+            metric_readers=metric_readers,
+            shutdown_on_exit=shutdown_on_exit,
+        )
+        providers.append(provider)
+        return provider
+
+    assert initialize_otel(
+        endpoint="https://otel.preview.invalid",
+        resource_attributes={
+            "service.name": "umbral",
+            "deployment.environment.name": "preview",
+            "service.version": "preview-20260801",
+            "umbral.release.digest": "sha256:" + "a" * 64,
+        },
+        trace_exporter_factory=trace_exporter,
+        metric_exporter_factory=metric_exporter,
+        tracer_provider_factory=tracer_provider,
+        meter_provider_factory=meter_provider,
+        trace_provider_setter=lambda _: None,
+        meter_provider_setter=lambda _: None,
+    )
+
+    assert captured == {
+        "trace": _ExporterConfig(
+            "https://otel.preview.invalid/v1/traces",
+            {"shared": "one", "override": "traces"},
+        ),
+        "metric": _ExporterConfig(
+            "https://otel.preview.invalid/v1/metrics",
+            {"shared": "one", "override": "generic"},
+        ),
+    }
+    assert resources == [
+        {
+            "service.name": "umbral",
+            "deployment.environment.name": "preview",
+            "service.version": "preview-20260801",
+            "umbral.release.digest": "sha256:" + "a" * 64,
+        }
+    ] * 2
+    for provider in providers:
+        provider.shutdown()
+
+
+def test_sentry_disables_default_pii_and_scrubs_transaction_events() -> None:
+    captured: dict[str, object] = {}
+
+    assert initialize_sentry(
+        "https://sentry.invalid/1",
+        "preview-20260801",
+        initializer=lambda **kwargs: captured.update(kwargs),
+    )
+
+    filtered = captured["before_send_transaction"](  # type: ignore[operator]
+        {
+            "tags": {"operation": "request.completed", "email": "person@example.com"},
+            "request": {"url": "https://private.invalid/?token=secret"},
+            "contexts": {"body": "secret"},
+        },
+        {},
+    )
+    assert captured["send_default_pii"] is False
+    assert filtered == {"tags": {"operation": "request.completed"}}
