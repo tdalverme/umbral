@@ -3,6 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import json
+import sys
+import time
+from typing import Any
+
+from umbral.workers.scheduler import (
+    DEFAULT_DUE_WORK_LIMIT,
+    HEARTBEAT_INTERVAL_SECONDS,
+    scheduler_once,
+)
+from umbral.workers.worker import build_rq_worker
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -10,15 +21,50 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("worker", help="run the durable job worker")
     subparsers.add_parser("scheduler", help="run the UTC scheduler")
+    subparsers.add_parser("scheduler-once", help="run one durable scheduler pass")
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> int:
     args = build_parser().parse_args(argv)
-    # Process composition is supplied by the deployment adapter. Keeping the
-    # parser side-effect free makes `--help` and smoke checks safe.
-    if args.command in {"worker", "scheduler"}:
+    active_dependencies = dependencies
+    if active_dependencies is None:
+        from umbral.workers.composition import build_process_dependencies
+
+        active_dependencies = build_process_dependencies()
+    if (
+        args.command == "scheduler"
+        and active_dependencies.settings.environment == "preview"
+    ):
+        return 2
+    if args.command == "worker":
+        return 0 if build_rq_worker(active_dependencies.queue).work() else 1
+    if args.command == "scheduler-once":
+        try:
+            summary = scheduler_once(
+                active_dependencies.runtime,
+                queue=active_dependencies.queue,
+                identity_store=active_dependencies.identity_store,
+                limit=DEFAULT_DUE_WORK_LIMIT,
+            )
+        except Exception:
+            print("scheduler-once failed", file=sys.stderr)
+            return 1
+        print(json.dumps(summary, sort_keys=True, separators=(",", ":")))
         return 0
+    if args.command == "scheduler":
+        while True:
+            try:
+                scheduler_once(
+                    active_dependencies.runtime,
+                    queue=active_dependencies.queue,
+                    identity_store=active_dependencies.identity_store,
+                    limit=DEFAULT_DUE_WORK_LIMIT,
+                )
+            except Exception:
+                print("scheduler failed", file=sys.stderr)
+                return 1
+            time.sleep(HEARTBEAT_INTERVAL_SECONDS)
     return 2
 
 

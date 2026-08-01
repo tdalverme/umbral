@@ -376,6 +376,13 @@ class InMemoryJobRuntime:
                 rebuilt += 1
             return rebuilt
 
+    def reclaim_expired_outbox(self, *, limit: int = 100) -> int:
+        """Keep the common runtime seam explicit; in-memory relay has no lease."""
+
+        if not 1 <= limit <= 1000:
+            raise ValueError("limit must be between 1 and 1000")
+        return 0
+
     def reap_expired(self, *, limit: int = 100) -> int:
         with self._lock:
             count = 0

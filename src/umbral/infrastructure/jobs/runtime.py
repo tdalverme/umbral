@@ -272,6 +272,14 @@ class SqlAlchemyJobRuntime:
                 or 0
             )
 
+    def reclaim_expired_outbox(self, *, limit: int = 100) -> int:
+        with self._session_factory() as session:
+            count = SqlAlchemyJobRepository(session).reclaim_expired_outbox(
+                now=self.now, limit=_limit(limit)
+            )
+            session.commit()
+            return count
+
     def reap_expired(self, *, limit: int = 100) -> int:
         with self._session_factory() as session:
             count = SqlAlchemyJobRepository(session).reap_expired(
