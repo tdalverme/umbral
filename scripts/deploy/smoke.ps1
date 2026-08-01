@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string]$ManifestPath,
+    [ValidateSet("local", "preview")] [string]$Mode = "local",
+    [string]$BaseUrl,
     [string]$PythonExecutable
 )
 
@@ -23,10 +25,19 @@ foreach ($artifactName in @("web", "runtime")) {
     }
 }
 $env:PYTHONPATH = Join-Path $repoRoot "src"
-$identitySmoke = & $PythonExecutable -c "import json; from umbral.ops.smoke import run_identity_smoke; print(json.dumps(run_identity_smoke()))" | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0 -or $identitySmoke.result -ne "accepted") {
-    throw "Identity smoke failed."
+if ($Mode -eq "preview") {
+    if ([string]::IsNullOrWhiteSpace($BaseUrl)) { throw "Preview smoke requires BaseUrl." }
+    $origin = [Uri]$BaseUrl
+    if ($origin.Scheme -ne "https" -or -not $origin.Host -or $origin.AbsolutePath -notin @("", "/") -or $origin.Query) {
+        throw "Preview smoke requires one public HTTPS web origin."
+    }
+    $previewSmoke = & $PythonExecutable -m umbral.ops.smoke preview --base-url $BaseUrl --manifest-path $manifestFullPath | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or -not $previewSmoke.passed) { throw "Preview identity smoke failed." }
+    $previewSmoke | ConvertTo-Json -Depth 8
+    exit 0
 }
+$identitySmoke = & $PythonExecutable -m umbral.ops.smoke local | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or $identitySmoke.result -ne "accepted") { throw "Identity smoke failed." }
 [ordered]@{
     checks = @("web", "api", "worker", "scheduler", "extensions", "reference_job", "synthetic_object", "identity")
     release_id = $manifest.release_id

@@ -65,6 +65,11 @@ jobs:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           IDENTITY_ISSUER: ${{ secrets.IDENTITY_ISSUER }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          UMBRAL_PREVIEW_BASE_URL: ${{ secrets.UMBRAL_PREVIEW_BASE_URL }}
+          UMBRAL_SMOKE_INVITEE: ${{ secrets.UMBRAL_SMOKE_INVITEE }}
+          UMBRAL_SMOKE_OPERATOR_DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
+          UMBRAL_SMOKE_RESEND_OBSERVATION_TOKEN: ${{ secrets.RESEND_API_KEY }}
+          UMBRAL_PREVIEW_SMOKE_OBSERVER_FACTORY: ${{ vars.UMBRAL_PREVIEW_SMOKE_OBSERVER_FACTORY }}
         run: |
           $manifest = Get-Item artifacts/release/release-manifest.json
           $checksum = (Get-Content -Raw "${manifest}.sha256").Trim()
@@ -78,4 +83,6 @@ jobs:
           ./scripts/deploy/check-preview-dependencies.ps1 -ManifestPath $manifest.FullName -EvidencePath "artifacts/release/preview-dependency-evidence.json" -PythonExecutable $pythonExecutable
           $switch = ./scripts/deploy/set-railway-images.ps1 -ManifestPath $manifest.FullName -ManifestSha256 $checksum -Environment "${{ inputs.environment }}" | ConvertFrom-Json
           $null = ./scripts/deploy/wait-railway-services.ps1 -Environment "${{ inputs.environment }}" -DeploymentIdsJson ($switch.deployment_ids | ConvertTo-Json -Compress)
-          $null = ./scripts/deploy/smoke.ps1 -ManifestPath $manifest.FullName -PythonExecutable $pythonExecutable
+          $null = & $pythonExecutable -m umbral.ops.identity preload-invitation --email-env UMBRAL_SMOKE_INVITEE --database-url-env UMBRAL_SMOKE_OPERATOR_DATABASE_URL
+          if ($LASTEXITCODE -ne 0) { throw "Preview invitation preload failed." }
+          $null = ./scripts/deploy/smoke.ps1 -Mode preview -BaseUrl $env:UMBRAL_PREVIEW_BASE_URL -ManifestPath $manifest.FullName -PythonExecutable $pythonExecutable
