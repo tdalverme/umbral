@@ -12,6 +12,8 @@ from redis import Redis
 from rq import Worker
 from rq.serializers import JSONSerializer
 
+import umbral.workers.__main__ as workers_cli
+import umbral.workers.composition as worker_composition
 from umbral.application.identity.ports import IdentityStore
 from umbral.application.jobs.contracts import JobContext, JobState
 from umbral.application.jobs.ports import JobQueue, JobRuntime
@@ -144,6 +146,44 @@ def test_run_message_records_an_unregistered_handler_as_a_stable_failure() -> No
     assert snapshot.error_code == "job.handler_not_registered"
 
 
+def test_run_message_rebuilds_child_composition_for_each_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    queue = RecordingJobQueue()
+    runtime = InMemoryJobRuntime(queue=queue)
+    first = runtime.submit_simple("test.registered", "first", "message-4")
+    second = runtime.submit_simple("test.registered", "second", "message-5")
+    effects: list[UUID] = []
+    compositions = 0
+
+    def handler(context: JobContext) -> Mapping[str, bool]:
+        effects.append(context.execution_id)
+        return {"processed": True}
+
+    def compose() -> object:
+        nonlocal compositions
+        compositions += 1
+        return SimpleNamespace(
+            runtime=runtime,
+            handlers={"test.registered": handler},
+            worker_id=f"child-{compositions}",
+        )
+
+    monkeypatch.setattr(worker_composition, "build_process_dependencies", compose)
+
+    for execution in (first, second):
+        assert run_message(
+            execution_id=str(execution.execution_id),
+            attempt_number=1,
+            correlation_id=str(runtime.correlation_id(execution.execution_id)),
+        )
+
+    assert compositions == 2
+    assert effects == [first.execution_id, second.execution_id]
+    assert runtime.get(first.execution_id).state is JobState.SUCCEEDED
+    assert runtime.get(second.execution_id).state is JobState.SUCCEEDED
+
+
 def test_scheduler_once_runs_durable_steps_in_order_and_returns_summary() -> None:
     runtime = _SchedulerRuntime()
     store = _RetentionStore(runtime.events)
@@ -216,3 +256,57 @@ def test_scheduler_is_rejected_in_preview() -> None:
     dependencies = SimpleNamespace(settings=SimpleNamespace(environment="preview"))
 
     assert main(["scheduler"], dependencies=dependencies) == 2
+
+
+@pytest.mark.parametrize("worker_result", [True, False])
+def test_worker_normal_completion_always_exits_zero(
+    monkeypatch: pytest.MonkeyPatch, worker_result: bool
+) -> None:
+    dependencies = SimpleNamespace(
+        settings=SimpleNamespace(environment="local"), queue=object()
+    )
+    monkeypatch.setattr(
+        workers_cli,
+        "build_rq_worker",
+        lambda queue: SimpleNamespace(work=lambda: worker_result),
+    )
+
+    assert main(["worker"], dependencies=dependencies) == 0
+
+
+def test_worker_exception_exits_nonzero_without_exposing_dependency_value(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dependencies = SimpleNamespace(
+        settings=SimpleNamespace(environment="local"), queue=object()
+    )
+
+    def fail_worker(queue: object) -> object:
+        del queue
+        raise RuntimeError("redis://canary-secret@host")
+
+    monkeypatch.setattr(workers_cli, "build_rq_worker", fail_worker)
+
+    assert main(["worker"], dependencies=dependencies) == 1
+    captured = capsys.readouterr()
+    assert captured.err == "worker failed\n"
+    assert "canary-secret" not in captured.out + captured.err
+
+
+@pytest.mark.parametrize("command", ["worker", "scheduler-once"])
+def test_composition_failure_is_a_safe_nonzero_process_result(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    def fail_composition() -> object:
+        raise RuntimeError("postgresql://canary-secret@host")
+
+    monkeypatch.setattr(
+        worker_composition, "build_process_dependencies", fail_composition
+    )
+
+    assert main([command]) == 1
+    captured = capsys.readouterr()
+    assert captured.err == f"{command} failed\n"
+    assert "canary-secret" not in captured.out + captured.err
