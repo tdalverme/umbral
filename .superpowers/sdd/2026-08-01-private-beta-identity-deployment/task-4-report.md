@@ -29,6 +29,7 @@ GREEN was observed after the minimal adapter implementation: `3 passed` for the 
 - The conformance suite now covers `current_attempt`, exact recent-request window behavior, and deep/reentrant rollback of provider-event dedupe. Magic-link integration asserts exact exported-identity/session cardinality through existing production operations.
 - Fresh non-container verification after the review fixes: `50 passed, 2 deselected`.
 - Review round 2 adds reloaded transitions for every record type, multiple-current-attempt selection/filtering, an attempt-save spy for the rate limiter, exact link/role/session cardinality through existing production operations, and rollback proof through `recent_requests == 0`. Fresh result: `51 passed, 2 deselected`.
+- Review round 3 corrected the rollback check to fingerprint `person@example.com`, the email used by the failed request. A deliberate `== 1` mutation failed with observed count `0`; final `== 0` is green.
 - Provider calls remain outside store transactions. The provider webhook is now deduplicated and, when an audit is relevant, appended through one atomic store operation.
 - Authorization still updates activity only after an allowed action; session and audit mutate in the same transaction.
 - `PostgresIdentityRepository` remains the existing SQL groundwork and is not wired as the application `IdentityStore`; extending its domain mapping is deferred to the SQL implementation task rather than invented in this port-refactor task.

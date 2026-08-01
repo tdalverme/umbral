@@ -246,7 +246,7 @@ def test_application_transaction_rolls_back_request_and_audit() -> None:
     assert store.audit_events() == ()
     assert (
         store.recent_requests(
-            store.fingerprint("unknown@example.com"),
+            store.fingerprint("person@example.com"),
             now=NOW,
             field="email_fingerprint",
         )
