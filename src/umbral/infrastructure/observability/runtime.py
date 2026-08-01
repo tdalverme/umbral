@@ -46,7 +46,7 @@ class ObservabilityRuntime:
             diagnostics: list[str] = []
             try:
                 otlp_result = self._initialize_otel(
-                    endpoint=settings.otel_exporter_otlp_endpoint,
+                    settings=settings,
                     resource_attributes=_resource_attributes(settings),
                 )
             except Exception:

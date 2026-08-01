@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable, Mapping
 from threading import RLock
 from typing import Any, Literal
@@ -18,6 +17,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.util.re import parse_env_headers
 
 from umbral.application.runtime.telemetry import TelemetrySignal
+from umbral.infrastructure.config.settings import Settings
 
 DependencyName = Literal["identity_provider", "email_provider"]
 DependencyState = Literal["ready", "degraded", "unavailable"]
@@ -53,7 +53,7 @@ class ObservabilityHandle:
 
 def initialize_otel(
     *,
-    endpoint: str,
+    settings: Settings,
     resource_attributes: Mapping[str, str],
     trace_exporter_factory: Callable[..., Any] = OTLPSpanExporter,
     metric_exporter_factory: Callable[..., Any] = OTLPMetricExporter,
@@ -71,12 +71,26 @@ def initialize_otel(
     try:
         resource = Resource(dict(resource_attributes))
         trace_exporter = trace_exporter_factory(
-            endpoint=_endpoint_for("traces", endpoint),
-            headers=_headers_for("TRACES"),
+            endpoint=_endpoint_for(
+                "traces",
+                settings.otel_exporter_otlp_endpoint,
+                settings.otel_exporter_otlp_traces_endpoint,
+            ),
+            headers=_headers_for(
+                settings.otel_exporter_otlp_headers,
+                settings.otel_exporter_otlp_traces_headers,
+            ),
         )
         metric_exporter = metric_exporter_factory(
-            endpoint=_endpoint_for("metrics", endpoint),
-            headers=_headers_for("METRICS"),
+            endpoint=_endpoint_for(
+                "metrics",
+                settings.otel_exporter_otlp_endpoint,
+                settings.otel_exporter_otlp_metrics_endpoint,
+            ),
+            headers=_headers_for(
+                settings.otel_exporter_otlp_headers,
+                settings.otel_exporter_otlp_metrics_headers,
+            ),
         )
         tracer_provider = tracer_provider_factory(
             resource=resource,
@@ -95,8 +109,11 @@ def initialize_otel(
     return ObservabilityHandle(tracer_provider, meter_provider)
 
 
-def _endpoint_for(signal: str, configured_endpoint: str) -> str:
-    signal_endpoint = os.getenv(f"OTEL_EXPORTER_OTLP_{signal.upper()}_ENDPOINT")
+def _endpoint_for(
+    signal: str,
+    configured_endpoint: str,
+    signal_endpoint: str | None = None,
+) -> str:
     if signal_endpoint:
         return signal_endpoint
     return f"{_generic_endpoint_base(configured_endpoint)}/v1/{signal}"
@@ -111,11 +128,12 @@ def _generic_endpoint_base(configured_endpoint: str) -> str:
     return endpoint
 
 
-def _headers_for(signal: str) -> dict[str, str]:
-    generic = parse_env_headers(os.getenv("OTEL_EXPORTER_OTLP_HEADERS", ""))
-    specific = parse_env_headers(
-        os.getenv(f"OTEL_EXPORTER_OTLP_{signal}_HEADERS", "")
-    )
+def _headers_for(
+    generic_headers: str | None,
+    signal_headers: str | None,
+) -> dict[str, str]:
+    generic = parse_env_headers(generic_headers or "")
+    specific = parse_env_headers(signal_headers or "")
     return {**generic, **specific}
 
 

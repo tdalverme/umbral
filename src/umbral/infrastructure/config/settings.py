@@ -68,6 +68,29 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: str = Field(
         validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT"
     )
+    otel_exporter_otlp_headers: str | None = Field(
+        default=None,
+        validation_alias="OTEL_EXPORTER_OTLP_HEADERS",
+        repr=False,
+    )
+    otel_exporter_otlp_traces_endpoint: str | None = Field(
+        default=None,
+        validation_alias="OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+    )
+    otel_exporter_otlp_traces_headers: str | None = Field(
+        default=None,
+        validation_alias="OTEL_EXPORTER_OTLP_TRACES_HEADERS",
+        repr=False,
+    )
+    otel_exporter_otlp_metrics_endpoint: str | None = Field(
+        default=None,
+        validation_alias="OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+    )
+    otel_exporter_otlp_metrics_headers: str | None = Field(
+        default=None,
+        validation_alias="OTEL_EXPORTER_OTLP_METRICS_HEADERS",
+        repr=False,
+    )
     sentry_dsn: str | None = Field(default=None, validation_alias="SENTRY_DSN")
     api_base_url: str = Field(validation_alias="UMBRAL_API_BASE_URL")
     access_mode: Literal["product_session", "cloudflare"] = Field(
@@ -109,6 +132,11 @@ class Settings(BaseSettings):
             "OBJECT_STORE_ACCESS_KEY",
             "OBJECT_STORE_SECRET_KEY",
             "OTEL_EXPORTER_OTLP_ENDPOINT",
+            "OTEL_EXPORTER_OTLP_HEADERS",
+            "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+            "OTEL_EXPORTER_OTLP_TRACES_HEADERS",
+            "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+            "OTEL_EXPORTER_OTLP_METRICS_HEADERS",
             "SENTRY_DSN",
             "UMBRAL_API_BASE_URL",
             "UMBRAL_ACCESS_MODE",
@@ -165,6 +193,14 @@ class Settings(BaseSettings):
         otel = _url(
             values["OTEL_EXPORTER_OTLP_ENDPOINT"], "OTEL_EXPORTER_OTLP_ENDPOINT"
         )
+        for field_name in (
+            "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+            "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+        ):
+            if values.get(field_name, "").strip():
+                signal_endpoint = _url(values[field_name], field_name)
+                if environment != "local" and signal_endpoint.scheme != "https":
+                    raise SettingsValidationError("CONFIG_TLS_REQUIRED", field_name)
         api = _url(values["UMBRAL_API_BASE_URL"], "UMBRAL_API_BASE_URL")
 
         if environment == "local":

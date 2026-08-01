@@ -74,6 +74,37 @@ def test_rq_worker_uses_umbral_queue_and_json_serializer() -> None:
     assert isinstance(worker.queues[0].serializer, JSONSerializer)
 
 
+def test_worker_settings_loader_accepts_explicit_otlp_signal_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    environment = {
+        "UMBRAL_ENV": "local",
+        "UMBRAL_RELEASE_ID": "worker-local",
+        "UMBRAL_RELEASE_MANIFEST": "<local>",
+        "DATABASE_URL": "postgresql://umbral:local@127.0.0.1/umbral",
+        "REDIS_URL": "redis://127.0.0.1:6379/0",
+        "OBJECT_STORE_BACKEND": "filesystem",
+        "OBJECT_STORE_ROOT": ".umbral-local",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://127.0.0.1:4318",
+        "OTEL_EXPORTER_OTLP_HEADERS": "authorization=CANARY_OTLP_API_KEY",
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://127.0.0.1:4318/traces",
+        "OTEL_EXPORTER_OTLP_TRACES_HEADERS": "authorization=trace-key",
+        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://127.0.0.1:4318/metrics",
+        "OTEL_EXPORTER_OTLP_METRICS_HEADERS": "authorization=metric-key",
+        "UMBRAL_API_BASE_URL": "http://127.0.0.1:8000",
+    }
+    monkeypatch.setattr(
+        worker_composition,
+        "os",
+        SimpleNamespace(environ=environment),
+    )
+
+    settings = worker_composition._load_settings()
+
+    assert settings.otel_exporter_otlp_traces_headers == "authorization=trace-key"
+    assert settings.otel_exporter_otlp_metrics_headers == "authorization=metric-key"
+
+
 def test_run_message_claims_once_and_records_registered_handler_outcome() -> None:
     queue = RecordingJobQueue()
     runtime = InMemoryJobRuntime(queue=queue)

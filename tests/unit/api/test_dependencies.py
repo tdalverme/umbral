@@ -51,6 +51,37 @@ def test_runtime_settings_loader_preserves_preview_supabase_configuration() -> N
     assert settings.supabase_url == "https://bpwgyvetbneghrtxcadm.supabase.co"
 
 
+def test_runtime_settings_loader_accepts_explicit_otlp_signal_configuration() -> None:
+    environment = _preview_environment() | {
+        "OTEL_EXPORTER_OTLP_HEADERS": "authorization=CANARY_OTLP_API_KEY",
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://collector.invalid/traces",
+        "OTEL_EXPORTER_OTLP_TRACES_HEADERS": "authorization=trace-key",
+        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "https://collector.invalid/metrics",
+        "OTEL_EXPORTER_OTLP_METRICS_HEADERS": "authorization=metric-key",
+    }
+
+    settings = _load_settings(environment)
+
+    assert settings.otel_exporter_otlp_traces_endpoint == "https://collector.invalid/traces"
+    assert settings.otel_exporter_otlp_metrics_endpoint == "https://collector.invalid/metrics"
+    rendered = repr(settings)
+    assert not any(
+        canary in rendered
+        for canary in ("CANARY_OTLP_API_KEY", "trace-key", "metric-key")
+    )
+
+
+def test_runtime_settings_loader_rejects_unknown_otlp_signal_options() -> None:
+    with pytest.raises(SettingsValidationError) as raised:
+        _load_settings(
+            _preview_environment()
+            | {"OTEL_EXPORTER_OTLP_LOGS_HEADERS": "authorization=unexpected"}
+        )
+
+    assert raised.value.rule_code == "CONFIG_UNKNOWN_SETTING"
+    assert raised.value.field_name == "OTEL_EXPORTER_OTLP_LOGS_HEADERS"
+
+
 def test_local_runtime_keeps_development_adapters() -> None:
     dependencies = build_runtime_dependencies()
 

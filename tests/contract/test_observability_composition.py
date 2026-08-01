@@ -58,6 +58,11 @@ def _settings() -> Settings:
             "REDIS_URL": "redis://redis.railway.internal/0",
             "OBJECT_STORE_BACKEND": "s3",
             "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.preview.invalid",
+            "OTEL_EXPORTER_OTLP_HEADERS": "authorization=CANARY_OTLP_API_KEY",
+            "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://otel.preview.invalid/custom-traces",
+            "OTEL_EXPORTER_OTLP_TRACES_HEADERS": "authorization=trace-key",
+            "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "https://otel.preview.invalid/custom-metrics",
+            "OTEL_EXPORTER_OTLP_METRICS_HEADERS": "authorization=metric-key",
             "SENTRY_DSN": "https://sentry.invalid/1",
             "UMBRAL_API_BASE_URL": "http://api.railway.internal:8000",
             "UMBRAL_ACCESS_MODE": "product_session",
@@ -80,9 +85,12 @@ def test_runtime_initializes_safe_observability_once_without_affecting_product(
     sentry_calls: list[tuple[str | None, str]] = []
 
     def initialize_otel(
-        *, endpoint: str, resource_attributes: dict[str, str]
+        *, settings: Settings, resource_attributes: dict[str, str]
     ) -> bool:
-        del endpoint
+        assert (
+            settings.otel_exporter_otlp_headers
+            == "authorization=CANARY_OTLP_API_KEY"
+        )
         captured.append(_CapturedProvider(resource_attributes))
         return True
 
@@ -133,8 +141,16 @@ def test_otel_uses_bounded_resource_and_standard_signal_configuration(
     captured: dict[str, _ExporterConfig] = {}
     resources: list[dict[str, str]] = []
     providers: list[TracerProvider | MeterProvider] = []
-    monkeypatch.setenv("OTEL_EXPORTER_OTLP_HEADERS", "shared=one,override=generic")
-    monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "override=traces")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_HEADERS", "poison=outside-settings")
+    settings = _settings().model_copy(
+        update={
+            "otel_exporter_otlp_headers": "shared=one,override=generic",
+            "otel_exporter_otlp_traces_endpoint": None,
+            "otel_exporter_otlp_traces_headers": "override=traces",
+            "otel_exporter_otlp_metrics_endpoint": None,
+            "otel_exporter_otlp_metrics_headers": None,
+        }
+    )
 
     def trace_exporter(
         *, endpoint: str | None, headers: dict[str, str] | None
@@ -188,7 +204,7 @@ def test_otel_uses_bounded_resource_and_standard_signal_configuration(
         return provider
 
     handle = initialize_otel(
-        endpoint="https://otel.preview.invalid",
+        settings=settings,
         resource_attributes={
             "service.name": "umbral",
             "deployment.environment.name": "preview",
@@ -230,11 +246,16 @@ def test_otel_uses_signal_specific_endpoints_as_is_and_normalizes_legacy_base(
     monkeypatch: MonkeyPatch,
 ) -> None:
     captured: dict[str, _ExporterConfig] = {}
-    monkeypatch.setenv(
-        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "https://collector.invalid/custom-traces"
-    )
-    monkeypatch.setenv(
-        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "https://collector.invalid/custom-metrics"
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "https://poison.invalid")
+    settings = _settings().model_copy(
+        update={
+            "otel_exporter_otlp_endpoint": "https://otel.preview.invalid/v1/traces",
+            "otel_exporter_otlp_headers": None,
+            "otel_exporter_otlp_traces_endpoint": "https://collector.invalid/custom-traces",
+            "otel_exporter_otlp_traces_headers": None,
+            "otel_exporter_otlp_metrics_endpoint": "https://collector.invalid/custom-metrics",
+            "otel_exporter_otlp_metrics_headers": None,
+        }
     )
 
     def trace_exporter(
@@ -254,7 +275,7 @@ def test_otel_uses_signal_specific_endpoints_as_is_and_normalizes_legacy_base(
         return OTLPMetricExporter(endpoint=endpoint, headers=headers)
 
     handle = initialize_otel(
-        endpoint="https://otel.preview.invalid/v1/traces",
+        settings=settings,
         resource_attributes={"service.name": "umbral"},
         trace_exporter_factory=trace_exporter,
         metric_exporter_factory=metric_exporter,
