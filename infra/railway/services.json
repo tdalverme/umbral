@@ -1,0 +1,39 @@
+{
+  "contract_version": 1,
+  "services": [
+    {
+      "name": "web",
+      "release_artifact": "web",
+      "public_domain": true,
+      "healthcheck_path": "/health",
+      "restart_policy": "ON_FAILURE",
+      "serverless_sleep": true
+    },
+    {
+      "name": "api",
+      "release_artifact": "runtime",
+      "start_command": "python -m uvicorn umbral.api.main:app --host 0.0.0.0 --port 8000",
+      "public_domain": false,
+      "healthcheck_path": "/health",
+      "restart_policy": "ON_FAILURE",
+      "serverless_sleep": true
+    },
+    {
+      "name": "worker",
+      "release_artifact": "runtime",
+      "start_command": "python -m umbral.workers worker",
+      "public_domain": false,
+      "restart_policy": "ALWAYS",
+      "serverless_sleep": false
+    },
+    {
+      "name": "scheduler",
+      "release_artifact": "runtime",
+      "start_command": "python -m umbral.workers scheduler-once",
+      "public_domain": false,
+      "restart_policy": "NEVER",
+      "cron_schedule": "*/5 * * * *",
+      "cron_timezone": "UTC"
+    }
+  ]
+}

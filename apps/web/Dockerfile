@@ -12,7 +12,9 @@ RUN npm run build --workspace @umbral/web
 
 FROM node:24.15-alpine AS runtime
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 RUN addgroup -S umbral && adduser -S -u 10001 -G umbral umbral

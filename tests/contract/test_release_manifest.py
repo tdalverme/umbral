@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -92,4 +94,21 @@ def test_surfaces_require_the_same_manifest_and_exact_digests() -> None:
                 "artifact_digest": "sha256:" + "1" * 64,
             }
         }
+    )
+
+
+def test_railway_contract_uses_the_manifest_artifact_names() -> None:
+    """A renamed release artifact must not silently disconnect Railway services."""
+    repository_root = Path(__file__).resolve().parents[2]
+    fixture_path = (
+        repository_root / "tests" / "fixtures" / "release-manifests" / "valid.json"
+    )
+    manifest = ReleaseManifest.from_mapping(
+        json.loads(fixture_path.read_text(encoding="utf-8"))
+    )
+    services_path = repository_root / "infra" / "railway" / "services.json"
+    services = json.loads(services_path.read_text(encoding="utf-8"))["services"]
+
+    assert {service["release_artifact"] for service in services} == set(
+        manifest.artifact_digests()
     )

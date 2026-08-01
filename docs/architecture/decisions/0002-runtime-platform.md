@@ -2,22 +2,30 @@
 
 ## Decision
 
-Render Pro hosts the private API, worker, scheduler and PostgreSQL 17; the web
-surface is a separate non-auto-build service. Cloudflare Access closes origins
-and exposes only the exact `/health` path. R2 stores immutable object versions
-and recovery manifests. Grafana Cloud/OTel and Sentry receive metadata-only
-signals.
+Render/Cloudflare remains the deferred production platform decision. For the
+private beta only, Railway hosts the public web surface plus private API,
+worker and scheduler services; Neon provides PostgreSQL and Cloudflare R2
+stores immutable object versions and recovery manifests. Railway private
+networking is automatic, so only web receives a public Railway domain; no
+custom DNS is approved for this preview exception. Grafana Cloud/OTel and
+Sentry receive metadata-only signals.
+
+The preview exception has a USD 20 monthly ceiling. Serverless sleep is enabled
+only for web and API; the worker remains available and scheduler work runs as a
+UTC cron command no more frequently than every five minutes.
 
 ## Alternatives and tradeoffs
 
-- A single provider would reduce coordination but loses the explicit edge gate
-  and object retention controls required by this increment.
+- Railway/Neon/R2 minimize beta operating cost, but do not satisfy the
+  production decision's custom DNS or approved availability posture.
 - Kubernetes adds HA and regional recovery before the beta needs it; it is
   deferred with single-region capacity limits.
 - Redis remains disposable transport; PostgreSQL outbox state is rebuildable.
 
 ## Exit conditions
 
-Revisit Render/Cloudflare/R2 when measured capacity, a second region, provider
-outage frequency, or retention cost exceeds the beta budget. Promotion scripts
-remain provider-neutral and record evidence without provider credentials.
+Exit the Railway preview exception before production promotion, custom DNS,
+the USD 20 ceiling, measured capacity, a second region, provider outage
+frequency, or retention cost requires a revisited platform decision. Promotion
+scripts remain provider-neutral and record evidence without provider
+credentials.
