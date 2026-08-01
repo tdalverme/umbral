@@ -30,14 +30,16 @@ def test_late_completion_cannot_reinstate_an_older_link() -> None:
         correlation_id=uuid4(),
         now=now,
     )
-    first = next(iter(store.attempts.values()))
+    first = store.latest_attempt()
+    assert first is not None
     access.request_magic_link(
         email="person@example.com",
         origin_fingerprint="two",
         correlation_id=uuid4(),
         now=now + timedelta(seconds=1),
     )
-    second = next(item for item in store.attempts.values() if item.id != first.id)
+    second = store.latest_attempt()
+    assert second is not None and second.id != first.id
     access.issue_attempt(second.id, now=now + timedelta(seconds=1))
     access.issue_attempt(first.id, now=now + timedelta(seconds=2))
     assert second.state == "issued"

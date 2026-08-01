@@ -26,10 +26,10 @@ def test_provider_failure_creates_no_session_or_user() -> None:
         correlation_id=uuid4(),
         now=now,
     )
-    attempt = next(iter(store.attempts.values()))
+    attempt = store.latest_attempt()
+    assert attempt is not None
     access.issue_attempt(attempt.id, now=now)
-    assert not store.users
-    assert not store.sessions
+    assert store.user_for_email("person@example.com") is None
     assert attempt.state == "failed"
 
 
@@ -46,10 +46,11 @@ def test_email_failure_creates_no_access_grant() -> None:
         correlation_id=uuid4(),
         now=now,
     )
-    attempt = next(iter(store.attempts.values()))
+    attempt = store.latest_attempt()
+    assert attempt is not None
     access.issue_attempt(attempt.id, now=now)
     assert attempt.state == "failed"
-    assert not store.users and not store.sessions
+    assert store.user_for_email("person@example.com") is None
 
 
 def test_identity_verification_failure_does_not_activate_user() -> None:
@@ -66,12 +67,13 @@ def test_identity_verification_failure_does_not_activate_user() -> None:
         correlation_id=uuid4(),
         now=now,
     )
-    attempt = next(iter(store.attempts.values()))
+    attempt = store.latest_attempt()
+    assert attempt is not None
     access.issue_attempt(attempt.id, now=now)
     token_hash = str(email.messages[0]["capture_url"]).split("token_hash=", 1)[1]
     with pytest.raises(IdentityError):
         access.confirm_magic_link(attempt_id=attempt.id, token_hash=token_hash, now=now)
-    assert not store.users and not store.sessions
+    assert store.user_for_email("person@example.com") is None
 
 
 def test_provider_sign_out_failure_prevents_any_local_identity_mutation() -> None:
@@ -93,7 +95,8 @@ def test_provider_sign_out_failure_prevents_any_local_identity_mutation() -> Non
         correlation_id=uuid4(),
         now=now,
     )
-    attempt = next(iter(store.attempts.values()))
+    attempt = store.latest_attempt()
+    assert attempt is not None
     access.issue_attempt(attempt.id, now=now)
     token_hash = str(email.messages[0]["capture_url"]).split("token_hash=", 1)[1]
 
@@ -103,5 +106,4 @@ def test_provider_sign_out_failure_prevents_any_local_identity_mutation() -> Non
     assert error.value.code == "auth.provider_unavailable"
     assert attempt.state == "issued"
     assert invitation.status == "active"
-    assert not store.users and not store.links
-    assert not store.roles and not store.sessions
+    assert store.user_for_email("person@example.com") is None

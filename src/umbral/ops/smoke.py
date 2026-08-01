@@ -58,4 +58,4 @@ def run_identity_smoke() -> dict[str, str]:
     access = IdentityAccess(store, FakeIdentityProvider(), RecordingEmailAdapter())
     now = datetime.now(timezone.utc)
     access.request_magic_link(email="smoke@example.test", origin_fingerprint="smoke", correlation_id=uuid4(), now=now)
-    return {"result": "accepted", "sessions": str(len(store.sessions)), "synthetic": "true"}
+    return {"result": "accepted", "sessions": str(store.session_count()), "synthetic": "true"}

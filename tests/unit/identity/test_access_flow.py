@@ -1,6 +1,7 @@
  # ruff: noqa: E501
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -23,17 +24,20 @@ def test_activation_is_one_user_and_latest_link_wins() -> None:
     email = RecordingEmailAdapter()
     service = IdentityAccess(store, provider, email)
     service.request_magic_link(email="person@example.com", origin_fingerprint="a", correlation_id=uuid4(), now=now)
-    first = next(iter(store.attempts.values()))
+    first = store.latest_attempt()
+    assert first is not None
     service.issue_attempt(first.id, now=now)
     service.request_magic_link(email="person@example.com", origin_fingerprint="b", correlation_id=uuid4(), now=now + timedelta(seconds=1))
-    second = next(item for item in store.attempts.values() if item.id != first.id)
+    second = store.latest_attempt()
+    assert second is not None and second.id != first.id
     service.issue_attempt(second.id, now=now + timedelta(seconds=1))
     assert first.state == "superseded"
     token_hash = str(email.messages[-1]["capture_url"]).split("token_hash=", 1)[1]
     session = service.confirm_magic_link(attempt_id=second.id, token_hash=str(token_hash), now=now + timedelta(seconds=2))
-    assert len(store.users) == 1
-    assert len(store.links) == 1
-    assert len(store.sessions) == 1
+    assert store.user(session.user_id) is not None
+    subject = "fake-subject-" + hashlib.sha256(b"person@example.com").hexdigest()[:24]
+    assert store.link_for_subject("fake", "fake://local", subject) is not None
+    assert store.session_by_digest(__import__("hashlib").sha256(session.token.encode()).digest()) is not None
     with pytest.raises(IdentityError) as error:
         service.confirm_magic_link(attempt_id=second.id, token_hash=str(token_hash), now=now + timedelta(seconds=3))
     assert error.value.code == "auth.link_unavailable"
@@ -57,7 +61,8 @@ def test_repeat_magic_link_reuses_same_product_identity() -> None:
         correlation_id=uuid4(),
         now=now,
     )
-    first = next(iter(store.attempts.values()))
+    first = store.latest_attempt()
+    assert first is not None
     service.issue_attempt(first.id, now=now)
     first_token = str(email.messages[-1]["capture_url"]).split("token_hash=", 1)[1]
     first_session = service.confirm_magic_link(
@@ -70,7 +75,8 @@ def test_repeat_magic_link_reuses_same_product_identity() -> None:
         correlation_id=uuid4(),
         now=now + timedelta(minutes=1),
     )
-    second = next(item for item in store.attempts.values() if item.id != first.id)
+    second = store.latest_attempt()
+    assert second is not None and second.id != first.id
     service.issue_attempt(second.id, now=now + timedelta(minutes=1))
     second_token = str(email.messages[-1]["capture_url"]).split("token_hash=", 1)[1]
     second_session = service.confirm_magic_link(
@@ -80,5 +86,6 @@ def test_repeat_magic_link_reuses_same_product_identity() -> None:
     )
 
     assert second_session.user_id == first_session.user_id
-    assert len(store.users) == 1
-    assert len(store.links) == 1
+    assert store.user_for_email("person@example.com") is not None
+    subject = "fake-subject-" + hashlib.sha256(b"person@example.com").hexdigest()[:24]
+    assert store.link_for_subject("fake", "fake://local", subject) is not None

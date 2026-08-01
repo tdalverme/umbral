@@ -20,12 +20,12 @@ class AccessAdministration:
 
     def preload_invitation(self, email: str, *, source: str = "controlled_preload") -> Invitation:
         normalized = normalize_email(email).value
-        with self.store.lock:
+        with self.store.transaction():
             existing = self.store.invitation_for_email(normalized)
             if existing:
                 return existing
             invitation = Invitation.new(normalized, source=source)
-            self.store.invitations[invitation.id] = invitation
+            self.store.save_invitation(invitation)
             self._audit(
                 "invitation.preloaded.v1",
                 "accepted",
@@ -35,9 +35,11 @@ class AccessAdministration:
             return invitation
 
     def set_user_status(self, user_id: UUID, *, status: str, reason: str = "administrator_change", now: datetime | None = None, actor_user_id: UUID | None = None) -> None:
-        with self.store.lock:
+        with self.store.transaction():
             self._require_administrator(actor_user_id)
-            user = self.store.users[user_id]
+            user = self.store.user(user_id)
+            if user is None:
+                raise IdentityError("auth.access_denied", status=403, recovery="contact_support")
             moment = now or datetime.now(timezone.utc)
             if status == "disabled":
                 user.disable(reason, now=moment)
@@ -45,6 +47,7 @@ class AccessAdministration:
                 user.enable(now=moment)
             else:
                 raise ValueError("unknown user status")
+            self.store.save_user(user)
             self._audit(
                 "user.status_changed.v1",
                 "accepted",
@@ -57,14 +60,14 @@ class AccessAdministration:
         if role not in {"user", "operator", "administrator"}:
             raise ValueError("unknown role")
         moment = now or datetime.now(timezone.utc)
-        with self.store.lock:
+        with self.store.transaction():
             self._require_administrator(actor_user_id)
-            current = next((item for item in self.store.roles.values() if item.product_user_id == user_id and item.role == role and item.active), None)
+            current = self.store.active_role(user_id, role)
             if grant:
                 if current:
                     return current.id
                 assignment = RoleAssignment(uuid4(), user_id, cast(Literal["user", "operator", "administrator"], role), moment, reason=reason)
-                self.store.roles[assignment.id] = assignment
+                self.store.save_role(assignment)
                 self._audit(
                     "role.granted.v1",
                     "accepted",
@@ -76,6 +79,7 @@ class AccessAdministration:
                 return assignment.id
             if current:
                 current.revoked_at = moment
+                self.store.save_role(current)
                 self._audit(
                     "role.revoked.v1",
                     "accepted",
@@ -89,19 +93,19 @@ class AccessAdministration:
     def _require_administrator(self, actor_user_id: UUID | None) -> None:
         if actor_user_id is None:
             return
-        actor = self.store.users.get(actor_user_id)
+        actor = self.store.user(actor_user_id)
         if actor is None or actor.status != "active" or "administrator" not in self.store.active_roles(actor_user_id):
             raise IdentityError("auth.access_denied", status=403, recovery="contact_support")
 
     def bootstrap_administrator(self, user_id: UUID, *, now: datetime | None = None) -> UUID:
-        with self.store.lock:
-            if any(item.role == "administrator" and item.active for item in self.store.roles.values()):
+        with self.store.transaction():
+            if self.store.has_active_administrator():
                 raise IdentityError("auth.access_denied", status=403, recovery="contact_support")
-            user = self.store.users.get(user_id)
+            user = self.store.user(user_id)
             if user is None or user.status != "active":
                 raise IdentityError("auth.access_denied", status=403, recovery="contact_support")
             assignment = RoleAssignment(uuid4(), user_id, "administrator", now or datetime.now(timezone.utc), reason="zero_admin_bootstrap")
-            self.store.roles[assignment.id] = assignment
+            self.store.save_role(assignment)
             self._audit(
                 "role.granted.v1",
                 "accepted",
@@ -134,7 +138,7 @@ class AccessAdministration:
                 "role_assignment_id": role_assignment_id,
             },
         )
-        self.store.audits.append(
+        self.store.append_audit(
             AccessAuditEvent(
                 uuid4(),
                 event_type,

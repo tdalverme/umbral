@@ -73,4 +73,4 @@ def test_unknown_webhook_is_ignored_without_access_mutation() -> None:
         headers={"svix-timestamp": timestamp, "svix-signature": signature},
         now=datetime.now(timezone.utc),
     )
-    assert access.store.audits == []
+    assert access.store.audit_events() == ()

@@ -23,7 +23,8 @@ def test_identity_export_contains_only_stable_internal_references() -> None:
         correlation_id=uuid4(),
         now=now,
     )
-    attempt = next(iter(store.attempts.values()))
+    attempt = store.latest_attempt()
+    assert attempt is not None
     access.issue_attempt(attempt.id, now=now)
     token_hash = str(email.messages[0]["capture_url"]).split("token_hash=", 1)[1]
     access.confirm_magic_link(

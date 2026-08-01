@@ -15,7 +15,7 @@ from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 def test_eligible_request_submits_only_attempt_reference() -> None:
     store = InMemoryIdentityStore()
     invitation = Invitation.new("person@example.com")
-    store.invitations[invitation.id] = invitation
+    store.save_invitation(invitation)
     queue = RecordingJobQueue()
     runtime = InMemoryJobRuntime(queue=queue)
     access = IdentityAccess(

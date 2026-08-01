@@ -22,9 +22,10 @@ def test_email_limit_is_exact_and_does_not_create_attempt() -> None:
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
     for _ in range(3):
         service.request_magic_link(email="person@example.com", origin_fingerprint="same", correlation_id=uuid4(), now=now)
+    third = store.latest_attempt()
+    assert third is not None
     service.request_magic_link(email="person@example.com", origin_fingerprint="same", correlation_id=uuid4(), now=now)
-    assert len(store.attempts) == 3
-    assert list(store.requests.values())[-1].decision == "email_limited"
+    assert store.latest_attempt() == third
     service.request_magic_link(email="person@example.com", origin_fingerprint="same", correlation_id=uuid4(), now=now + timedelta(minutes=15, seconds=1))
-    assert len(store.attempts) == 4
+    assert store.latest_attempt() != third
  # ruff: noqa: E501

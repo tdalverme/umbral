@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import hashlib
-import secrets
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -29,17 +28,18 @@ class AccessControl:
     ) -> CurrentPrincipal:
         now = now.astimezone(timezone.utc)
         digest = hashlib.sha256(token.encode()).digest()
-        with self.store.lock:
-            session = next((item for item in self.store.sessions.values() if secrets.compare_digest(item.token_digest, digest)), None)
+        with self.store.transaction():
+            session = self.store.session_by_digest(digest)
             if session is None:
                 raise IdentityError("auth.session_required", status=401, recovery="sign_in")
-            user = self.store.users.get(session.product_user_id)
+            user = self.store.user(session.product_user_id)
             if session.revoked_at is not None:
                 self._audit(False, "session_revoked", action, user.id if user else None, session.id, correlation_id=correlation_id)
                 raise IdentityError("auth.session_required", status=401, recovery="sign_in")
             if session.is_idle_expired(now):
                 session.revoked_at = now
                 session.revocation_reason = "idle_timeout"
+                self.store.save_session(session)
                 self._audit(False, "session_idle_expired", action, user.id if user else None, session.id, correlation_id=correlation_id)
                 raise IdentityError("auth.session_required", status=401, recovery="sign_in")
             if user is None or user.status != "active":
@@ -51,6 +51,7 @@ class AccessControl:
                 self._audit(False, decision.reason, action, user.id, session.id, correlation_id=correlation_id)
                 raise IdentityError("auth.access_denied", status=403, recovery="contact_support")
             session.last_activity_at = now
+            self.store.save_session(session)
             self._audit(True, "eligible", action, user.id, session.id, correlation_id=correlation_id)
             return CurrentPrincipal(user.id, tuple(sorted(roles)), session.last_activity_at)
 
@@ -77,8 +78,4 @@ class AccessControl:
             action=action,
             policy_version="identity-policy.v1",
         )
-        append_audit = getattr(self.store, "append_audit", None)
-        if callable(append_audit):
-            append_audit(event)
-        else:
-            self.store.audits.append(event)
+        self.store.append_audit(event)

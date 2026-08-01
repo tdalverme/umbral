@@ -48,68 +48,163 @@ from umbral.infrastructure.db.models.identity import (
 
 class InMemoryIdentityStore:
     def __init__(self, *, fingerprint_key: bytes = b"local-identity-key") -> None:
-        self.invitations: dict[UUID, Invitation] = {}
-        self.users: dict[UUID, ProductUser] = {}
-        self.links: dict[UUID, ExternalIdentityLink] = {}
-        self.roles: dict[UUID, RoleAssignment] = {}
-        self.requests: dict[UUID, MagicLinkRequest] = {}
-        self.attempts: dict[UUID, MagicLinkAttempt] = {}
-        self.sessions: dict[UUID, ProductSession] = {}
-        self.audits: list[AccessAuditEvent] = []
+        self._invitations: dict[UUID, Invitation] = {}
+        self._users: dict[UUID, ProductUser] = {}
+        self._links: dict[UUID, ExternalIdentityLink] = {}
+        self._roles: dict[UUID, RoleAssignment] = {}
+        self._requests: dict[UUID, MagicLinkRequest] = {}
+        self._attempts: dict[UUID, MagicLinkAttempt] = {}
+        self._sessions: dict[UUID, ProductSession] = {}
+        self._audits: list[AccessAuditEvent] = []
+        self._provider_events: set[tuple[str, str]] = set()
         self._key = fingerprint_key
-        self.lock = threading.RLock()
+        self._lock = threading.RLock()
 
     def fingerprint(self, value: str) -> bytes:
         return hmac.new(self._key, value.encode(), hashlib.sha256).digest()
 
     def invitation_for_email(self, email: str) -> Invitation | None:
-        return next((item for item in self.invitations.values() if item.normalized_email == email), None)
+        return next((item for item in self._invitations.values() if item.normalized_email == email), None)
+
+    def invitation(self, invitation_id: UUID) -> Invitation | None:
+        return self._invitations.get(invitation_id)
+
+    def save_invitation(self, invitation: Invitation) -> None:
+        self._invitations[invitation.id] = invitation
+
+    def user(self, user_id: UUID) -> ProductUser | None:
+        return self._users.get(user_id)
 
     def user_for_email(self, email: str) -> ProductUser | None:
-        return next((item for item in self.users.values() if item.normalized_email == email), None)
+        return next((item for item in self._users.values() if item.normalized_email == email), None)
+
+    def save_user(self, user: ProductUser) -> None:
+        self._users[user.id] = user
 
     def link_for_subject(self, provider: str, issuer: str, subject: str) -> ExternalIdentityLink | None:
-        return next((item for item in self.links.values() if item.provider == provider and item.provider_issuer == issuer and item.provider_subject == subject), None)
+        return next((item for item in self._links.values() if item.provider == provider and item.provider_issuer == issuer and item.provider_subject == subject), None)
+
+    def save_link(self, link: ExternalIdentityLink) -> None:
+        self._links[link.id] = link
 
     def active_roles(self, user_id: UUID) -> set[str]:
-        return {item.role for item in self.roles.values() if item.product_user_id == user_id and item.active}
+        return {item.role for item in self._roles.values() if item.product_user_id == user_id and item.active}
+
+    def active_role(self, user_id: UUID, role: str) -> RoleAssignment | None:
+        return next((item for item in self._roles.values() if item.product_user_id == user_id and item.role == role and item.active), None)
+
+    def has_active_administrator(self) -> bool:
+        return any(item.role == "administrator" and item.active for item in self._roles.values())
+
+    def save_role(self, role: RoleAssignment) -> None:
+        self._roles[role.id] = role
+
+    def save_request(self, request: MagicLinkRequest) -> None:
+        self._requests[request.id] = request
+
+    def request(self, request_id: UUID) -> MagicLinkRequest | None:
+        return self._requests.get(request_id)
 
     def current_attempt(self, *, invitation_id: UUID | None = None, product_user_id: UUID | None = None) -> MagicLinkAttempt | None:
-        candidates = [item for item in self.attempts.values() if item.state == "issued"]
+        candidates = [item for item in self._attempts.values() if item.state == "issued"]
         if invitation_id is not None:
             candidates = [item for item in candidates if item.invitation_id == invitation_id]
         if product_user_id is not None:
             candidates = [item for item in candidates if item.product_user_id == product_user_id]
         return max(candidates, key=lambda item: item.issued_at or datetime.min.replace(tzinfo=timezone.utc), default=None)
 
+    def latest_attempt(self) -> MagicLinkAttempt | None:
+        return max(
+            self._attempts.values(),
+            key=lambda item: self._requests[item.request_id].requested_at,
+            default=None,
+        )
+
     def recent_requests(self, fingerprint: bytes, *, now: datetime, field: str) -> int:
         threshold = now.astimezone(timezone.utc) - timedelta(minutes=15)
-        return sum(1 for item in self.requests.values() if getattr(item, field) == fingerprint and item.requested_at > threshold)
+        return sum(1 for item in self._requests.values() if getattr(item, field) == fingerprint and item.requested_at > threshold)
+
+    def save_attempt(self, attempt: MagicLinkAttempt) -> None:
+        self._attempts[attempt.id] = attempt
+
+    def attempt(self, attempt_id: UUID) -> MagicLinkAttempt | None:
+        return self._attempts.get(attempt_id)
+
+    def attempt_for_provider_message(self, message_id: str) -> MagicLinkAttempt | None:
+        return next((item for item in self._attempts.values() if item.provider_message_id == message_id), None)
+
+    def session_by_digest(self, digest: bytes) -> ProductSession | None:
+        return next((item for item in self._sessions.values() if hmac.compare_digest(item.token_digest, digest)), None)
+
+    def save_session(self, session: ProductSession) -> None:
+        self._sessions[session.id] = session
+
+    def append_audit(self, event: AccessAuditEvent) -> None:
+        self._audits.append(event)
+
+    def append_provider_audit_once(self, provider: str, event_id: str, audit_event: AccessAuditEvent | None) -> bool:
+        key = (provider, event_id)
+        if key in self._provider_events:
+            return False
+        self._provider_events.add(key)
+        if audit_event is not None:
+            self.append_audit(audit_event)
+        return True
+
+    def audit_events(self) -> tuple[AccessAuditEvent, ...]:
+        return tuple(self._audits)
+
+    def exportable_identities(
+        self,
+    ) -> tuple[tuple[ProductUser, tuple[ExternalIdentityLink, ...]], ...]:
+        users = sorted(self._users.values(), key=lambda item: str(item.id))
+        return tuple(
+            (
+                user,
+                tuple(
+                    link
+                    for link in self._links.values()
+                    if link.product_user_id == user.id
+                ),
+            )
+            for user in users
+        )
+
+    def session_count(self) -> int:
+        return len(self._sessions)
+
+    def purge_requests_before(self, cutoff: datetime) -> int:
+        expired = [key for key, item in self._requests.items() if item.purge_after <= cutoff]
+        for key in expired:
+            del self._requests[key]
+        return len(expired)
 
     @contextmanager
     def transaction(self) -> Iterator[InMemoryIdentityStore]:
         """Provide rollback semantics for local identity composition tests."""
 
-        with self.lock:
-            invitations = deepcopy(self.invitations)
-            users = deepcopy(self.users)
-            links = deepcopy(self.links)
-            roles = deepcopy(self.roles)
-            requests = deepcopy(self.requests)
-            attempts = deepcopy(self.attempts)
-            sessions = deepcopy(self.sessions)
-            audits = deepcopy(self.audits)
+        with self._lock:
+            invitations = deepcopy(self._invitations)
+            users = deepcopy(self._users)
+            links = deepcopy(self._links)
+            roles = deepcopy(self._roles)
+            requests = deepcopy(self._requests)
+            attempts = deepcopy(self._attempts)
+            sessions = deepcopy(self._sessions)
+            audits = deepcopy(self._audits)
+            provider_events = deepcopy(self._provider_events)
             try:
                 yield self
             except Exception:
-                self.invitations = invitations
-                self.users = users
-                self.links = links
-                self.roles = roles
-                self.requests = requests
-                self.attempts = attempts
-                self.sessions = sessions
-                self.audits = audits
+                self._invitations = invitations
+                self._users = users
+                self._links = links
+                self._roles = roles
+                self._requests = requests
+                self._attempts = attempts
+                self._sessions = sessions
+                self._audits = audits
+                self._provider_events = provider_events
                 raise
 
 

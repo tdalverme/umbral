@@ -19,7 +19,7 @@ def test_identity_request_commits_attempt_job_and_audit_with_one_correlation() -
     correlation_id = uuid4()
     store = InMemoryIdentityStore()
     invitation = Invitation.new("person@example.com")
-    store.invitations[invitation.id] = invitation
+    store.save_invitation(invitation)
     transaction_manager = InMemoryTransactionManager()
     runtime = InMemoryJobRuntime(queue=RecordingJobQueue())
     access = IdentityAccess(
@@ -37,15 +37,17 @@ def test_identity_request_commits_attempt_job_and_audit_with_one_correlation() -
         now=now,
     )
 
-    attempt = next(iter(store.attempts.values()))
+    attempt = store.latest_attempt()
+    assert attempt is not None
     submission = runtime.submissions[0]
     assert transaction_manager.commits == 1
     assert transaction_manager.rollbacks == 0
     assert attempt.job_execution_id == submission.execution_id
     assert submission.identity.logical_target == str(attempt.id)
     assert runtime.correlation_id(submission.execution_id) == correlation_id
-    assert store.requests[attempt.request_id].correlation_id == correlation_id
-    assert all(event.correlation_id == correlation_id for event in store.audits)
+    request = store.request(attempt.request_id)
+    assert request is not None and request.correlation_id == correlation_id
+    assert all(event.correlation_id == correlation_id for event in store.audit_events())
 
 
 def test_identity_worker_registry_exposes_reference_only_handlers() -> None:
