@@ -151,9 +151,11 @@ class IdentityAccess:
                         )
                     )
                     attempt.job_execution_id = submission.execution_id
+                    self.store.save_attempt(attempt)
                 except Exception:
                     attempt.state = "failed"
                     attempt.failure_reason = "job_submission_failed"
+                    self.store.save_attempt(attempt)
                     self._audit(
                         "magic_link.issue_failed.v1",
                         "failed",

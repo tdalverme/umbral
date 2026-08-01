@@ -25,6 +25,9 @@ GREEN was observed after the minimal adapter implementation: `3 passed` for the 
 
 ## Self-review / concerns
 
+- Review round 1 added copy-on-write adapter coverage for job submission. It first failed with an unsaved `job_execution_id` and `pending` state after submission failure; both transitions now call `save_attempt` explicitly.
+- The conformance suite now covers `current_attempt`, exact recent-request window behavior, and deep/reentrant rollback of provider-event dedupe. Magic-link integration asserts exact exported-identity/session cardinality through existing production operations.
+- Fresh non-container verification after the review fixes: `50 passed, 2 deselected`.
 - Provider calls remain outside store transactions. The provider webhook is now deduplicated and, when an audit is relevant, appended through one atomic store operation.
 - Authorization still updates activity only after an allowed action; session and audit mutate in the same transaction.
 - `PostgresIdentityRepository` remains the existing SQL groundwork and is not wired as the application `IdentityStore`; extending its domain mapping is deferred to the SQL implementation task rather than invented in this port-refactor task.

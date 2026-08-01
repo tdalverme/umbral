@@ -134,3 +134,48 @@ def test_store_rolls_back_state_and_audit_together(
 
     assert store.invitation_for_email("rollback@example.com") is None
     assert store.audit_events() == ()
+
+
+def test_store_finds_current_attempt_and_applies_exact_rate_window(
+    store: InMemoryIdentityStore,
+) -> None:
+    """Catches stores that return stale attempts or include the 15-minute boundary."""
+
+    user = ProductUser(uuid4(), "rate@example.com", created_at=NOW, status_changed_at=NOW)
+    current_request = MagicLinkRequest(uuid4(), b"e" * 32, b"o" * 32, "eligible", NOW, NOW + timedelta(hours=24), uuid4())
+    current = MagicLinkAttempt(uuid4(), current_request.id, "product_user", None, user.id, state="issued", issued_at=NOW, expires_at=NOW + timedelta(minutes=15))
+    boundary_request = MagicLinkRequest(uuid4(), b"e" * 32, b"x" * 32, "eligible", NOW - timedelta(minutes=15), NOW, uuid4())
+    recent_request = MagicLinkRequest(uuid4(), b"e" * 32, b"y" * 32, "eligible", NOW - timedelta(minutes=14, seconds=59), NOW, uuid4())
+
+    with store.transaction():
+        store.save_user(user)
+        store.save_request(current_request)
+        store.save_attempt(current)
+        store.save_request(boundary_request)
+        store.save_request(recent_request)
+
+    assert store.current_attempt(product_user_id=user.id) == current
+    assert store.recent_requests(b"e" * 32, now=NOW, field="email_fingerprint") == 2
+
+
+def test_store_rolls_back_provider_dedupe_deeply_and_reentrantly(
+    store: InMemoryIdentityStore,
+) -> None:
+    """Catches inner rollback corruption of state or a permanently claimed event."""
+
+    invitation = Invitation.new("nested@example.com")
+    event = AccessAuditEvent(uuid4(), "magic_link.delivery_observed.v1", "observed", "email_delivered", uuid4(), NOW, provider="email", provider_event_id="evt-nested")
+
+    with store.transaction():
+        store.save_invitation(invitation)
+        with pytest.raises(RuntimeError, match="inner"):
+            with store.transaction():
+                invitation.status = "accepted"
+                store.save_invitation(invitation)
+                store.append_provider_audit_once("email", "evt-nested", event)
+                raise RuntimeError("inner")
+        assert store.invitation_for_email("nested@example.com") is not None
+        assert store.invitation_for_email("nested@example.com").status == "active"
+        assert store.append_provider_audit_once("email", "evt-nested", event) is True
+
+    assert store.audit_events() == (event,)

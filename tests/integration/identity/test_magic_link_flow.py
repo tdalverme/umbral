@@ -85,6 +85,8 @@ def test_first_activation_creates_one_user_link_and_role() -> None:
         store.session_by_digest(hashlib.sha256(session.token.encode()).digest())
         is not None
     )
+    assert len(store.exportable_identities()) == 1
+    assert store.session_count() == 1
 
 
 def test_repeat_login_reuses_identity_and_creates_a_new_session() -> None:
@@ -126,6 +128,8 @@ def test_repeat_login_reuses_identity_and_creates_a_new_session() -> None:
         store.session_by_digest(hashlib.sha256(second.token.encode()).digest())
         is not None
     )
+    assert len(store.exportable_identities()) == 1
+    assert store.session_count() == 2
 
 
 def test_identity_conflict_rolls_back_activation_and_audit() -> None:
@@ -156,6 +160,8 @@ def test_identity_conflict_rolls_back_activation_and_audit() -> None:
     assert store.user(other.id) == other
     assert store.link_for_subject("fake", "fake://local", subject) is not None
     assert store.audit_events() == audits_before
+    assert len(store.exportable_identities()) == 1
+    assert store.session_count() == 0
 
 
 def test_provider_failure_leaves_no_access_grant() -> None:
@@ -202,6 +208,7 @@ def test_ten_duplicate_confirmations_create_one_session() -> None:
         store.session_by_digest(hashlib.sha256(first.token.encode()).digest())
         is not None
     )
+    assert store.session_count() == 1
     assert outcomes == ["auth.link_unavailable"] * 9
 
 

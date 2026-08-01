@@ -29,13 +29,18 @@ def test_email_limit_is_exact_and_does_not_create_attempt() -> None:
             now=now,
         )
     third = requested_attempt(service, store)
+    runtime = service.job_runtime
+    assert runtime is not None
+    submissions_before = len(runtime.submissions)
     service.request_magic_link(
         email="person@example.com",
         origin_fingerprint="same",
         correlation_id=uuid4(),
         now=now,
     )
+    assert len(runtime.submissions) == submissions_before
     assert requested_attempt(service, store) == third
+    assert store.audit_events()[-1].reason == "email_rate_limited"
     service.request_magic_link(
         email="person@example.com",
         origin_fingerprint="same",
