@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from threading import RLock
 from typing import Any, Literal
+from urllib.parse import unquote
 
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
@@ -14,7 +16,6 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.util.re import parse_env_headers
 
 from umbral.application.runtime.telemetry import TelemetrySignal
 from umbral.infrastructure.config.settings import Settings
@@ -24,6 +25,8 @@ DependencyState = Literal["ready", "degraded", "unavailable"]
 Environment = Literal["local", "preview", "production"]
 _DEPENDENCIES = frozenset({"identity_provider", "email_provider"})
 _STATES = frozenset({"ready", "degraded", "unavailable"})
+_HEADER_NAME = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+_HEX = frozenset("0123456789abcdefABCDEF")
 
 
 class ObservabilityHandle:
@@ -132,9 +135,46 @@ def _headers_for(
     generic_headers: str | None,
     signal_headers: str | None,
 ) -> dict[str, str]:
-    generic = parse_env_headers(generic_headers or "")
-    specific = parse_env_headers(signal_headers or "")
+    generic = _parse_headers(generic_headers)
+    specific = _parse_headers(signal_headers)
     return {**generic, **specific}
+
+
+def _parse_headers(value: str | None) -> dict[str, str]:
+    """Parse standard OTLP comma-separated headers without provider logging."""
+
+    if value is None or not value.strip():
+        return {}
+    headers: dict[str, str] = {}
+    for raw_entry in value.split(","):
+        entry = raw_entry.strip()
+        if not entry or "=" not in entry:
+            raise ValueError("OTLP_HEADERS_INVALID")
+        raw_name, raw_value = entry.split("=", 1)
+        name = _decode_header_component(raw_name.strip())
+        header_value = _decode_header_component(raw_value.strip())
+        if not _HEADER_NAME.fullmatch(name) or _contains_control(header_value):
+            raise ValueError("OTLP_HEADERS_INVALID")
+        headers[name] = header_value
+    return headers
+
+
+def _decode_header_component(value: str) -> str:
+    for index, character in enumerate(value):
+        if character == "%" and (
+            index + 2 >= len(value)
+            or value[index + 1] not in _HEX
+            or value[index + 2] not in _HEX
+        ):
+            raise ValueError("OTLP_HEADERS_INVALID")
+    decoded = unquote(value)
+    if _contains_control(decoded):
+        raise ValueError("OTLP_HEADERS_INVALID")
+    return decoded
+
+
+def _contains_control(value: str) -> bool:
+    return any(ord(character) < 32 or ord(character) == 127 for character in value)
 
 
 def _call_providers(providers: tuple[object, object], method_name: str) -> bool:

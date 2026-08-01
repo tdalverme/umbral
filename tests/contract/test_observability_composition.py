@@ -144,7 +144,7 @@ def test_otel_uses_bounded_resource_and_standard_signal_configuration(
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_HEADERS", "poison=outside-settings")
     settings = _settings().model_copy(
         update={
-            "otel_exporter_otlp_headers": "shared=one,override=generic",
+            "otel_exporter_otlp_headers": "shared=one%20two,override=generic",
             "otel_exporter_otlp_traces_endpoint": None,
             "otel_exporter_otlp_traces_headers": "override=traces",
             "otel_exporter_otlp_metrics_endpoint": None,
@@ -223,11 +223,11 @@ def test_otel_uses_bounded_resource_and_standard_signal_configuration(
     assert captured == {
         "trace": _ExporterConfig(
             "https://otel.preview.invalid/v1/traces",
-            {"shared": "one", "override": "traces"},
+            {"shared": "one two", "override": "traces"},
         ),
         "metric": _ExporterConfig(
             "https://otel.preview.invalid/v1/metrics",
-            {"shared": "one", "override": "generic"},
+            {"shared": "one two", "override": "generic"},
         ),
     }
     assert resources == [
@@ -302,6 +302,38 @@ def test_otel_normalizes_legacy_trace_suffix_without_doubling_paths() -> None:
     assert _endpoint_for(
         "metrics", "https://otel.preview.invalid/v1/traces"
     ) == "https://otel.preview.invalid/v1/metrics"
+
+
+def test_malformed_otlp_headers_fail_closed_without_exposing_canary(
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    canary = "CANARY_OTLP_HEADER_SECRET"
+    settings = _settings().model_copy(
+        update={
+            "otel_exporter_otlp_headers": f"authorization={canary}%0Ainjected",
+            "otel_exporter_otlp_traces_headers": None,
+            "otel_exporter_otlp_metrics_headers": None,
+        }
+    )
+    exporter_calls: list[str] = []
+
+    result = initialize_otel(
+        settings=settings,
+        resource_attributes={"service.name": "umbral"},
+        trace_exporter_factory=lambda **_: exporter_calls.append("traces"),
+        metric_exporter_factory=lambda **_: exporter_calls.append("metrics"),
+    )
+    diagnostics = ObservabilityRuntime(
+        initialize_otel=initialize_otel,
+        initialize_sentry=lambda *_: True,
+    ).initialize(settings)
+
+    captured = capsys.readouterr()
+    assert result is None
+    assert exporter_calls == []
+    assert diagnostics.diagnostics == ("observability.otlp_unavailable",)
+    assert canary not in repr(settings) + captured.out + captured.err + caplog.text
 
 
 def test_runtime_flushes_and_shuts_down_each_provider_once() -> None:
