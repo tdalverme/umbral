@@ -102,22 +102,38 @@ def run_preview_dependency_conformance(
     object_body = b"provider-conformance"
     primary_bucket = config.get("OBJECT_STORE_BUCKET", "")
     recovery_bucket = config.get("R2_RECOVERY_BUCKET", "")
+    buckets_are_isolated = _r2_buckets_are_isolated(primary_bucket, recovery_bucket)
     checks.append(
-        _check(
-            "r2.primary_round_trip",
-            lambda: _primary_object_round_trip(
-                clients.object_store, primary_bucket, object_key, object_body
-            ),
+        DependencyCheck(
+            "r2.bucket_isolation",
+            buckets_are_isolated,
+            "dependency.ok" if buckets_are_isolated else "dependency.failed",
         )
     )
-    checks.append(
-        _check(
-            "r2.recovery_copy",
-            lambda: _recovery_object_copy(
-                clients.object_store, primary_bucket, recovery_bucket, object_key
-            ),
+    if buckets_are_isolated:
+        checks.append(
+            _check(
+                "r2.primary_round_trip",
+                lambda: _primary_object_round_trip(
+                    clients.object_store, primary_bucket, object_key, object_body
+                ),
+            )
         )
-    )
+        checks.append(
+            _check(
+                "r2.recovery_copy",
+                lambda: _recovery_object_copy(
+                    clients.object_store, primary_bucket, recovery_bucket, object_key
+                ),
+            )
+        )
+    else:
+        checks.extend(
+            (
+                DependencyCheck("r2.primary_round_trip", False, "dependency.failed"),
+                DependencyCheck("r2.recovery_copy", False, "dependency.failed"),
+            )
+        )
 
     checks.append(
         _check(
@@ -209,6 +225,14 @@ def _extension_names(value: object) -> set[str]:
     if not isinstance(value, (frozenset, list, set, tuple)):
         raise ValueError("extensions response is invalid")
     return {str(name) for name in value}
+
+
+def _r2_buckets_are_isolated(primary_bucket: str, recovery_bucket: str) -> bool:
+    return (
+        bool(primary_bucket)
+        and bool(recovery_bucket)
+        and primary_bucket != recovery_bucket
+    )
 
 
 def _redis_round_trip(redis: RedisClient, message: bytes) -> bool:

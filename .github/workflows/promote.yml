@@ -27,6 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.8.17"
+      - name: Sync locked Python environment
+        run: uv sync --locked --all-groups
       - uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.manifest }}
@@ -60,12 +68,14 @@ jobs:
         run: |
           $manifest = Get-Item artifacts/release/release-manifest.json
           $checksum = (Get-Content -Raw "${manifest}.sha256").Trim()
+          $pythonExecutable = Join-Path $env:GITHUB_WORKSPACE ".venv/bin/python"
+          if (-not (Test-Path -LiteralPath $pythonExecutable)) { throw "uv did not create the Linux Python environment." }
           $null = ./scripts/deploy/verify-access.ps1
           $null = ./scripts/deploy/validate-railway-config.ps1 -ManifestPath $manifest.FullName
           $backupEvidence = "artifacts/release/preview-backup-evidence.json"
           ./scripts/deploy/backup-preview.ps1 -ManifestPath $manifest.FullName -EvidencePath $backupEvidence
-          ./scripts/deploy/migrate-preview.ps1 -ManifestPath $manifest.FullName -BackupEvidencePath $backupEvidence
-          ./scripts/deploy/check-preview-dependencies.ps1 -ManifestPath $manifest.FullName -EvidencePath "artifacts/release/preview-dependency-evidence.json"
+          ./scripts/deploy/migrate-preview.ps1 -ManifestPath $manifest.FullName -BackupEvidencePath $backupEvidence -PythonExecutable $pythonExecutable
+          ./scripts/deploy/check-preview-dependencies.ps1 -ManifestPath $manifest.FullName -EvidencePath "artifacts/release/preview-dependency-evidence.json" -PythonExecutable $pythonExecutable
           $switch = ./scripts/deploy/set-railway-images.ps1 -ManifestPath $manifest.FullName -ManifestSha256 $checksum -Environment "${{ inputs.environment }}" | ConvertFrom-Json
           $null = ./scripts/deploy/wait-railway-services.ps1 -Environment "${{ inputs.environment }}" -DeploymentIdsJson ($switch.deployment_ids | ConvertTo-Json -Compress)
-          $null = ./scripts/deploy/smoke.ps1 -ManifestPath $manifest.FullName
+          $null = ./scripts/deploy/smoke.ps1 -ManifestPath $manifest.FullName -PythonExecutable $pythonExecutable

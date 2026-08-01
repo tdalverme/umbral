@@ -1,9 +1,15 @@
 [CmdletBinding()]
-param([Parameter(Mandatory = $true)] [string]$ManifestPath)
+param(
+    [Parameter(Mandatory = $true)] [string]$ManifestPath,
+    [string]$PythonExecutable
+)
 
 $ErrorActionPreference = "Stop"
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
-$pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
+if ([string]::IsNullOrWhiteSpace($PythonExecutable)) {
+    $localPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+    $PythonExecutable = if (Test-Path -LiteralPath $localPython) { $localPython } else { "python" }
+}
 $manifestFullPath = if ([System.IO.Path]::IsPathRooted($ManifestPath)) {
     [System.IO.Path]::GetFullPath($ManifestPath)
 } else {
@@ -17,7 +23,7 @@ foreach ($artifactName in @("web", "runtime")) {
     }
 }
 $env:PYTHONPATH = Join-Path $repoRoot "src"
-$identitySmoke = & $pythonPath -c "import json; from umbral.ops.smoke import run_identity_smoke; print(json.dumps(run_identity_smoke()))" | ConvertFrom-Json
+$identitySmoke = & $PythonExecutable -c "import json; from umbral.ops.smoke import run_identity_smoke; print(json.dumps(run_identity_smoke()))" | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0 -or $identitySmoke.result -ne "accepted") {
     throw "Identity smoke failed."
 }

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 
 class _Clients:
-    def __init__(self) -> None:
+    def __init__(self, failure: str | None = None) -> None:
+        self.failure = failure
         self.redis_messages: list[bytes] = []
         self.objects: dict[tuple[str, str], bytes] = {}
         self.http_requests: list[tuple[str, str, dict[str, str], bytes | None]] = []
@@ -17,10 +20,21 @@ class _Clients:
             "alembic_revision": "0001_foundation_runtime",
             "extensions": {"postgis", "vector"},
         }
+        if self.failure == "postgres.server_major" and operation == "server_major":
+            return 16
+        if (
+            self.failure == "postgres.alembic_revision"
+            and operation == "alembic_revision"
+        ):
+            return "wrong-revision"
+        if self.failure == "postgres.extensions" and operation == "extensions":
+            return {"postgis"}
         return values[operation]
 
     def redis(self, operation: str, value: bytes | None = None) -> object:
         if operation == "ping":
+            if self.failure == "redis.round_trip":
+                return ""
             return "PONG"
         if operation == "enqueue":
             assert value is not None
@@ -35,6 +49,8 @@ class _Clients:
     ) -> object:
         if operation == "put":
             assert body is not None
+            if self.failure == "r2.primary_round_trip":
+                return {"size_bytes": 0}
             self.objects[(bucket, key)] = body
             return {"size_bytes": len(body)}
         if operation == "stat":
@@ -43,6 +59,8 @@ class _Clients:
             return self.objects[(bucket, key)]
         if operation == "copy":
             assert body is not None
+            if self.failure == "r2.recovery_copy":
+                return {"size_bytes": 0}
             source_bucket, source_key = body.decode().split("/", maxsplit=1)
             self.objects[(bucket, key)] = self.objects[(source_bucket, source_key)]
             return {"size_bytes": len(self.objects[(bucket, key)])}
@@ -52,8 +70,16 @@ class _Clients:
         self, method: str, url: str, headers: dict[str, str], body: bytes | None
     ) -> object:
         self.http_requests.append((method, url, headers, body))
+        if self.failure == "grafana.otlp" and "otel" in url:
+            return 503
         if "sentry" in url:
+            if self.failure == "sentry.event":
+                return {"status_code": 202}
             return {"status_code": 202, "event_id": "evt-preview-probe"}
+        if self.failure == "supabase.reachability" and "supabase" in url:
+            return 503
+        if self.failure == "resend.reachability" and "resend" in url:
+            return 503
         return 200
 
 
@@ -99,6 +125,7 @@ def test_preview_dependency_gate_runs_all_remote_checks_without_secret_evidence(
         "database.url_roles",
         "redis.round_trip",
         "r2.primary_round_trip",
+        "r2.bucket_isolation",
         "r2.recovery_copy",
         "grafana.otlp",
         "sentry.event",
@@ -155,6 +182,90 @@ def test_preview_dependency_gate_rejects_a_direct_runtime_database_url() -> None
     ).code == "dependency.failed"
 
 
+def test_preview_dependency_gate_rejects_shared_primary_and_recovery_buckets(
+) -> None:
+    from umbral.ops.provider_conformance import (
+        PreviewDependencyClients,
+        run_preview_dependency_conformance,
+    )
+
+    config = _config()
+    config["R2_RECOVERY_BUCKET"] = config["OBJECT_STORE_BUCKET"]
+    clients = _Clients()
+
+    report = run_preview_dependency_conformance(
+        config=config,
+        manifest_revision="0001_foundation_runtime",
+        clients=PreviewDependencyClients(
+            postgres=clients.postgres,
+            redis=clients.redis,
+            object_store=clients.object_store,
+            http=clients.http,
+        ),
+    )
+
+    assert not report.passed
+    assert next(
+        check for check in report.checks if check.name == "r2.bucket_isolation"
+    ).code == "dependency.failed"
+    assert clients.objects == {}
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "postgres.server_major",
+        "postgres.alembic_revision",
+        "postgres.extensions",
+        "database.url_roles",
+        "redis.round_trip",
+        "r2.primary_round_trip",
+        "r2.bucket_isolation",
+        "r2.recovery_copy",
+        "grafana.otlp",
+        "sentry.event",
+        "supabase.issuer",
+        "supabase.reachability",
+        "resend.reachability",
+    ],
+)
+def test_preview_dependency_gate_fails_closed_without_sensitive_evidence(
+    failure: str,
+) -> None:
+    from umbral.ops.provider_conformance import (
+        PreviewDependencyClients,
+        run_preview_dependency_conformance,
+    )
+
+    config = _config()
+    if failure == "database.url_roles":
+        config["DATABASE_URL"] = config["DATABASE_MIGRATION_URL"]
+    if failure == "r2.bucket_isolation":
+        config["R2_RECOVERY_BUCKET"] = config["OBJECT_STORE_BUCKET"]
+    if failure == "supabase.issuer":
+        config["IDENTITY_ISSUER"] = "https://wrong-issuer.example.test/auth/v1"
+    clients = _Clients(failure)
+
+    report = run_preview_dependency_conformance(
+        config=config,
+        manifest_revision="0001_foundation_runtime",
+        clients=PreviewDependencyClients(
+            postgres=clients.postgres,
+            redis=clients.redis,
+            object_store=clients.object_store,
+            http=clients.http,
+        ),
+    )
+
+    assert not report.passed
+    assert next(check for check in report.checks if check.name == failure).code == (
+        "dependency.failed"
+    )
+    assert "runtime" not in repr(report.to_dict())
+    assert "sentry-secret" not in repr(report.to_dict())
+    assert "re_test_value" not in repr(report.to_dict())
+
+
 def test_promotion_workflow_orders_dependency_gates_before_exact_image_switch() -> None:
     workflow = (
         Path(__file__).resolve().parents[2] / ".github" / "workflows" / "promote.yml"
@@ -172,3 +283,30 @@ def test_promotion_workflow_orders_dependency_gates_before_exact_image_switch() 
     positions = [workflow.index(command) for command in ordered_commands]
 
     assert positions == sorted(positions)
+
+
+def test_promotion_bootstraps_locked_uv_before_linux_python_deployment_steps() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    workflow = (repository_root / ".github" / "workflows" / "promote.yml").read_text(
+        encoding="utf-8"
+    )
+    migrate_path = repository_root / "scripts" / "deploy" / "migrate-preview.ps1"
+    migrate = migrate_path.read_text(encoding="utf-8")
+    conformance = (
+        repository_root / "scripts" / "deploy" / "check-preview-dependencies.ps1"
+    ).read_text(encoding="utf-8")
+    smoke = (repository_root / "scripts" / "deploy" / "smoke.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    setup = "astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b"
+    assert setup in workflow
+    assert 'version: "0.8.17"' in workflow
+    assert "uv sync --locked --all-groups" in workflow
+    assert workflow.index("uv sync --locked --all-groups") < workflow.index(
+        "migrate-preview.ps1"
+    )
+    assert ".venv/bin/python" in workflow
+    assert "PythonExecutable" in migrate
+    assert "PythonExecutable" in conformance
+    assert "PythonExecutable" in smoke
