@@ -40,9 +40,11 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
         ):
             return 2
         if args.command == "worker":
+            _heartbeat(active_dependencies, "worker")
             build_rq_worker(active_dependencies.queue).work()
             return 0
         if args.command == "scheduler-once":
+            _heartbeat(active_dependencies, "scheduler")
             summary = scheduler_once(
                 active_dependencies.runtime,
                 queue=active_dependencies.queue,
@@ -53,6 +55,7 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
             return 0
         if args.command == "scheduler":
             while True:
+                _heartbeat(active_dependencies, "scheduler")
                 scheduler_once(
                     active_dependencies.runtime,
                     queue=active_dependencies.queue,
@@ -66,6 +69,12 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
         return 1
     finally:
         shutdown_observability()
+
+
+def _heartbeat(dependencies: Any, surface: str) -> None:
+    writer = getattr(dependencies, "heartbeat_writer", None)
+    if writer is not None:
+        writer.observe(surface, state="ready", checks={"runtime_process": "ready"})
 
 
 if __name__ == "__main__":

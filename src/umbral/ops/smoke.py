@@ -4,22 +4,16 @@
 from __future__ import annotations
 
 import argparse
-import importlib
 import json
 import os
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import monotonic
+from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID, uuid4
-
-from umbral.application.identity.access import IdentityAccess
-from umbral.application.identity.administration import AccessAdministration
-from umbral.infrastructure.db.repositories.identity import InMemoryIdentityStore
-from umbral.infrastructure.email.recording import RecordingEmailAdapter
-from umbral.infrastructure.identity.fake import FakeIdentityProvider
 
 REQUIRED_SURFACES = ("web", "api", "worker", "scheduler")
 _SHA256 = "0123456789abcdef"
@@ -49,12 +43,26 @@ class PreviewSmokeObserver:
     def preload_invitation(self) -> str:
         raise NotImplementedError
 
+    def runtime_surfaces(self, *, timeout_seconds: int) -> tuple[dict[str, str], ...]:
+        raise NotImplementedError
+
     def wait_for_magic_link(
-        self, correlation_id: UUID, *, timeout_seconds: int
+        self,
+        correlation_id: UUID,
+        *,
+        recipient: str,
+        requested_at: datetime,
+        timeout_seconds: int,
     ) -> ObservedPreviewMessage:
         raise NotImplementedError
 
     def trigger_delivery_event(self, scenario: str, correlation_id: UUID) -> str:
+        raise NotImplementedError
+
+    def prepare_delivery_recipient(self, scenario: str, correlation_id: UUID) -> str:
+        raise NotImplementedError
+
+    def cleanup_delivery_recipient(self, recipient: str) -> None:
         raise NotImplementedError
 
     def audit_projection_observed(
@@ -62,7 +70,20 @@ class PreviewSmokeObserver:
     ) -> bool:
         raise NotImplementedError
 
-    def evidence_text(self) -> str:
+    def wait_for_no_magic_link(
+        self,
+        correlation_id: UUID,
+        *,
+        recipient: str,
+        requested_at: datetime,
+        timeout_seconds: int,
+    ) -> bool:
+        raise NotImplementedError
+
+    def backdate_session(self, user_id: UUID, *, timeout_seconds: int) -> bool:
+        raise NotImplementedError
+
+    def evidence_text(self) -> object:
         raise NotImplementedError
 
 
@@ -89,26 +110,30 @@ class ResendPreviewObserver(PreviewSmokeObserver):
         return self._preload()
 
     def wait_for_magic_link(
-        self, correlation_id: UUID, *, timeout_seconds: int
+        self,
+        correlation_id: UUID,
+        *,
+        recipient: str,
+        requested_at: datetime,
+        timeout_seconds: int,
     ) -> ObservedPreviewMessage:
-        del timeout_seconds
-        listing = self._resend_get("https://api.resend.com/emails", self._observation_token)
-        if not isinstance(listing, Mapping) or not isinstance(listing.get("data"), list):
-            raise ValueError("Resend email listing is invalid")
-        for item in listing["data"]:
-            if not isinstance(item, Mapping) or not isinstance(item.get("id"), str):
-                continue
-            message_id = item["id"]
-            if message_id in self._observed_message_ids:
-                continue
-            detail = self._resend_get(
-                f"https://api.resend.com/emails/{message_id}", self._observation_token
-            )
-            capture_url = _capture_url_from_resend_detail(detail)
-            if capture_url:
-                self._observed_message_ids.add(message_id)
-                return ObservedPreviewMessage(message_id, capture_url, correlation_id)
-        raise ValueError("Resend message was not observed")
+        deadline = monotonic() + timeout_seconds
+        while True:
+            listing = self._resend_get("https://api.resend.com/emails", self._observation_token)
+            if not isinstance(listing, Mapping) or not isinstance(listing.get("data"), list):
+                raise ValueError("Resend email listing is invalid")
+            matches = [item for item in listing["data"] if _resend_message_matches(item, recipient, requested_at, correlation_id)]
+            if len(matches) > 1:
+                raise ValueError("Resend message correlation is ambiguous")
+            if len(matches) == 1 and isinstance(matches[0], Mapping) and isinstance(matches[0].get("id"), str):
+                message_id = matches[0]["id"]
+                if message_id not in self._observed_message_ids:
+                    detail = self._resend_get(f"https://api.resend.com/emails/{message_id}", self._observation_token)
+                    capture_url = _capture_url_from_resend_detail(detail)
+                    if capture_url:
+                        self._observed_message_ids.add(message_id)
+                        return ObservedPreviewMessage(message_id, capture_url, correlation_id)
+            _sleep_remaining(deadline)
 
     def trigger_delivery_event(self, scenario: str, correlation_id: UUID) -> str:
         if scenario not in {"delivered", "bounced", "complained"}:
@@ -120,8 +145,279 @@ class ResendPreviewObserver(PreviewSmokeObserver):
     ) -> bool:
         return self._audit_projection(provider_event_id, timeout_seconds)
 
-    def evidence_text(self) -> str:
-        return ""
+    def evidence_text(self) -> object:
+        return {"observer": "injected", "messages": sorted(self._observed_message_ids)}
+
+    def wait_for_no_magic_link(
+        self,
+        correlation_id: UUID,
+        *,
+        recipient: str,
+        requested_at: datetime,
+        timeout_seconds: int,
+    ) -> bool:
+        del correlation_id, recipient, requested_at, timeout_seconds
+        raise NotImplementedError("injected observer must prove provider absence")
+
+    def backdate_session(self, user_id: UUID, *, timeout_seconds: int) -> bool:
+        del user_id, timeout_seconds
+        raise NotImplementedError("injected observer must backdate operator-side")
+
+
+class BuiltInPreviewObserver(PreviewSmokeObserver):
+    """Preview-only composition for Resend observation and operator DB checks."""
+
+    def __init__(
+        self,
+        *,
+        database_url: str,
+        observation_token: str,
+        sender: str,
+        deadline: float | None = None,
+    ) -> None:
+        self._database_url = database_url
+        self._observation_token = observation_token
+        self._sender = sender
+        self._deadline = deadline
+        self._event_correlations: dict[str, UUID] = {}
+        self._delivery_reasons: dict[UUID, str] = {}
+        self._evidence: list[dict[str, object]] = []
+
+    def preload_invitation(self) -> str:
+        raise RuntimeError("preview preload is performed before the smoke process")
+
+    def runtime_surfaces(self, *, timeout_seconds: int) -> tuple[dict[str, str], ...]:
+        deadline = self._start_deadline(timeout_seconds)
+        import psycopg
+
+        with psycopg.connect(
+            self._database_url, connect_timeout=max(1, int(_remaining(deadline)))
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT surface, state, release_id, manifest_sha256, artifact_digest, correlation_id, observed_at "
+                    "FROM runtime_surface_status WHERE environment = 'preview' "
+                    "AND observed_at >= NOW() - INTERVAL '10 minutes'"
+                )
+                rows = cursor.fetchall()
+        return tuple(
+            {
+                "surface": str(surface),
+                "state": str(state),
+                "release_id": str(release_id),
+                "manifest_sha256": str(checksum),
+                "artifact_digest": str(digest),
+                "correlation_id": str(correlation_id),
+                "observed_at": _utc(observed_at).isoformat(),
+            }
+            for surface, state, release_id, checksum, digest, correlation_id, observed_at in rows
+        )
+
+    def wait_for_magic_link(
+        self,
+        correlation_id: UUID,
+        *,
+        recipient: str,
+        requested_at: datetime,
+        timeout_seconds: int,
+    ) -> ObservedPreviewMessage:
+        deadline = self._start_deadline(timeout_seconds)
+        while True:
+            listing = self._resend_json("GET", "/emails", None, deadline)
+            messages = listing.get("data")
+            if isinstance(messages, list):
+                matches = [
+                    item
+                    for item in messages
+                    if _resend_message_matches(
+                        item, recipient, requested_at, correlation_id
+                    )
+                ]
+                if len(matches) == 1 and isinstance(matches[0], Mapping):
+                    message_id = matches[0].get("id")
+                    if isinstance(message_id, str):
+                        detail = self._resend_json(
+                            "GET", f"/emails/{message_id}", None, deadline
+                        )
+                        capture_url = _capture_url_from_resend_detail(detail)
+                        if capture_url:
+                            self._event_correlations[message_id] = correlation_id
+                            return ObservedPreviewMessage(
+                                message_id, capture_url, correlation_id
+                            )
+                if len(matches) > 1:
+                    raise ValueError("Resend message correlation is ambiguous")
+            _sleep_remaining(deadline)
+
+    def trigger_delivery_event(self, scenario: str, correlation_id: UUID) -> str:
+        if scenario not in {"delivered", "bounced", "complained"}:
+            raise ValueError("unknown Resend test event")
+        deadline = self._require_deadline()
+        recipient = f"{scenario}+{correlation_id.hex[:16]}@resend.dev"
+        response = self._resend_json(
+            "POST",
+            "/emails",
+            {
+                "from": self._sender,
+                "to": [recipient],
+                "subject": f"Umbral preview {correlation_id}",
+                "text": "preview provider event",
+                "tags": [{"name": "correlation_id", "value": str(correlation_id)}],
+            },
+            deadline,
+        )
+        event_id = response.get("id")
+        if not isinstance(event_id, str) or not event_id:
+            raise ValueError("Resend event ID is unavailable")
+        self._event_correlations[event_id] = correlation_id
+        return event_id
+
+    def prepare_delivery_recipient(self, scenario: str, correlation_id: UUID) -> str:
+        if scenario not in {"delivered", "bounced", "complained"}:
+            raise ValueError("unknown Resend test event")
+        recipient = f"{scenario}+{correlation_id.hex[:16]}@resend.dev"
+        from umbral.ops.identity import _preload_with_database
+
+        _preload_with_database(recipient, self._database_url)
+        self._event_correlations[recipient] = correlation_id
+        self._delivery_reasons[correlation_id] = f"email_{scenario}"
+        return recipient
+
+    def cleanup_delivery_recipient(self, recipient: str) -> None:
+        import psycopg
+
+        with psycopg.connect(self._database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM identity_invitations WHERE normalized_email = %s "
+                    "AND status = 'active'",
+                    (recipient,),
+                )
+            connection.commit()
+
+    def audit_projection_observed(
+        self, provider_event_id: str, *, timeout_seconds: int
+    ) -> bool:
+        deadline = self._start_deadline(timeout_seconds)
+        import psycopg
+
+        while True:
+            with psycopg.connect(
+                self._database_url, connect_timeout=max(1, int(_remaining(deadline)))
+            ) as connection:
+                with connection.cursor() as cursor:
+                    correlation_id = self._event_correlations.get(provider_event_id)
+                    if correlation_id is None:
+                        raise ValueError("unknown Resend provider message")
+                    expected_reason = self._delivery_reasons.get(correlation_id)
+                    cursor.execute(
+                        "SELECT provider_event_id, event_type, reason, COUNT(*) "
+                        "FROM access_audit_events WHERE provider = 'resend' "
+                        "AND correlation_id = %s GROUP BY provider_event_id, event_type, reason",
+                        (str(correlation_id),),
+                    )
+                    rows = cursor.fetchall()
+            if (
+                len(rows) == 1
+                and rows[0][0]
+                and rows[0][1] == "magic_link.delivery_observed.v1"
+                and rows[0][2] == expected_reason
+                and rows[0][3] == 1
+            ):
+                from sqlalchemy import create_engine
+                from sqlalchemy.orm import sessionmaker
+
+                from umbral.infrastructure.db.repositories.identity import (
+                    SqlAlchemyIdentityStore,
+                )
+
+                engine = create_engine(self._database_url)
+                try:
+                    store = SqlAlchemyIdentityStore(sessionmaker(bind=engine))
+                    with store.transaction():
+                        if store.append_provider_audit_once("resend", str(rows[0][0]), None):
+                            return False
+                finally:
+                    engine.dispose()
+                return True
+            _sleep_remaining(deadline)
+
+    def wait_for_no_magic_link(
+        self,
+        correlation_id: UUID,
+        *,
+        recipient: str,
+        requested_at: datetime,
+        timeout_seconds: int,
+    ) -> bool:
+        deadline = min(self._start_deadline(timeout_seconds), monotonic() + 10)
+        while True:
+            listing = self._resend_json("GET", "/emails", None, deadline)
+            messages = listing.get("data")
+            if isinstance(messages, list) and any(
+                _resend_message_matches(item, recipient, requested_at, correlation_id)
+                for item in messages
+            ):
+                return False
+            if monotonic() >= deadline:
+                return True
+            _sleep_remaining(deadline)
+
+    def backdate_session(self, user_id: UUID, *, timeout_seconds: int) -> bool:
+        deadline = self._start_deadline(timeout_seconds)
+        import psycopg
+
+        with psycopg.connect(
+            self._database_url, connect_timeout=max(1, int(_remaining(deadline)))
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE product_sessions SET last_activity_at = NOW() - INTERVAL '31 minutes' "
+                    "WHERE product_user_id = %s AND revoked_at IS NULL RETURNING id",
+                    (str(user_id),),
+                )
+                changed = cursor.fetchone() is not None
+            connection.commit()
+        return changed
+
+    def evidence_text(self) -> object:
+        return {"operations": self._evidence, "events": list(self._event_correlations)}
+
+    def _resend_json(
+        self, method: str, path: str, payload: object | None, deadline: float
+    ) -> Mapping[str, object]:
+        from urllib.error import HTTPError
+        from urllib.request import Request, urlopen
+
+        body = json.dumps(payload, separators=(",", ":")).encode() if payload else None
+        request = Request(
+            f"https://api.resend.com{path}",
+            method=method,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self._observation_token}",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with urlopen(request, timeout=_remaining(deadline)) as response:  # noqa: S310
+                value = _json_object(response.read())
+        except HTTPError as error:
+            error.read()
+            raise ValueError("Resend observation failed") from error
+        return value
+
+    def _start_deadline(self, timeout_seconds: int) -> float:
+        deadline = monotonic() + timeout_seconds
+        self._deadline = (
+            deadline if self._deadline is None else min(self._deadline, deadline)
+        )
+        return self._deadline
+
+    def _require_deadline(self) -> float:
+        if self._deadline is None:
+            raise ValueError("preview deadline is unavailable")
+        return self._deadline
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +428,7 @@ class PreviewSmokeConfig:
     release_id: str
     manifest_sha256: str
     artifact_digests: Mapping[str, str]
+    invitation_id: str
     invited_email: str
     resend_observation_token: str
     timeout_seconds: int
@@ -156,8 +453,11 @@ class PreviewSmokeConfig:
             _is_digest(value) for value in self.artifact_digests.values()
         ):
             raise ValueError("preview smoke requires exact web and runtime digests")
+        UUID(self.invitation_id)
         if not self.invited_email or not self.resend_observation_token:
-            raise ValueError("preview smoke requires private invitation and observation inputs")
+            raise ValueError(
+                "preview smoke requires private invitation and observation inputs"
+            )
         if not 1 <= self.timeout_seconds <= 300:
             raise ValueError("preview smoke timeout must be bounded")
 
@@ -183,8 +483,7 @@ class PreviewSmokeCheck:
             "observed_at": self.observed_at.isoformat().replace("+00:00", "Z"),
             "duration_ms": self.duration_ms,
         }
-        if self.provider_id is not None:
-            payload["provider_id"] = self.provider_id
+        payload["provider_id"] = self.provider_id
         return payload
 
 
@@ -197,7 +496,10 @@ class PreviewSmokeReport:
         return all(check.passed for check in self.checks)
 
     def to_dict(self) -> dict[str, object]:
-        return {"passed": self.passed, "checks": [check.to_dict() for check in self.checks]}
+        return {
+            "passed": self.passed,
+            "checks": [check.to_dict() for check in self.checks],
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,17 +533,34 @@ def run_smoke(checks: Mapping[str, Callable[[], bool]]) -> SmokeReport:
             passed = bool(check())
         except Exception:
             passed = False
-        results.append(SmokeCheck(name, passed, "smoke.ok" if passed else "smoke.failed"))
+        results.append(
+            SmokeCheck(name, passed, "smoke.ok" if passed else "smoke.failed")
+        )
     return SmokeReport(tuple(results))
 
 
 def run_identity_smoke() -> dict[str, str]:
+    from umbral.application.identity.access import IdentityAccess
+    from umbral.application.identity.administration import AccessAdministration
+    from umbral.infrastructure.db.repositories.identity import InMemoryIdentityStore
+    from umbral.infrastructure.email.recording import RecordingEmailAdapter
+    from umbral.infrastructure.identity.fake import FakeIdentityProvider
+
     store = InMemoryIdentityStore()
     AccessAdministration(store).preload_invitation("smoke@example.test")
     access = IdentityAccess(store, FakeIdentityProvider(), RecordingEmailAdapter())
     now = datetime.now(timezone.utc)
-    access.request_magic_link(email="smoke@example.test", origin_fingerprint="smoke", correlation_id=uuid4(), now=now)
-    return {"result": "accepted", "sessions": str(store.session_count()), "synthetic": "true"}
+    access.request_magic_link(
+        email="smoke@example.test",
+        origin_fingerprint="smoke",
+        correlation_id=uuid4(),
+        now=now,
+    )
+    return {
+        "result": "accepted",
+        "sessions": str(store.session_count()),
+        "synthetic": "true",
+    }
 
 
 def run_preview_identity_smoke(
@@ -250,10 +569,12 @@ def run_preview_identity_smoke(
     http: Callable[[str, str, bytes | None], PreviewHttpResponse],
     observer: PreviewSmokeObserver,
     now: Callable[[], datetime] | None = None,
+    scanner_http: Callable[[str, str, bytes | None], PreviewHttpResponse] | None = None,
 ) -> PreviewSmokeReport:
     """Exercise the preview BFF while retaining all secret provider material locally."""
 
     clock = now or (lambda: datetime.now(timezone.utc))
+    scanner = scanner_http or http
     checks: list[PreviewSmokeCheck] = []
 
     def check(
@@ -280,18 +601,25 @@ def run_preview_identity_smoke(
         return passed
 
     runtime_ok = check(
-        "runtime_identity", lambda: (None, _runtime_identity_matches(config, http))
+        "runtime_identity",
+        lambda: (None, _runtime_identity_matches(config, http, observer)),
     )
-    invitation_ok = check("invitation", lambda: (_operator_invitation(observer), True))
+    invitation_ok = check("invitation", lambda: (config.invitation_id, True))
 
     correlation_id = uuid4()
     message: ObservedPreviewMessage | None = None
 
     def request_invited() -> tuple[str | None, bool]:
         nonlocal message
-        accepted = _request_magic_link(config, http, config.invited_email)
+        requested_at = clock()
+        accepted = _request_magic_link(
+            config, http, config.invited_email, correlation_id
+        )
         message = observer.wait_for_magic_link(
-            correlation_id, timeout_seconds=config.timeout_seconds
+            correlation_id,
+            recipient=config.invited_email,
+            requested_at=requested_at,
+            timeout_seconds=config.timeout_seconds,
         )
         return message.message_id, accepted and message.correlation_id == correlation_id
 
@@ -309,7 +637,8 @@ def run_preview_identity_smoke(
             message.message_id if message else None,
             capture is not None
             and message is not None
-            and _public_response(http, "GET", message.capture_url, None).status_code == 303,
+            and _public_response(scanner, "GET", message.capture_url, None).status_code
+            == 303,
         ),
     )
     confirmation_ok = check(
@@ -326,39 +655,102 @@ def run_preview_identity_smoke(
             capture is not None and _confirm_magic_link(config, http, *capture) >= 400,
         ),
     )
-    check(
-        "repeat",
-        lambda: (None, _request_magic_link(config, http, config.invited_email)),
-    )
+    repeat_correlation = uuid4()
+    repeat_requested_at: datetime | None = None
+    repeat_capture: tuple[str, str] | None = None
+
+    def request_repeat() -> tuple[str | None, bool]:
+        nonlocal repeat_capture, repeat_requested_at
+        repeat_requested_at = clock()
+        accepted = _request_magic_link(
+            config, http, config.invited_email, repeat_correlation
+        )
+        repeat_message = observer.wait_for_magic_link(
+            repeat_correlation,
+            recipient=config.invited_email,
+            requested_at=repeat_requested_at,
+            timeout_seconds=config.timeout_seconds,
+        )
+        try:
+            repeat_capture = _capture_parameters(config, repeat_message.capture_url)
+        except ValueError:
+            repeat_capture = None
+        return repeat_message.message_id, accepted and repeat_capture is not None and repeat_message.message_id != (message.message_id if message else "")
+
+    check("repeat", request_repeat)
+    non_invited_correlation = uuid4()
+
+    def request_non_invited() -> tuple[str | None, bool]:
+        requested_at = clock()
+        email = _non_invited_email(config.invited_email)
+        accepted = _request_magic_link(config, http, email, non_invited_correlation)
+        absent = observer.wait_for_no_magic_link(
+            non_invited_correlation,
+            recipient=email,
+            requested_at=requested_at,
+            timeout_seconds=config.timeout_seconds,
+        )
+        return None, accepted and absent
+
     check(
         "non_invited",
-        lambda: (
-            None,
-            _request_magic_link(config, http, _non_invited_email(config.invited_email)),
-        ),
+        request_non_invited,
     )
-    check(
-        "authorization",
-        lambda: (None, _public_response(http, "GET", _url(config, "/api/auth/session"), None).status_code == 200),
-    )
+    session: Mapping[str, object] | None = None
+
+    def authorization() -> tuple[str | None, bool]:
+        nonlocal session
+        response = _public_response(
+            http, "GET", _url(config, "/api/auth/session"), None
+        )
+        session = _json_object(response.body) if response.status_code == 200 else None
+        return None, response.status_code == 200 and _is_uuid(
+            str(session.get("user_id", ""))
+        ) if session else False
+
+    check("authorization", authorization)
     check(
         "logout",
-        lambda: (None, _public_response(http, "POST", _url(config, "/api/auth/logout"), None).status_code == 204),
-    )
-    check(
-        "idle_expiry",
         lambda: (
             None,
-            _public_response(http, "GET", _url(config, "/api/auth/session?idle=boundary"), None).status_code == 401,
+            _public_response(
+                http, "POST", _url(config, "/api/auth/logout"), None
+            ).status_code
+            == 204
+            and _public_response(http, "GET", _url(config, "/api/auth/session"), None).status_code == 401,
         ),
     )
+    def idle_expiry() -> tuple[str | None, bool]:
+        if repeat_capture is None or _confirm_magic_link(config, http, *repeat_capture) != 204:
+            return None, False
+        active = _public_response(http, "GET", _url(config, "/api/auth/session"), None)
+        payload = _json_object(active.body) if active.status_code == 200 else {}
+        user_id = payload.get("user_id")
+        return None, isinstance(user_id, str) and observer.backdate_session(UUID(user_id), timeout_seconds=config.timeout_seconds) and _public_response(http, "GET", _url(config, "/api/auth/session"), None).status_code == 401
+
+    check("idle_expiry", idle_expiry)
     for scenario in ("delivered", "bounced", "complained"):
         event_correlation = uuid4()
 
         def delivery_operation(
             scenario: str = scenario, correlation_id: UUID = event_correlation
         ) -> tuple[str | None, bool]:
-            return _delivery_event(observer, scenario, correlation_id, config.timeout_seconds)
+            recipient = observer.prepare_delivery_recipient(scenario, correlation_id)
+            try:
+                requested_at = clock()
+                accepted = _request_magic_link(config, http, recipient, correlation_id)
+                message = observer.wait_for_magic_link(
+                    correlation_id,
+                    recipient=recipient,
+                    requested_at=requested_at,
+                    timeout_seconds=config.timeout_seconds,
+                )
+                observed = observer.audit_projection_observed(
+                    message.message_id, timeout_seconds=config.timeout_seconds
+                )
+                return message.message_id, accepted and observed
+            finally:
+                observer.cleanup_delivery_recipient(recipient)
 
         check(
             scenario,
@@ -383,11 +775,16 @@ def run_preview_identity_smoke(
 def _runtime_identity_matches(
     config: PreviewSmokeConfig,
     http: Callable[[str, str, bytes | None], PreviewHttpResponse],
+    observer: PreviewSmokeObserver,
 ) -> bool:
     health = _public_response(http, "GET", _url(config, "/health"), None)
     ready = _public_response(http, "GET", _url(config, "/ready"), None)
     version = _public_response(http, "GET", _url(config, "/version"), None)
-    if health.status_code != 200 or ready.status_code != 200 or version.status_code != 200:
+    if (
+        health.status_code != 200
+        or ready.status_code != 200
+        or version.status_code != 200
+    ):
         return False
     health_payload = _json_object(health.body)
     ready_payload = _json_object(ready.body)
@@ -395,13 +792,45 @@ def _runtime_identity_matches(
     return (
         health_payload == {"status": "alive"}
         and ready_payload.get("surface") == "web"
-        and ready_payload.get("state") in {"ready", "degraded"}
+        and ready_payload.get("state") == "ready"
         and ready_payload.get("release_id") == config.release_id
         and version_payload.get("surface") == "web"
         and version_payload.get("release_id") == config.release_id
         and version_payload.get("manifest_sha256") == config.manifest_sha256
         and version_payload.get("artifact_digest") == config.artifact_digests["web"]
+        and _runtime_surfaces_match(config, observer)
     )
+
+
+def _runtime_surfaces_match(
+    config: PreviewSmokeConfig, observer: PreviewSmokeObserver
+) -> bool:
+    rows = observer.runtime_surfaces(timeout_seconds=config.timeout_seconds)
+    if len(rows) != len(REQUIRED_SURFACES):
+        return False
+    expected_digests = {
+        "web": config.artifact_digests["web"],
+        "api": config.artifact_digests["runtime"],
+        "worker": config.artifact_digests["runtime"],
+        "scheduler": config.artifact_digests["runtime"],
+    }
+    return {row.get("surface") for row in rows} == set(REQUIRED_SURFACES) and all(
+        row.get("state") == "ready"
+        and row.get("release_id") == config.release_id
+        and row.get("manifest_sha256") == config.manifest_sha256
+        and row.get("artifact_digest") == expected_digests[row["surface"]]
+        and _is_uuid(row.get("correlation_id", ""))
+        and _is_fresh_observed_at(row.get("observed_at"))
+        for row in rows
+    )
+
+
+def _is_fresh_observed_at(value: object) -> bool:
+    try:
+        observed_at = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return datetime.now(timezone.utc) - _utc(observed_at) <= timedelta(minutes=10)
+    except (TypeError, ValueError):
+        return False
 
 
 def _operator_invitation(observer: PreviewSmokeObserver) -> str:
@@ -413,17 +842,21 @@ def _request_magic_link(
     config: PreviewSmokeConfig,
     http: Callable[[str, str, bytes | None], PreviewHttpResponse],
     email: str,
+    correlation_id: UUID,
 ) -> bool:
     response = _public_response(
         http,
         "POST",
         _url(config, "/api/auth/magic-link-requests"),
-        ("{\"email\":\"" + email + "\"}").encode(),
+        ('{"email":"' + email + '"}').encode(),
+        headers={"X-Correlation-ID": str(correlation_id)},
     )
     return response.status_code == 202
 
 
-def _capture_parameters(config: PreviewSmokeConfig, capture_url: str) -> tuple[str, str]:
+def _capture_parameters(
+    config: PreviewSmokeConfig, capture_url: str
+) -> tuple[str, str]:
     parsed = urlparse(capture_url)
     if f"{parsed.scheme}://{parsed.netloc}" != config.public_web_base_url.rstrip("/"):
         raise ValueError("capture URL left the public web origin")
@@ -447,11 +880,7 @@ def _confirm_magic_link(
         "POST",
         _url(config, "/api/auth/confirmations"),
         (
-            "{\"attemptId\":\""
-            + attempt_id
-            + "\",\"tokenHash\":\""
-            + token_hash
-            + "\"}"
+            '{"attemptId":"' + attempt_id + '","tokenHash":"' + token_hash + '"}'
         ).encode(),
     )
     return response.status_code
@@ -474,7 +903,12 @@ def _public_response(
     method: str,
     url: str,
     body: bytes | None,
+    *,
+    headers: Mapping[str, str] | None = None,
 ) -> PreviewHttpResponse:
+    request = getattr(http, "request", None)
+    if callable(request):
+        return cast(PreviewHttpResponse, request(method, url, body, headers or {}))
     return http(method, url, body)
 
 
@@ -504,6 +938,41 @@ def _capture_url_from_resend_detail(detail: object) -> str | None:
     return None
 
 
+def _resend_message_matches(
+    item: object, recipient: str, requested_at: datetime, correlation_id: UUID
+) -> bool:
+    if not isinstance(item, Mapping):
+        return False
+    recipients = item.get("to")
+    if isinstance(recipients, str):
+        recipient_matches = recipients == recipient
+    elif isinstance(recipients, list):
+        recipient_matches = recipient in recipients
+    else:
+        recipient_matches = False
+    created_at = item.get("created_at")
+    try:
+        created = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    tags = item.get("tags")
+    tag_values = (
+        {
+            str(tag.get("value"))
+            for tag in tags
+            if isinstance(tag, Mapping) and isinstance(tag.get("value"), str)
+        }
+        if isinstance(tags, list)
+        else set()
+    )
+    subject = item.get("subject")
+    return (
+        recipient_matches
+        and _utc(created) >= _utc(requested_at)
+        and (str(correlation_id) in tag_values or str(correlation_id) in str(subject))
+    )
+
+
 def _non_invited_email(invited_email: str) -> str:
     local, separator, domain = invited_email.partition("@")
     if not separator:
@@ -511,8 +980,26 @@ def _non_invited_email(invited_email: str) -> str:
     return f"not-invited-{uuid4().hex[:12]}@{domain}"
 
 
-def _redaction_clean(evidence: str, *canaries: str) -> bool:
-    return all(not canary or canary not in evidence for canary in canaries)
+def _redaction_clean(evidence: object, *canaries: str) -> bool:
+    """Reject canaries at every nested evidence, log, and error value."""
+
+    def values(value: object) -> list[str]:
+        if isinstance(value, Mapping):
+            return [
+                *map(str, value.keys()),
+                *(part for item in value.values() for part in values(item)),
+            ]
+        if isinstance(value, (list, tuple, set, frozenset)):
+            return [part for item in value for part in values(item)]
+        if isinstance(value, bytes):
+            return [value.decode("utf-8", "replace")]
+        return [str(value)]
+
+    flattened = values(evidence)
+    return all(
+        not canary or all(canary not in value for value in flattened)
+        for canary in canaries
+    )
 
 
 def _is_sha256(value: str) -> bool:
@@ -523,10 +1010,31 @@ def _is_digest(value: str) -> bool:
     return value.startswith("sha256:") and _is_sha256(value.removeprefix("sha256:"))
 
 
+def _is_uuid(value: str) -> bool:
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("smoke timestamps must be timezone-aware")
     return value.astimezone(timezone.utc)
+
+
+def _remaining(deadline: float) -> float:
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise TimeoutError("preview smoke timed out")
+    return remaining
+
+
+def _sleep_remaining(deadline: float) -> None:
+    from time import sleep
+
+    sleep(min(1.0, _remaining(deadline)))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -550,14 +1058,21 @@ def main(argv: list[str] | None = None) -> int:
             release_id=_required_manifest_string(manifest, "release_id"),
             manifest_sha256=_manifest_sha256(args.manifest_path),
             artifact_digests=_manifest_digests(manifest),
+            invitation_id=os.environ.get("UMBRAL_SMOKE_INVITATION_ID", ""),
             invited_email=os.environ.get("UMBRAL_SMOKE_INVITEE", ""),
             resend_observation_token=os.environ.get(
                 "UMBRAL_SMOKE_RESEND_OBSERVATION_TOKEN", ""
             ),
             timeout_seconds=args.timeout_seconds,
         )
-        observer = _load_preview_observer(config)
-        report = run_preview_identity_smoke(config, http=_urllib_http, observer=observer)
+        deadline = monotonic() + config.timeout_seconds
+        observer = _built_in_preview_observer(config, deadline=deadline)
+        report = run_preview_identity_smoke(
+            config,
+            http=CookieHttpClient(deadline=deadline),
+            scanner_http=CookieHttpClient(deadline=deadline, follow_redirects=False),
+            observer=observer,
+        )
     except Exception:
         print('{"passed":false,"code":"smoke.preview_unavailable"}')
         return 1
@@ -565,19 +1080,75 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if report.passed else 1
 
 
-def _load_preview_observer(config: PreviewSmokeConfig) -> PreviewSmokeObserver:
-    raw = os.environ.get("UMBRAL_PREVIEW_SMOKE_OBSERVER_FACTORY", "")
-    module_name, separator, attribute = raw.partition(":")
-    if not separator or not module_name or not attribute:
-        raise ValueError("preview observer factory is unavailable")
-    factory = getattr(importlib.import_module(module_name), attribute)
-    observer = factory(config)
-    if not isinstance(observer, PreviewSmokeObserver):
-        raise TypeError("preview observer is invalid")
-    return observer
+def _built_in_preview_observer(
+    config: PreviewSmokeConfig, *, deadline: float | None = None
+) -> PreviewSmokeObserver:
+    database_url_name = os.environ.get("UMBRAL_SMOKE_OPERATOR_DATABASE_URL_ENV", "")
+    database_url = os.environ.get(database_url_name, "")
+    sender = os.environ.get("RESEND_FROM_EMAIL", "")
+    if not database_url_name or not database_url or not sender:
+        raise ValueError("preview operator configuration is unavailable")
+    return BuiltInPreviewObserver(
+        database_url=database_url,
+        observation_token=config.resend_observation_token,
+        sender=sender,
+        deadline=deadline,
+    )
 
 
-def _urllib_http(method: str, url: str, body: bytes | None) -> PreviewHttpResponse:
+class CookieHttpClient:
+    def __init__(
+        self, *, deadline: float | None = None, follow_redirects: bool = True
+    ) -> None:
+        from http.cookiejar import CookieJar
+        from urllib.request import (
+            HTTPCookieProcessor,
+            HTTPRedirectHandler,
+            build_opener,
+        )
+
+        class NoRedirect(HTTPRedirectHandler):
+            def redirect_request(self, *args: object, **kwargs: object) -> None:
+                del args, kwargs
+                return None
+
+        cookies = HTTPCookieProcessor(CookieJar())
+        self._opener = (
+            build_opener(cookies)
+            if follow_redirects
+            else build_opener(cookies, NoRedirect())
+        )
+        self._deadline = deadline
+
+    def __call__(
+        self, method: str, url: str, body: bytes | None
+    ) -> PreviewHttpResponse:
+        return self.request(method, url, body, {})
+
+    def request(
+        self, method: str, url: str, body: bytes | None, headers: Mapping[str, str]
+    ) -> PreviewHttpResponse:
+        return _urllib_http(
+            method,
+            url,
+            body,
+            opener=self._opener,
+            headers=headers,
+            timeout_seconds=_remaining(self._deadline)
+            if self._deadline is not None
+            else 30,
+        )
+
+
+def _urllib_http(
+    method: str,
+    url: str,
+    body: bytes | None,
+    *,
+    opener: Any | None = None,
+    headers: Mapping[str, str] | None = None,
+    timeout_seconds: float = 30,
+) -> PreviewHttpResponse:
     from urllib.error import HTTPError
     from urllib.request import Request, urlopen
 
@@ -585,15 +1156,21 @@ def _urllib_http(method: str, url: str, body: bytes | None) -> PreviewHttpRespon
         url,
         method=method,
         data=body,
-        headers={"Content-Type": "application/json"} if body is not None else {},
+        headers={
+            **({"Content-Type": "application/json"} if body is not None else {}),
+            **(headers or {}),
+        },
     )
     try:
-        with urlopen(request, timeout=30) as response:  # noqa: S310
+        active_opener = opener.open if opener is not None else urlopen
+        with active_opener(request, timeout=timeout_seconds) as response:  # noqa: S310
             return PreviewHttpResponse(
                 int(response.status), dict(response.headers.items()), response.read()
             )
     except HTTPError as error:
-        return PreviewHttpResponse(int(error.code), dict(error.headers.items()), error.read())
+        return PreviewHttpResponse(
+            int(error.code), dict(error.headers.items()), error.read()
+        )
 
 
 def _manifest_sha256(path: str) -> str:

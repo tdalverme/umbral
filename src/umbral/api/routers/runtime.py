@@ -6,10 +6,11 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from umbral.api.dependencies import RuntimeDependencies
+from umbral.api.routers.auth import _check_bff
 from umbral.application.runtime.readiness import DependencyCheckName
 from umbral.domain.errors import InvalidRequestError
 
@@ -82,6 +83,12 @@ class Problem(BaseModel):
     errors: list[ValidationIssue] | None = Field(default=None, max_length=50)
 
 
+class InternalWebHeartbeat(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    state: Literal["ready", "degraded", "not_ready"]
+    checks: dict[str, str]
+
+
 def configure_runtime_routes(dependencies: RuntimeDependencies) -> None:
     """Bind immutable dependencies once in the composition root."""
 
@@ -133,6 +140,13 @@ async def ready(request: Request, response: Response) -> Readiness:
 
     _assert_no_query_parameters(request)
     report = _dependencies().readiness.evaluate()
+    writer = _dependencies().heartbeat_writer
+    if writer is not None:
+        writer.observe(
+            "api",
+            state=report.state,
+            checks={check.name: check.state for check in report.checks},
+        )
     response.headers["Cache-Control"] = "no-store"
     if report.state == "not_ready":
         response.status_code = 503
@@ -187,3 +201,20 @@ async def version(request: Request, response: Response) -> RuntimeVersion:
         database_revision=release.database_revision,
         built_at=datetime.fromisoformat(release.built_at.replace("Z", "+00:00")),
     )
+
+
+@router.post(
+    "/internal/runtime/web-heartbeat", include_in_schema=False, status_code=204
+)
+async def web_heartbeat(
+    payload: InternalWebHeartbeat,
+    x_umbral_bff_token: str | None = Header(default=None, include_in_schema=False),
+) -> Response:
+    """Accept the web's private heartbeat only through the BFF credential."""
+
+    _check_bff(x_umbral_bff_token)
+    writer = _dependencies().heartbeat_writer
+    if writer is None:
+        return Response(status_code=204)
+    writer.observe("web", state=payload.state, checks=payload.checks)
+    return Response(status_code=204)

@@ -43,6 +43,7 @@ class ResendEmailAdapter:
         expires_at: datetime,
         idempotency_key: str,
         now: datetime,
+        correlation_id: UUID | None = None,
     ) -> EmailAcceptance:
         if self._sender is None:
             raise IdentityError(
@@ -62,7 +63,14 @@ class ResendEmailAdapter:
                         "Tu enlace para ingresar a Umbral\n\n"
                         f"Ingresá a Umbral: {capture_url}"
                     ),
-                    "tags": [{"name": "attempt_id", "value": str(attempt_id)}],
+                    "tags": [
+                        {"name": "attempt_id", "value": str(attempt_id)},
+                        *(
+                            [{"name": "correlation_id", "value": str(correlation_id)}]
+                            if correlation_id is not None
+                            else []
+                        ),
+                    ],
                 },
                 {"idempotency_key": idempotency_key},
             )
@@ -111,7 +119,13 @@ class ResendEmailAdapter:
                 or not isinstance(email_id, str)
             ):
                 raise ValueError("verified webhook payload is incomplete")
-            return {"id": event_id, "type": event_type, "email_id": email_id}
+            result = {"id": event_id, "type": event_type, "email_id": email_id}
+            tags = verified_data.get("tags")
+            if isinstance(tags, Mapping):
+                correlation_id = tags.get("correlation_id")
+                if isinstance(correlation_id, str):
+                    result["correlation_id"] = correlation_id
+            return result
         except (UnicodeDecodeError, TypeError, ValueError, KeyError) as exc:
             raise IdentityError(
                 "auth.webhook_invalid", status=401, recovery="none"

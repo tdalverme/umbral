@@ -5,10 +5,12 @@ from __future__ import annotations
 import os
 import socket
 from dataclasses import dataclass
+from pathlib import Path
 
 from redis import Redis
 
 from umbral.application.identity.access import IdentityAccess
+from umbral.application.runtime.version import load_release_manifest
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.repositories.identity import SqlAlchemyIdentityStore
 from umbral.infrastructure.db.session import SessionProvider
@@ -16,6 +18,7 @@ from umbral.infrastructure.identity.registry import build_identity_registry
 from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
 from umbral.infrastructure.observability.runtime import initialize_observability
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
+from umbral.infrastructure.runtime.heartbeat import RuntimeHeartbeatWriter
 from umbral.workers.registry import JobRegistry
 from umbral.workers.registry import build_identity_registry as build_job_registry
 
@@ -31,6 +34,7 @@ class ProcessDependencies:
     runtime: SqlAlchemyJobRuntime
     registry: JobRegistry
     worker_id: str
+    heartbeat_writer: RuntimeHeartbeatWriter | None = None
 
     @property
     def handlers(self) -> dict[str, object]:
@@ -66,6 +70,13 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         handlers=registry.as_mapping(),
     )
     identity_access.job_runtime = runtime
+    heartbeat_writer = None
+    if active_settings.environment != "local":
+        heartbeat_writer = RuntimeHeartbeatWriter(
+            session_provider.session_factory,
+            environment=active_settings.environment,
+            release=load_release_manifest(Path(active_settings.release_manifest)),
+        )
     return ProcessDependencies(
         settings=active_settings,
         session_provider=session_provider,
@@ -76,6 +87,7 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         runtime=runtime,
         registry=registry,
         worker_id=f"rq:{socket.gethostname()}:{os.getpid()}",
+        heartbeat_writer=heartbeat_writer,
     )
 
 

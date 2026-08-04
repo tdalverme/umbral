@@ -56,6 +56,7 @@ class EmailPort(Protocol):
         expires_at: datetime,
         idempotency_key: str,
         now: datetime,
+        correlation_id: UUID | None = None,
     ) -> EmailAcceptance: ...
 
     def verify_webhook(

@@ -10,6 +10,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     headers: {
       "Content-Type": "application/json",
       "X-Umbral-Origin-Fingerprint": originFingerprint(request),
+      ...(request.headers.get("x-correlation-id")
+        ? { "X-Correlation-ID": request.headers.get("x-correlation-id")! }
+        : {}),
     },
     body: JSON.stringify({ email: body.email }),
   });

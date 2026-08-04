@@ -1,18 +1,55 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
+from typing import cast
 from uuid import UUID
+
+import pytest
 
 from umbral.ops.identity import main as identity_main
 from umbral.ops.smoke import (
+    CookieHttpClient,
     ObservedPreviewMessage,
     PreviewHttpResponse,
     PreviewSmokeConfig,
     PreviewSmokeObserver,
     ResendPreviewObserver,
+    _runtime_surfaces_match,
     run_preview_identity_smoke,
 )
+
+
+def test_scanner_client_observes_real_redirect_without_following_it() -> None:
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path == "/capture":
+                self.send_response(303)
+                self.send_header("Location", "/confirm")
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *_: object) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        origin = f"http://127.0.0.1:{server.server_port}"
+        browser = CookieHttpClient()
+        scanner = CookieHttpClient(follow_redirects=False)
+        assert browser("GET", f"{origin}/capture", None).status_code == 200
+        response = scanner("GET", f"{origin}/capture", None)
+        assert response.status_code == 303
+        assert response.headers["Location"] == "/confirm"
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 class RecordingObserver(PreviewSmokeObserver):
@@ -24,12 +61,62 @@ class RecordingObserver(PreviewSmokeObserver):
         self.preloaded += 1
         return "00000000-0000-0000-0000-000000000101"
 
+    def runtime_surfaces(self, *, timeout_seconds: int) -> tuple[dict[str, str], ...]:
+        assert timeout_seconds == 30
+        rows = (
+            {
+                "surface": "web",
+                "state": "ready",
+                "release_id": "release-20260801",
+                "manifest_sha256": "a" * 64,
+                "artifact_digest": "sha256:" + "b" * 64,
+                "correlation_id": "00000000-0000-0000-0000-000000000501",
+            },
+            {
+                "surface": "api",
+                "state": "ready",
+                "release_id": "release-20260801",
+                "manifest_sha256": "a" * 64,
+                "artifact_digest": "sha256:" + "c" * 64,
+                "correlation_id": "00000000-0000-0000-0000-000000000502",
+            },
+            {
+                "surface": "worker",
+                "state": "ready",
+                "release_id": "release-20260801",
+                "manifest_sha256": "a" * 64,
+                "artifact_digest": "sha256:" + "c" * 64,
+                "correlation_id": "00000000-0000-0000-0000-000000000503",
+            },
+            {
+                "surface": "scheduler",
+                "state": "ready",
+                "release_id": "release-20260801",
+                "manifest_sha256": "a" * 64,
+                "artifact_digest": "sha256:" + "c" * 64,
+                "correlation_id": "00000000-0000-0000-0000-000000000504",
+            },
+        )
+        return tuple(
+            row | {"observed_at": datetime.now(timezone.utc).isoformat()}
+            for row in rows
+        )
+
     def wait_for_magic_link(
-        self, correlation_id: UUID, *, timeout_seconds: int
+        self,
+        correlation_id: UUID,
+        *,
+        recipient: str,
+        requested_at: datetime,
+        timeout_seconds: int,
     ) -> ObservedPreviewMessage:
         assert timeout_seconds == 30
+        assert recipient == "operator-private@example.test" or recipient.endswith(
+            "@resend.dev"
+        )
+        assert requested_at == datetime(2026, 8, 1, tzinfo=timezone.utc)
         return ObservedPreviewMessage(
-            message_id="email_01HZY6A2D5YQ3DAN9F5C4XE5QY",
+            message_id=f"email_{correlation_id.hex}",
             capture_url=(
                 "https://preview.example.test/auth/capture?"
                 "attempt_id=00000000-0000-0000-0000-000000000201&"
@@ -42,10 +129,39 @@ class RecordingObserver(PreviewSmokeObserver):
         self.events.append((scenario, correlation_id))
         return f"event_{scenario}"
 
+    def prepare_delivery_recipient(self, scenario: str, correlation_id: UUID) -> str:
+        self.events.append((scenario, correlation_id))
+        return f"{scenario}+{correlation_id.hex[:16]}@resend.dev"
+
+    def cleanup_delivery_recipient(self, recipient: str) -> None:
+        assert recipient.endswith("@resend.dev")
+
     def audit_projection_observed(
         self, provider_event_id: str, *, timeout_seconds: int
     ) -> bool:
-        return provider_event_id.startswith("event_") and timeout_seconds == 30
+        return (
+            provider_event_id.startswith(("event_", "email_")) and timeout_seconds == 30
+        )
+
+    def wait_for_no_magic_link(
+        self,
+        correlation_id: UUID,
+        *,
+        recipient: str,
+        requested_at: datetime,
+        timeout_seconds: int,
+    ) -> bool:
+        return (
+            recipient.startswith("not-invited-")
+            and requested_at == datetime(2026, 8, 1, tzinfo=timezone.utc)
+            and timeout_seconds == 30
+        )
+
+    def backdate_session(self, user_id: UUID, *, timeout_seconds: int) -> bool:
+        return (
+            user_id == UUID("00000000-0000-0000-0000-000000000601")
+            and timeout_seconds == 30
+        )
 
     def evidence_text(self) -> str:
         return "only operational output"
@@ -56,9 +172,10 @@ def test_preview_smoke_uses_only_the_public_bff_and_returns_closed_evidence() ->
 
     calls: list[tuple[str, str, bytes | None]] = []
     confirm_calls = 0
+    session_calls = 0
 
     def http(method: str, url: str, body: bytes | None) -> PreviewHttpResponse:
-        nonlocal confirm_calls
+        nonlocal confirm_calls, session_calls
         calls.append((method, url, body))
         assert url.startswith("https://preview.example.test/")
         path = url.removeprefix("https://preview.example.test")
@@ -86,17 +203,22 @@ def test_preview_smoke_uses_only_the_public_bff_and_returns_closed_evidence() ->
             )
         if path == "/api/auth/confirmations":
             confirm_calls += 1
-            if confirm_calls == 1:
+            if confirm_calls in {1, 3}:
                 return PreviewHttpResponse(
                     204, {"set-cookie": "umbral_local_session=session; Path=/"}, b""
                 )
             return PreviewHttpResponse(409, {}, b'{"code":"auth.magic_link_reused"}')
         if path == "/api/auth/session":
-            return PreviewHttpResponse(200, {}, b'{"roles":["user"]}')
+            session_calls += 1
+            if session_calls in {2, 4}:
+                return PreviewHttpResponse(401, {}, b'{"code":"auth.session_expired"}')
+            return PreviewHttpResponse(
+                200,
+                {},
+                b'{"user_id":"00000000-0000-0000-0000-000000000601","roles":["user"]}',
+            )
         if path == "/api/auth/logout":
             return PreviewHttpResponse(204, {}, b"")
-        if path == "/api/auth/session?idle=boundary":
-            return PreviewHttpResponse(401, {}, b'{"code":"auth.session_expired"}')
         raise AssertionError(path)
 
     observer = RecordingObserver()
@@ -109,6 +231,7 @@ def test_preview_smoke_uses_only_the_public_bff_and_returns_closed_evidence() ->
                 "web": "sha256:" + "b" * 64,
                 "runtime": "sha256:" + "c" * 64,
             },
+            invitation_id="00000000-0000-0000-0000-000000000101",
             invited_email="operator-private@example.test",
             resend_observation_token="re_private_observation_token",
             timeout_seconds=30,
@@ -121,19 +244,20 @@ def test_preview_smoke_uses_only_the_public_bff_and_returns_closed_evidence() ->
     assert report.passed, [
         check.scenario for check in report.checks if not check.passed
     ]
-    assert observer.preloaded == 1
+    assert observer.preloaded == 0
     assert [scenario for scenario, _ in observer.events] == [
         "delivered",
         "bounced",
         "complained",
     ]
     evidence = report.to_dict()
+    checks = cast("list[dict[str, str]]", evidence["checks"])
     serialized = json.dumps(evidence, sort_keys=True)
     assert "operator-private@example.test" not in serialized
     assert "private-provider-token-value-that-is-long-enough" not in serialized
     assert "re_private_observation_token" not in serialized
     assert all("api.railway.internal" not in url for _, url, _ in calls)
-    assert {check["scenario"] for check in evidence["checks"]} == {
+    assert {check["scenario"] for check in checks} == {
         "runtime_identity",
         "invitation",
         "invited",
@@ -153,7 +277,7 @@ def test_preview_smoke_uses_only_the_public_bff_and_returns_closed_evidence() ->
 
 
 def test_preload_invitation_reads_secret_values_only_by_environment_variable_name(
-    capsys,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """An operator command must not take secret values as argv values."""
 
@@ -189,8 +313,9 @@ def test_preload_invitation_reads_secret_values_only_by_environment_variable_nam
     )
 
 
-def test_resend_observer_lists_then_loads_a_message_without_exposing_credentials(
-) -> None:
+def test_resend_observer_lists_then_loads_a_message_without_exposing_credentials() -> (
+    None
+):
     """The Resend observer obtains capture material at its injected API boundary."""
 
     observed_urls: list[str] = []
@@ -199,12 +324,26 @@ def test_resend_observer_lists_then_loads_a_message_without_exposing_credentials
         observed_urls.append(url)
         assert token == "re_private_observation_token"
         if url.endswith("/emails"):
-            return {"data": [{"id": "email_01HZY6A2D5YQ3DAN9F5C4XE5QY"}]}
+            return {
+                "data": [
+                    {
+                        "id": "email_01HZY6A2D5YQ3DAN9F5C4XE5QY",
+                        "to": "operator-private@example.test",
+                        "created_at": "2026-08-01T00:00:00Z",
+                        "tags": [
+                            {
+                                "name": "correlation_id",
+                                "value": "00000000-0000-0000-0000-000000000403",
+                            }
+                        ],
+                    }
+                ]
+            }
         return {
             "id": "email_01HZY6A2D5YQ3DAN9F5C4XE5QY",
             "html": (
                 '<a href="https://preview.example.test/auth/capture?'
-                'attempt_id=00000000-0000-0000-0000-000000000401&'
+                "attempt_id=00000000-0000-0000-0000-000000000401&"
                 'token_hash=private-provider-token-value-that-is-long-enough">Ingresar</a>'
             ),
             "text": "",
@@ -219,11 +358,96 @@ def test_resend_observer_lists_then_loads_a_message_without_exposing_credentials
     )
     correlation_id = UUID("00000000-0000-0000-0000-000000000403")
 
-    message = observer.wait_for_magic_link(correlation_id, timeout_seconds=30)
+    message = observer.wait_for_magic_link(
+        correlation_id,
+        recipient="operator-private@example.test",
+        requested_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        timeout_seconds=30,
+    )
 
     assert message.message_id == "email_01HZY6A2D5YQ3DAN9F5C4XE5QY"
     assert message.correlation_id == correlation_id
     assert observed_urls == [
         "https://api.resend.com/emails",
         "https://api.resend.com/emails/email_01HZY6A2D5YQ3DAN9F5C4XE5QY",
+    ]
+
+
+def test_preview_smoke_redacts_nested_observer_evidence() -> None:
+    from umbral.ops.smoke import _redaction_clean
+
+    assert not _redaction_clean(
+        {"errors": [{"context": {"token": "canary-secret"}}]}, "canary-secret"
+    )
+
+
+def test_runtime_surfaces_accept_exactly_four_fresh_matching_rows() -> None:
+    assert _runtime_surfaces_match(_smoke_config(), _SurfaceObserver(_surface_rows()))
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda rows: rows.__setitem__(
+            0,
+            {
+                **rows[0],
+                "observed_at": (
+                    datetime.now(timezone.utc) - timedelta(minutes=11)
+                ).isoformat(),
+            },
+        ),
+        lambda rows: rows.pop(),
+        lambda rows: rows.__setitem__(3, {**rows[3], "surface": "worker"}),
+        lambda rows: rows.__setitem__(
+            0, {**rows[0], "artifact_digest": "sha256:" + "d" * 64}
+        ),
+        lambda rows: rows.__setitem__(0, {**rows[0], "release_id": "wrong-release"}),
+        lambda rows: rows.__setitem__(0, {**rows[0], "manifest_sha256": "d" * 64}),
+        lambda rows: rows.__setitem__(0, {**rows[0], "state": "degraded"}),
+    ],
+)
+def test_runtime_surfaces_fail_closed_for_invalid_identity_or_freshness(
+    mutate: Callable[[list[dict[str, str]]], None],
+) -> None:
+    rows = _surface_rows()
+    mutate(rows)
+    assert not _runtime_surfaces_match(_smoke_config(), _SurfaceObserver(rows))
+
+
+class _SurfaceObserver(PreviewSmokeObserver):
+    def __init__(self, rows: list[dict[str, str]]) -> None:
+        self.rows = rows
+
+    def runtime_surfaces(self, *, timeout_seconds: int) -> tuple[dict[str, str], ...]:
+        assert timeout_seconds == 30
+        return tuple(self.rows)
+
+
+def _smoke_config() -> PreviewSmokeConfig:
+    return PreviewSmokeConfig(
+        public_web_base_url="https://preview.example.test",
+        release_id="release-20260801",
+        manifest_sha256="a" * 64,
+        artifact_digests={"web": "sha256:" + "b" * 64, "runtime": "sha256:" + "c" * 64},
+        invitation_id="00000000-0000-0000-0000-000000000101",
+        invited_email="operator-private@example.test",
+        resend_observation_token="token",
+        timeout_seconds=30,
+    )
+
+
+def _surface_rows() -> list[dict[str, str]]:
+    now = datetime.now(timezone.utc).isoformat()
+    return [
+        {
+            "surface": surface,
+            "state": "ready",
+            "release_id": "release-20260801",
+            "manifest_sha256": "a" * 64,
+            "artifact_digest": "sha256:" + ("b" if surface == "web" else "c") * 64,
+            "correlation_id": f"00000000-0000-0000-0000-00000000050{index}",
+            "observed_at": now,
+        }
+        for index, surface in enumerate(("web", "api", "worker", "scheduler"), start=1)
     ]

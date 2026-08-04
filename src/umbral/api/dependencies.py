@@ -21,10 +21,12 @@ from umbral.application.runtime.version import (
     load_release_manifest,
 )
 from umbral.infrastructure.config.settings import Settings
+from umbral.infrastructure.db.session import SessionProvider
 from umbral.infrastructure.runtime.composition import (
     RuntimeCompositionFactories,
     compose_runtime,
 )
+from umbral.infrastructure.runtime.heartbeat import RuntimeHeartbeatWriter
 
 _LOCAL_RELEASE_MANIFEST = "<local>"
 
@@ -41,6 +43,7 @@ class RuntimeDependencies:
     identity_access: IdentityAccess
     access_control: AccessControl
     administration: AccessAdministration
+    heartbeat_writer: RuntimeHeartbeatWriter | None = None
     job_runtime: JobRuntime | None = None
 
 
@@ -57,6 +60,13 @@ def build_runtime_dependencies(
     composition = compose_runtime(
         settings=settings, release=release, factories=factories
     )
+    heartbeat_writer = None
+    if settings.environment != "local":
+        heartbeat_writer = RuntimeHeartbeatWriter(
+            SessionProvider(settings.database_url).session_factory,
+            environment=settings.environment,
+            release=release,
+        )
     return RuntimeDependencies(
         settings=settings,
         release=release,
@@ -66,6 +76,7 @@ def build_runtime_dependencies(
         identity_access=composition.identity_access,
         access_control=composition.access_control,
         administration=composition.administration,
+        heartbeat_writer=heartbeat_writer,
         job_runtime=composition.job_runtime,
     )
 
@@ -75,7 +86,19 @@ def _load_settings(environment: Mapping[str, str]) -> Settings:
         key: value
         for key, value in environment.items()
         if key.startswith(
-            ("UMBRAL_", "DATABASE_", "REDIS_", "OBJECT_STORE_", "OTEL_", "SENTRY_", "IDENTITY_", "SUPABASE_", "EMAIL_", "RESEND_", "SESSION_")
+            (
+                "UMBRAL_",
+                "DATABASE_",
+                "REDIS_",
+                "OBJECT_STORE_",
+                "OTEL_",
+                "SENTRY_",
+                "IDENTITY_",
+                "SUPABASE_",
+                "EMAIL_",
+                "RESEND_",
+                "SESSION_",
+            )
         )
     }
     if not values:

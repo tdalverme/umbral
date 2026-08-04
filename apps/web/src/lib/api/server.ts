@@ -19,6 +19,6 @@ export async function forwardIdentityRequest(path: string, init: RequestInit = {
   const baseUrl = apiBaseUrl();
   const headers = new Headers(init.headers);
   headers.set("X-Umbral-BFF-Token", process.env.UMBRAL_BFF_TOKEN || "local-bff-token");
-  headers.set("X-Correlation-ID", crypto.randomUUID());
+  if (!headers.has("X-Correlation-ID")) headers.set("X-Correlation-ID", crypto.randomUUID());
   return fetch(`${baseUrl}${path}`, { ...init, headers, cache: "no-store" });
 }

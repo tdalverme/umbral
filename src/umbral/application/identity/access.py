@@ -43,6 +43,15 @@ from umbral.domain.identity.models import (
 )
 
 
+def _provider_correlation(event: Mapping[str, str]) -> UUID:
+    """Use provider metadata when present without trusting malformed values."""
+
+    try:
+        return UUID(event.get("correlation_id", ""))
+    except ValueError:
+        return uuid4()
+
+
 class IdentityAccess:
     """Deep module hiding provider, limiter and session state transitions."""
 
@@ -69,6 +78,7 @@ class IdentityAccess:
         with self._transaction():
             message_id = event.get("email_id")
             event_type = event.get("type")
+            correlation_id = _provider_correlation(event)
             reason_by_type = {
                 "email.delivered": "email_delivered",
                 "email.delivery_delayed": "email_delayed",
@@ -104,9 +114,15 @@ class IdentityAccess:
                 return self.store.append_provider_audit_once(
                     self.email.provider, event_id, audit
                 )
-            return self.store.append_provider_audit_once(
-                self.email.provider, event_id, None
+            audit = self._new_audit(
+                "provider.event_ignored.v1",
+                "observed",
+                "ignored",
+                correlation_id,
+                provider=self.email.provider,
+                provider_event_id=event_id,
             )
+            return self.store.append_provider_audit_once(self.email.provider, event_id, audit)
 
     def request_magic_link(self, *, email: str, origin_fingerprint: str, correlation_id: UUID, now: datetime) -> MagicLinkRequestResult:
         now = utc(now)
@@ -203,7 +219,7 @@ class IdentityAccess:
                 or actual_url.path != "/auth/capture"
             ):
                 raise IdentityError("auth.link_unavailable", status=503, recovery="retry_later")
-            acceptance = self.email.send_magic_link(attempt_id=attempt_id, normalized_email=email, capture_url=generated.capture_url, expires_at=generated.expires_at, idempotency_key=f"identity.magic-link/{attempt_id}", now=now)
+            acceptance = self.email.send_magic_link(attempt_id=attempt_id, normalized_email=email, capture_url=generated.capture_url, expires_at=generated.expires_at, idempotency_key=f"identity.magic-link/{attempt_id}", now=now, correlation_id=request.correlation_id)
         except IdentityError as exc:
             with self._transaction():
                 attempt = self.store.attempt(attempt_id)

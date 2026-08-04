@@ -22,7 +22,7 @@ class RecordingEmailAdapter:
         self.messages: list[dict[str, object]] = []
         self.fail_send = False
 
-    def send_magic_link(self, *, attempt_id: UUID, normalized_email: str, capture_url: str, expires_at: datetime, idempotency_key: str, now: datetime) -> EmailAcceptance:
+    def send_magic_link(self, *, attempt_id: UUID, normalized_email: str, capture_url: str, expires_at: datetime, idempotency_key: str, now: datetime, correlation_id: UUID | None = None) -> EmailAcceptance:
         if self.fail_send:
             raise IdentityError("auth.provider_unavailable", status=503, recovery="retry_later")
         if any(message["idempotency_key"] == idempotency_key for message in self.messages):
@@ -31,6 +31,7 @@ class RecordingEmailAdapter:
         message_id = f"mail-{len(self.messages) + 1}"
         self.messages.append({
             "attempt_id": attempt_id,
+            "correlation_id": correlation_id,
             "idempotency_key": idempotency_key,
             "message_id": message_id,
             "to": normalized_email,
