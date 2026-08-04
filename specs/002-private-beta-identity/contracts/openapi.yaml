@@ -1,0 +1,345 @@
+openapi: 3.1.0
+info:
+  title: Umbral Private Beta Identity Contract
+  version: 0.1.0
+  description: >
+    Planning contract for the private FastAPI identity surface. Browser callers
+    reach these operations only through the Umbral Next.js BFF.
+servers:
+  - url: https://api.internal.invalid
+    description: Private Product API placeholder
+tags:
+  - name: Authentication
+  - name: Email provider events
+
+paths:
+  /api/v1/auth/magic-link-requests:
+    post:
+      tags: [Authentication]
+      operationId: requestMagicLink
+      summary: Acknowledge a magic-link request without revealing eligibility
+      security:
+        - bffAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OriginFingerprint"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MagicLinkRequest"
+      responses:
+        "202":
+          description: >
+            Same response for eligible, ineligible, rate-limited, and
+            provider-independent acknowledgement paths.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NeutralAcknowledgement"
+        "400":
+          $ref: "#/components/responses/InvalidBffRequest"
+        "422":
+          $ref: "#/components/responses/InvalidInput"
+
+  /api/v1/auth/magic-link-confirmations:
+    post:
+      tags: [Authentication]
+      operationId: confirmMagicLink
+      summary: Verify a current link and create one Umbral product session
+      description: >
+        Called server-to-server after the user explicitly submits the clean
+        confirmation page. The token hash is write-only bearer material and
+        must never be logged, echoed, or persisted.
+      security:
+        - bffAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MagicLinkConfirmation"
+      responses:
+        "204":
+          description: Product session created
+          headers:
+            Set-Cookie:
+              description: >
+                Opaque product session cookie. Remote form is
+                __Host-umbral_session with Secure, HttpOnly, SameSite=Lax,
+                Path=/ and no Domain.
+              schema:
+                type: string
+        "403":
+          description: Definitive access denial without membership detail
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "410":
+          description: Link cannot be used; a new request is the safe recovery
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          $ref: "#/components/responses/InvalidInput"
+        "503":
+          description: Identity proof is temporarily unavailable; no session created
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/v1/auth/session:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentSession
+      summary: Resolve the current active principal
+      description: >
+        This is a protected operation and may reset the idle window when called
+        for an actual protected navigation. It must not be background-polled.
+      security:
+        - productSession: []
+          bffAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Current principal summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentSession"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logoutCurrentSession
+      summary: Revoke the current product session
+      description: Idempotent; an absent or already revoked session also returns 204.
+      security:
+        - bffAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      responses:
+        "204":
+          description: Session revoked or already absent
+          headers:
+            Set-Cookie:
+              description: Clears the product session cookie
+              schema:
+                type: string
+
+  /api/v1/integrations/email/resend-events:
+    post:
+      tags: [Email provider events]
+      operationId: receiveResendEvent
+      summary: Verify and ingest one raw Resend webhook
+      description: >
+        The public Next.js route forwards the exact raw body and signature
+        headers. FastAPI verifies before parsing, maps only allowlisted fields,
+        and discards the raw payload.
+      security:
+        - bffAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - name: svix-id
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+        - name: svix-timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 64
+        - name: svix-signature
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 512
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "204":
+          description: Valid event accepted or duplicate already processed
+        "400":
+          description: Invalid event shape
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Invalid signature or stale timestamp
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+components:
+  securitySchemes:
+    bffAuth:
+      type: apiKey
+      in: header
+      name: X-Umbral-BFF-Token
+      description: Environment-specific secret present only on web server and API
+    productSession:
+      type: apiKey
+      in: cookie
+      name: __Host-umbral_session
+      description: Opaque product session; local HTTP uses a different configured name
+
+  parameters:
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OriginFingerprint:
+      name: X-Umbral-Origin-Fingerprint
+      in: header
+      required: true
+      description: >
+        Environment-scoped HMAC fingerprint produced by the trusted web BFF;
+        never a raw address or user-supplied forwarding header.
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9_-]{43}$"
+
+  schemas:
+    MagicLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 3
+          maxLength: 320
+
+    NeutralAcknowledgement:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message:
+          type: string
+          const: >
+            Si la dirección está habilitada, recibirás un enlace para continuar.
+
+    MagicLinkConfirmation:
+      type: object
+      additionalProperties: false
+      required: [attempt_id, token_hash]
+      properties:
+        attempt_id:
+          type: string
+          format: uuid
+        token_hash:
+          type: string
+          minLength: 32
+          maxLength: 512
+          writeOnly: true
+
+    CurrentSession:
+      type: object
+      additionalProperties: false
+      required: [user_id, roles, last_activity_at]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [user, operator, administrator]
+        last_activity_at:
+          type: string
+          format: date-time
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+        - code
+        - recovery
+        - request_id
+        - correlation_id
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+          maxLength: 200
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          maxLength: 500
+          description: Sanitized stable explanation that never echoes input
+        instance:
+          type: string
+          description: Route template or opaque request reference; no query string
+        code:
+          type: string
+          enum:
+            - auth.link_unavailable
+            - auth.access_denied
+            - auth.provider_unavailable
+            - auth.session_required
+            - auth.request_invalid
+            - auth.webhook_invalid
+        recovery:
+          type: string
+          enum: [request_new_link, sign_in, contact_support, retry_later, none]
+        request_id:
+          type: string
+          format: uuid
+        correlation_id:
+          type: string
+          format: uuid
+
+  responses:
+    InvalidBffRequest:
+      description: Missing or invalid trusted BFF metadata
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InvalidInput:
+      description: Structurally invalid input; no eligibility information
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthenticated:
+      description: Missing, revoked, disabled, or idle-expired product session
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
