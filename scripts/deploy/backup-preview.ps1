@@ -44,8 +44,10 @@ try {
     $env:AWS_SECRET_ACCESS_KEY = $env:OBJECT_STORE_SECRET_KEY
     $env:AWS_EC2_METADATA_DISABLED = "true"
 
-    & pg_dump --format=custom --file $temporaryDump $env:DATABASE_URL 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $temporaryDump)) { throw "Database backup failed." }
+    $pgDumpError = (& pg_dump --format=custom --file $temporaryDump $env:DATABASE_URL 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $temporaryDump)) {
+        throw ("Database backup failed: {0}" -f $pgDumpError)
+    }
 
     $dumpHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $temporaryDump).Hash.ToLowerInvariant()
     $dumpSize = (Get-Item -LiteralPath $temporaryDump).Length
