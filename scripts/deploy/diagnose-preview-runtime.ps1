@@ -133,7 +133,7 @@ function Invoke-RailwayRunDiagnostic {
     try {
         $scriptPath = Join-Path ([System.IO.Path]::GetTempPath()) "umbral-api-run-diagnostic.py"
         [System.IO.File]::WriteAllText($scriptPath, $apiRunCode, [Text.UTF8Encoding]::new($false))
-        & npx @railway/cli@5.27.2 run -e preview -- $PythonExecutable $scriptPath
+        & npx @railway/cli@5.27.2 run -e preview --service api -- $PythonExecutable $scriptPath
         Write-Host "railway run api boot exit $LASTEXITCODE"
     } catch {
         Write-Host ("railway run api boot failed: {0}" -f $_.Exception.Message)
