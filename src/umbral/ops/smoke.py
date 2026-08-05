@@ -228,6 +228,17 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         self.relay_pending(correlation_id)
         try:
             while True:
+                issued_id = self._issued_message_id(correlation_id)
+                if issued_id is not None:
+                    detail = self._resend_json(
+                        "GET", f"/emails/{issued_id}", None, deadline
+                    )
+                    capture_url = _capture_url_from_resend_detail(detail)
+                    if capture_url:
+                        self._event_correlations[issued_id] = correlation_id
+                        return ObservedPreviewMessage(
+                            issued_id, capture_url, correlation_id
+                        )
                 listing = self._resend_json("GET", "/emails", None, deadline)
                 messages = listing.get("data")
                 if isinstance(messages, list):
@@ -295,9 +306,57 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 file=sys.stderr,
             )
             self._print_rq_job_state(outbox)
+            self._print_resend_listing()
         except Exception as error:
             print(
                 f"SMOKE RESEND attempt query failed: {type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+
+    def _issued_message_id(self, correlation_id: UUID) -> str | None:
+        import psycopg
+
+        try:
+            with psycopg.connect(self._database_url, connect_timeout=5) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT a.provider_message_id "
+                        "FROM magic_link_attempts a "
+                        "JOIN magic_link_requests r ON r.id = a.request_id "
+                        "WHERE r.correlation_id = %s AND a.state = 'issued' "
+                        "AND a.provider_message_id IS NOT NULL",
+                        (str(correlation_id),),
+                    )
+                    row = cursor.fetchone()
+            if row and row[0]:
+                return str(row[0])
+        except Exception:
+            return None
+        return None
+
+    def _print_resend_listing(self) -> None:
+        fresh_deadline = monotonic() + 15
+        try:
+            listing = self._resend_json("GET", "/emails", None, fresh_deadline)
+            messages = listing.get("data")
+            if isinstance(messages, list):
+                for item in messages[:5]:
+                    if isinstance(item, Mapping):
+                        print(
+                            f"SMOKE RESEND listing item id={item.get('id')!r} "
+                            f"created_at={item.get('created_at')!r} "
+                            f"tags={item.get('tags')!r} has_to={bool(item.get('to'))}",
+                            file=sys.stderr,
+                        )
+            else:
+                print(
+                    f"SMOKE RESEND listing diagnostic data={type(messages).__name__}",
+                    file=sys.stderr,
+                )
+        except Exception as error:
+            print(
+                f"SMOKE RESEND listing diagnostic failed: "
+                f"{type(error).__name__}: {error}",
                 file=sys.stderr,
             )
 
