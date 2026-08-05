@@ -382,10 +382,22 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                     file=sys.stderr,
                 )
             else:
+                import re as _re
+
+                def _mask(value: object) -> str | None:
+                    if not isinstance(value, str):
+                        return None
+                    return _re.sub(
+                        r"(token_hash|attempt_id)=[^\"'&<>\s]+",
+                        r"\1=***",
+                        value[:500],
+                    )
+
                 print(
                     f"SMOKE RESEND issued detail: no capture url "
                     f"html_len={len(html) if isinstance(html, str) else None} "
-                    f"text_len={len(text) if isinstance(text, str) else None}",
+                    f"text_len={len(text) if isinstance(text, str) else None} "
+                    f"html={_mask(html)!r} text={_mask(text)!r}",
                     file=sys.stderr,
                 )
         except Exception as error:
