@@ -73,16 +73,21 @@ correo. El manifiesto de release se entrega a las imágenes como JSON inline
 
 ## Paso 3: release y promote
 
-1. Desde el worktree con el incremento consolidado:
-   `git tag v0.2.1 54ed040` y `git push origin v0.2.1`.
-2. Verificar la corrida `release` en Acciones: login GHCR con `GHCR_DEPLOY_TOKEN`,
+1. Llevar el incremento a la rama por defecto (`main`), porque el `promote`
+   (workflow_dispatch) se lee desde `main` y su checkout descarga los scripts de
+   ahí:
+   `git checkout main; git merge --ff-only <rama>` y `git push origin main`.
+2. Taggear el commit más reciente de `main` que contiene el fix del manifest
+   inline (hoy `87f8167`):
+   `git tag v0.2.1 87f8167` y `git push origin v0.2.1`.
+3. Verificar la corrida `release` en Acciones: login GHCR con `GHCR_DEPLOY_TOKEN`,
    build de web/runtime `linux/amd64`, escribir `release-manifest.json` + `.sha256`
    y publicar el artifact `release-manifest-<sha>`.
-3. Disparar `promote` (workflow_dispatch) con:
+4. Disparar `promote` (workflow_dispatch) con:
    - `manifest`: nombre del artifact (`release-manifest-<sha>`);
    - `release_run_id`: run ID de la corrida release;
    - `environment`: `preview`.
-4. Orden del promote: verify-access → validate-railway-config → backup →
+5. Orden del promote: verify-access → validate-railway-config → backup →
    migrate (Alembic) → check-dependencies → set-railway-images (fija imagen y
    las `UMBRAL_RELEASE_*` por servicio) → wait-railway-services →
    preload de invitación → smoke de 15 escenarios. El smoke cierra SC-001.
