@@ -35,8 +35,13 @@ if ($Mode -eq "preview") {
     if ($origin.Scheme -ne "https" -or -not $origin.Host -or $origin.AbsolutePath -notin @("", "/") -or $origin.Query) {
         throw "Preview smoke requires one public HTTPS web origin."
     }
-    $previewSmoke = & $PythonExecutable -m umbral.ops.smoke preview --base-url $BaseUrl --manifest-path $manifestFullPath | ConvertFrom-Json
-    if ($LASTEXITCODE -ne 0 -or -not $previewSmoke.passed) { throw "Preview identity smoke failed." }
+    $previewSmokeRaw = & $PythonExecutable -m umbral.ops.smoke preview --base-url $BaseUrl --manifest-path $manifestFullPath 2>&1
+    $previewSmokeExit = $LASTEXITCODE
+    if ($previewSmokeExit -ne 0) {
+        throw ("Preview identity smoke failed (exit {0}): {1}" -f $previewSmokeExit, ($previewSmokeRaw -join "`n"))
+    }
+    $previewSmoke = $previewSmokeRaw | ConvertFrom-Json
+    if (-not $previewSmoke.passed) { throw "Preview identity smoke failed: $previewSmokeRaw" }
     if (@($previewSmoke.PSObject.Properties.Name).Count -ne 2 -or @($previewSmoke.PSObject.Properties.Name | Where-Object { $_ -notin @("passed", "checks") }).Count -ne 0 -or $previewSmoke.passed -isnot [bool]) { throw "Preview smoke result schema is invalid." }
     $requiredScenarios = @("runtime_identity", "invitation", "invited", "scanner_prefetch", "explicit_confirmation", "single_use", "repeat", "non_invited", "authorization", "logout", "idle_expiry", "delivered", "bounced", "complained", "redaction")
     $checks = @($previewSmoke.checks)
