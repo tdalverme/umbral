@@ -5,6 +5,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# The promote job sets runner-only variables (release metadata, smoke fixtures,
+# preview URL) that Settings validation would reject as unknown. Drop them so the
+# diagnostics reproduce the deployed service environment instead of the runner's.
+Get-ChildItem Env: | Where-Object {
+    $_.Name -eq "UMBRAL_MANIFEST_DATABASE_REVISION" -or
+    $_.Name -eq "UMBRAL_PREVIEW_BASE_URL" -or
+    $_.Name -like "UMBRAL_SMOKE_*"
+} | Remove-Item
+
 # Reproduce the scheduler service boot and the api runtime composition on the
 # promote runner (which carries the preview secrets) so failures surface with a
 # full traceback instead of the swallowed "scheduler-once failed" line.
