@@ -99,7 +99,25 @@ jobs:
           $env:UMBRAL_SMOKE_INVITATION_ID = [string]$preload.invitation_id
           # Run the scheduler once inside its deployed env so the scheduler
           # surface heartbeat and any pending outbox relay are fresh for the
-          # smoke regardless of the cron cadence or reused deployments.
-          $null = & npx @railway/cli@5.27.2 run -e preview --service scheduler -- $pythonExecutable -m umbral.workers scheduler-once
+          # smoke regardless of the cron cadence or reused deployments. Run the
+          # composition directly so a broken scheduler env surfaces its traceback.
+          $schedulerRun = @'
+from umbral.workers.composition import build_process_dependencies
+from umbral.workers.scheduler import DEFAULT_DUE_WORK_LIMIT, scheduler_once
+deps = build_process_dependencies()
+writer = getattr(deps, "heartbeat_writer", None)
+if writer is not None:
+    writer.observe("scheduler", state="ready", checks={"runtime_process": "ready"})
+summary = scheduler_once(
+    deps.runtime,
+    queue=deps.queue,
+    identity_store=deps.identity_store,
+    limit=DEFAULT_DUE_WORK_LIMIT,
+)
+print("scheduler-once summary:", summary)
+'@
+          $schedulerScript = Join-Path $env:RUNNER_TEMP "umbral-scheduler-run.py"
+          [System.IO.File]::WriteAllText($schedulerScript, $schedulerRun, [Text.UTF8Encoding]::new($false))
+          $null = & npx @railway/cli@5.27.2 run -e preview --service scheduler -- $pythonExecutable $schedulerScript
           if ($LASTEXITCODE -ne 0) { throw "Preview scheduler-once pass failed (exit $LASTEXITCODE)." }
           $null = ./scripts/deploy/smoke.ps1 -Mode preview -BaseUrl $env:UMBRAL_PREVIEW_BASE_URL -ManifestPath $manifest.FullName -PythonExecutable $pythonExecutable
