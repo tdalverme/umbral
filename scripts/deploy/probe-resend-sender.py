@@ -8,8 +8,8 @@ promote log instead of a generic provider_unavailable attempt failure.
 import os
 from uuid import uuid4
 
-from umbral.workers.composition import build_process_dependencies
 from umbral.infrastructure.identity.registry import _resend_sender
+from umbral.workers.composition import build_process_dependencies
 
 # railway run merges the promote runner's environment with the service
 # variables; drop the runner-only release/smoke inputs that Settings would
