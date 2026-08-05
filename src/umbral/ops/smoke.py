@@ -321,9 +321,10 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             if job is None:
                 print(f"SMOKE RQ job {job_id} absent (outbox={outbox_state})", file=sys.stderr)
             else:
+                exc = job.exc_info
                 print(
                     f"SMOKE RQ job {job_id} status={job.get_status()} "
-                    f"result={job.result!r}",
+                    f"result={job.result!r} exc={exc!r}",
                     file=sys.stderr,
                 )
 

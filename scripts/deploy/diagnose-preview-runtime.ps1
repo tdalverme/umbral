@@ -276,6 +276,17 @@ function Dump-PrivateApiUrlConfiguration {
     }
     # Redis endpoint shape per service (password masked) so a queue split
     # between the api/worker and the smoke relay is visible in the log.
+    $runnerRedis = [string]$env:REDIS_URL
+    if (-not [string]::IsNullOrWhiteSpace($runnerRedis)) {
+        try {
+            $runnerShape = & sh -c 'v="$1"; case "$v" in rediss://*) s="rediss";; *) s="redis";; esac; printf "%s://%s" "$s" "${v##*@}"' _ $runnerRedis 2>&1
+            Write-Host ("runner REDIS_URL shape = {0}" -f ($runnerShape -join " "))
+        } catch {
+            Write-Host ("runner REDIS_URL shape query failed: {0}" -f $_.Exception.Message)
+        }
+    } else {
+        Write-Host "runner REDIS_URL <empty>"
+    }
     $shellCommand = 'v="$REDIS_URL"; case "$v" in rediss://*) s="rediss";; *) s="redis";; esac; printf "%s://%s" "$s" "${v##*@}"'
     foreach ($service in @("api", "worker")) {
         try {
