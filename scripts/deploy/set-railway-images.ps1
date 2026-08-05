@@ -18,15 +18,15 @@ function Require-AllowedProperties($Value, [string[]]$Required, [string[]]$Allow
     Require-Condition (@($Required | Where-Object { $_ -notin $properties }).Count -eq 0) $Message
 }
 
-function Get-DeploymentId($Value) {
-    if ($Value -isnot [pscustomobject]) { return $null }
-    $properties = @($Value.PSObject.Properties.Name)
-    if ($properties.Count -ne 1 -or $properties[0] -notin @("deploymentId", "deployment_id")) {
-        return $null
+function Get-RailwayDeploymentIds([string]$Service, [string]$Environment) {
+    $raw = & npx @railway/cli@5.27.2 deployment list -e $Environment --service $Service --json
+    if ($LASTEXITCODE -ne 0) { throw ("Railway deployment query failed for {0}." -f $Service) }
+    if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
+    $ids = @()
+    foreach ($deployment in ($raw | ConvertFrom-Json)) {
+        $ids += [string]$deployment.id
     }
-    $deploymentId = [string]$Value.($properties[0])
-    if ([string]::IsNullOrWhiteSpace($deploymentId)) { return $null }
-    return $deploymentId
+    return $ids
 }
 
 if ([string]::IsNullOrWhiteSpace($env:RAILWAY_TOKEN) -and [string]::IsNullOrWhiteSpace($env:RAILWAY_API_TOKEN)) {
@@ -39,7 +39,7 @@ $actualChecksum = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestFullPath
 Require-Condition ($ManifestSha256 -match "^[0-9a-f]{64}$") "Manifest checksum must be a lowercase sha256 value."
 Require-Condition ($actualChecksum -eq $ManifestSha256) "Release manifest checksum does not match."
 
-$manifestJson = Get-Content -Raw -LiteralPath $manifestFullPath
+$manifestJson = [string](Get-Content -Raw -LiteralPath $manifestFullPath)
 $manifest = $manifestJson | ConvertFrom-Json
 $rootProperties = @($manifest.PSObject.Properties.Name | Sort-Object)
 $expectedRootProperties = @("artifacts", "built_at", "config_schema_version", "contract_major", "database_revision", "git_sha", "release_id", "schema_version")
@@ -71,24 +71,60 @@ $serviceArtifacts = [ordered]@{
     worker = "runtime"
     scheduler = "runtime"
 }
-$deploymentIds = [ordered]@{}
+
+$patch = [ordered]@{ services = [ordered]@{} }
 foreach ($service in $serviceArtifacts.Keys) {
     $artifact = $manifest.artifacts.($serviceArtifacts[$service])
     $imageReference = "{0}@{1}" -f $artifact.image, $artifact.digest
-    $response = & npx @railway/cli@5.27.2 environment edit -e $Environment `
-        --service-config $service source.image $imageReference `
-        --service-config $service variables.UMBRAL_RELEASE_ID.value $manifest.release_id `
-        --service-config $service variables.UMBRAL_RELEASE_DIGEST.value $artifact.digest `
-        --service-config $service variables.UMBRAL_RELEASE_MANIFEST.value $manifestJson `
-        -m $manifest.release_id --json
-    if ($LASTEXITCODE -ne 0) { throw ("Railway image update failed for {0}." -f $service) }
-    $deploymentId = Get-DeploymentId ($response | ConvertFrom-Json)
+    $patch.services[$service] = [ordered]@{
+        source = [ordered]@{ image = $imageReference }
+        variables = [ordered]@{
+            UMBRAL_RELEASE_ID = [ordered]@{ value = $manifest.release_id }
+            UMBRAL_RELEASE_DIGEST = [ordered]@{ value = $artifact.digest }
+            UMBRAL_RELEASE_MANIFEST = [ordered]@{ value = $manifestJson }
+        }
+    }
+}
+$patchJson = $patch | ConvertTo-Json -Depth 6
+
+$knownDeployments = @{}
+foreach ($service in $serviceArtifacts.Keys) {
+    $knownDeployments[$service] = @(Get-RailwayDeploymentIds -Service $service -Environment $Environment)
+}
+
+# The CLI ignores --service-config flags when stdin is not a terminal (CI),
+# so the config patch is piped as stdin JSON and --json emits the result.
+$response = $patchJson | & npx @railway/cli@5.27.2 environment edit -e $Environment -m $manifest.release_id --json
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Railway CLI response:"
+    Write-Host ($response | Out-String)
+    throw "Railway environment update failed."
+}
+$editResult = $response | ConvertFrom-Json
+if ($editResult.committed -ne $true) {
+    Write-Host "Railway CLI response:"
+    Write-Host ($response | Out-String)
+    throw "Railway environment update did not commit."
+}
+
+$deploymentIds = [ordered]@{}
+foreach ($service in $serviceArtifacts.Keys) {
+    $deadline = [DateTime]::UtcNow.AddSeconds(120)
+    $deploymentId = $null
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $ids = @(Get-RailwayDeploymentIds -Service $service -Environment $Environment)
+        $known = @($knownDeployments[$service])
+        foreach ($id in $ids) {
+            if ($known -notcontains $id) { $deploymentId = $id; break }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($deploymentId)) { break }
+        Start-Sleep -Seconds 10
+    }
     if ([string]::IsNullOrWhiteSpace($deploymentId)) {
-        Write-Host "Railway CLI response for ${service}:"
-        Write-Host ($response | Out-String)
-        throw ("Railway returned an ambiguous deployment ID for {0}." -f $service)
+        throw ("Railway did not create a new deployment for {0} after applying the image change." -f $service)
     }
     $deploymentIds[$service] = $deploymentId
+    Write-Host "New deployment for ${service}: $deploymentId"
 }
 
 [ordered]@{

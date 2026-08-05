@@ -20,16 +20,24 @@ $pending = [System.Collections.Generic.HashSet[string]]::new([string[]]$services
 while ($pending.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline) {
     foreach ($service in @($pending)) {
         $expectedId = [string]$deploymentIds.$service
-        $deployments = & npx @railway/cli@5.27.2 deployment list -e $Environment --service $service --json
+        $raw = & npx @railway/cli@5.27.2 deployment list -e $Environment --service $service --json
         if ($LASTEXITCODE -ne 0) { throw ("Railway deployment query failed for {0}." -f $service) }
-        $deployment = @($deployments | ConvertFrom-Json | Where-Object { $_.id -eq $expectedId }) | Select-Object -First 1
-        if ($null -eq $deployment) { continue }
-        if ($deployment.status -eq "SUCCESS") {
+        if ([string]::IsNullOrWhiteSpace($raw)) { continue }
+        $ids = @()
+        $statuses = @()
+        foreach ($deployment in ($raw | ConvertFrom-Json)) {
+            $ids += [string]$deployment.id
+            $statuses += [string]$deployment.status
+        }
+        $deploymentIndex = [Array]::IndexOf($ids, $expectedId)
+        if ($deploymentIndex -lt 0) { continue }
+        $deploymentStatus = $statuses[$deploymentIndex]
+        if ($deploymentStatus -eq "SUCCESS") {
             [void]$pending.Remove($service)
             continue
         }
-        if ($deployment.status -in @("FAILED", "CRASHED", "REMOVED", "SKIPPED", "CANCELED", "CANCELLED", "ERROR")) {
-            throw ("Railway deployment {0} for {1} finished with {2}." -f $expectedId, $service, $deployment.status)
+        if ($deploymentStatus -in @("FAILED", "CRASHED", "REMOVED", "SKIPPED", "CANCELED", "CANCELLED", "ERROR")) {
+            throw ("Railway deployment {0} for {1} finished with {2}." -f $expectedId, $service, $deploymentStatus)
         }
     }
     if ($pending.Count -gt 0) { Start-Sleep -Seconds $PollSeconds }
