@@ -134,15 +134,14 @@ function Dump-LiveApiServiceConfig {
             return
         }
         Write-Host ("api service properties: {0}" -f (@($apiConfig.PSObject.Properties.Name) -join ", "))
+        Write-Host "--- source ---"
+        Write-Host ($apiConfig.source | ConvertTo-Json -Depth 5 -Compress)
+        Write-Host "--- deploy ---"
+        Write-Host ($apiConfig.deploy | ConvertTo-Json -Depth 10 -Compress)
         if ($null -ne $apiConfig.variables) {
-            foreach ($variable in @($apiConfig.variables.PSObject.Properties)) {
-                $value = $variable.Value
-                if ($null -ne $value -and $value.PSObject.Properties.Name -contains "value") {
-                    $value.value = "***"
-                }
-            }
+            Write-Host ("--- variable names ({0}) ---" -f @($apiConfig.variables.PSObject.Properties.Name).Count)
+            Write-Host (@($apiConfig.variables.PSObject.Properties.Name | Sort-Object) -join ", ")
         }
-        $apiConfig | ConvertTo-Json -Depth 10
     } catch {
         Write-Host ("live api service config dump failed: {0}" -f $_.Exception.Message)
     }
