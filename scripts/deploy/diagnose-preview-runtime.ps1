@@ -28,6 +28,14 @@ deps = build_runtime_dependencies()
 print("api runtime composition boot OK; release_id:", deps.release.release_id)
 '@
 
+$workerCode = @'
+from umbral.workers.composition import build_process_dependencies
+from umbral.workers.worker import build_rq_worker
+deps = build_process_dependencies()
+worker = build_rq_worker(deps.queue)
+print("worker composition boot OK; worker:", type(worker).__name__)
+'@
+
 function Invoke-Diagnostic([string]$Label, [string]$Code) {
     Write-Host ""
     Write-Host "=== $Label ==="
@@ -40,5 +48,6 @@ function Invoke-Diagnostic([string]$Label, [string]$Code) {
 }
 
 Invoke-Diagnostic "scheduler-once (composition + one pass)" $schedulerCode
+Invoke-Diagnostic "worker composition boot" $workerCode
 Invoke-Diagnostic "api runtime composition boot" $apiCode
 exit 0

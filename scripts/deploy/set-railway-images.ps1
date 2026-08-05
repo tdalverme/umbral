@@ -105,34 +105,55 @@ if (-not [string]::IsNullOrWhiteSpace($otlpHeadersValue)) {
     $observabilityVars.OTEL_EXPORTER_OTLP_HEADERS = $otlpHeadersValue
 }
 
-# If the environment already pins this release, reuse the current deployment IDs
-# and skip the (now idempotent) patch to avoid a no-op commit that yields no
-# new deployment.
+# Compare every app service against its target spec so only the services that
+# actually diverge are patched. This keeps the promote idempotent (no-op when
+# everything is already pinned) while still producing fresh deployments for the
+# services that changed and reusing the current deployment IDs for the rest.
+$currentConfig = $null
 $currentConfigRaw = & npx @railway/cli@5.27.2 environment config -e $Environment --json
-$alreadyAtTarget = $false
 if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($currentConfigRaw)) {
     $currentConfig = $currentConfigRaw | ConvertFrom-Json
-    $alreadyAtTarget = $true
-    foreach ($service in $serviceArtifacts.Keys) {
-        $artifact = $manifest.artifacts.($serviceArtifacts[$service])
-        $imageReference = "{0}@{1}" -f $artifact.image, $artifact.digest
-        $svcConfig = $currentConfig.services.($serviceIdByName[$service])
-        if ($null -eq $svcConfig -or $null -eq $svcConfig.source -or $null -eq $svcConfig.source.image -or [string]$svcConfig.source.image -ne $imageReference) { $alreadyAtTarget = $false; break }
-        if ([string]$svcConfig.variables.UMBRAL_RELEASE_ID.value -ne [string]$manifest.release_id -or [string]$svcConfig.variables.UMBRAL_RELEASE_DIGEST.value -ne [string]$artifact.digest) { $alreadyAtTarget = $false; break }
-        $storedManifest = $null
-        try { $storedManifest = [string]$svcConfig.variables.UMBRAL_RELEASE_MANIFEST.value | ConvertFrom-Json } catch { $alreadyAtTarget = $false; break }
-        if ($null -eq $storedManifest -or [string]$storedManifest.release_id -ne [string]$manifest.release_id -or [string]$storedManifest.git_sha -ne [string]$manifest.git_sha) { $alreadyAtTarget = $false; break }
-        foreach ($key in $observabilityVars.Keys) {
-            if ([string]$svcConfig.variables.$key.value -ne [string]$observabilityVars[$key]) { $alreadyAtTarget = $false; break }
-        }
-        if ($serviceExtraVars.ContainsKey($service)) {
-            foreach ($key in $serviceExtraVars[$service].Keys) {
-                if ([string]$svcConfig.variables.$key.value -ne [string]$serviceExtraVars[$service][$key]) { $alreadyAtTarget = $false; break }
-            }
+}
+
+function Test-ServiceAtTarget {
+    param(
+        [Parameter(Mandatory = $true)] [string]$Service,
+        [Parameter(Mandatory = $true)] $Manifest,
+        [Parameter(Mandatory = $true)] $ServiceArtifacts,
+        [AllowNull()] $SvcConfig,
+        [Parameter(Mandatory = $true)] $ObservabilityVars,
+        [Parameter(Mandatory = $true)] $ServiceExtraVars
+    )
+    if ($null -eq $SvcConfig) { return $false }
+    $artifact = $Manifest.artifacts.($ServiceArtifacts[$Service])
+    $imageReference = "{0}@{1}" -f $artifact.image, $artifact.digest
+    if ($null -eq $SvcConfig.source -or $null -eq $SvcConfig.source.image -or [string]$SvcConfig.source.image -ne $imageReference) { return $false }
+    if ([string]$SvcConfig.variables.UMBRAL_RELEASE_ID.value -ne [string]$Manifest.release_id -or [string]$SvcConfig.variables.UMBRAL_RELEASE_DIGEST.value -ne [string]$artifact.digest) { return $false }
+    $storedManifest = $null
+    try { $storedManifest = [string]$SvcConfig.variables.UMBRAL_RELEASE_MANIFEST.value | ConvertFrom-Json } catch { return $false }
+    if ($null -eq $storedManifest -or [string]$storedManifest.release_id -ne [string]$Manifest.release_id -or [string]$storedManifest.git_sha -ne [string]$Manifest.git_sha) { return $false }
+    foreach ($key in $ObservabilityVars.Keys) {
+        if ([string]$SvcConfig.variables.$key.value -ne [string]$ObservabilityVars[$key]) { return $false }
+    }
+    if ($ServiceExtraVars.ContainsKey($Service)) {
+        foreach ($key in $ServiceExtraVars[$Service].Keys) {
+            if ([string]$SvcConfig.variables.$key.value -ne [string]$ServiceExtraVars[$Service][$key]) { return $false }
         }
     }
+    return $true
 }
-if ($alreadyAtTarget) {
+
+$serviceNeedsPatch = @{}
+foreach ($service in $serviceArtifacts.Keys) {
+    $svcConfig = $null
+    if ($null -ne $currentConfig) {
+        $svcConfig = $currentConfig.services.($serviceIdByName[$service])
+    }
+    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ServiceExtraVars $serviceExtraVars)
+}
+
+$servicesToPatch = @($serviceArtifacts.Keys | Where-Object { $serviceNeedsPatch[$_] })
+if ($servicesToPatch.Count -eq 0) {
     Write-Host "Environment already pinned to $($manifest.release_id); reusing current deployments."
     $currentDeploymentIds = [ordered]@{}
     foreach ($service in $serviceArtifacts.Keys) {
@@ -147,7 +168,7 @@ if ($alreadyAtTarget) {
 }
 
 $patch = [ordered]@{ services = [ordered]@{} }
-foreach ($service in $serviceArtifacts.Keys) {
+foreach ($service in $servicesToPatch) {
     $artifact = $manifest.artifacts.($serviceArtifacts[$service])
     $imageReference = "{0}@{1}" -f $artifact.image, $artifact.digest
     $serviceVariables = [ordered]@{
@@ -173,7 +194,7 @@ foreach ($service in $serviceArtifacts.Keys) {
 $patchJson = $patch | ConvertTo-Json -Depth 6
 
 $knownDeployments = @{}
-foreach ($service in $serviceArtifacts.Keys) {
+foreach ($service in $servicesToPatch) {
     $knownDeployments[$service] = @(Get-RailwayDeploymentIds -Service $service -Environment $Environment)
 }
 
@@ -194,6 +215,11 @@ if ($editResult.committed -ne $true) {
 
 $deploymentIds = [ordered]@{}
 foreach ($service in $serviceArtifacts.Keys) {
+    if (-not $serviceNeedsPatch[$service]) {
+        $deploymentIds[$service] = [string]$statusByName[$service].deploymentId
+        Write-Host "Reusing deployment for ${service}: $($deploymentIds[$service])"
+        continue
+    }
     $deadline = [DateTime]::UtcNow.AddSeconds(120)
     $deploymentId = $null
     while ([DateTime]::UtcNow -lt $deadline) {
