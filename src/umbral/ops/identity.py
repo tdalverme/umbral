@@ -87,8 +87,18 @@ def main(
     values = os.environ if environ is None else environ
     email = values.get(args.email_env, "")
     database_url = values.get(args.database_url_env, "")
-    if not email or not database_url:
-        raise ValueError("operator environment input is unavailable")
+    missing = [
+        name
+        for name, value in (
+            (args.email_env, email),
+            (args.database_url_env, database_url),
+        )
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            f"operator environment input is unavailable: {','.join(missing)}"
+        )
     invitation_id = (preload_invitation or _preload_with_database)(email, database_url)
     print(
         json.dumps(

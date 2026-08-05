@@ -81,6 +81,7 @@ print("api app module import OK; title:", app.title)
 # reconstruction. Best-effort: a failure here indicates the deployed env itself.
 $apiRunCode = @'
 import subprocess
+import sys
 import time
 import urllib.request
 
@@ -88,6 +89,8 @@ from umbral.api.main import app  # noqa: F401
 
 proc = subprocess.Popen(
     [
+        sys.executable,
+        "-m",
         "uvicorn",
         "umbral.api.main:app",
         "--host",
