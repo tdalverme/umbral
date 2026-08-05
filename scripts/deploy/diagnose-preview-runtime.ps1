@@ -10,12 +10,19 @@ $ErrorActionPreference = "Stop"
 # fixtures, preview URL) that Settings validation would reject as unknown and
 # lacks the static preview service variables. Drop the former and set the latter
 # so the diagnostics reproduce the deployed service environment, backed by the
-# runner's reachable resource URLs for real scheduler/worker passes.
-Get-ChildItem Env: | Where-Object {
+# runner's reachable resource URLs for real scheduler/worker passes. This script
+# runs in the same PowerShell process as the promote step, so the removed
+# runner-only variables are restored afterwards for the preload and smoke steps.
+$savedRunnerOnlyEnv = @{}
+foreach ($name in @(Get-ChildItem Env: | Where-Object {
     $_.Name -eq "UMBRAL_MANIFEST_DATABASE_REVISION" -or
     $_.Name -eq "UMBRAL_PREVIEW_BASE_URL" -or
     $_.Name -like "UMBRAL_SMOKE_*"
-} | Remove-Item
+} | ForEach-Object { $_.Name })) {
+    $value = [Environment]::GetEnvironmentVariable($name)
+    if ($null -ne $value) { $savedRunnerOnlyEnv[$name] = $value }
+    Remove-Item ("Env:" + $name) -ErrorAction SilentlyContinue
+}
 
 $manifest = Get-Content -Raw -LiteralPath $ManifestPath | ConvertFrom-Json
 $manifestJson = [string](Get-Content -Raw -LiteralPath $ManifestPath)
@@ -204,10 +211,16 @@ function Dump-LiveApiServiceConfig {
     }
 }
 
-Invoke-Diagnostic "scheduler-once (composition + one pass)" $schedulerCode
-Invoke-Diagnostic "worker composition boot" $workerCode
-Invoke-Diagnostic "api runtime composition boot" $apiCode
-Invoke-Diagnostic "api app module import (uvicorn path)" $apiAppCode
-Invoke-RailwayRunDiagnostic
-Dump-LiveApiServiceConfig
+try {
+    Invoke-Diagnostic "scheduler-once (composition + one pass)" $schedulerCode
+    Invoke-Diagnostic "worker composition boot" $workerCode
+    Invoke-Diagnostic "api runtime composition boot" $apiCode
+    Invoke-Diagnostic "api app module import (uvicorn path)" $apiAppCode
+    Invoke-RailwayRunDiagnostic
+    Dump-LiveApiServiceConfig
+} finally {
+    foreach ($entry in $savedRunnerOnlyEnv.GetEnumerator()) {
+        [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
+    }
+}
 exit 0
