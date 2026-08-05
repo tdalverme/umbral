@@ -105,6 +105,21 @@ if (-not [string]::IsNullOrWhiteSpace($otlpHeadersValue)) {
     $observabilityVars.OTEL_EXPORTER_OTLP_HEADERS = $otlpHeadersValue
 }
 
+# The api runtime builds its S3 object store at composition time, so the deployed
+# services need the object store variables sourced from the promote runner's
+# secrets (same pattern as observability) to stay bootable.
+$objectStoreVars = [ordered]@{
+    OBJECT_STORE_BACKEND = [string][Environment]::GetEnvironmentVariable("OBJECT_STORE_BACKEND")
+}
+if ([string]::IsNullOrWhiteSpace($objectStoreVars.OBJECT_STORE_BACKEND)) {
+    $objectStoreVars.OBJECT_STORE_BACKEND = "s3"
+}
+foreach ($key in @("OBJECT_STORE_BUCKET", "OBJECT_STORE_ENDPOINT_URL", "OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY")) {
+    $value = [Environment]::GetEnvironmentVariable($key)
+    Require-Condition (-not [string]::IsNullOrWhiteSpace([string]$value)) "Missing ${key} environment value for Railway service variables."
+    $objectStoreVars[$key] = [string]$value
+}
+
 # Compare every app service against its target spec so only the services that
 # actually diverge are patched. This keeps the promote idempotent (no-op when
 # everything is already pinned) while still producing fresh deployments for the
@@ -122,6 +137,7 @@ function Test-ServiceAtTarget {
         [Parameter(Mandatory = $true)] $ServiceArtifacts,
         [AllowNull()] $SvcConfig,
         [Parameter(Mandatory = $true)] $ObservabilityVars,
+        [Parameter(Mandatory = $true)] $ObjectStoreVars,
         [Parameter(Mandatory = $true)] $ServiceExtraVars
     )
     if ($null -eq $SvcConfig) { return $false }
@@ -134,6 +150,9 @@ function Test-ServiceAtTarget {
     if ($null -eq $storedManifest -or [string]$storedManifest.release_id -ne [string]$Manifest.release_id -or [string]$storedManifest.git_sha -ne [string]$Manifest.git_sha) { return $false }
     foreach ($key in $ObservabilityVars.Keys) {
         if ([string]$SvcConfig.variables.$key.value -ne [string]$ObservabilityVars[$key]) { return $false }
+    }
+    foreach ($key in $ObjectStoreVars.Keys) {
+        if ([string]$SvcConfig.variables.$key.value -ne [string]$ObjectStoreVars[$key]) { return $false }
     }
     if ($ServiceExtraVars.ContainsKey($Service)) {
         foreach ($key in $ServiceExtraVars[$Service].Keys) {
@@ -149,7 +168,7 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ($null -ne $currentConfig) {
         $svcConfig = $currentConfig.services.($serviceIdByName[$service])
     }
-    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ServiceExtraVars $serviceExtraVars)
+    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ServiceExtraVars $serviceExtraVars)
 }
 
 $servicesToPatch = @($serviceArtifacts.Keys | Where-Object { $serviceNeedsPatch[$_] })
@@ -180,6 +199,9 @@ foreach ($service in $servicesToPatch) {
     }
     if ($observabilityVars.Contains("OTEL_EXPORTER_OTLP_HEADERS")) {
         $serviceVariables.OTEL_EXPORTER_OTLP_HEADERS = [ordered]@{ value = $observabilityVars.OTEL_EXPORTER_OTLP_HEADERS }
+    }
+    foreach ($key in $ObjectStoreVars.Keys) {
+        $serviceVariables[$key] = [ordered]@{ value = $ObjectStoreVars[$key] }
     }
     if ($serviceExtraVars.ContainsKey($service)) {
         foreach ($key in $serviceExtraVars[$service].Keys) {
