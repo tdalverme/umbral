@@ -30,3 +30,26 @@ def filter_sentry_event(
     tags = event.get("tags")
     safe_tags = filter_attributes(tags) if isinstance(tags, Mapping) else {}
     return {"tags": safe_tags} if safe_tags else None
+
+
+_SENSITIVE_NAMES = frozenset({
+    "email", "normalized_email", "token", "token_hash", "cookie", "session_token",
+    "authorization", "raw_body", "body", "secret", "url", "query", "recipient",
+    "subject", "message", "password",
+})
+
+
+def redact_identity_payload(value: object) -> object:
+    """Recursively drop identity bearer material and unnecessary PII."""
+
+    if isinstance(value, Mapping):
+        return {
+            str(key): redact_identity_payload(item)
+            for key, item in value.items()
+            if str(key).lower() not in _SENSITIVE_NAMES
+        }
+    if isinstance(value, list):
+        return [redact_identity_payload(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(redact_identity_payload(item) for item in value)
+    return value

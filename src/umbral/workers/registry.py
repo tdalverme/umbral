@@ -3,8 +3,28 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
 from umbral.application.jobs.ports import JobHandler
+
+if TYPE_CHECKING:
+    from umbral.application.identity.access import IdentityAccess
+
+
+def build_identity_registry(access: IdentityAccess) -> JobRegistry:
+    """Compose the explicit identity issue handler without dynamic imports."""
+
+    from umbral.workers.identity import (
+        IdentityMagicLinkIssueHandler,
+        IdentityRetentionHandler,
+    )
+
+    return JobRegistry(
+        {
+            "identity.magic_link.issue": IdentityMagicLinkIssueHandler(access),
+            "identity.retention.purge": IdentityRetentionHandler(access),
+        }
+    )
 
 
 class JobRegistry:
@@ -23,6 +43,11 @@ class JobRegistry:
 
     def get(self, job_type: str) -> JobHandler | None:
         return self._handlers.get(job_type)
+
+    def as_mapping(self) -> Mapping[str, JobHandler]:
+        """Expose the immutable composition result to a job runtime."""
+
+        return dict(self._handlers)
 
     def require(self, job_type: str) -> JobHandler:
         handler = self.get(job_type)

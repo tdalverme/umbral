@@ -26,6 +26,17 @@ services:
       timeout: 3s
       retries: 10
 
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8025/api/v1/info"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   minio:
     image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
     command: server /data --console-address :9001

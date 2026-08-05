@@ -1,6 +1,7 @@
+import { PUBLIC_HEALTH_PATH } from "./policy";
+
 export type AccessClaims = { aud: string | string[]; exp: number };
 
-export const PUBLIC_HEALTH_PATH = "/health";
 export const ACCESS_AUDIENCE = "umbral-runtime";
 
 export function isPublicHealthPath(pathname: string): boolean {

@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from time import perf_counter
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 from uuid import UUID
 
+from rq import Worker
+from rq.serializers import JSONSerializer
+
 from umbral.application.jobs.contracts import JobContext, JsonScalar
-from umbral.application.jobs.service import InMemoryJobRuntime
+from umbral.application.jobs.ports import JobRuntime
 from umbral.application.runtime.telemetry import TelemetrySignal
+
+if TYPE_CHECKING:
+    from umbral.infrastructure.queue.rq_queue import RQJobQueue
 
 Handler = Callable[[JobContext], Mapping[str, JsonScalar]]
 
@@ -17,7 +23,7 @@ Handler = Callable[[JobContext], Mapping[str, JsonScalar]]
 class InMemoryWorker:
     def __init__(
         self,
-        runtime: InMemoryJobRuntime,
+        runtime: JobRuntime,
         handlers: Mapping[str, Handler | object],
         *,
         worker_id: str,
@@ -83,12 +89,39 @@ class InMemoryWorker:
         return True
 
 
+def build_rq_worker(queue: RQJobQueue) -> Worker:
+    """Create the long-lived RQ worker with the sole durable queue contract."""
+
+    return Worker(
+        [queue.queue],
+        connection=queue.queue.connection,
+        serializer=JSONSerializer,
+    )
+
+
 def run_message(
     *,
     execution_id: str,
     attempt_number: int,
     correlation_id: str,
-) -> None:
-    """RQ entrypoint placeholder; composition injects the process runtime."""
+    worker: InMemoryWorker | None = None,
+) -> bool:
+    """Process one JSON-only RQ envelope through the explicit handler registry."""
 
-    del execution_id, attempt_number, correlation_id
+    active_worker = worker
+    if active_worker is None:
+        from umbral.workers.composition import build_process_dependencies
+
+        dependencies = build_process_dependencies()
+        active_worker = InMemoryWorker(
+            dependencies.runtime,
+            dependencies.handlers,
+            worker_id=dependencies.worker_id,
+        )
+    return active_worker.process(
+        {
+            "execution_id": execution_id,
+            "attempt_number": attempt_number,
+            "correlation_id": correlation_id,
+        }
+    )

@@ -8,13 +8,16 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:identity": "vitest run src/lib/auth",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:identity": "playwright test --config=playwright.config.ts identity.spec.ts",
     "api:generate": "openapi-ts -f openapi-ts.config.ts",
     "api:check": "openapi-ts -f openapi-ts.config.ts && node scripts/check-generated-client.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.101.4",
+    "jose": "^6.1.0",
     "next": ">=16.2.12 <17",
     "react": ">=19.2.7 <20",
     "react-dom": ">=19.2.7 <20"

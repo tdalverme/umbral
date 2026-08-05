@@ -1,5 +1,16 @@
 """All foundation database mappings are imported from this module."""
+# ruff: noqa: E501
 
+from umbral.infrastructure.db.models.identity import (
+    AccessAuditEvent,
+    ExternalIdentityLink,
+    IdentityInvitation,
+    MagicLinkAttempt,
+    MagicLinkRequest,
+    ProductSession,
+    ProductUser,
+    RoleAssignment,
+)
 from umbral.infrastructure.db.models.jobs import (
     JobAttempt,
     JobExecution,
@@ -17,4 +28,12 @@ __all__ = [
     "RuntimeSurfaceStatus",
     "StoredObject",
     "StoredObjectVersion",
+    "AccessAuditEvent",
+    "ExternalIdentityLink",
+    "IdentityInvitation",
+    "MagicLinkAttempt",
+    "MagicLinkRequest",
+    "ProductSession",
+    "ProductUser",
+    "RoleAssignment",
 ]

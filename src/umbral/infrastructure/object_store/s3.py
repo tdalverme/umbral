@@ -6,7 +6,6 @@ import hashlib
 import re
 from io import BytesIO
 from typing import Any, BinaryIO
-from uuid import uuid4
 
 from umbral.application.objects.contracts import (
     ObjectInfo,
@@ -27,15 +26,11 @@ class S3ObjectStore:
         self,
         client: Any,
         bucket: str,
-        endpoint_url: str | None = None,
     ) -> None:
-        del endpoint_url  # The configured boto client owns endpoint details.
         if not bucket:
             raise ValueError("bucket must not be empty")
         self.client = client
         self.bucket = bucket
-        self._keys_by_token: dict[str, str] = {}
-        self._tokens_by_key: dict[str, str] = {}
 
     def put_if_absent(
         self,
@@ -157,17 +152,12 @@ class S3ObjectStore:
         )
 
     def _ref_for_key(self, key: str) -> ProviderObjectRef:
-        token = self._tokens_by_key.get(key)
-        if token is None:
-            token = uuid4().hex
-            self._tokens_by_key[key] = token
-            self._keys_by_token[token] = key
-        return ProviderObjectRef(token)
+        return ProviderObjectRef(_validate_key(key))
 
     def _key_for_ref(self, provider_ref: ProviderObjectRef) -> str:
         try:
-            return self._keys_by_token[provider_ref.value]
-        except KeyError as error:
+            return _validate_key(provider_ref.value)
+        except ValueError as error:
             raise ObjectNotFound("provider object reference is unavailable") from error
 
 
@@ -224,15 +214,21 @@ def _is_conditional_unsupported(error: Exception) -> bool:
 
 
 def _validate_key(storage_key: str) -> str:
+    if not isinstance(storage_key, str):
+        raise ValueError("storage key must be an opaque relative path")
+    parts = storage_key.split("/")
     if (
         not storage_key
         or "\\" in storage_key
         or storage_key.startswith("/")
-        or ".." in storage_key.split("/")
+        or ":" in storage_key
+        or "?" in storage_key
+        or "#" in storage_key
+        or len(parts) < 3
+        or parts[0] != "objects"
+        or any(part in {"", ".", ".."} for part in parts)
     ):
         raise ValueError("storage key must be an opaque relative path")
-    if not storage_key.startswith("objects/") or len(storage_key.split("/")) < 3:
-        raise ValueError("storage key must be an opaque objects/<id>/<version> path")
     return storage_key
 
 

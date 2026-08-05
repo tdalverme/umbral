@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses } from './types.gen';
+import type { ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -17,6 +17,59 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
      */
     meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
+
+/**
+ * Logout
+ */
+export const logoutCurrentSession = <ThrowOnError extends boolean = false>(options?: Options<LogoutCurrentSessionData, ThrowOnError>): RequestResult<LogoutCurrentSessionResponses, LogoutCurrentSessionErrors, ThrowOnError> => (options?.client ?? client).post<LogoutCurrentSessionResponses, LogoutCurrentSessionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/auth/logout',
+    ...options
+});
+
+/**
+ * Confirm Magic Link
+ */
+export const confirmMagicLink = <ThrowOnError extends boolean = false>(options: Options<ConfirmMagicLinkData, ThrowOnError>): RequestResult<ConfirmMagicLinkResponses, ConfirmMagicLinkErrors, ThrowOnError> => (options.client ?? client).post<ConfirmMagicLinkResponses, ConfirmMagicLinkErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/auth/magic-link-confirmations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Request Magic Link
+ */
+export const requestMagicLink = <ThrowOnError extends boolean = false>(options: Options<RequestMagicLinkData, ThrowOnError>): RequestResult<RequestMagicLinkResponses, RequestMagicLinkErrors, ThrowOnError> => (options.client ?? client).post<RequestMagicLinkResponses, RequestMagicLinkErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/auth/magic-link-requests',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Current Session
+ */
+export const getCurrentSession = <ThrowOnError extends boolean = false>(options?: Options<GetCurrentSessionData, ThrowOnError>): RequestResult<GetCurrentSessionResponses, GetCurrentSessionErrors, ThrowOnError> => (options?.client ?? client).get<GetCurrentSessionResponses, GetCurrentSessionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/auth/session',
+    ...options
+});
+
+/**
+ * Receive Email Event
+ */
+export const receiveResendEvent = <ThrowOnError extends boolean = false>(options?: Options<ReceiveResendEventData, ThrowOnError>): RequestResult<ReceiveResendEventResponses, ReceiveResendEventErrors, ThrowOnError> => (options?.client ?? client).post<ReceiveResendEventResponses, ReceiveResendEventErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/integrations/email/resend-events',
+    ...options
+});
 
 /**
  * Confirm that the current process can respond

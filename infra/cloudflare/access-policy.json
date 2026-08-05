@@ -1,8 +1,19 @@
 {
   "origin_closed": true,
-  "datastores_private": true,
-  "require_access": true,
+  "web_public_domain": true,
+  "api_public_domain": false,
+  "datastores_private_or_managed": true,
+  "access_mode": "product_session",
+  "umbral_session_protection": true,
+  "webhook_anonymous_at_environment_gate": true,
+  "webhook_requires_provider_signature": true,
   "jwt_audience": "umbral-runtime",
-  "public_paths": ["/health"],
-  "bypass_methods": ["GET", "HEAD"]
+  "public_paths": [
+    "/health",
+    "/login",
+    "/auth/capture",
+    "/auth/confirm",
+    "/api/auth/magic-link-requests",
+    "/api/webhooks/email"
+  ]
 }

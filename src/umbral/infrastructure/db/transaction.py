@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from typing import TypeVar
 
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 from umbral.application.transactions import TransactionStateError
 from umbral.domain.errors import ConcurrencyConflict
+
+ResultT = TypeVar("ResultT")
 
 
 def translate_stale_data_error(
@@ -87,3 +90,13 @@ class SqlAlchemyTransactionManager:
 
     def transaction(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self._session_factory())
+
+
+def run_in_transaction(
+    manager: SqlAlchemyTransactionManager,
+    operation: Callable[[SqlAlchemyUnitOfWork], ResultT],
+) -> ResultT:
+    """Run one application operation under the SQLAlchemy transaction owner."""
+
+    with manager.transaction() as unit_of_work:
+        return operation(unit_of_work)

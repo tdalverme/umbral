@@ -26,7 +26,7 @@ from .contracts import (
     SubmitJob,
     classify_failure,
 )
-from .ports import JobQueue
+from .ports import JobClaim, JobQueue, RelayResult
 
 
 @dataclass(slots=True)
@@ -65,19 +65,6 @@ class _Execution:
     lease_owner: str | None = None
     lease_until: datetime | None = None
     attempts: list[_Attempt] = field(default_factory=list)
-
-
-@dataclass(frozen=True, slots=True)
-class JobClaim:
-    execution_id: UUID
-    attempt_number: int
-    context: JobContext
-
-
-@dataclass(frozen=True, slots=True)
-class RelayResult:
-    published: int = 0
-    failed: int = 0
 
 
 @dataclass(slots=True)
@@ -169,18 +156,6 @@ class InMemoryJobRuntime:
                 attempt_number=1,
                 available_at=self._now,
             )
-            # Publish eagerly for local/recording adapters while retaining a
-            # pending outbox row.  The relay can safely rebuild it after a
-            # crash or transport loss.
-            try:
-                self.queue.publish(
-                    execution_id=execution.execution_id,
-                    attempt_number=1,
-                    correlation_id=execution.correlation_id,
-                )
-            except Exception:
-                pass
-            execution.state = JobState.QUEUED
             snapshot = self._snapshot(execution)
             self.submissions.append(snapshot)
             return snapshot
@@ -255,6 +230,7 @@ class InMemoryJobRuntime:
             return JobClaim(
                 execution_id=execution_id,
                 attempt_number=attempt_number,
+                worker_id=worker_id,
                 context=JobContext(
                     execution_id=execution_id,
                     attempt_number=attempt_number,
@@ -274,6 +250,9 @@ class InMemoryJobRuntime:
             if (
                 execution.state is not JobState.RUNNING
                 or execution.attempt_count != claim.attempt_number
+                or execution.lease_owner != claim.worker_id
+                or execution.lease_until is None
+                or execution.lease_until <= self._now
             ):
                 return self._snapshot(execution)
             attempt = execution.attempts[-1]
@@ -332,6 +311,8 @@ class InMemoryJobRuntime:
     def relay_due(
         self, *, queue: JobQueue | None = None, limit: int = 100
     ) -> RelayResult:
+        if not 1 <= limit <= 1000:
+            raise ValueError("limit must be between 1 and 1000")
         target_queue = queue or self.queue
         published = 0
         failed = 0
@@ -339,7 +320,11 @@ class InMemoryJobRuntime:
             due = [
                 outbox
                 for outbox in self._outbox.values()
-                if outbox.state == "pending" and outbox.available_at <= self._now
+                if (
+                    outbox.state == "pending"
+                    and outbox.available_at <= self._now
+                    and outbox.publish_attempts < 100
+                )
             ][:limit]
             for outbox in due:
                 execution = self._executions[outbox.execution_id]
@@ -352,6 +337,12 @@ class InMemoryJobRuntime:
                 except Exception:
                     outbox.publish_attempts += 1
                     outbox.error_code = "queue.publish_failed"
+                    if outbox.publish_attempts >= 100:
+                        outbox.state = "failed"
+                    else:
+                        outbox.available_at = self._now + timedelta(
+                            seconds=min(300, 1 << max(0, outbox.publish_attempts - 1))
+                        )
                     failed += 1
                 else:
                     outbox.state = "published"
@@ -367,27 +358,44 @@ class InMemoryJobRuntime:
         with self._lock:
             return sum(row.state == "pending" for row in self._outbox.values())
 
-    def rebuild_outbox(self) -> int:
+    def rebuild_outbox(self, *, limit: int = 100) -> int:
         """Mark transport rows publishable after Redis state is lost."""
 
         with self._lock:
             rebuilt = 0
-            for row in self._outbox.values():
-                if row.state == "published":
+            eligible = [
+                row for row in self._outbox.values() if row.state == "published"
+            ]
+            for row in eligible[:limit]:
+                if row.publish_attempts >= 100:
+                    row.state = "failed"
+                    row.error_code = "queue.publish_exhausted"
+                else:
                     row.state = "pending"
                     row.error_code = None
-                    rebuilt += 1
+                rebuilt += 1
             return rebuilt
 
-    def reap_expired(self) -> int:
+    def reclaim_expired_outbox(self, *, limit: int = 100) -> int:
+        """Keep the common runtime seam explicit; in-memory relay has no lease."""
+
+        if not 1 <= limit <= 1000:
+            raise ValueError("limit must be between 1 and 1000")
+        return 0
+
+    def reap_expired(self, *, limit: int = 100) -> int:
         with self._lock:
             count = 0
-            for execution in self._executions.values():
+            eligible = [
+                execution
+                for execution in self._executions.values()
                 if (
                     execution.state is JobState.RUNNING
                     and execution.lease_until is not None
                     and execution.lease_until <= self._now
-                ):
+                )
+            ]
+            for execution in eligible[:limit]:
                     self._abandon_locked(execution)
                     count += 1
             return count

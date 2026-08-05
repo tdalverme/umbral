@@ -43,7 +43,18 @@ export async function GET(request: Request): Promise<Response> {
   if (hasQueryParameters(request)) return invalidRequestResponse();
   const correlationId = correlationIdFor(request);
   try {
-    return jsonResponse(readyPayload(await loadRuntimeManifest()), 200, "application/json", correlationId);
+    const payload = readyPayload(await loadRuntimeManifest());
+    const apiBaseUrl = process.env.UMBRAL_API_BASE_URL;
+    const bffToken = process.env.UMBRAL_BFF_TOKEN;
+    if (!apiBaseUrl || !bffToken) throw new Error("runtime heartbeat unavailable");
+    const heartbeat = await fetch(`${apiBaseUrl}/internal/runtime/web-heartbeat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Umbral-BFF-Token": bffToken },
+      body: JSON.stringify({ state: payload.state, checks: Object.fromEntries(payload.checks.map((check) => [check.name, check.state])) }),
+      cache: "no-store",
+    });
+    if (heartbeat.status !== 204) throw new Error("runtime heartbeat unavailable");
+    return jsonResponse(payload, 200, "application/json", correlationId);
   } catch {
     return jsonResponse(unavailablePayload(), 503, "application/json", correlationId);
   }

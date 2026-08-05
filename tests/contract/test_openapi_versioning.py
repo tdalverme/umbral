@@ -16,13 +16,16 @@ CONTRACT_PATH = REPOSITORY_ROOT / "contracts" / "openapi" / "v1" / "openapi.json
 EXPORT_SCRIPT = REPOSITORY_ROOT / "scripts" / "export-openapi.ps1"
 CONTRACT_CHECK = REPOSITORY_ROOT / "scripts" / "check-contracts.ps1"
 EXPECTED_OPERATION_IDS = {
-    "/health": "getRuntimeHealth",
-    "/ready": "getRuntimeReadiness",
-    "/version": "getRuntimeVersion",
+    "GET /health": "getRuntimeHealth",
+    "GET /ready": "getRuntimeReadiness",
+    "GET /version": "getRuntimeVersion",
+    "POST /api/v1/auth/magic-link-requests": "requestMagicLink",
+    "POST /api/v1/auth/magic-link-confirmations": "confirmMagicLink",
+    "GET /api/v1/auth/session": "getCurrentSession",
+    "POST /api/v1/auth/logout": "logoutCurrentSession",
+    "POST /api/v1/integrations/email/resend-events": "receiveResendEvent",
 }
-EXPECTED_GET_OPERATION_IDS = {
-    f"GET {path}": operation_id for path, operation_id in EXPECTED_OPERATION_IDS.items()
-}
+EXPECTED_GET_OPERATION_IDS = EXPECTED_OPERATION_IDS
 
 
 def _read_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:

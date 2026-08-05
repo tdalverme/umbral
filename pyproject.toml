@@ -20,11 +20,14 @@ dependencies = [
     "opentelemetry-sdk>=1,<2",
     "opentelemetry-exporter-otlp-proto-http>=1,<2",
     "sentry-sdk[fastapi]>=2,<3",
+    "supabase>=2,<3",
+    "resend>=2,<3",
 ]
 
 [dependency-groups]
 pytest = [
     "pytest>=8,<9",
+    "pytest-asyncio>=1,<2",
     "pytest-cov>=6,<7",
     "testcontainers[postgres,redis]>=4,<5",
     "httpx>=0.28,<1",
@@ -42,6 +45,12 @@ mypy = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "identity: private-beta identity behavior and contract checks",
+    "integration: tests that require external runtime services",
+    "e2e: browser-level end-to-end scenarios",
+]
 
 [tool.ruff]
 target-version = "py313"
@@ -97,9 +106,58 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "Identity domain boundary"
+type = "forbidden"
+source_modules = ["umbral.domain.identity"]
+forbidden_modules = [
+    "umbral.application",
+    "umbral.agent",
+    "umbral.api",
+    "umbral.infrastructure",
+    "umbral.workers",
+    "fastapi",
+    "pydantic",
+    "pydantic_settings",
+    "sqlalchemy",
+    "alembic",
+    "psycopg",
+    "geoalchemy2",
+    "pgvector",
+    "rq",
+    "redis",
+    "boto3",
+    "opentelemetry",
+    "sentry_sdk",
+]
+
+[[tool.importlinter.contracts]]
 name = "Application boundary"
 type = "forbidden"
 source_modules = ["umbral.application"]
+forbidden_modules = [
+    "umbral.agent",
+    "umbral.api",
+    "umbral.infrastructure",
+    "umbral.workers",
+    "fastapi",
+    "pydantic",
+    "pydantic_settings",
+    "sqlalchemy",
+    "alembic",
+    "psycopg",
+    "geoalchemy2",
+    "pgvector",
+    "rq",
+    "redis",
+    "boto3",
+    "opentelemetry",
+    "sentry_sdk",
+]
+
+[[tool.importlinter.contracts]]
+name = "Identity application boundary"
+type = "forbidden"
+source_modules = ["umbral.application.identity"]
 forbidden_modules = [
     "umbral.agent",
     "umbral.api",

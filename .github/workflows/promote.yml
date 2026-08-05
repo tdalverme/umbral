@@ -4,16 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       manifest:
-        description: "Immutable release manifest artifact"
+        description: "Immutable release artifact name"
+        required: true
+        type: string
+      release_run_id:
+        description: "GitHub Actions run ID that produced the release artifact"
         required: true
         type: string
       environment:
         description: "Target environment"
         required: true
         type: choice
-        options: [preview, production]
+        options: [preview]
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -22,6 +27,62 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify access, backup, migration and smoke gates
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.8.17"
+      - name: Sync locked Python environment
+        run: uv sync --locked --all-groups
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.manifest }}
+          path: artifacts/release
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.release_run_id }}
+      - name: Install pinned Railway CLI
+        run: npx @railway/cli@5.27.2 --version
+      - name: Install PostgreSQL client for preview backups
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+      - name: Verify gates and promote immutable Railway images
         shell: pwsh
-        run: ./scripts/deploy/promote-release.ps1 -ManifestPath "${{ inputs.manifest }}" -Environment "${{ inputs.environment }}" -AccessPassed -BackupPassed -MigrationPassed -SmokePassed
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          OBJECT_STORE_BUCKET: ${{ secrets.OBJECT_STORE_BUCKET }}
+          OBJECT_STORE_ENDPOINT_URL: ${{ secrets.OBJECT_STORE_ENDPOINT_URL }}
+          OBJECT_STORE_ACCESS_KEY: ${{ secrets.OBJECT_STORE_ACCESS_KEY }}
+          OBJECT_STORE_SECRET_KEY: ${{ secrets.OBJECT_STORE_SECRET_KEY }}
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          IDENTITY_ISSUER: ${{ secrets.IDENTITY_ISSUER }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          UMBRAL_PREVIEW_BASE_URL: ${{ secrets.UMBRAL_PREVIEW_BASE_URL }}
+          UMBRAL_SMOKE_INVITEE: ${{ secrets.UMBRAL_SMOKE_INVITEE }}
+          UMBRAL_SMOKE_OPERATOR_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          UMBRAL_SMOKE_OPERATOR_DATABASE_URL_ENV: UMBRAL_SMOKE_OPERATOR_DATABASE_URL
+          UMBRAL_SMOKE_RESEND_OBSERVATION_TOKEN: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          $manifest = Get-Item artifacts/release/release-manifest.json
+          $checksum = (Get-Content -Raw "${manifest}.sha256").Trim()
+          $pythonExecutable = Join-Path $env:GITHUB_WORKSPACE ".venv/bin/python"
+          if (-not (Test-Path -LiteralPath $pythonExecutable)) { throw "uv did not create the Linux Python environment." }
+          $null = ./scripts/deploy/verify-access.ps1
+          $null = ./scripts/deploy/validate-railway-config.ps1 -ManifestPath $manifest.FullName
+          $backupEvidence = "artifacts/release/preview-backup-evidence.json"
+          ./scripts/deploy/backup-preview.ps1 -ManifestPath $manifest.FullName -EvidencePath $backupEvidence
+          ./scripts/deploy/migrate-preview.ps1 -ManifestPath $manifest.FullName -BackupEvidencePath $backupEvidence -PythonExecutable $pythonExecutable
+          ./scripts/deploy/check-preview-dependencies.ps1 -ManifestPath $manifest.FullName -EvidencePath "artifacts/release/preview-dependency-evidence.json" -PythonExecutable $pythonExecutable
+          $switch = ./scripts/deploy/set-railway-images.ps1 -ManifestPath $manifest.FullName -ManifestSha256 $checksum -Environment "${{ inputs.environment }}" | ConvertFrom-Json
+          $null = ./scripts/deploy/wait-railway-services.ps1 -Environment "${{ inputs.environment }}" -DeploymentIdsJson ($switch.deployment_ids | ConvertTo-Json -Compress)
+          $preload = & $pythonExecutable -m umbral.ops.identity preload-invitation --email-env UMBRAL_SMOKE_INVITEE --database-url-env UMBRAL_SMOKE_OPERATOR_DATABASE_URL | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $preload.result -ne "accepted" -or [string]::IsNullOrWhiteSpace([string]$preload.invitation_id)) { throw "Preview invitation preload failed." }
+          $env:UMBRAL_SMOKE_INVITATION_ID = [string]$preload.invitation_id
+          $null = ./scripts/deploy/smoke.ps1 -Mode preview -BaseUrl $env:UMBRAL_PREVIEW_BASE_URL -ManifestPath $manifest.FullName -PythonExecutable $pythonExecutable

@@ -65,7 +65,20 @@ def load_release_manifest(path: Path) -> ReleaseManifest:
         raw = json.loads(raw_bytes)
     except (OSError, json.JSONDecodeError) as error:
         raise ReleaseManifestValidationError("document") from error
+    return _parse_release_manifest(raw, sha256(raw_bytes).hexdigest())
 
+
+def parse_release_manifest(text: str) -> ReleaseManifest:
+    """Parse one inline JSON manifest, for example from UMBRAL_RELEASE_MANIFEST."""
+
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise ReleaseManifestValidationError("document") from error
+    return _parse_release_manifest(raw, sha256(text.encode("utf-8")).hexdigest())
+
+
+def _parse_release_manifest(raw: Any, manifest_sha256: str) -> ReleaseManifest:
     if not isinstance(raw, dict):
         raise ReleaseManifestValidationError("document")
     _validate_manifest_fields(raw)
@@ -88,7 +101,7 @@ def load_release_manifest(path: Path) -> ReleaseManifest:
             raw["config_schema_version"], "config_schema_version"
         ),
         artifacts=MappingProxyType(artifacts),
-        manifest_sha256=sha256(raw_bytes).hexdigest(),
+        manifest_sha256=manifest_sha256,
     )
 
 

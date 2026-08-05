@@ -31,6 +31,25 @@ class SqlAlchemyJobRepository:
     def get(self, execution_id: UUID) -> JobExecution | None:
         return self.session.get(JobExecution, execution_id)
 
+    def get_for_update(self, execution_id: UUID) -> JobExecution | None:
+        return self.session.scalar(
+            select(JobExecution)
+            .where(JobExecution.id == execution_id)
+            .with_for_update(skip_locked=True)
+        )
+
+    def attempt_for_update(
+        self, execution_id: UUID, ordinal: int
+    ) -> JobAttempt | None:
+        return self.session.scalar(
+            select(JobAttempt)
+            .where(
+                JobAttempt.execution_id == execution_id,
+                JobAttempt.ordinal == ordinal,
+            )
+            .with_for_update(skip_locked=True)
+        )
+
     def get_by_identity(self, identity: JobIdentity) -> JobExecution | None:
         return self.session.scalar(
             select(JobExecution).where(
@@ -75,7 +94,6 @@ class SqlAlchemyJobRepository:
             updated_at=timestamp,
         )
         self.session.add_all([execution, outbox])
-        self.session.flush()
         return execution
 
     def claim(
@@ -149,7 +167,6 @@ class SqlAlchemyJobRepository:
         execution.lease_owner = None
         execution.lease_until = None
         execution.updated_at = timestamp
-        self.session.flush()
         return execution
 
     def schedule_retry(
@@ -218,6 +235,7 @@ class SqlAlchemyJobRepository:
                 .where(
                     JobOutboxMessage.state == "pending",
                     JobOutboxMessage.available_at <= timestamp,
+                    JobOutboxMessage.publish_attempts < 100,
                 )
                 .order_by(JobOutboxMessage.available_at)
                 .limit(limit)
@@ -256,12 +274,48 @@ class SqlAlchemyJobRepository:
         now: datetime | None = None,
     ) -> None:
         timestamp = _utc(now or datetime.now(timezone.utc))
-        row.state = "pending"
+        if row.publish_attempts >= 100:
+            row.state = "failed"
+        else:
+            row.state = "pending"
+            row.available_at = timestamp + timedelta(
+                seconds=min(300, 1 << max(0, row.publish_attempts - 1))
+            )
         row.error_code = error_code
         row.lease_owner = None
         row.lease_until = None
         row.updated_at = timestamp
         self.session.flush()
+
+    def outbox_for_update(self, message_id: UUID) -> JobOutboxMessage | None:
+        return self.session.scalar(
+            select(JobOutboxMessage)
+            .where(JobOutboxMessage.id == message_id)
+            .with_for_update(skip_locked=True)
+        )
+
+    def rebuild_outbox(self, *, limit: int = 100) -> int:
+        rows = list(
+            self.session.scalars(
+                select(JobOutboxMessage)
+                .where(JobOutboxMessage.state == "published")
+                .order_by(JobOutboxMessage.updated_at)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
+            )
+        )
+        for row in rows:
+            if row.publish_attempts >= 100:
+                row.state = "failed"
+                row.error_code = "queue.publish_exhausted"
+            else:
+                row.state = "pending"
+                row.error_code = None
+            row.published_at = None
+            row.lease_owner = None
+            row.lease_until = None
+        self.session.flush()
+        return len(rows)
 
     def reclaim_expired_outbox(
         self, *, now: datetime | None = None, limit: int = 100
@@ -279,7 +333,11 @@ class SqlAlchemyJobRepository:
             )
         )
         for row in rows:
-            row.state = "pending"
+            if row.publish_attempts >= 100:
+                row.state = "failed"
+                row.error_code = "queue.publish_exhausted"
+            else:
+                row.state = "pending"
             row.lease_owner = None
             row.lease_until = None
             row.updated_at = timestamp
@@ -381,6 +439,22 @@ class SqlAlchemyJobRepository:
         self, execution: JobExecution, *, now: datetime | None = None
     ) -> None:
         timestamp = _utc(now or datetime.now(timezone.utc))
+        attempt = self.session.scalar(
+            select(JobAttempt)
+            .where(
+                JobAttempt.execution_id == execution.id,
+                JobAttempt.ordinal == execution.attempt_count,
+                JobAttempt.state == "running",
+            )
+            .with_for_update(skip_locked=True)
+        )
+        if attempt is not None:
+            attempt.state = "abandoned"
+            attempt.finished_at = timestamp
+            attempt.duration_ms = max(
+                0, int((timestamp - attempt.started_at).total_seconds() * 1000)
+            )
+            attempt.error_code = "job.lease_expired"
         execution.available_at = timestamp
         execution.error_code = "job.lease_expired"
         execution.lease_owner = None

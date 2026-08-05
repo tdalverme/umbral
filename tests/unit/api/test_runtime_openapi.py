@@ -23,6 +23,8 @@ def test_dependency_check_name_schema_is_the_closed_contract_allowlist() -> None
         "execution_loop",
         "scheduling_loop",
         "telemetry",
+        "identity_provider",
+        "email_provider",
     ]
 
 

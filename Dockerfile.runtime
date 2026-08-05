@@ -7,7 +7,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev
 COPY src ./src
-COPY alembic.ini alembic ./
+COPY alembic.ini ./
+COPY alembic ./alembic
 
 FROM python:3.13-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -21,4 +22,4 @@ COPY --from=builder /app/alembic.ini /app/alembic.ini
 COPY --from=builder /app/alembic /app/alembic
 RUN useradd --create-home --uid 10001 umbral
 USER 10001
-ENTRYPOINT ["python", "-m", "umbral.workers"]
+CMD ["python", "-m", "umbral.workers", "--help"]

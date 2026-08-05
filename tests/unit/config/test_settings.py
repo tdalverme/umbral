@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 import pytest
+
 from umbral.infrastructure.config.settings import Settings, SettingsValidationError
 
 
@@ -46,7 +47,10 @@ def _secret_canaries(case: ConfigurationCase) -> set[str]:
         "DATABASE_URL",
         "REDIS_URL",
         "SENTRY_DSN",
+        "SUPABASE_SECRET_KEY",
         "UMBRAL_ACCESS_AUDIENCE",
+        "RESEND_API_KEY",
+        "EMAIL_WEBHOOK_SECRET",
     }
     return {
         value
@@ -88,6 +92,7 @@ def test_configuration_fixture_covers_required_invalid_setting_categories() -> N
         "CONFIG_BACKEND",
         "CONFIG_TLS_REQUIRED",
         "CONFIG_PRIVATE_INGRESS",
+        "CONFIG_PROVIDER",
         "CONFIG_RELEASE_DIGEST_REQUIRED",
         "CONFIG_UNKNOWN_SETTING",
     }
@@ -95,3 +100,22 @@ def test_configuration_fixture_covers_required_invalid_setting_categories() -> N
     assert expected_rule_codes <= {
         case["expected"]["rule_code"] for case in REJECTED_CASES
     }
+
+
+@pytest.mark.parametrize(
+    "supabase_url",
+    ["http://bpwgyvetbneghrtxcadm.supabase.co", "https://other.supabase.co"],
+)
+def test_preview_rejects_supabase_url_outside_the_configured_project(
+    supabase_url: str,
+) -> None:
+    values = _case_environment(
+        next(case for case in ACCEPTED_CASES if case["id"] == "preview-valid")
+    )
+    values["SUPABASE_URL"] = supabase_url
+
+    with pytest.raises(SettingsValidationError) as raised:
+        Settings.from_environment(values)
+
+    assert raised.value.rule_code == "CONFIG_FORMAT"
+    assert raised.value.field_name == "SUPABASE_URL"

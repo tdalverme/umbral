@@ -1,0 +1,140 @@
+"""Narrow provider and persistence ports; SDK types do not cross this seam."""
+# ruff: noqa: E501
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from datetime import datetime
+from typing import TYPE_CHECKING, ContextManager, Protocol
+from uuid import UUID
+
+from umbral.application.identity.contracts import (
+    EmailAcceptance,
+    GeneratedMagicLink,
+    ProviderProof,
+)
+
+if TYPE_CHECKING:
+    from umbral.domain.identity.models import (
+        AccessAuditEvent,
+        ExternalIdentityLink,
+        IdentityExportRecord,
+        IdentityReport,
+        Invitation,
+        MagicLinkAttempt,
+        MagicLinkRequest,
+        ProductSession,
+        ProductUser,
+        RoleAssignment,
+    )
+
+
+class IdentityProofPort(Protocol):
+    provider: str
+    issuer: str
+
+    def generate_magic_link(
+        self, *, attempt_id: UUID, email: str, now: datetime
+    ) -> GeneratedMagicLink: ...
+
+    def verify_magic_link(
+        self, *, attempt_id: UUID, token_hash: str, now: datetime
+    ) -> ProviderProof: ...
+
+    def revoke_provider_session(self, handle: str) -> None: ...
+
+
+class EmailPort(Protocol):
+    provider: str
+
+    def send_magic_link(
+        self,
+        *,
+        attempt_id: UUID,
+        normalized_email: str,
+        capture_url: str,
+        expires_at: datetime,
+        idempotency_key: str,
+        now: datetime,
+        correlation_id: UUID | None = None,
+    ) -> EmailAcceptance: ...
+
+    def verify_webhook(
+        self, *, raw_body: bytes, headers: Mapping[str, str], received_at: datetime
+    ) -> Mapping[str, str] | None: ...
+
+
+class IdentityStore(Protocol):
+    def transaction(self) -> ContextManager[None]: ...
+
+    def fingerprint(self, value: str) -> bytes: ...
+
+    def invitation_for_email(self, email: str) -> Invitation | None: ...
+
+    def invitation(self, invitation_id: UUID) -> Invitation | None: ...
+
+    def save_invitation(self, invitation: Invitation) -> None: ...
+
+    def user(self, user_id: UUID) -> ProductUser | None: ...
+
+    def user_for_email(self, email: str) -> ProductUser | None: ...
+
+    def save_user(self, user: ProductUser) -> None: ...
+
+    def link_for_subject(
+        self, provider: str, issuer: str, subject: str
+    ) -> ExternalIdentityLink | None: ...
+
+    def save_link(self, link: ExternalIdentityLink) -> None: ...
+
+    def active_roles(self, user_id: UUID) -> set[str]: ...
+
+    def active_role(self, user_id: UUID, role: str) -> RoleAssignment | None: ...
+
+    def has_active_administrator(self) -> bool: ...
+
+    def save_role(self, role: RoleAssignment) -> None: ...
+
+    def save_request(self, request: MagicLinkRequest) -> None: ...
+
+    def request(self, request_id: UUID) -> MagicLinkRequest | None: ...
+
+    def current_attempt(
+        self, *, invitation_id: UUID | None = None, product_user_id: UUID | None = None
+    ) -> MagicLinkAttempt | None: ...
+
+    def save_attempt(self, attempt: MagicLinkAttempt) -> None: ...
+
+    def attempt(self, attempt_id: UUID) -> MagicLinkAttempt | None: ...
+
+    def attempt_for_provider_message(
+        self, message_id: str
+    ) -> MagicLinkAttempt | None: ...
+
+    def session_by_digest(self, digest: bytes) -> ProductSession | None: ...
+
+    def save_session(self, session: ProductSession) -> None: ...
+
+    def append_audit(self, event: AccessAuditEvent) -> None: ...
+
+    def append_provider_audit_once(
+        self, provider: str, event_id: str, audit_event: AccessAuditEvent | None
+    ) -> bool: ...
+
+    def audit_events(self) -> tuple[AccessAuditEvent, ...]: ...
+
+    def identity_report(self) -> IdentityReport: ...
+
+    def exportable_identity_views(self) -> tuple[IdentityExportRecord, ...]: ...
+
+    def exportable_identities(
+        self,
+    ) -> tuple[tuple[ProductUser, tuple[ExternalIdentityLink, ...]], ...]: ...
+
+    def session_count(self) -> int: ...
+
+    def purge_requests_before(self, cutoff: datetime) -> int: ...
+
+    def recent_requests(
+        self, fingerprint: bytes, *, now: datetime, field: str
+    ) -> int: ...

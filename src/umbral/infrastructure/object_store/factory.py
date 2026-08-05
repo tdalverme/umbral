@@ -34,5 +34,4 @@ def build_object_store(
     return S3ObjectStore(
         client=client,
         bucket=bucket,
-        endpoint_url=settings.object_store_endpoint_url,
     )

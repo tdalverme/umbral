@@ -22,6 +22,8 @@ DependencyCheckName = Literal[
     "execution_loop",
     "scheduling_loop",
     "telemetry",
+    "identity_provider",
+    "email_provider",
 ]
 _ALLOWED_CHECK_NAMES = frozenset(
     {
@@ -36,6 +38,8 @@ _ALLOWED_CHECK_NAMES = frozenset(
         "execution_loop",
         "scheduling_loop",
         "telemetry",
+        "identity_provider",
+        "email_provider",
     }
 )
 _ALLOWED_CHECK_CODES = frozenset(
@@ -62,6 +66,10 @@ _ALLOWED_CHECK_CODES = frozenset(
         "scheduling_loop.unavailable",
         "telemetry.degraded",
         "telemetry.unavailable",
+        "identity_provider.degraded",
+        "identity_provider.unavailable",
+        "email_provider.degraded",
+        "email_provider.unavailable",
     }
 )
 
@@ -163,6 +171,32 @@ class ReadinessService:
             release_id=release_id,
             probes=probes,
         )
+
+
+def login_dependency_probes(
+    *,
+    identity: Callable[[], ReadinessCheck],
+    email: Callable[[], ReadinessCheck],
+) -> tuple[ReadinessProbe, ReadinessProbe]:
+    """Build non-critical probes for the two new-login dependencies.
+
+    Existing product sessions remain a product/API readiness concern.  An
+    identity or delivery outage therefore reports ``degraded`` login
+    capability rather than taking the API surface out of service.
+    """
+
+    return (
+        ReadinessProbe(
+            name="identity_provider",
+            critical=False,
+            check=identity,
+        ),
+        ReadinessProbe(
+            name="email_provider",
+            critical=False,
+            check=email,
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)

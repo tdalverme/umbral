@@ -14,12 +14,68 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build, scan and attest once
+      - uses: docker/setup-buildx-action@v4
+      - name: Require classic GHCR deploy token
+        if: ${{ secrets.GHCR_DEPLOY_TOKEN == '' }}
         run: |
-          docker buildx build --platform linux/amd64 --file Dockerfile.runtime --tag ghcr.io/${{ github.repository }}/runtime:${{ github.sha }} --push .
-          docker buildx build --platform linux/amd64 --file apps/web/Dockerfile --tag ghcr.io/${{ github.repository }}/web:${{ github.sha }} --push .
-      - name: Publish immutable manifest artifact
+          echo "GHCR_DEPLOY_TOKEN (classic PAT with write:packages) is required so Railway can pull public packages anonymously." >&2
+          exit 1
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_DEPLOY_TOKEN }}
+      - id: runtime
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.runtime
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository }}/runtime:${{ github.sha }}
+          provenance: mode=max
+      - id: web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository }}/web:${{ github.sha }}
+          provenance: mode=max
+      - name: Make organization packages public
+        if: github.event.repository.owner.type == 'Organization'
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
+          PACKAGE_PREFIX: ${{ github.event.repository.name }}
+        run: |
+          gh api --method PATCH "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_PREFIX}%2Fruntime" -f visibility=public
+          gh api --method PATCH "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_PREFIX}%2Fweb" -f visibility=public
+      - name: Make personal packages public
+        if: github.event.repository.owner.type != 'Organization'
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
+          PACKAGE_PREFIX: ${{ github.event.repository.name }}
+        run: |
+          gh api --method PATCH "/user/packages/container/${PACKAGE_PREFIX}%2Fruntime" -f visibility=public
+          gh api --method PATCH "/user/packages/container/${PACKAGE_PREFIX}%2Fweb" -f visibility=public
+      - name: Record immutable release identity
+        shell: pwsh
+        env:
+          WEB_IMAGE: ghcr.io/${{ github.repository }}/web
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+          RUNTIME_IMAGE: ghcr.io/${{ github.repository }}/runtime
+          RUNTIME_DIGEST: ${{ steps.runtime.outputs.digest }}
+        run: |
+          ./scripts/deploy/build-release.ps1 -ReleaseId "${{ github.ref_name }}" -GitSha "${{ github.sha }}" -DatabaseRevision "0002_private_beta_identity" -WebImage $env:WEB_IMAGE -WebDigest $env:WEB_DIGEST -RuntimeImage $env:RUNTIME_IMAGE -RuntimeDigest $env:RUNTIME_DIGEST
+          New-Item -ItemType Directory -Force -Path artifacts/provenance | Out-Null
+          docker buildx imagetools inspect "${env:WEB_IMAGE}@${env:WEB_DIGEST}" --raw | Set-Content -NoNewline -Encoding utf8 artifacts/provenance/web.json
+          docker buildx imagetools inspect "${env:RUNTIME_IMAGE}@${env:RUNTIME_DIGEST}" --raw | Set-Content -NoNewline -Encoding utf8 artifacts/provenance/runtime.json
+      - name: Publish immutable release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-manifest-${{ github.sha }}
-          path: contracts/release-manifest.schema.json
+          path: |
+            artifacts/release-manifest.json
+            artifacts/release-manifest.json.sha256
+            artifacts/provenance/
