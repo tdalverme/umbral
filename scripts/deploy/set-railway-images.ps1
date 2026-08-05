@@ -72,11 +72,23 @@ $serviceArtifacts = [ordered]@{
     scheduler = "runtime"
 }
 
+# The stdin JSON path in `environment edit` does not translate service names to
+# IDs; the backend only applies patches keyed by service ID, so resolve them here.
+$rawStatus = & npx @railway/cli@5.27.2 service status --all -e $Environment --json
+if ($LASTEXITCODE -ne 0) { throw "Railway service status query failed." }
+$serviceIdByName = @{}
+foreach ($svc in ($rawStatus | ConvertFrom-Json)) {
+    $serviceIdByName[[string]$svc.name] = [string]$svc.id
+}
+foreach ($service in $serviceArtifacts.Keys) {
+    Require-Condition ($serviceIdByName.ContainsKey($service)) "Railway service '${service}' was not found in the environment."
+}
+
 $patch = [ordered]@{ services = [ordered]@{} }
 foreach ($service in $serviceArtifacts.Keys) {
     $artifact = $manifest.artifacts.($serviceArtifacts[$service])
     $imageReference = "{0}@{1}" -f $artifact.image, $artifact.digest
-    $patch.services[$service] = [ordered]@{
+    $patch.services[$serviceIdByName[$service]] = [ordered]@{
         source = [ordered]@{ image = $imageReference }
         variables = [ordered]@{
             UMBRAL_RELEASE_ID = [ordered]@{ value = $manifest.release_id }
