@@ -104,4 +104,6 @@ jobs:
           # surfaces its traceback.
           $null = & npx @railway/cli@5.27.2 run -e preview --service scheduler -- $pythonExecutable ./scripts/deploy/run-scheduler-pass.py
           if ($LASTEXITCODE -ne 0) { throw "Preview scheduler-once pass failed (exit $LASTEXITCODE)." }
+          $null = & npx @railway/cli@5.27.2 run -e preview --service worker -- $pythonExecutable ./scripts/deploy/probe-resend-sender.py
+          if ($LASTEXITCODE -ne 0) { throw "Preview resend sender probe failed (exit $LASTEXITCODE)." }
           $null = ./scripts/deploy/smoke.ps1 -Mode preview -BaseUrl $env:UMBRAL_PREVIEW_BASE_URL -ManifestPath $manifest.FullName -PythonExecutable $pythonExecutable
