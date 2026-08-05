@@ -47,22 +47,25 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}/web:${{ github.sha }}
           provenance: mode=max
-      - name: Make organization packages public
-        if: github.event.repository.owner.type == 'Organization'
+      - name: Ensure GHCR packages are public for anonymous Railway pulls
         env:
           GH_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
           PACKAGE_PREFIX: ${{ github.event.repository.name }}
         run: |
-          gh api --method PATCH "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_PREFIX}%2Fruntime" -f visibility=public
-          gh api --method PATCH "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_PREFIX}%2Fweb" -f visibility=public
-      - name: Make personal packages public
-        if: github.event.repository.owner.type != 'Organization'
-        env:
-          GH_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
-          PACKAGE_PREFIX: ${{ github.event.repository.name }}
-        run: |
-          gh api --method PATCH "/user/packages/container/${PACKAGE_PREFIX}%2Fruntime" -f visibility=public
-          gh api --method PATCH "/user/packages/container/${PACKAGE_PREFIX}%2Fweb" -f visibility=public
+          owner_type="$(gh api "/users/${{ github.repository_owner }}" --jq .type)"
+          if [ "$owner_type" = "Organization" ]; then
+            owner_endpoint="/orgs/${{ github.repository_owner }}"
+          else
+            owner_endpoint="/user"
+          fi
+          for image in runtime web; do
+            package="${PACKAGE_PREFIX}%2F${image}"
+            visibility="$(gh api "${owner_endpoint}/packages/container/${package}" --jq .visibility)"
+            if [ "$visibility" != "public" ]; then
+              echo "::error::GHCR package ${PACKAGE_PREFIX}/${image} is '${visibility}', but Railway pulls it anonymously and needs it public. Set it to public once in the GitHub web UI: https://github.com/users/${{ github.repository_owner }}/packages/container/package/${package}/settings"
+              exit 1
+            fi
+          done
       - name: Record immutable release identity
         shell: pwsh
         env:
