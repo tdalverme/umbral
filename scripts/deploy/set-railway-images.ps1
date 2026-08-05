@@ -84,6 +84,8 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ($LASTEXITCODE -ne 0) { throw ("Railway image update failed for {0}." -f $service) }
     $deploymentId = Get-DeploymentId ($response | ConvertFrom-Json)
     if ([string]::IsNullOrWhiteSpace($deploymentId)) {
+        Write-Host "Railway CLI response for ${service}:"
+        Write-Host ($response | Out-String)
         throw ("Railway returned an ambiguous deployment ID for {0}." -f $service)
     }
     $deploymentIds[$service] = $deploymentId
