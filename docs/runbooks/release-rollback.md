@@ -11,5 +11,6 @@
    schema es compatible; si no, detener y compensar hacia delante.
 
 Los scripts son gates locales y no realizan una promoción remota implícita.
-Render, Cloudflare y R2 se verifican mediante credenciales/proyectos del
-ambiente; la ausencia de esos prerrequisitos queda registrada como brecha.
+Railway (servicios, Postgres/Redis y object storage) y los proveedores de
+identidad/correo se verifican mediante credenciales/proyectos del ambiente; la
+ausencia de esos prerrequisitos queda registrada como brecha.

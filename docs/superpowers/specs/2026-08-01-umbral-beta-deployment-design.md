@@ -9,6 +9,17 @@
 
 **Budget ceiling**: USD 20 per month
 
+## Amendment 2026-08-04: Railway-consolidated preview
+
+The pipeline now uses a consolidated Railway topology: Railway provides
+PostgreSQL (PostGIS/pgvector template, unmanaged) and Redis, and a single
+S3-compatible object storage bucket; `NEON_DIRECT_URL`, the `DATABASE_MIGRATION_URL`
+role split, `R2_RECOVERY_*`, and the two-bucket isolation/copy checks are
+removed. Supabase Auth remains the only external identity provider and Resend
+the transactional email provider, as decided in ADR 0003. Migration to Neon
+later requires only changing `DATABASE_URL`. Cost ceiling and the other sections
+below remain in effect unless contradicted here.
+
 ## Context
 
 The foundation plan selected Render Pro, Cloudflare Access, Cloudflare R2,
@@ -39,16 +50,16 @@ Use the following beta topology:
 | Job worker | Railway Hobby | Always on with bounded resources |
 | Scheduler and maintenance | Railway Cron | One-shot command, minimum five-minute cadence |
 | Redis transport | Railway Redis-compatible service | Private network; disposable queue/cache state |
-| Product PostgreSQL | Neon Free, PostgreSQL 17 | Pooled runtime connections; direct migration connection; scale to zero |
-| Object storage | Cloudflare R2 Free | Separate preview primary and recovery buckets |
+| Product PostgreSQL | Railway Postgres template, PostgreSQL 18 | Single private URL for runtime and migration; PostGIS/pgvector enabled |
+| Object storage | Railway S3-compatible Object Storage | Single private bucket for objects and backups |
 | External proof of email | Existing Supabase Free project | Auth only; no Umbral product tables |
 | Transactional email | Existing Resend account | Resend test sender until DNS is controlled |
 | Traces and metrics | Grafana Cloud Free | OTLP over HTTPS; metadata allowlist |
 | Error monitoring | Sentry Developer | PII disabled; metadata allowlist |
 
-Railway is the deployment control plane and private service network. Neon,
-R2, Grafana, Sentry, Supabase, and Resend are managed external dependencies;
-Umbral does not run or patch their servers.
+Railway is the deployment control plane and private service network. Grafana,
+Sentry, Supabase, and Resend are managed external dependencies; Umbral does not
+run or patch their servers.
 
 This decision replaces the Render/Cloudflare topology only for the beta
 environment. It does not choose the final production platform. Production
@@ -69,15 +80,16 @@ The data flow is:
 2. Next.js validates the Umbral product session for protected routes.
 3. Next.js forwards allowed server-side requests to private FastAPI with the
    environment-specific BFF credential and correlation ID.
-4. FastAPI persists product truth in Neon PostgreSQL and publishes only opaque
+4. FastAPI persists product truth in Railway PostgreSQL and publishes only opaque
    job references to Railway Redis.
 5. The always-on worker consumes Redis jobs, reloads authoritative state from
    PostgreSQL, calls Supabase/Resend or other explicit adapters, and records the
    result transactionally.
 6. Railway Cron starts bounded one-shot maintenance commands instead of
    deploying a permanent scheduler loop.
-7. API, worker, and cron write objects through the S3-compatible port to R2 and
-   export allowlisted signals to Grafana Cloud and Sentry.
+7. API, worker, and cron write objects through the S3-compatible port to the
+   Railway object bucket and export allowlisted signals to Grafana Cloud and
+   Sentry.
 
 PostgreSQL remains authoritative for product identity, jobs, schedules,
 outbox, audit, and recovery. Redis may be lost and rebuilt from PostgreSQL.
@@ -169,18 +181,16 @@ environment-crossover issuers/origins.
 
 ## Data Services
 
-### Neon PostgreSQL
+### Railway PostgreSQL
 
-Create a PostgreSQL 17 Neon project in a region close to the selected Railway
-region. Enable PostGIS and pgvector through Alembic/bootstrap verification.
-Runtime services use the pooled connection string. Release migrations use the
-direct connection string and run before the new application digest becomes
-active.
+Create the Railway Postgres template with PostGIS and pgvector enabled through
+Alembic/bootstrap verification. Runtime and release migrations share the same
+single private connection string; no pooled/direct role split exists. The
+service is unmanaged (no SLA/HA), which is acceptable for the private beta.
 
-The Free limit is acceptable only while the database remains below its storage
-and compute allowances. A usage alert at 70% of either limit triggers a move to
-a paid Neon plan or a reviewed migration; silent data deletion is never an
-acceptable response.
+The database is expected to remain well below free/cheap storage allowances. A
+usage alert at 70% of either limit triggers a move to a reviewed plan or a
+migration; silent data deletion is never an acceptable response.
 
 Preview composes the PostgreSQL identity, session, audit, job, schedule, and
 outbox repositories. In-memory repositories remain limited to tests and local
@@ -193,13 +203,13 @@ uses native Redis protocol, and has conservative CPU/memory limits. PostgreSQL
 outbox recovery reconstructs unpublished or lost queue messages after a Redis
 restart.
 
-### Cloudflare R2
+### Railway Object Storage
 
-Use separate private `preview-primary` and `preview-recovery` buckets with no
-public listing. Credentials are scoped to the required buckets and operations.
-The S3 adapter records checksums and provider references; release evidence tests
-write/read/stat behavior and recovery copying. Custom DNS is not required to
-use R2.
+Use one private S3-compatible bucket with no public listing. The S3 adapter
+records checksums and provider references; release evidence tests write/read/stat
+behavior against the single bucket and keeps backups under `backups/preview/`.
+Credentials are scoped to the required bucket and operations. Custom DNS is not
+required to use Railway object storage.
 
 ## Cost Controls
 
@@ -218,7 +228,7 @@ Reaching the hard limit intentionally takes the beta offline. This is preferable
 to unbounded spending during a test phase and must surface as an operational
 alert. The first week of real usage is reviewed before invitations expand.
 
-Neon, R2, Grafana Cloud, Sentry, Supabase, and Resend remain on their free tiers
+Grafana Cloud, Sentry, Supabase, and Resend remain on their free tiers
 while within published limits. Approaching 70% of a hard provider quota creates
 an operational follow-up before the quota is exhausted.
 
@@ -232,7 +242,7 @@ not a fixed price; the USD 20 Railway hard limit is the enforceable ceiling.
   decision.
 - The worker remains available so an accepted magic-link request is not left
   waiting for an HTTP wake-up.
-- Neon or PostgreSQL failure makes identity mutations and durable jobs
+- PostgreSQL failure makes identity mutations and durable jobs
   unavailable; no product access is granted.
 - Redis failure degrades job execution. PostgreSQL outbox state remains intact
   and is replayed after recovery.
@@ -241,7 +251,8 @@ not a fixed price; the USD 20 Railway hard limit is the enforceable ceiling.
 - A Supabase Free project can pause after sustained low activity and requires
   an operator resume; readiness and the runbook distinguish this from a normal
   application cold start.
-- R2 failure degrades object-dependent work without changing product truth.
+- Object storage failure degrades object-dependent work without changing
+  product truth.
 - Grafana or Sentry failure is visible in readiness but never rolls back or
   changes a product transaction.
 - A Railway hard-limit shutdown is an explicit beta outage, not a reason to
@@ -253,9 +264,9 @@ The deployment preserves the foundation's build-once rule:
 
 1. CI builds the web and Python runtime OCI images once and records immutable
    digests in the release manifest.
-2. The preview release gate validates Railway configuration, Neon extensions
-   and Alembic head, Redis, R2, telemetry, provider isolation, and secret
-   inventory without exposing values.
+2. The preview release gate validates Railway configuration, extensions
+   and Alembic head, Redis, object storage, telemetry, provider isolation, and
+   secret inventory without exposing values.
 3. A release command runs backup evidence and forward migrations using the
    exact manifest.
 4. Railway services deploy the recorded digests. Service-specific start
@@ -285,9 +296,9 @@ The implementation plan must cover only the seams required by this deployment:
 6. PostgreSQL composition for identity, sessions, audit, jobs, schedules, and
    outbox in preview, with in-memory adapters restricted to local/tests;
 7. a real always-on worker entry point and finite cron entry point;
-8. Neon migration/readiness conformance for PostgreSQL 17, PostGIS, and
-   pgvector;
-9. Railway Redis and R2 integration conformance;
+8. migration/readiness conformance for PostgreSQL (PostGIS and pgvector) and
+   the single private URL;
+9. Railway Redis and object storage integration conformance;
 10. Grafana/Sentry beta configuration and redaction verification;
 11. exact-manifest deploy, smoke, evidence, and rollback automation;
 12. updates to the foundation platform ADR and identity runbook reflecting the
@@ -302,8 +313,9 @@ production topology redesign is part of this work.
 
 This minimizes accounts but makes PostgreSQL extensions, backups, and database
 operation more self-managed. Persistent PostgreSQL, Redis, and worker resources
-also put the USD 20 ceiling at risk. It remains a future option if Railway's
-managed database capabilities or budget change.
+also put the USD 20 ceiling at risk. The 2026-08-04 amendment adopted this
+option with a single bucket and unmanaged PostgreSQL; it was selected over the
+alternatives below for the private beta.
 
 ### Maximum-free split across Vercel, Render, Neon, Upstash, and R2
 
@@ -325,8 +337,8 @@ The beta deployment design is complete when:
 - the exact release manifest can deploy and roll back without rebuilding;
 - Supabase/Resend provider conformance passes within the DNS-free limitations;
 - Supabase Free pause detection and documented manual recovery are verified;
-- PostgreSQL 17, PostGIS, pgvector, Redis recovery, R2, Grafana, and Sentry
-  checks pass;
+- PostgreSQL, PostGIS, pgvector, Redis recovery, object storage, Grafana, and
+  Sentry checks pass;
 - identity SC-001 through SC-010 evidence is attached to the accepted ADR and
   runbook;
 - no secret or bearer material appears in source, logs, traces, Sentry,

@@ -49,7 +49,7 @@ class _Clients:
     ) -> object:
         if operation == "put":
             assert body is not None
-            if self.failure == "r2.primary_round_trip":
+            if self.failure == "object_store.round_trip":
                 return {"size_bytes": 0}
             self.objects[(bucket, key)] = body
             return {"size_bytes": len(body)}
@@ -57,13 +57,6 @@ class _Clients:
             return {"size_bytes": len(self.objects[(bucket, key)])}
         if operation == "get":
             return self.objects[(bucket, key)]
-        if operation == "copy":
-            assert body is not None
-            if self.failure == "r2.recovery_copy":
-                return {"size_bytes": 0}
-            source_bucket, source_key = body.decode().split("/", maxsplit=1)
-            self.objects[(bucket, key)] = self.objects[(source_bucket, source_key)]
-            return {"size_bytes": len(self.objects[(bucket, key)])}
         raise AssertionError(operation)
 
     def http(
@@ -85,10 +78,8 @@ class _Clients:
 
 def _config() -> dict[str, str]:
     return {
-        "DATABASE_URL": "postgresql://runtime:runtime@ep-preview-pooler.neon.tech/umbral",
-        "DATABASE_MIGRATION_URL": "postgresql://migration:migration@ep-preview.neon.tech/umbral",
+        "DATABASE_URL": "postgresql://umbral:umbral@preview-postgres.railway.internal:5432/railway",
         "OBJECT_STORE_BUCKET": "umbral-primary",
-        "R2_RECOVERY_BUCKET": "umbral-recovery",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example.test",
         "SENTRY_DSN": "https://sentry-secret@sentry.example.test/42",
         "SUPABASE_URL": "https://configured-project.supabase.co",
@@ -122,11 +113,8 @@ def test_preview_dependency_gate_runs_all_remote_checks_without_secret_evidence(
         "postgres.server_major",
         "postgres.alembic_revision",
         "postgres.extensions",
-        "database.url_roles",
         "redis.round_trip",
-        "r2.primary_round_trip",
-        "r2.bucket_isolation",
-        "r2.recovery_copy",
+        "object_store.round_trip",
         "grafana.otlp",
         "sentry.event",
         "supabase.issuer",
@@ -155,73 +143,14 @@ def test_preview_dependency_gate_runs_all_remote_checks_without_secret_evidence(
     assert b"sentry-secret" not in sentry_request[3]
 
 
-def test_preview_dependency_gate_rejects_a_direct_runtime_database_url() -> None:
-    from umbral.ops.provider_conformance import (
-        PreviewDependencyClients,
-        run_preview_dependency_conformance,
-    )
-
-    config = _config()
-    config["DATABASE_URL"] = config["DATABASE_MIGRATION_URL"]
-    clients = _Clients()
-
-    report = run_preview_dependency_conformance(
-        config=config,
-        manifest_revision="0001_foundation_runtime",
-        clients=PreviewDependencyClients(
-            postgres=clients.postgres,
-            redis=clients.redis,
-            object_store=clients.object_store,
-            http=clients.http,
-        ),
-    )
-
-    assert not report.passed
-    assert next(
-        check for check in report.checks if check.name == "database.url_roles"
-    ).code == "dependency.failed"
-
-
-def test_preview_dependency_gate_rejects_shared_primary_and_recovery_buckets(
-) -> None:
-    from umbral.ops.provider_conformance import (
-        PreviewDependencyClients,
-        run_preview_dependency_conformance,
-    )
-
-    config = _config()
-    config["R2_RECOVERY_BUCKET"] = config["OBJECT_STORE_BUCKET"]
-    clients = _Clients()
-
-    report = run_preview_dependency_conformance(
-        config=config,
-        manifest_revision="0001_foundation_runtime",
-        clients=PreviewDependencyClients(
-            postgres=clients.postgres,
-            redis=clients.redis,
-            object_store=clients.object_store,
-            http=clients.http,
-        ),
-    )
-
-    assert not report.passed
-    assert next(
-        check for check in report.checks if check.name == "r2.bucket_isolation"
-    ).code == "dependency.failed"
-    assert clients.objects == {}
-
-
 @pytest.mark.parametrize(
     "failure",
     [
         "postgres.server_major",
         "postgres.alembic_revision",
         "postgres.extensions",
-        "database.url_roles",
         "redis.round_trip",
-        "r2.primary_round_trip",
-        "r2.bucket_isolation",
-        "r2.recovery_copy",
+        "object_store.round_trip",
         "grafana.otlp",
         "sentry.event",
         "supabase.issuer",
@@ -238,10 +167,6 @@ def test_preview_dependency_gate_fails_closed_without_sensitive_evidence(
     )
 
     config = _config()
-    if failure == "database.url_roles":
-        config["DATABASE_URL"] = config["DATABASE_MIGRATION_URL"]
-    if failure == "r2.bucket_isolation":
-        config["R2_RECOVERY_BUCKET"] = config["OBJECT_STORE_BUCKET"]
     if failure == "supabase.issuer":
         config["IDENTITY_ISSUER"] = "https://wrong-issuer.example.test/auth/v1"
     clients = _Clients(failure)

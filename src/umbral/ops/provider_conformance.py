@@ -88,7 +88,6 @@ def run_preview_dependency_conformance(
             ),
         )
     )
-    checks.append(_check("database.url_roles", lambda: _valid_database_roles(config)))
 
     opaque_message = f"provider-conformance-{uuid4().hex}".encode()
     checks.append(
@@ -100,40 +99,15 @@ def run_preview_dependency_conformance(
 
     object_key = f"provider-conformance/{uuid4().hex}"
     object_body = b"provider-conformance"
-    primary_bucket = config.get("OBJECT_STORE_BUCKET", "")
-    recovery_bucket = config.get("R2_RECOVERY_BUCKET", "")
-    buckets_are_isolated = _r2_buckets_are_isolated(primary_bucket, recovery_bucket)
+    object_bucket = config.get("OBJECT_STORE_BUCKET", "")
     checks.append(
-        DependencyCheck(
-            "r2.bucket_isolation",
-            buckets_are_isolated,
-            "dependency.ok" if buckets_are_isolated else "dependency.failed",
+        _check(
+            "object_store.round_trip",
+            lambda: _primary_object_round_trip(
+                clients.object_store, object_bucket, object_key, object_body
+            ),
         )
     )
-    if buckets_are_isolated:
-        checks.append(
-            _check(
-                "r2.primary_round_trip",
-                lambda: _primary_object_round_trip(
-                    clients.object_store, primary_bucket, object_key, object_body
-                ),
-            )
-        )
-        checks.append(
-            _check(
-                "r2.recovery_copy",
-                lambda: _recovery_object_copy(
-                    clients.object_store, primary_bucket, recovery_bucket, object_key
-                ),
-            )
-        )
-    else:
-        checks.extend(
-            (
-                DependencyCheck("r2.primary_round_trip", False, "dependency.failed"),
-                DependencyCheck("r2.recovery_copy", False, "dependency.failed"),
-            )
-        )
 
     checks.append(
         _check(
@@ -206,33 +180,10 @@ def _check_dict(check: DependencyCheck) -> dict[str, object]:
     return payload
 
 
-def _valid_database_roles(config: Mapping[str, str]) -> bool:
-    runtime = urlparse(config.get("DATABASE_URL", ""))
-    migration = urlparse(config.get("DATABASE_MIGRATION_URL", ""))
-    runtime_hostname = runtime.hostname or ""
-    migration_hostname = migration.hostname or ""
-    return (
-        runtime.scheme in {"postgres", "postgresql"}
-        and migration.scheme in {"postgres", "postgresql"}
-        and bool(runtime_hostname)
-        and bool(migration_hostname)
-        and "-pooler" in runtime_hostname
-        and "-pooler" not in migration_hostname
-    )
-
-
 def _extension_names(value: object) -> set[str]:
     if not isinstance(value, (frozenset, list, set, tuple)):
         raise ValueError("extensions response is invalid")
     return {str(name) for name in value}
-
-
-def _r2_buckets_are_isolated(primary_bucket: str, recovery_bucket: str) -> bool:
-    return (
-        bool(primary_bucket)
-        and bool(recovery_bucket)
-        and primary_bucket != recovery_bucket
-    )
 
 
 def _redis_round_trip(redis: RedisClient, message: bytes) -> bool:
@@ -254,23 +205,6 @@ def _primary_object_round_trip(
         and isinstance(stat, Mapping)
         and stat.get("size_bytes") == len(body)
         and retrieved == body
-    )
-
-
-def _recovery_object_copy(
-    object_store: ObjectStoreClient,
-    primary_bucket: str,
-    recovery_bucket: str,
-    key: str,
-) -> bool:
-    copied = object_store(
-        "copy", recovery_bucket, key, f"{primary_bucket}/{key}".encode()
-    )
-    stat = object_store("stat", recovery_bucket, key, None)
-    return (
-        isinstance(copied, Mapping)
-        and isinstance(stat, Mapping)
-        and stat.get("size_bytes") == copied.get("size_bytes")
     )
 
 
@@ -476,13 +410,11 @@ def main() -> int:
         if name
         in {
             "DATABASE_URL",
-            "DATABASE_MIGRATION_URL",
             "REDIS_URL",
             "OBJECT_STORE_BUCKET",
             "OBJECT_STORE_ENDPOINT_URL",
             "OBJECT_STORE_ACCESS_KEY",
             "OBJECT_STORE_SECRET_KEY",
-            "R2_RECOVERY_BUCKET",
             "OTEL_EXPORTER_OTLP_ENDPOINT",
             "OTEL_EXPORTER_OTLP_HEADERS",
             "SENTRY_DSN",

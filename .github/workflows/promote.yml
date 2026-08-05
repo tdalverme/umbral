@@ -43,21 +43,19 @@ jobs:
           run-id: ${{ inputs.release_run_id }}
       - name: Install pinned Railway CLI
         run: npx @railway/cli@5.27.2 --version
+      - name: Install PostgreSQL client for preview backups
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
       - name: Verify gates and promote immutable Railway images
         shell: pwsh
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DATABASE_MIGRATION_URL: ${{ secrets.NEON_DIRECT_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
           OBJECT_STORE_BUCKET: ${{ secrets.OBJECT_STORE_BUCKET }}
           OBJECT_STORE_ENDPOINT_URL: ${{ secrets.OBJECT_STORE_ENDPOINT_URL }}
           OBJECT_STORE_ACCESS_KEY: ${{ secrets.OBJECT_STORE_ACCESS_KEY }}
           OBJECT_STORE_SECRET_KEY: ${{ secrets.OBJECT_STORE_SECRET_KEY }}
-          R2_RECOVERY_BUCKET: ${{ secrets.R2_RECOVERY_BUCKET }}
-          R2_RECOVERY_ACCESS_KEY_ID: ${{ secrets.R2_RECOVERY_ACCESS_KEY_ID }}
-          R2_RECOVERY_SECRET_ACCESS_KEY: ${{ secrets.R2_RECOVERY_SECRET_ACCESS_KEY }}
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
@@ -68,7 +66,7 @@ jobs:
           RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
           UMBRAL_PREVIEW_BASE_URL: ${{ secrets.UMBRAL_PREVIEW_BASE_URL }}
           UMBRAL_SMOKE_INVITEE: ${{ secrets.UMBRAL_SMOKE_INVITEE }}
-          UMBRAL_SMOKE_OPERATOR_DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
+          UMBRAL_SMOKE_OPERATOR_DATABASE_URL: ${{ secrets.DATABASE_URL }}
           UMBRAL_SMOKE_OPERATOR_DATABASE_URL_ENV: UMBRAL_SMOKE_OPERATOR_DATABASE_URL
           UMBRAL_SMOKE_RESEND_OBSERVATION_TOKEN: ${{ secrets.RESEND_API_KEY }}
         run: |

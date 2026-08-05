@@ -80,15 +80,16 @@ provider-conformance/recovery en task 13. El smoke de release local
 
 - Re-ejecutar el smoke de preview contra el manifiesto exacto
   (`scripts/deploy/smoke.ps1 -Mode preview -BaseUrl <origin>`), que requiere
-  preview desplegado, `UMBRAL_SMOKE_INVITEE`, `UMBRAL_OPERATOR_DATABASE_URL` y
-  token de observación Resend. El commit `49a7c6e` ejecutó la corrida real el
-  2026-08-01; el worktree extiende el smoke a 15 escenarios y necesita una
-  nueva corrida para cerrar SC-001 y el manifiesto vigente.
+  preview desplegado, `UMBRAL_SMOKE_INVITEE`,
+  `UMBRAL_SMOKE_OPERATOR_DATABASE_URL` y token de observación Resend. El commit
+  `49a7c6e` ejecutó la corrida real el 2026-08-01; el worktree extiende el smoke
+  a 15 escenarios y necesita una nueva corrida para cerrar SC-001 y el
+  manifiesto vigente.
 - Medir el rollback de producción <15 min; `docs/runbooks/evidence/
   us4-production-rollback.md` registra que no se ejecutó remotamente.
 - Alinear `docs/runbooks/evidence/us4-preview-release.md` con la plataforma
-  real (Railway/Neon); el documento aún cita Render/Cloudflare de la topología
-  de diseño.
+  real (Railway consolidado); el documento aún cita Render/Cloudflare de la
+  topología de diseño.
 - Corregir `compose.yaml` local: pglayers rechaza `POSTGRES_PASSWORD=umbral_local_only`
   por contener el username (`umbral`); el quickstart local depende de este
   servicio. Las suites de prueba usan Testcontainers y no dependen de compose.

@@ -120,7 +120,7 @@ def test_variable_inventory_contains_only_scoped_variable_names() -> None:
         "OBJECT_STORE_ACCESS_KEY",
         "SUPABASE_SECRET_KEY",
         "RESEND_API_KEY",
-        "NEON_DIRECT_URL",
+        "GHCR_DEPLOY_TOKEN",
         "RAILWAY_TOKEN",
     } <= names
     assert all(set(variable) == {"name", "scopes"} for variable in variables)

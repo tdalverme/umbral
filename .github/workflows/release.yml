@@ -15,11 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4
+      - name: Require classic GHCR deploy token
+        if: ${{ secrets.GHCR_DEPLOY_TOKEN == '' }}
+        run: |
+          echo "GHCR_DEPLOY_TOKEN (classic PAT with write:packages) is required so Railway can pull public packages anonymously." >&2
+          exit 1
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_DEPLOY_TOKEN }}
       - id: runtime
         uses: docker/build-push-action@v7
         with:
@@ -41,7 +46,7 @@ jobs:
       - name: Make organization packages public
         if: github.event.repository.owner.type == 'Organization'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
           PACKAGE_PREFIX: ${{ github.event.repository.name }}
         run: |
           gh api --method PATCH "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_PREFIX}%2Fruntime" -f visibility=public
@@ -49,7 +54,7 @@ jobs:
       - name: Make personal packages public
         if: github.event.repository.owner.type != 'Organization'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
           PACKAGE_PREFIX: ${{ github.event.repository.name }}
         run: |
           gh api --method PATCH "/user/packages/container/${PACKAGE_PREFIX}%2Fruntime" -f visibility=public

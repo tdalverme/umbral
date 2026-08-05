@@ -31,10 +31,7 @@
     { "name": "RESEND_API_KEY", "scopes": ["api", "worker", "scheduler"] },
     { "name": "RESEND_FROM_EMAIL", "scopes": ["api", "worker", "scheduler"] },
     { "name": "EMAIL_WEBHOOK_SECRET", "scopes": ["api", "worker", "scheduler"] },
-    { "name": "NEON_DIRECT_URL", "scopes": ["release"] },
-    { "name": "R2_RECOVERY_BUCKET", "scopes": ["release"] },
-    { "name": "R2_RECOVERY_ACCESS_KEY_ID", "scopes": ["release"] },
-    { "name": "R2_RECOVERY_SECRET_ACCESS_KEY", "scopes": ["release"] },
+    { "name": "GHCR_DEPLOY_TOKEN", "scopes": ["release"] },
     { "name": "RAILWAY_TOKEN", "scopes": ["release"] },
     { "name": "SENTRY_PROBE_ID", "scopes": ["release"] },
     { "name": "GRAFANA_PROBE_ID", "scopes": ["release"] }
