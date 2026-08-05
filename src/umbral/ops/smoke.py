@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -246,7 +247,16 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                                 message_id, capture_url, correlation_id
                             )
                 if len(matches) > 1:
+                    print(
+                        f"SMOKE RESEND ambiguous matches={len(matches)}",
+                        file=sys.stderr,
+                    )
                     raise ValueError("Resend message correlation is ambiguous")
+            else:
+                print(
+                    f"SMOKE RESEND listing unexpected data={type(messages).__name__}",
+                    file=sys.stderr,
+                )
             _sleep_remaining(deadline)
 
     def trigger_delivery_event(self, scenario: str, correlation_id: UUID) -> str:
@@ -406,7 +416,12 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             with urlopen(request, timeout=_remaining(deadline)) as response:  # noqa: S310
                 value = _json_object(response.read())
         except HTTPError as error:
-            error.read()
+            body = error.read()
+            print(
+                f"SMOKE RESEND {method} {path} HTTP {error.code} "
+                f"body={body[:200]!r}",
+                file=sys.stderr,
+            )
             raise ValueError("Resend observation failed") from error
         return value
 
@@ -589,7 +604,11 @@ def run_preview_identity_smoke(
         provider_id: str | None = None
         try:
             provider_id, passed = operation()
-        except Exception:
+        except Exception as error:
+            print(
+                f"SMOKE {scenario} RAISED {type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
             passed = False
         checks.append(
             PreviewSmokeCheck(
@@ -788,11 +807,17 @@ def _runtime_identity_matches(
         or ready.status_code != 200
         or version.status_code != 200
     ):
+        print(
+            f"SMOKE runtime_identity probes health={health.status_code} "
+            f"ready={ready.status_code} version={version.status_code} "
+            f"ready_body={ready.body[:200]!r}",
+            file=sys.stderr,
+        )
         return False
     health_payload = _json_object(health.body)
     ready_payload = _json_object(ready.body)
     version_payload = _json_object(version.body)
-    return (
+    identity = (
         health_payload == {"status": "alive"}
         and ready_payload.get("surface") == "web"
         and ready_payload.get("state") == "ready"
@@ -801,8 +826,15 @@ def _runtime_identity_matches(
         and version_payload.get("release_id") == config.release_id
         and version_payload.get("manifest_sha256") == config.manifest_sha256
         and version_payload.get("artifact_digest") == config.artifact_digests["web"]
-        and _runtime_surfaces_match(config, observer)
     )
+    if not identity:
+        print(
+            f"SMOKE runtime_identity mismatch health={health_payload} "
+            f"ready={ready_payload} version={version_payload}",
+            file=sys.stderr,
+        )
+        return False
+    return _runtime_surfaces_match(config, observer)
 
 
 def _runtime_surfaces_match(
@@ -810,6 +842,11 @@ def _runtime_surfaces_match(
 ) -> bool:
     rows = observer.runtime_surfaces(timeout_seconds=config.timeout_seconds)
     if len(rows) != len(REQUIRED_SURFACES):
+        print(
+            f"SMOKE surfaces count rows={len(rows)} required={len(REQUIRED_SURFACES)} "
+            f"surfaces={[row.get('surface') for row in rows]}",
+            file=sys.stderr,
+        )
         return False
     expected_digests = {
         "web": config.artifact_digests["web"],
@@ -817,7 +854,7 @@ def _runtime_surfaces_match(
         "worker": config.artifact_digests["runtime"],
         "scheduler": config.artifact_digests["runtime"],
     }
-    return {row.get("surface") for row in rows} == set(REQUIRED_SURFACES) and all(
+    matches = {row.get("surface") for row in rows} == set(REQUIRED_SURFACES) and all(
         row.get("state") == "ready"
         and row.get("release_id") == config.release_id
         and row.get("manifest_sha256") == config.manifest_sha256
@@ -826,6 +863,9 @@ def _runtime_surfaces_match(
         and _is_fresh_observed_at(row.get("observed_at"))
         for row in rows
     )
+    if not matches:
+        print(f"SMOKE surfaces mismatch rows={rows!r}", file=sys.stderr)
+    return matches
 
 
 def _is_fresh_observed_at(value: object) -> bool:
@@ -854,6 +894,12 @@ def _request_magic_link(
         ('{"email":"' + email + '"}').encode(),
         headers={"X-Correlation-ID": str(correlation_id)},
     )
+    if response.status_code != 202:
+        print(
+            f"SMOKE magic-link POST status={response.status_code} "
+            f"body={response.body[:200]!r}",
+            file=sys.stderr,
+        )
     return response.status_code == 202
 
 
