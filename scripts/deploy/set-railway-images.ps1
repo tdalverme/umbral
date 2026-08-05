@@ -77,11 +77,46 @@ $serviceArtifacts = [ordered]@{
 $rawStatus = & npx @railway/cli@5.27.2 service status --all -e $Environment --json
 if ($LASTEXITCODE -ne 0) { throw "Railway service status query failed." }
 $serviceIdByName = @{}
+$statusByName = @{}
 foreach ($svc in ($rawStatus | ConvertFrom-Json)) {
     $serviceIdByName[[string]$svc.name] = [string]$svc.id
+    $statusByName[[string]$svc.name] = $svc
 }
 foreach ($service in $serviceArtifacts.Keys) {
     Require-Condition ($serviceIdByName.ContainsKey($service)) "Railway service '${service}' was not found in the environment."
+}
+
+# If the environment already pins this release, reuse the current deployment IDs
+# and skip the (now idempotent) patch to avoid a no-op commit that yields no
+# new deployment.
+$currentConfigRaw = & npx @railway/cli@5.27.2 environment config -e $Environment --json
+$alreadyAtTarget = $false
+if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($currentConfigRaw)) {
+    $currentConfig = $currentConfigRaw | ConvertFrom-Json
+    $alreadyAtTarget = $true
+    foreach ($service in $serviceArtifacts.Keys) {
+        $artifact = $manifest.artifacts.($serviceArtifacts[$service])
+        $imageReference = "{0}@{1}" -f $artifact.image, $artifact.digest
+        $svcConfig = $currentConfig.services.($serviceIdByName[$service])
+        if ($null -eq $svcConfig -or $null -eq $svcConfig.source -or $null -eq $svcConfig.source.image -or [string]$svcConfig.source.image -ne $imageReference) { $alreadyAtTarget = $false; break }
+        if ([string]$svcConfig.variables.UMBRAL_RELEASE_ID.value -ne [string]$manifest.release_id -or [string]$svcConfig.variables.UMBRAL_RELEASE_DIGEST.value -ne [string]$artifact.digest) { $alreadyAtTarget = $false; break }
+        $storedManifest = $null
+        try { $storedManifest = [string]$svcConfig.variables.UMBRAL_RELEASE_MANIFEST.value | ConvertFrom-Json } catch { $alreadyAtTarget = $false; break }
+        if ($null -eq $storedManifest -or [string]$storedManifest.release_id -ne [string]$manifest.release_id -or [string]$storedManifest.git_sha -ne [string]$manifest.git_sha) { $alreadyAtTarget = $false; break }
+    }
+}
+if ($alreadyAtTarget) {
+    Write-Host "Environment already pinned to $($manifest.release_id); reusing current deployments."
+    $currentDeploymentIds = [ordered]@{}
+    foreach ($service in $serviceArtifacts.Keys) {
+        $currentDeploymentIds[$service] = [string]$statusByName[$service].deploymentId
+    }
+    [ordered]@{
+        release_id = $manifest.release_id
+        manifest_sha256 = $actualChecksum
+        deployment_ids = $currentDeploymentIds
+    } | ConvertTo-Json -Depth 5
+    return
 }
 
 $patch = [ordered]@{ services = [ordered]@{} }

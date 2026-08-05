@@ -52,7 +52,7 @@ while ($pending.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline) {
         $deploymentIndex = [Array]::IndexOf($ids, $expectedId)
         if ($deploymentIndex -lt 0) { continue }
         $deploymentStatus = $statuses[$deploymentIndex]
-        if ($deploymentStatus -eq "SUCCESS") {
+        if ($deploymentStatus -in @("SUCCESS", "SLEEPING")) {
             [void]$pending.Remove($service)
             continue
         }
