@@ -647,49 +647,53 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         deadline = self._start_deadline(timeout_seconds)
         import psycopg
 
-        while True:
-            with psycopg.connect(
-                self._database_url, connect_timeout=max(1, int(_remaining(deadline)))
-            ) as connection:
-                with connection.cursor() as cursor:
-                    correlation_id = self._event_correlations.get(provider_event_id)
-                    if correlation_id is None:
-                        raise ValueError("unknown Resend provider message")
-                    expected_reason = self._delivery_reasons.get(correlation_id)
-                    cursor.execute(
-                        "SELECT provider_event_id, event_type, reason, COUNT(*) "
-                        "FROM access_audit_events WHERE provider = 'resend' "
-                        "AND correlation_id = %s GROUP BY provider_event_id, event_type, reason",
-                        (str(correlation_id),),
+        try:
+            while True:
+                with psycopg.connect(
+                    self._database_url, connect_timeout=max(1, int(_remaining(deadline)))
+                ) as connection:
+                    with connection.cursor() as cursor:
+                        correlation_id = self._event_correlations.get(provider_event_id)
+                        if correlation_id is None:
+                            raise ValueError("unknown Resend provider message")
+                        expected_reason = self._delivery_reasons.get(correlation_id)
+                        cursor.execute(
+                            "SELECT provider_event_id, event_type, reason, COUNT(*) "
+                            "FROM access_audit_events WHERE provider = 'resend' "
+                            "AND correlation_id = %s GROUP BY provider_event_id, event_type, reason",
+                            (str(correlation_id),),
+                        )
+                        rows = cursor.fetchall()
+                if (
+                    len(rows) == 1
+                    and rows[0][0]
+                    and rows[0][1] == "magic_link.delivery_observed.v1"
+                    and rows[0][2] == expected_reason
+                    and rows[0][3] == 1
+                ):
+                    from sqlalchemy import create_engine
+                    from sqlalchemy.orm import sessionmaker
+
+                    from umbral.infrastructure.db.repositories.identity import (
+                        SqlAlchemyIdentityStore,
                     )
-                    rows = cursor.fetchall()
-            if (
-                len(rows) == 1
-                and rows[0][0]
-                and rows[0][1] == "magic_link.delivery_observed.v1"
-                and rows[0][2] == expected_reason
-                and rows[0][3] == 1
-            ):
-                from sqlalchemy import create_engine
-                from sqlalchemy.orm import sessionmaker
+                    from umbral.infrastructure.db.session import (
+                        resolve_postgres_dialect_url,
+                    )
 
-                from umbral.infrastructure.db.repositories.identity import (
-                    SqlAlchemyIdentityStore,
-                )
-                from umbral.infrastructure.db.session import (
-                    resolve_postgres_dialect_url,
-                )
-
-                engine = create_engine(resolve_postgres_dialect_url(self._database_url))
-                try:
-                    store = SqlAlchemyIdentityStore(sessionmaker(bind=engine))
-                    with store.transaction():
-                        if store.append_provider_audit_once("resend", str(rows[0][0]), None):
-                            return False
-                finally:
-                    engine.dispose()
-                return True
-            _sleep_remaining(deadline)
+                    engine = create_engine(resolve_postgres_dialect_url(self._database_url))
+                    try:
+                        store = SqlAlchemyIdentityStore(sessionmaker(bind=engine))
+                        with store.transaction():
+                            if store.append_provider_audit_once("resend", str(rows[0][0]), None):
+                                return False
+                    finally:
+                        engine.dispose()
+                    return True
+                _sleep_remaining(deadline)
+        except TimeoutError:
+            self._print_resend_webhook_events()
+            raise
 
     def wait_for_no_magic_link(
         self,

@@ -137,7 +137,7 @@ foreach ($key in @("OBJECT_STORE_BUCKET", "OBJECT_STORE_ENDPOINT_URL", "OBJECT_S
 # point at the public web origin, so the capture origin is derived from the
 # promote runner's preview base URL instead of a stale static value.
 $providerVars = [ordered]@{}
-foreach ($key in @("RESEND_API_KEY", "RESEND_FROM_EMAIL")) {
+foreach ($key in @("RESEND_API_KEY", "RESEND_FROM_EMAIL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "IDENTITY_ISSUER")) {
     $value = [Environment]::GetEnvironmentVariable($key)
     Require-Condition (-not [string]::IsNullOrWhiteSpace([string]$value)) "Missing ${key} environment value for Railway service variables."
     $providerVars[$key] = [string]$value
