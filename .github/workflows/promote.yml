@@ -97,4 +97,9 @@ jobs:
           $preload = & $pythonExecutable -m umbral.ops.identity preload-invitation --email-env UMBRAL_SMOKE_INVITEE --database-url-env UMBRAL_SMOKE_OPERATOR_DATABASE_URL | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $preload.result -ne "accepted" -or [string]::IsNullOrWhiteSpace([string]$preload.invitation_id)) { throw "Preview invitation preload failed." }
           $env:UMBRAL_SMOKE_INVITATION_ID = [string]$preload.invitation_id
+          # Run the scheduler once inside its deployed env so the scheduler
+          # surface heartbeat and any pending outbox relay are fresh for the
+          # smoke regardless of the cron cadence or reused deployments.
+          $null = & npx @railway/cli@5.27.2 run -e preview --service scheduler -- $pythonExecutable -m umbral.workers scheduler-once
+          if ($LASTEXITCODE -ne 0) { throw "Preview scheduler-once pass failed (exit $LASTEXITCODE)." }
           $null = ./scripts/deploy/smoke.ps1 -Mode preview -BaseUrl $env:UMBRAL_PREVIEW_BASE_URL -ManifestPath $manifest.FullName -PythonExecutable $pythonExecutable
