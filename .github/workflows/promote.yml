@@ -52,6 +52,8 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends postgresql-client-18
+          sudo ln -sf /usr/lib/postgresql/18/bin/pg_dump /usr/bin/pg_dump
+          pg_dump --version
       - name: Verify gates and promote immutable Railway images
         shell: pwsh
         env:
