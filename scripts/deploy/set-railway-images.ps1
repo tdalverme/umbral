@@ -133,13 +133,18 @@ foreach ($key in @("OBJECT_STORE_BUCKET", "OBJECT_STORE_ENDPOINT_URL", "OBJECT_S
 
 # Runtime services also need the current provider credentials so the worker can
 # issue magic links; static provisioning can leave a rotated key behind, which
-# makes the sender return 401 during the smoke.
+# makes the sender return 401 during the smoke. The magic-link capture URL must
+# point at the public web origin, so the capture origin is derived from the
+# promote runner's preview base URL instead of a stale static value.
 $providerVars = [ordered]@{}
 foreach ($key in @("RESEND_API_KEY", "RESEND_FROM_EMAIL")) {
     $value = [Environment]::GetEnvironmentVariable($key)
     Require-Condition (-not [string]::IsNullOrWhiteSpace([string]$value)) "Missing ${key} environment value for Railway service variables."
     $providerVars[$key] = [string]$value
 }
+$previewBaseUrl = [string][Environment]::GetEnvironmentVariable("UMBRAL_PREVIEW_BASE_URL")
+Require-Condition (-not [string]::IsNullOrWhiteSpace($previewBaseUrl)) "Missing UMBRAL_PREVIEW_BASE_URL environment value for Railway service variables."
+$providerVars["IDENTITY_CAPTURE_ORIGIN"] = "https://" + $previewBaseUrl.Trim()
 
 # Compare every app service against its target spec so only the services that
 # actually diverge are patched. This keeps the promote idempotent (no-op when
