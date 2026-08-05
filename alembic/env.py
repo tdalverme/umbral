@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from logging.config import fileConfig
 
 from alembic import context
@@ -16,6 +17,7 @@ if config.config_file_name is not None:
 
 database_url = os.getenv("DATABASE_URL")
 if database_url:
+    database_url = re.sub(r"^postgres(ql)?://", "postgresql+psycopg://", database_url, count=1)
     config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 target_metadata = expected_schema()
