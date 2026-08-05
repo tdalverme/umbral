@@ -491,9 +491,23 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                     )
                     rows = cursor.fetchall()
             print(f"SMOKE RESEND webhook events rows={rows!r}", file=sys.stderr)
+            self._print_resend_webhooks()
         except Exception as error:
             print(
                 f"SMOKE RESEND webhook events failed: "
+                f"{type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+
+    def _print_resend_webhooks(self) -> None:
+        try:
+            listing = self._resend_json(
+                "GET", "/webhooks", None, monotonic() + 15
+            )
+            print(f"SMOKE RESEND webhooks config={listing!r}", file=sys.stderr)
+        except Exception as error:
+            print(
+                f"SMOKE RESEND webhooks query failed: "
                 f"{type(error).__name__}: {error}",
                 file=sys.stderr,
             )

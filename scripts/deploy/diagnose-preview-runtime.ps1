@@ -265,14 +265,15 @@ function Dump-PrivateApiUrlConfiguration {
         }
     }
     # The magic-link confirm verifies the Supabase access token issuer against
-    # IDENTITY_ISSUER; print the configured value (a public URL, not a secret).
+    # IDENTITY_ISSUER; report consistency with SUPABASE_URL without exposing
+    # the project ref value.
     foreach ($service in @("api", "worker")) {
         try {
-            $shellCommand = 'printf "%s" "$IDENTITY_ISSUER"'
+            $shellCommand = 'base="$SUPABASE_URL"; iss="$IDENTITY_ISSUER"; if [ "$iss" = "${base%/}/auth/v1" ]; then echo "consistent"; else echo "mismatch"; fi'
             $value = & npx @railway/cli@5.27.2 run -e preview --service $service -- sh -c $shellCommand 2>&1
-            Write-Host ("{0} IDENTITY_ISSUER = {1}" -f $service, ($value -join " "))
+            Write-Host ("{0} IDENTITY_ISSUER/supabase = {1}" -f $service, ($value -join " "))
         } catch {
-            Write-Host ("{0} IDENTITY_ISSUER query failed: {1}" -f $service, $_.Exception.Message)
+            Write-Host ("{0} issuer check failed: {1}" -f $service, $_.Exception.Message)
         }
     }
     # BFF token presence without exposing the secret value.
