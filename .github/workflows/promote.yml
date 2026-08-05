@@ -44,7 +44,14 @@ jobs:
       - name: Install pinned Railway CLI
         run: npx @railway/cli@5.27.2 --version
       - name: Install PostgreSQL client for preview backups
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
       - name: Verify gates and promote immutable Railway images
         shell: pwsh
         env:
