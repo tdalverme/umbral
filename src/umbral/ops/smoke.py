@@ -326,7 +326,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 execution_id=str(execution_id),
                 attempt_number=int(attempt_number),
                 correlation_id=str(execution_correlation_id),
-                job_id=f"{execution_id}:{attempt_number}",
+                job_id=f"{execution_id}-{attempt_number}",
             )
 
     def trigger_delivery_event(self, scenario: str, correlation_id: UUID) -> str:
@@ -465,6 +465,8 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
     ) -> bool:
         deadline = min(self._start_deadline(timeout_seconds), monotonic() + 10)
         while True:
+            if monotonic() >= deadline:
+                return True
             listing = self._resend_json("GET", "/emails", None, deadline)
             messages = listing.get("data")
             if isinstance(messages, list) and any(

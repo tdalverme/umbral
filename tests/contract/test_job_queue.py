@@ -20,7 +20,7 @@ def test_recording_queue_keeps_ids_only_and_is_json_serializable() -> None:
         correlation_id=correlation_id,
     )
 
-    assert message_id == f"{execution_id}:1"
+    assert message_id == f"{execution_id}-1"
     payload = queue.messages[0].payload
     assert payload == {
         "execution_id": str(execution_id),
@@ -60,7 +60,7 @@ def test_rq_queue_uses_json_serializer_and_forwards_only_contract_payload() -> N
 
     assert fake.calls[0][0] == "umbral.workers.worker:run_message"
     kwargs = fake.calls[0][1]
-    assert kwargs["job_id"] == f"{execution_id}:2"
+    assert kwargs["job_id"] == f"{execution_id}-2"
     assert kwargs["execution_id"] == str(execution_id)
     assert kwargs["attempt_number"] == 2
     assert kwargs["correlation_id"] == str(correlation_id)

@@ -50,7 +50,7 @@ class RQJobQueue:
     ) -> str:
         if attempt_number < 1:
             raise ValueError("attempt_number must be positive")
-        message_id = f"{execution_id}:{attempt_number}"
+        message_id = f"{execution_id}-{attempt_number}"
         self.queue.enqueue(
             self.job_name,
             execution_id=str(execution_id),
