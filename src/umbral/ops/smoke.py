@@ -310,7 +310,10 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                     ),
                     requests AS (
                         SELECT id FROM magic_link_requests
-                        WHERE id IN (SELECT request_id FROM attempts)
+                        WHERE id IN (
+                            SELECT request_id FROM magic_link_attempts
+                            WHERE invitation_id IN (SELECT id FROM target)
+                        )
                     )
                     DELETE FROM access_audit_events
                     WHERE invitation_id IN (SELECT id FROM target)

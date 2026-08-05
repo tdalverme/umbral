@@ -243,6 +243,36 @@ function Dump-PreviewPublicDomains {
     }
 }
 
+# The web needs a private URL to reach the api, but the promote pipeline only
+# pins image/release variables. Dump the live web/api internal URL variables
+# (non-secret) so a misconfigured UMBRAL_PRIVATE_API_URL is visible in the log.
+function Dump-PrivateApiUrlConfiguration {
+    Write-Host ""
+    Write-Host "=== web/api private api url configuration ==="
+    foreach ($pair in @(
+        @("web", "UMBRAL_PRIVATE_API_URL"),
+        @("web", "UMBRAL_API_BASE_URL"),
+        @("api", "UMBRAL_API_BASE_URL")
+    )) {
+        $service = $pair[0]
+        $variable = $pair[1]
+        try {
+            $shellCommand = 'v="$' + $variable + '"; printf "%s (len %s)" "$v" "${#v}"'
+            $value = & npx @railway/cli@5.27.2 run -e preview --service $service -- sh -c $shellCommand 2>&1
+            Write-Host ("{0} {1} = {2}" -f $service, $variable, ($value -join " "))
+        } catch {
+            Write-Host ("{0} {1} query failed: {2}" -f $service, $variable, $_.Exception.Message)
+        }
+    }
+    try {
+        $shellCommand = 'v="$UMBRAL_RELEASE_MANIFEST"; printf "%s (len %s)" "${v:0:80}" "${#v}"'
+        $value = & npx @railway/cli@5.27.2 run -e preview --service web -- sh -c $shellCommand 2>&1
+        Write-Host ("web UMBRAL_RELEASE_MANIFEST prefix = {0}" -f ($value -join " "))
+    } catch {
+        Write-Host ("web UMBRAL_RELEASE_MANIFEST query failed: {0}" -f $_.Exception.Message)
+    }
+}
+
 try {
     Invoke-Diagnostic "scheduler-once (composition + one pass)" $schedulerCode
     Invoke-Diagnostic "worker composition boot" $workerCode
@@ -250,6 +280,7 @@ try {
     Invoke-Diagnostic "api app module import (uvicorn path)" $apiAppCode
     Invoke-RailwayRunDiagnostic
     Dump-LiveApiServiceConfig
+    Dump-PrivateApiUrlConfiguration
     Dump-PreviewPublicDomains
 } finally {
     foreach ($entry in $savedRunnerOnlyEnv.GetEnumerator()) {

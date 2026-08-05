@@ -34,12 +34,6 @@ export class RuntimeManifestError extends Error {
   }
 }
 
-function configuredManifestPath(): string {
-  const configured = process.env.UMBRAL_RELEASE_MANIFEST?.trim();
-  if (!configured) throw new RuntimeManifestError();
-  return path.resolve(process.cwd(), configured);
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -111,20 +105,26 @@ function validateManifest(value: unknown, manifestSha256: string): RuntimeManife
 }
 
 export async function loadRuntimeManifest(): Promise<RuntimeManifest> {
-  let rawBytes: Buffer;
-  try {
-    rawBytes = await readFile(configuredManifestPath());
-  } catch {
-    throw new RuntimeManifestError();
+  const configured = process.env.UMBRAL_RELEASE_MANIFEST;
+  if (!configured) throw new RuntimeManifestError();
+  let raw: string;
+  if (configured.trimStart().startsWith("{")) {
+    raw = configured;
+  } else {
+    try {
+      raw = await readFile(path.resolve(process.cwd(), configured), "utf8");
+    } catch {
+      throw new RuntimeManifestError();
+    }
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(rawBytes.toString("utf8")) as unknown;
+    parsed = JSON.parse(raw) as unknown;
   } catch {
     throw new RuntimeManifestError();
   }
-  return validateManifest(parsed, createHash("sha256").update(rawBytes).digest("hex"));
+  return validateManifest(parsed, createHash("sha256").update(raw).digest("hex"));
 }
 
 export function versionFromManifest(manifest: RuntimeManifest): Record<string, unknown> {
