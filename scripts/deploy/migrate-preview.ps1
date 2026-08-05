@@ -33,14 +33,11 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host $alembicError
     throw ("Alembic migration failed: {0}" -f $alembicError)
 }
-$dbStateErrorFile = Join-Path ([System.IO.Path]::GetTempPath()) ("dbstate-{0}.txt" -f [guid]::NewGuid().ToString("N"))
-$databaseState = & $PythonExecutable -c "import json, os, psycopg; c=psycopg.connect(os.environ['DATABASE_URL']); q=c.cursor(); q.execute('select version_num from alembic_version'); r=q.fetchone()[0]; q.execute(\"select extname from pg_extension where extname in ('postgis','vector')\"); print(json.dumps({'revision': r, 'extensions': sorted(x[0] for x in q.fetchall())}))" 2> $dbStateErrorFile
-$dbStateError = Get-Content -Raw -LiteralPath $dbStateErrorFile
-Remove-Item -LiteralPath $dbStateErrorFile -Force -ErrorAction SilentlyContinue
+$databaseState = & $PythonExecutable -m umbral.ops.db_state 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Database conformance query failed; full error:"
-    Write-Host $dbStateError
-    throw ("Database conformance query failed: {0}" -f $dbStateError)
+    Write-Host ($databaseState | Out-String)
+    throw "Database conformance query failed."
 }
 $state = ($databaseState | Out-String | ConvertFrom-Json)
 if ($state.revision -ne $manifest.database_revision -or @($state.extensions).Count -ne 2 -or @($state.extensions | Where-Object { $_ -notin @('postgis', 'vector') }).Count -ne 0) {
