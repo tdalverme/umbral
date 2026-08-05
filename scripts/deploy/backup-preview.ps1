@@ -50,8 +50,13 @@ try {
     }
     Write-Host "Backup database host: $($databaseUri.Host):$($databaseUri.Port)"
 
-    $pgDumpError = (& pg_dump --format=custom --file $temporaryDump $env:DATABASE_URL 2>&1 | Out-String).Trim()
+    $pgDumpErrorFile = Join-Path ([System.IO.Path]::GetTempPath()) ("pgdump-{0}.txt" -f $backupId)
+    & pg_dump --format=custom --file $temporaryDump $env:DATABASE_URL 2> $pgDumpErrorFile
+    $pgDumpError = Get-Content -Raw -LiteralPath $pgDumpErrorFile
+    Remove-Item -LiteralPath $pgDumpErrorFile -Force -ErrorAction SilentlyContinue
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $temporaryDump)) {
+        Write-Host "pg_dump failed; full error:"
+        Write-Host $pgDumpError
         throw ("Database backup failed: {0}" -f $pgDumpError)
     }
 
