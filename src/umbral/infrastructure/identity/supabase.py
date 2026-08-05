@@ -76,17 +76,21 @@ class SupabaseIdentityAdapter:
                     "options": {"shouldCreateUser": True},
                 }
             )
-            user = _required_object(response.user)
-            session = _required_object(response.session)
+            user = response.user
+            if user is None:
+                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="provider_user_missing")
             subject = _required_text(getattr(user, "id", None))
             verified_email = normalize_email(_required_text(getattr(user, "email", None))).value
             if not _required_text(getattr(user, "email_confirmed_at", None)):
-                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link")
+                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="email_unconfirmed")
+            session = response.session
+            if session is None:
+                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="session_missing")
             access_token = _required_text(getattr(session, "access_token", None))
             claims = _access_token_claims(access_token)
             issuer = _required_text(claims.get("iss"))
             if issuer != self.issuer or _required_text(claims.get("sub")) != subject:
-                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link")
+                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="issuer_mismatch")
             return ProviderProof(
                 self.provider,
                 issuer,

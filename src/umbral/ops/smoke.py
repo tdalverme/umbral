@@ -494,6 +494,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                     rows = cursor.fetchall()
             print(f"SMOKE RESEND webhook events rows={rows!r}", file=sys.stderr)
             self._print_resend_webhooks()
+            self._print_webhook_probe()
         except Exception as error:
             print(
                 f"SMOKE RESEND webhook events failed: "
@@ -524,6 +525,37 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         except Exception as error:
             print(
                 f"SMOKE RESEND webhooks query failed: "
+                f"{type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+
+    def _print_webhook_probe(self) -> None:
+        if not self._web_origin:
+            return
+        from urllib.error import HTTPError
+        from urllib.request import Request, urlopen
+
+        request = Request(
+            f"{self._web_origin}/api/webhooks/email",
+            method="POST",
+            data=b"{}",
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "curl/8.7.1",
+            },
+        )
+        try:
+            with urlopen(request, timeout=15) as response:  # noqa: S310
+                print(f"SMOKE RESEND webhook probe status={response.status}", file=sys.stderr)
+        except HTTPError as error:
+            body = error.read()
+            print(
+                f"SMOKE RESEND webhook probe status={error.code} body={body[:200]!r}",
+                file=sys.stderr,
+            )
+        except Exception as error:
+            print(
+                f"SMOKE RESEND webhook probe failed: "
                 f"{type(error).__name__}: {error}",
                 file=sys.stderr,
             )

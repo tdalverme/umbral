@@ -49,18 +49,21 @@ def _deps() -> RuntimeDependencies:
 def _problem(error: IdentityError, request: Request) -> JSONResponse:
     request_id = request.headers.get("X-Request-ID", str(uuid4()))
     correlation_id = request.headers.get("X-Correlation-ID", str(uuid4()))
+    content: dict[str, object] = {
+        "type": f"https://umbral.invalid/problems/{error.code}",
+        "title": "No se pudo completar el acceso",
+        "status": error.status,
+        "code": error.code,
+        "recovery": error.recovery,
+        "request_id": request_id,
+        "correlation_id": correlation_id,
+    }
+    if error.detail:
+        content["detail"] = error.detail
     return JSONResponse(
         status_code=error.status,
         media_type="application/problem+json",
-        content={
-            "type": f"https://umbral.invalid/problems/{error.code}",
-            "title": "No se pudo completar el acceso",
-            "status": error.status,
-            "code": error.code,
-            "recovery": error.recovery,
-            "request_id": request_id,
-            "correlation_id": correlation_id,
-        },
+        content=content,
         headers={"Cache-Control": "no-store"},
     )
 
