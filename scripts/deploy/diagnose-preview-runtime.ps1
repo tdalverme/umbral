@@ -264,6 +264,17 @@ function Dump-PrivateApiUrlConfiguration {
             Write-Host ("{0} {1} query failed: {2}" -f $service, $variable, $_.Exception.Message)
         }
     }
+    # The magic-link confirm verifies the Supabase access token issuer against
+    # IDENTITY_ISSUER; print the configured value (a public URL, not a secret).
+    foreach ($service in @("api", "worker")) {
+        try {
+            $shellCommand = 'printf "%s" "$IDENTITY_ISSUER"'
+            $value = & npx @railway/cli@5.27.2 run -e preview --service $service -- sh -c $shellCommand 2>&1
+            Write-Host ("{0} IDENTITY_ISSUER = {1}" -f $service, ($value -join " "))
+        } catch {
+            Write-Host ("{0} IDENTITY_ISSUER query failed: {1}" -f $service, $_.Exception.Message)
+        }
+    }
     # BFF token presence without exposing the secret value.
     foreach ($service in @("web", "api")) {
         try {

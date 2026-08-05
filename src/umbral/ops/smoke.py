@@ -343,6 +343,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             self._print_rq_job_state(outbox)
             self._print_resend_listing()
             self._print_issued_detail(correlation_id)
+            self._print_resend_webhook_events()
         except Exception as error:
             print(
                 f"SMOKE RESEND attempt query failed: {type(error).__name__}: {error}",
@@ -438,6 +439,61 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         except Exception as error:
             print(
                 f"SMOKE RESEND issued detail failed: "
+                f"{type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+
+    def _print_attempt_by_id(self, attempt_id: str) -> None:
+        import psycopg
+
+        try:
+            with psycopg.connect(self._database_url, connect_timeout=5) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT a.state, a.issued_at, a.expires_at, "
+                        "a.failure_reason, a.provider_message_id, r.correlation_id "
+                        "FROM magic_link_attempts a "
+                        "LEFT JOIN magic_link_requests r ON r.id = a.request_id "
+                        "WHERE a.id = %s",
+                        (attempt_id,),
+                    )
+                    attempt = cursor.fetchone()
+                    cursor.execute(
+                        "SELECT event_type, result, reason, correlation_id, "
+                        "occurred_at "
+                        "FROM access_audit_events WHERE attempt_id = %s "
+                        "ORDER BY occurred_at DESC LIMIT 10",
+                        (attempt_id,),
+                    )
+                    audits = cursor.fetchall()
+            print(
+                f"SMOKE CONFIRM attempt={attempt!r} audits={audits!r}",
+                file=sys.stderr,
+            )
+        except Exception as error:
+            print(
+                f"SMOKE CONFIRM attempt query failed: "
+                f"{type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+
+    def _print_resend_webhook_events(self) -> None:
+        import psycopg
+
+        try:
+            with psycopg.connect(self._database_url, connect_timeout=5) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT event_type, result, reason, correlation_id, "
+                        "provider_event_id, occurred_at "
+                        "FROM access_audit_events WHERE provider = 'resend' "
+                        "ORDER BY occurred_at DESC LIMIT 10"
+                    )
+                    rows = cursor.fetchall()
+            print(f"SMOKE RESEND webhook events rows={rows!r}", file=sys.stderr)
+        except Exception as error:
+            print(
+                f"SMOKE RESEND webhook events failed: "
                 f"{type(error).__name__}: {error}",
                 file=sys.stderr,
             )
@@ -953,6 +1009,10 @@ def run_preview_identity_smoke(
             capture is not None and _confirm_magic_link(config, http, *capture) == 204,
         ),
     )
+    if not confirmation_ok and capture is not None:
+        attempt_probe = getattr(observer, "_print_attempt_by_id", None)
+        if callable(attempt_probe):
+            attempt_probe(capture[0])
     check(
         "single_use",
         lambda: (
