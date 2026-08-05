@@ -89,6 +89,7 @@ function Invoke-Diagnostic([string]$Label, [string]$Code) {
 
 # Dump the live Railway api service configuration so the promote log shows the
 # exact start command, healthcheck and variables Railway applies to the api.
+# Variable values are masked to keep secrets out of the workflow log.
 function Dump-LiveApiServiceConfig {
     Write-Host ""
     Write-Host "=== live api service config ==="
@@ -99,6 +100,7 @@ function Dump-LiveApiServiceConfig {
             return
         }
         $config = $rawConfig | ConvertFrom-Json
+        Write-Host ("environment config top-level properties: {0}" -f (@($config.PSObject.Properties.Name) -join ", "))
         $rawStatus = & npx @railway/cli@5.27.2 service status --all -e preview --json
         $serviceId = $null
         if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($rawStatus)) {
@@ -108,13 +110,39 @@ function Dump-LiveApiServiceConfig {
             Write-Host "api service id not found"
             return
         }
-        $apiConfig = $config.services.$serviceId
+        Write-Host "api service id: $serviceId"
+        $apiConfig = $null
+        $servicesObject = $config.services
+        if ($null -ne $servicesObject) {
+            Write-Host ("services type: {0}" -f $servicesObject.GetType().FullName)
+            if ($servicesObject -is [System.Array]) {
+                $apiConfig = @($servicesObject) | Where-Object { $_.name -eq "api" } | Select-Object -First 1
+            } else {
+                $apiConfig = $servicesObject.$serviceId
+                if ($null -eq $apiConfig) {
+                    foreach ($prop in @($servicesObject.PSObject.Properties)) {
+                        if ($null -ne $prop.Value -and $prop.Value.PSObject.Properties.Name -contains "name" -and [string]$prop.Value.name -eq "api") {
+                            $apiConfig = $prop.Value
+                            break
+                        }
+                    }
+                }
+            }
+        }
         if ($null -eq $apiConfig) {
             Write-Host "api service config not found"
             return
         }
-        Write-Host "api service id: $serviceId"
-        $apiConfig | ConvertTo-Json -Depth 8
+        Write-Host ("api service properties: {0}" -f (@($apiConfig.PSObject.Properties.Name) -join ", "))
+        if ($null -ne $apiConfig.variables) {
+            foreach ($variable in @($apiConfig.variables.PSObject.Properties)) {
+                $value = $variable.Value
+                if ($null -ne $value -and $value.PSObject.Properties.Name -contains "value") {
+                    $value.value = "***"
+                }
+            }
+        }
+        $apiConfig | ConvertTo-Json -Depth 10
     } catch {
         Write-Host ("live api service config dump failed: {0}" -f $_.Exception.Message)
     }
