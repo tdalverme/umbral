@@ -1,9 +1,9 @@
 import { createClient, type Client } from "./generated/client";
 
-function apiBaseUrl(): string {
-  const baseUrl = process.env.UMBRAL_API_BASE_URL;
+export function apiBaseUrl(): string {
+  const baseUrl = process.env.UMBRAL_PRIVATE_API_URL || process.env.UMBRAL_API_BASE_URL;
   if (!baseUrl) {
-    throw new Error("UMBRAL_API_BASE_URL is required for server API requests");
+    throw new Error("UMBRAL_PRIVATE_API_URL is required for server API requests");
   }
   return baseUrl;
 }

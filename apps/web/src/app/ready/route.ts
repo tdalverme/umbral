@@ -1,3 +1,4 @@
+import { apiBaseUrl as serverApiBaseUrl } from "@/lib/api/server";
 import {
   correlationIdFor,
   hasQueryParameters,
@@ -44,7 +45,7 @@ export async function GET(request: Request): Promise<Response> {
   const correlationId = correlationIdFor(request);
   try {
     const payload = readyPayload(await loadRuntimeManifest());
-    const apiBaseUrl = process.env.UMBRAL_API_BASE_URL;
+    const apiBaseUrl = serverApiBaseUrl();
     const bffToken = process.env.UMBRAL_BFF_TOKEN;
     if (!apiBaseUrl || !bffToken) throw new Error("runtime heartbeat unavailable");
     const heartbeat = await fetch(`${apiBaseUrl}/internal/runtime/web-heartbeat`, {

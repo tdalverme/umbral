@@ -299,8 +299,35 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         with psycopg.connect(self._database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "DELETE FROM identity_invitations WHERE normalized_email = %s "
-                    "AND status = 'active'",
+                    """
+                    WITH target AS (
+                        SELECT id FROM identity_invitations
+                        WHERE normalized_email = %s AND status = 'active'
+                    ),
+                    attempts AS (
+                        SELECT id FROM magic_link_attempts
+                        WHERE invitation_id IN (SELECT id FROM target)
+                    ),
+                    requests AS (
+                        SELECT id FROM magic_link_requests
+                        WHERE id IN (SELECT request_id FROM attempts)
+                    )
+                    DELETE FROM access_audit_events
+                    WHERE invitation_id IN (SELECT id FROM target)
+                       OR attempt_id IN (SELECT id FROM attempts)
+                       OR request_id IN (SELECT id FROM requests)
+                    """,
+                    (recipient,),
+                )
+                cursor.execute(
+                    "DELETE FROM magic_link_attempts "
+                    "WHERE invitation_id IN (SELECT id FROM identity_invitations "
+                    "WHERE normalized_email = %s AND status = 'active')",
+                    (recipient,),
+                )
+                cursor.execute(
+                    "DELETE FROM identity_invitations "
+                    "WHERE normalized_email = %s AND status = 'active'",
                     (recipient,),
                 )
             connection.commit()
@@ -410,6 +437,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             headers={
                 "Authorization": f"Bearer {self._observation_token}",
                 "Content-Type": "application/json",
+                "User-Agent": "curl/8.7.1",
             },
         )
         try:
