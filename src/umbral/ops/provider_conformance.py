@@ -144,19 +144,7 @@ def run_preview_dependency_conformance(
             ),
         )
     )
-    checks.append(
-        _check(
-            "resend.reachability",
-            lambda: _accepted(
-                clients.http(
-                    "GET",
-                    "https://api.resend.com/domains",
-                    {"Authorization": f"Bearer {config.get('RESEND_API_KEY', '')}"},
-                    None,
-                )
-            ),
-        )
-    )
+    checks.append(_resend_check(clients.http, config.get("RESEND_API_KEY", "")))
     return PreviewDependencyReport(tuple(checks))
 
 
@@ -239,6 +227,22 @@ def _sentry_check(http: HttpClient, dsn: str) -> DependencyCheck:
         event_id is not None,
         "dependency.ok" if event_id is not None else "dependency.failed",
         {"event_id": event_id} if event_id is not None else None,
+    )
+
+
+def _resend_check(http: HttpClient, api_key: str) -> DependencyCheck:
+    response = http(
+        "GET",
+        "https://api.resend.com/domains",
+        {"Authorization": f"Bearer {api_key}"},
+        None,
+    )
+    status_code = _response_status(response)
+    return DependencyCheck(
+        "resend.reachability",
+        _accepted(response),
+        "dependency.ok" if _accepted(response) else "dependency.failed",
+        {"status_code": status_code} if status_code is not None else None,
     )
 
 
