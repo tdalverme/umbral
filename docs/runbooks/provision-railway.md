@@ -77,17 +77,24 @@ correo. El manifiesto de release se entrega a las imágenes como JSON inline
    (workflow_dispatch) se lee desde `main` y su checkout descarga los scripts de
    ahí:
    `git checkout main; git merge --ff-only <rama>` y `git push origin main`.
-2. Taggear el commit más reciente de `main` que contiene el fix del manifest
-   inline (hoy `87f8167`):
-   `git tag v0.2.1 87f8167` y `git push origin v0.2.1`.
+2. Taggear el commit más reciente de `main` con el fix del manifest inline y el
+   workflow `release` desbloqueado (sin `if` de secrets a nivel step y sin PATCH de
+   visibilidad):
+   `git tag v0.2.1 <sha-de-main>` y `git push origin v0.2.1`.
 3. Verificar la corrida `release` en Acciones: login GHCR con `GHCR_DEPLOY_TOKEN`,
    build de web/runtime `linux/amd64`, escribir `release-manifest.json` + `.sha256`
    y publicar el artifact `release-manifest-<sha>`.
-4. Disparar `promote` (workflow_dispatch) con:
+4. **Visibilidad pública de los packages GHCR (una vez, web UI):** Railway hace
+   pull anónimo, así que `ghcr.io/tdalverme/umbral/{runtime,web}` deben ser
+   `public`. GitHub no expone API para cambiar visibilidad; hacerlo manual en
+   https://github.com/users/tdalverme/packages/container/package/umbral%2Fruntime/settings
+   (ídem `umbral%2Fweb`). El gate "Ensure GHCR packages are public" del release
+   falla con el URL exacto si alguno quedó `private`.
+5. Disparar `promote` (workflow_dispatch) con:
    - `manifest`: nombre del artifact (`release-manifest-<sha>`);
    - `release_run_id`: run ID de la corrida release;
    - `environment`: `preview`.
-5. Orden del promote: verify-access → validate-railway-config → backup →
+6. Orden del promote: verify-access → validate-railway-config → backup →
    migrate (Alembic) → check-dependencies → set-railway-images (fija imagen y
    las `UMBRAL_RELEASE_*` por servicio) → wait-railway-services →
    preload de invitación → smoke de 15 escenarios. El smoke cierra SC-001.
