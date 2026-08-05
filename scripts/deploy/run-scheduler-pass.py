@@ -6,8 +6,21 @@ cadence or reused deployments. Composes directly so a broken scheduler
 environment surfaces a full traceback instead of a swallowed failure.
 """
 
+import os
+
 from umbral.workers.composition import build_process_dependencies
 from umbral.workers.scheduler import DEFAULT_DUE_WORK_LIMIT, scheduler_once
+
+# railway run merges the promote runner's environment with the service
+# variables; drop the runner-only release/smoke inputs that Settings would
+# reject as unknown, mirroring diagnose-preview-runtime.ps1.
+for name in list(os.environ):
+    if (
+        name == "UMBRAL_MANIFEST_DATABASE_REVISION"
+        or name == "UMBRAL_PREVIEW_BASE_URL"
+        or name.startswith("UMBRAL_SMOKE_")
+    ):
+        del os.environ[name]
 
 deps = build_process_dependencies()
 writer = getattr(deps, "heartbeat_writer", None)
