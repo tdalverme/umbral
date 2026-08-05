@@ -84,12 +84,13 @@ correo. El manifiesto de release se entrega a las imágenes como JSON inline
    build de web/runtime `linux/amd64`, escribir `release-manifest.json` + `.sha256`
    y publicar el artifact `release-manifest-<sha>`. Los packages GHCR quedan
    privados (no exponen código); Railway los pullea con credenciales.
-4. **Credenciales de registro privado en Railway (una vez):** los servicios
-   pullean `ghcr.io/tdalverme/umbral/{runtime,web}` con auth. Agregar al proyecto
-   Railway la credencial del registro GHCR: username `tdalverme` y password =
-   `GHCR_DEPLOY_TOKEN` (classic PAT con `read:packages`). Configurar en el
-   dashboard (Settings del proyecto → Private registries / Docker registry) o vía
-   CLI; si no está, el `wait-railway-services` del promote falla con error de pull.
+4. **Visibilidad pública de los packages GHCR (una vez, web UI):** Railway (plan
+   Hobby, pull anónimo) no soporta credenciales de registry privado, así que
+   `ghcr.io/tdalverme/umbral/{runtime,web}` deben ser `public`. GitHub no expone
+   API para cambiar visibilidad; hacerlo manual en
+   https://github.com/users/tdalverme/packages/container/package/umbral%2Fruntime/settings
+   (ídem `umbral%2Fweb`). El gate "Ensure GHCR packages are public" del release
+   falla con el URL exacto si alguno quedó `private`.
 5. Disparar `promote` (workflow_dispatch) con:
    - `manifest`: nombre del artifact (`release-manifest-<sha>`);
    - `release_run_id`: run ID de la corrida release;
