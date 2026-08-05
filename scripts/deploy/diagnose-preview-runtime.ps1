@@ -76,6 +76,46 @@ from umbral.api.main import app
 print("api app module import OK; title:", app.title)
 '@
 
+# Run the real api boot (uvicorn + /health) inside the Railway environment so the
+# deployed env is used verbatim (references resolved) rather than the runner's
+# reconstruction. Best-effort: a failure here indicates the deployed env itself.
+$apiRunCode = @'
+import subprocess
+import time
+import urllib.request
+
+from umbral.api.main import app  # noqa: F401
+
+proc = subprocess.Popen(
+    [
+        "uvicorn",
+        "umbral.api.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000",
+        "--log-level",
+        "info",
+    ],
+)
+try:
+    deadline = time.time() + 45
+    ok = False
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3) as response:
+                body = response.read().decode()
+                print("health status:", response.status, body)
+                ok = True
+                break
+        except Exception as error:
+            time.sleep(1)
+    print("health ok:", ok)
+finally:
+    proc.terminate()
+    proc.wait(timeout=10)
+'@
+
 function Invoke-Diagnostic([string]$Label, [string]$Code) {
     Write-Host ""
     Write-Host "=== $Label ==="
@@ -84,6 +124,19 @@ function Invoke-Diagnostic([string]$Label, [string]$Code) {
         Write-Host "$Label OK"
     } else {
         Write-Host "$Label FAILED (exit $LASTEXITCODE)"
+    }
+}
+
+function Invoke-RailwayRunDiagnostic {
+    Write-Host ""
+    Write-Host "=== api uvicorn + /health inside railway run ==="
+    try {
+        $scriptPath = Join-Path ([System.IO.Path]::GetTempPath()) "umbral-api-run-diagnostic.py"
+        [System.IO.File]::WriteAllText($scriptPath, $apiRunCode, [Text.UTF8Encoding]::new($false))
+        & npx @railway/cli@5.27.2 run -e preview -- $PythonExecutable $scriptPath
+        Write-Host "railway run api boot exit $LASTEXITCODE"
+    } catch {
+        Write-Host ("railway run api boot failed: {0}" -f $_.Exception.Message)
     }
 }
 
@@ -101,6 +154,7 @@ function Dump-LiveApiServiceConfig {
         }
         $config = $rawConfig | ConvertFrom-Json
         Write-Host ("environment config top-level properties: {0}" -f (@($config.PSObject.Properties.Name) -join ", "))
+        Write-Host ("privateNetworkDisabled: {0}" -f $config.privateNetworkDisabled)
         $rawStatus = & npx @railway/cli@5.27.2 service status --all -e preview --json
         $serviceId = $null
         if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($rawStatus)) {
@@ -151,5 +205,6 @@ Invoke-Diagnostic "scheduler-once (composition + one pass)" $schedulerCode
 Invoke-Diagnostic "worker composition boot" $workerCode
 Invoke-Diagnostic "api runtime composition boot" $apiCode
 Invoke-Diagnostic "api app module import (uvicorn path)" $apiAppCode
+Invoke-RailwayRunDiagnostic
 Dump-LiveApiServiceConfig
 exit 0
