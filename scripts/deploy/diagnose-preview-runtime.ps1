@@ -227,15 +227,19 @@ function Dump-LiveApiServiceConfig {
 function Dump-PreviewPublicDomains {
     Write-Host ""
     Write-Host "=== preview public domains ==="
-    try {
-        $raw = & npx @railway/cli@5.27.2 domain list -e preview --json
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($raw)) {
-            Write-Host "domain list failed (exit $LASTEXITCODE)"
-            return
+    foreach ($attempt in @(
+        @("domain list", "-e", "preview", "--json"),
+        @("domain list", "-e", "preview"),
+        @("service", "list", "-e", "preview", "--json")
+    )) {
+        try {
+            Write-Host ("--- railway {0} ---" -f ($attempt -join " "))
+            $raw = & npx @railway/cli@5.27.2 @attempt
+            Write-Host ("exit {0}" -f $LASTEXITCODE)
+            if (-not [string]::IsNullOrWhiteSpace($raw)) { Write-Host $raw }
+        } catch {
+            Write-Host ("failed: {0}" -f $_.Exception.Message)
         }
-        Write-Host $raw
-    } catch {
-        Write-Host ("domain list failed: {0}" -f $_.Exception.Message)
     }
 }
 

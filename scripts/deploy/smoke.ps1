@@ -27,6 +27,10 @@ foreach ($artifactName in @("web", "runtime")) {
 $env:PYTHONPATH = Join-Path $repoRoot "src"
 if ($Mode -eq "preview") {
     if ([string]::IsNullOrWhiteSpace($BaseUrl)) { throw "Preview smoke requires BaseUrl." }
+    $BaseUrl = $BaseUrl.Trim()
+    if ($BaseUrl -notmatch "^[a-zA-Z][a-zA-Z0-9+.-]*://") {
+        $BaseUrl = "https://" + $BaseUrl
+    }
     $origin = [Uri]$BaseUrl
     if ($origin.Scheme -ne "https" -or -not $origin.Host -or $origin.AbsolutePath -notin @("", "/") -or $origin.Query) {
         throw "Preview smoke requires one public HTTPS web origin."
