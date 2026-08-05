@@ -78,6 +78,8 @@ provider-conformance/recovery en task 13. El smoke de release local
 
 ## Follow-ups operativos pendientes
 
+- El aprovisionamiento de preview (proyecto, servicios, variables, repo secrets
+  y release) es un procedimiento versionado: `docs/runbooks/provision-railway.md`.
 - Re-ejecutar el smoke de preview contra el manifiesto exacto
   (`scripts/deploy/smoke.ps1 -Mode preview -BaseUrl <origin>`), que requiere
   preview desplegado, `UMBRAL_SMOKE_INVITEE`,

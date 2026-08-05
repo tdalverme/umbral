@@ -19,6 +19,7 @@ from umbral.application.runtime.version import (
     ReleaseArtifact,
     ReleaseManifest,
     load_release_manifest,
+    parse_release_manifest,
 )
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.session import SessionProvider
@@ -129,8 +130,15 @@ def _local_settings() -> dict[str, str]:
 
 
 def _load_release(settings: Settings) -> ReleaseManifest:
-    if settings.release_manifest != _LOCAL_RELEASE_MANIFEST:
-        return load_release_manifest(Path(settings.release_manifest))
+    value = settings.release_manifest
+    if value == _LOCAL_RELEASE_MANIFEST:
+        return _synthetic_release(settings)
+    if value.lstrip().startswith("{"):
+        return parse_release_manifest(value)
+    return load_release_manifest(Path(value))
+
+
+def _synthetic_release(settings: Settings) -> ReleaseManifest:
     return ReleaseManifest(
         release_id=settings.release_id,
         git_sha="0" * 40,

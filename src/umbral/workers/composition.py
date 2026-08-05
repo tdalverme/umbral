@@ -10,7 +10,11 @@ from pathlib import Path
 from redis import Redis
 
 from umbral.application.identity.access import IdentityAccess
-from umbral.application.runtime.version import load_release_manifest
+from umbral.application.runtime.version import (
+    ReleaseManifest,
+    load_release_manifest,
+    parse_release_manifest,
+)
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.repositories.identity import SqlAlchemyIdentityStore
 from umbral.infrastructure.db.session import SessionProvider
@@ -75,7 +79,7 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         heartbeat_writer = RuntimeHeartbeatWriter(
             session_provider.session_factory,
             environment=active_settings.environment,
-            release=load_release_manifest(Path(active_settings.release_manifest)),
+            release=_load_release(active_settings),
         )
     return ProcessDependencies(
         settings=active_settings,
@@ -89,6 +93,13 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         worker_id=f"rq:{socket.gethostname()}:{os.getpid()}",
         heartbeat_writer=heartbeat_writer,
     )
+
+
+def _load_release(settings: Settings) -> ReleaseManifest:
+    value = settings.release_manifest
+    if value.lstrip().startswith("{"):
+        return parse_release_manifest(value)
+    return load_release_manifest(Path(value))
 
 
 def _load_settings() -> Settings:

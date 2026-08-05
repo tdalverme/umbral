@@ -9,7 +9,7 @@ s\u00f3lo este inventario y sus fallos exponen exclusivamente `rule_code` y
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `UMBRAL_ENV` | Plataforma | entorno de deployment | API, worker, scheduler, web server | S\u00ed | `local`, `preview` o `production` | No | logs metadata permitidos |
 | `UMBRAL_RELEASE_ID` | Release engineering | manifiesto promovido | cuatro superficies | S\u00ed | identificador de release | No | `/version`, metadata |
-| `UMBRAL_RELEASE_MANIFEST` | Release engineering | secret mount/local file | cuatro superficies | S\u00ed | path local legible | No | no exponer path |
+| `UMBRAL_RELEASE_MANIFEST` | Release engineering | pipeline/local file | cuatro superficies | S\u00ed | JSON inline en preview (seteado por el pipeline) o path local legible | No | no exponer path |
 | `UMBRAL_RELEASE_DIGEST` | Release engineering | entorno de deployment | API, worker, scheduler, web server | Preview/production | `sha256:` + 64 hex | No | metadata permitida |
 | `DATABASE_URL` | Plataforma | secret store/Compose local | API, worker, scheduler | S\u00ed | PostgreSQL URL; TLS y host no local fuera de local | S\u00ed | nunca |
 | `REDIS_URL` | Plataforma | secret store/Compose local | API, worker, scheduler | S\u00ed | Redis URL; `rediss` fuera de local | S\u00ed | nunca |
@@ -30,3 +30,7 @@ browser; hosts privados y credenciales permanecen configuraci\u00f3n de servidor
 
 Los archivos `.env.example` contienen exclusivamente valores locales de ejemplo.
 No se copian a preview ni producci\u00f3n.
+
+En preview, `UMBRAL_RELEASE_ID`, `UMBRAL_RELEASE_DIGEST` y
+`UMBRAL_RELEASE_MANIFEST` (JSON inline) los escribe el pipeline en cada promote;
+ver `provision-railway.md`.

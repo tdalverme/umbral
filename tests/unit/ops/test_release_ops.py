@@ -192,6 +192,11 @@ def test_promotion_switches_each_service_uses_exact_images_and_records_deploymen
     runtime_image = "source.image ghcr.io/example/umbral/runtime@sha256:" + "2" * 64
     assert calls.count(runtime_image) == 3
     assert calls.count("deployment list") == 4
+    assert "variables.UMBRAL_RELEASE_ID.value 2026.08.01-immutable" in calls
+    assert calls.count("variables.UMBRAL_RELEASE_DIGEST.value sha256:" + "1" * 64) == 1
+    assert calls.count("variables.UMBRAL_RELEASE_DIGEST.value sha256:" + "2" * 64) == 3
+    assert calls.count("variables.UMBRAL_RELEASE_MANIFEST.value") == 4
+    assert "schema_version" in calls
     deployed = json.loads(evidence.read_text(encoding="utf-8"))
     assert deployed["deployed"] is True
     assert deployed["manifest_sha256"] == checksum

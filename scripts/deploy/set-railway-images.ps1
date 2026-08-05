@@ -39,7 +39,8 @@ $actualChecksum = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestFullPath
 Require-Condition ($ManifestSha256 -match "^[0-9a-f]{64}$") "Manifest checksum must be a lowercase sha256 value."
 Require-Condition ($actualChecksum -eq $ManifestSha256) "Release manifest checksum does not match."
 
-$manifest = Get-Content -Raw -LiteralPath $manifestFullPath | ConvertFrom-Json
+$manifestJson = Get-Content -Raw -LiteralPath $manifestFullPath
+$manifest = $manifestJson | ConvertFrom-Json
 $rootProperties = @($manifest.PSObject.Properties.Name | Sort-Object)
 $expectedRootProperties = @("artifacts", "built_at", "config_schema_version", "contract_major", "database_revision", "git_sha", "release_id", "schema_version")
 Require-Condition (($rootProperties -join ",") -eq ($expectedRootProperties -join ",")) "Release manifest schema is invalid."
@@ -74,7 +75,12 @@ $deploymentIds = [ordered]@{}
 foreach ($service in $serviceArtifacts.Keys) {
     $artifact = $manifest.artifacts.($serviceArtifacts[$service])
     $imageReference = "{0}@{1}" -f $artifact.image, $artifact.digest
-    $response = & npx @railway/cli@5.27.2 environment edit -e $Environment --service-config $service source.image $imageReference -m $manifest.release_id --json
+    $response = & npx @railway/cli@5.27.2 environment edit -e $Environment `
+        --service-config $service source.image $imageReference `
+        --service-config $service variables.UMBRAL_RELEASE_ID.value $manifest.release_id `
+        --service-config $service variables.UMBRAL_RELEASE_DIGEST.value $artifact.digest `
+        --service-config $service variables.UMBRAL_RELEASE_MANIFEST.value $manifestJson `
+        -m $manifest.release_id --json
     if ($LASTEXITCODE -ne 0) { throw ("Railway image update failed for {0}." -f $service) }
     $deploymentId = Get-DeploymentId ($response | ConvertFrom-Json)
     if ([string]::IsNullOrWhiteSpace($deploymentId)) {
