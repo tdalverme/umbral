@@ -189,6 +189,34 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
     def preload_invitation(self) -> str:
         raise RuntimeError("preview preload is performed before the smoke process")
 
+    def reset_request_history(self) -> None:
+        """Clear prior smoke rate-limit rows so the invitee stays eligible.
+
+        Repeated promote runs accumulate magic_link_requests for the invitee,
+        crossing the three-per-24h product limit before the smoke requests its
+        own links. The preview database only carries smoke fixtures, so the
+        request/attempt/session audit subtree is removed before the run.
+        """
+
+        import psycopg
+
+        with psycopg.connect(self._database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM access_audit_events "
+                    "WHERE session_id IN (SELECT id FROM product_sessions)"
+                )
+                cursor.execute("DELETE FROM product_sessions")
+                cursor.execute(
+                    "DELETE FROM access_audit_events WHERE attempt_id IS NOT NULL"
+                )
+                cursor.execute(
+                    "DELETE FROM access_audit_events WHERE request_id IS NOT NULL"
+                )
+                cursor.execute("DELETE FROM magic_link_attempts")
+                cursor.execute("DELETE FROM magic_link_requests")
+            connection.commit()
+
     def runtime_surfaces(self, *, timeout_seconds: int) -> tuple[dict[str, str], ...]:
         deadline = self._start_deadline(timeout_seconds)
         import psycopg
@@ -1377,6 +1405,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         deadline = monotonic() + config.timeout_seconds
         observer = _built_in_preview_observer(config, deadline=deadline)
+        reset = getattr(observer, "reset_request_history", None)
+        if callable(reset):
+            reset()
         report = run_preview_identity_smoke(
             config,
             http=CookieHttpClient(deadline=deadline),
