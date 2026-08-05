@@ -86,6 +86,19 @@ foreach ($service in $serviceArtifacts.Keys) {
     Require-Condition ($serviceIdByName.ContainsKey($service)) "Railway service '${service}' was not found in the environment."
 }
 
+# Preview runtimes require observability configuration; source it from the
+# promote runner's secrets so the patch keeps every app service bootable.
+$observabilityVars = [ordered]@{}
+foreach ($key in @("OTEL_EXPORTER_OTLP_ENDPOINT", "SENTRY_DSN")) {
+    $value = [Environment]::GetEnvironmentVariable($key)
+    Require-Condition (-not [string]::IsNullOrWhiteSpace([string]$value)) "Missing ${key} environment value for Railway service variables."
+    $observabilityVars[$key] = [string]$value
+}
+$otlpHeadersValue = [string][Environment]::GetEnvironmentVariable("OTEL_EXPORTER_OTLP_HEADERS")
+if (-not [string]::IsNullOrWhiteSpace($otlpHeadersValue)) {
+    $observabilityVars.OTEL_EXPORTER_OTLP_HEADERS = $otlpHeadersValue
+}
+
 # If the environment already pins this release, reuse the current deployment IDs
 # and skip the (now idempotent) patch to avoid a no-op commit that yields no
 # new deployment.
@@ -103,6 +116,9 @@ if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($currentConfigRaw
         $storedManifest = $null
         try { $storedManifest = [string]$svcConfig.variables.UMBRAL_RELEASE_MANIFEST.value | ConvertFrom-Json } catch { $alreadyAtTarget = $false; break }
         if ($null -eq $storedManifest -or [string]$storedManifest.release_id -ne [string]$manifest.release_id -or [string]$storedManifest.git_sha -ne [string]$manifest.git_sha) { $alreadyAtTarget = $false; break }
+        foreach ($key in $observabilityVars.Keys) {
+            if ([string]$svcConfig.variables.$key.value -ne [string]$observabilityVars[$key]) { $alreadyAtTarget = $false; break }
+        }
     }
 }
 if ($alreadyAtTarget) {
@@ -123,13 +139,19 @@ $patch = [ordered]@{ services = [ordered]@{} }
 foreach ($service in $serviceArtifacts.Keys) {
     $artifact = $manifest.artifacts.($serviceArtifacts[$service])
     $imageReference = "{0}@{1}" -f $artifact.image, $artifact.digest
+    $serviceVariables = [ordered]@{
+        UMBRAL_RELEASE_ID = [ordered]@{ value = $manifest.release_id }
+        UMBRAL_RELEASE_DIGEST = [ordered]@{ value = $artifact.digest }
+        UMBRAL_RELEASE_MANIFEST = [ordered]@{ value = $manifestJson }
+        OTEL_EXPORTER_OTLP_ENDPOINT = [ordered]@{ value = $observabilityVars.OTEL_EXPORTER_OTLP_ENDPOINT }
+        SENTRY_DSN = [ordered]@{ value = $observabilityVars.SENTRY_DSN }
+    }
+    if ($observabilityVars.Contains("OTEL_EXPORTER_OTLP_HEADERS")) {
+        $serviceVariables.OTEL_EXPORTER_OTLP_HEADERS = [ordered]@{ value = $observabilityVars.OTEL_EXPORTER_OTLP_HEADERS }
+    }
     $patch.services[$serviceIdByName[$service]] = [ordered]@{
         source = [ordered]@{ image = $imageReference }
-        variables = [ordered]@{
-            UMBRAL_RELEASE_ID = [ordered]@{ value = $manifest.release_id }
-            UMBRAL_RELEASE_DIGEST = [ordered]@{ value = $artifact.digest }
-            UMBRAL_RELEASE_MANIFEST = [ordered]@{ value = $manifestJson }
-        }
+        variables = $serviceVariables
     }
 }
 $patchJson = $patch | ConvertTo-Json -Depth 6
