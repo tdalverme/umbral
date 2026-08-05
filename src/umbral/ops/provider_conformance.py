@@ -397,11 +397,7 @@ def _http_client(
     method: str, url: str, headers: dict[str, str], body: bytes | None
 ) -> object:
     request_headers = dict(headers)
-    request_headers.setdefault(
-        "User-Agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    )
+    request_headers.setdefault("User-Agent", "curl/8.7.1")
     request = Request(url, method=method, headers=request_headers, data=body)
     try:
         with urlopen(request, timeout=15) as response:  # noqa: S310
