@@ -132,16 +132,8 @@ def run_preview_dependency_conformance(
         )
     )
     checks.append(
-        _check(
-            "supabase.reachability",
-            lambda: _accepted(
-                clients.http(
-                    "GET",
-                    f"{issuer.rstrip('/')}/health",
-                    {"apikey": config.get("SUPABASE_SECRET_KEY", "")},
-                    None,
-                )
-            ),
+        _supabase_reachability_check(
+            clients.http, config.get("IDENTITY_ISSUER", ""), config.get("SUPABASE_SECRET_KEY", "")
         )
     )
     checks.append(_resend_check(clients.http, config.get("RESEND_API_KEY", "")))
@@ -240,6 +232,24 @@ def _resend_check(http: HttpClient, api_key: str) -> DependencyCheck:
     status_code = _response_status(response)
     return DependencyCheck(
         "resend.reachability",
+        _accepted(response),
+        "dependency.ok" if _accepted(response) else "dependency.failed",
+        {"status_code": status_code} if status_code is not None else None,
+    )
+
+
+def _supabase_reachability_check(
+    http: HttpClient, issuer: str, secret_key: str
+) -> DependencyCheck:
+    response = http(
+        "GET",
+        f"{issuer.rstrip('/')}/health",
+        {"apikey": secret_key},
+        None,
+    )
+    status_code = _response_status(response)
+    return DependencyCheck(
+        "supabase.reachability",
         _accepted(response),
         "dependency.ok" if _accepted(response) else "dependency.failed",
         {"status_code": status_code} if status_code is not None else None,
