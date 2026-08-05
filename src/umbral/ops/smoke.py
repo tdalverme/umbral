@@ -1212,7 +1212,7 @@ def _confirm_magic_link(
         "POST",
         _url(config, "/api/auth/confirmations"),
         (
-            '{"attemptId":"' + attempt_id + '","tokenHash":"' + token_hash + '"}'
+            '{"attempt_id":"' + attempt_id + '","token_hash":"' + token_hash + '"}'
         ).encode(),
     )
     if response.status_code != 204:
