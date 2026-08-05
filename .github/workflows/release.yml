@@ -2,7 +2,8 @@ name: release
 
 on:
   push:
-    tags: ["v*.*.*"]
+    tags:
+      - "v*.*.*"
 
 permissions:
   contents: read
@@ -16,10 +17,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4
       - name: Require classic GHCR deploy token
-        if: ${{ secrets.GHCR_DEPLOY_TOKEN == '' }}
+        env:
+          GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
         run: |
-          echo "GHCR_DEPLOY_TOKEN (classic PAT with write:packages) is required so Railway can pull public packages anonymously." >&2
-          exit 1
+          if [ -z "$GHCR_DEPLOY_TOKEN" ]; then
+            echo "GHCR_DEPLOY_TOKEN (classic PAT with write:packages) is required so Railway can pull public packages anonymously." >&2
+            exit 1
+          fi
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
