@@ -90,7 +90,7 @@ jobs:
           ./scripts/deploy/migrate-preview.ps1 -ManifestPath $manifest.FullName -BackupEvidencePath $backupEvidence -PythonExecutable $pythonExecutable
           ./scripts/deploy/check-preview-dependencies.ps1 -ManifestPath $manifest.FullName -EvidencePath "artifacts/release/preview-dependency-evidence.json" -PythonExecutable $pythonExecutable
           $switch = ./scripts/deploy/set-railway-images.ps1 -ManifestPath $manifest.FullName -ManifestSha256 $checksum -Environment "${{ inputs.environment }}" | ConvertFrom-Json
-          $null = ./scripts/deploy/diagnose-preview-runtime.ps1 -PythonExecutable $pythonExecutable
+          $null = ./scripts/deploy/diagnose-preview-runtime.ps1 -PythonExecutable $pythonExecutable -ManifestPath $manifest.FullName
           $null = ./scripts/deploy/wait-railway-services.ps1 -Environment "${{ inputs.environment }}" -DeploymentIdsJson ($switch.deployment_ids | ConvertTo-Json -Compress)
           $preload = & $pythonExecutable -m umbral.ops.identity preload-invitation --email-env UMBRAL_SMOKE_INVITEE --database-url-env UMBRAL_SMOKE_OPERATOR_DATABASE_URL | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $preload.result -ne "accepted" -or [string]::IsNullOrWhiteSpace([string]$preload.invitation_id)) { throw "Preview invitation preload failed." }
