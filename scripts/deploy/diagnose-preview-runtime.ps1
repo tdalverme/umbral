@@ -274,6 +274,17 @@ function Dump-PrivateApiUrlConfiguration {
             Write-Host ("{0} UMBRAL_BFF_TOKEN query failed: {1}" -f $service, $_.Exception.Message)
         }
     }
+    # Redis endpoint shape per service (password masked) so a queue split
+    # between the api/worker and the smoke relay is visible in the log.
+    $shellCommand = 'v="$REDIS_URL"; case "$v" in rediss://*) s="rediss";; *) s="redis";; esac; printf "%s://%s" "$s" "${v##*@}"'
+    foreach ($service in @("api", "worker")) {
+        try {
+            $value = & npx @railway/cli@5.27.2 run -e preview --service $service -- sh -c $shellCommand 2>&1
+            Write-Host ("{0} REDIS_URL shape = {1}" -f $service, ($value -join " "))
+        } catch {
+            Write-Host ("{0} REDIS_URL query failed: {1}" -f $service, $_.Exception.Message)
+        }
+    }
     try {
         $shellCommand = 'printf "%s" "$UMBRAL_RELEASE_MANIFEST" | cut -c1-80; printf " (len %s)" "${#UMBRAL_RELEASE_MANIFEST}"'
         $value = & npx @railway/cli@5.27.2 run -e preview --service web -- sh -c $shellCommand 2>&1

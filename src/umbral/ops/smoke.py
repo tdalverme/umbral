@@ -282,12 +282,50 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                         (str(correlation_id),),
                     )
                     rows = cursor.fetchall()
-            print(f"SMOKE RESEND attempt state rows={rows!r}", file=sys.stderr)
+                    cursor.execute(
+                        "SELECT e.id, o.attempt_number, o.state "
+                        "FROM job_outbox_messages o "
+                        "JOIN job_executions e ON e.id = o.execution_id "
+                        "WHERE e.correlation_id = %s",
+                        (str(correlation_id),),
+                    )
+                    outbox = cursor.fetchall()
+            print(
+                f"SMOKE RESEND attempt state rows={rows!r} outbox={outbox!r}",
+                file=sys.stderr,
+            )
+            self._print_rq_job_state(outbox)
         except Exception as error:
             print(
                 f"SMOKE RESEND attempt query failed: {type(error).__name__}: {error}",
                 file=sys.stderr,
             )
+
+    def _print_rq_job_state(
+        self, outbox: list[tuple[object, object, object]]
+    ) -> None:
+        if not self._redis_url or not outbox:
+            return
+        from redis import Redis
+        from rq import Queue
+        from rq.serializers import JSONSerializer
+
+        queue = Queue(
+            "umbral",
+            connection=Redis.from_url(self._redis_url),
+            serializer=JSONSerializer(),
+        )
+        for execution_id, attempt_number, outbox_state in outbox:
+            job_id = f"{execution_id}-{attempt_number}"
+            job = queue.fetch_job(job_id)
+            if job is None:
+                print(f"SMOKE RQ job {job_id} absent (outbox={outbox_state})", file=sys.stderr)
+            else:
+                print(
+                    f"SMOKE RQ job {job_id} status={job.get_status()} "
+                    f"result={job.result!r}",
+                    file=sys.stderr,
+                )
 
     def relay_pending(self, correlation_id: UUID) -> None:
         """Publish this correlation's durable outbox messages to the job queue.
