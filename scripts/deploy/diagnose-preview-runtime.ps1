@@ -31,10 +31,14 @@ $env:SESSION_COOKIE_NAME = "__Host-umbral_session"
 $env:SESSION_SECURE = "true"
 $env:IDENTITY_PROVIDER = "supabase"
 $env:EMAIL_PROVIDER = "resend"
+$env:OBJECT_STORE_BACKEND = "s3"
 $env:IDENTITY_FINGERPRINT_KEY = "preview-identity-fingerprint-key-diagnostic"
 $env:IDENTITY_CAPTURE_ORIGIN = "https://umbral-preview.example.invalid"
 if ([string]::IsNullOrWhiteSpace([string]$env:EMAIL_WEBHOOK_SECRET)) {
     $env:EMAIL_WEBHOOK_SECRET = "diagnostic-email-webhook-secret"
+}
+if ([string]$env:REDIS_URL -match "^redis://") {
+    $env:REDIS_URL = $env:REDIS_URL -replace "^redis://", "rediss://"
 }
 
 # Reproduce the scheduler service boot and the api runtime composition on the
