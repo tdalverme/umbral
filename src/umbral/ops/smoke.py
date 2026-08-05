@@ -174,11 +174,13 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         database_url: str,
         observation_token: str,
         sender: str,
+        redis_url: str = "",
         deadline: float | None = None,
     ) -> None:
         self._database_url = database_url
         self._observation_token = observation_token
         self._sender = sender
+        self._redis_url = redis_url
         self._deadline = deadline
         self._event_correlations: dict[str, UUID] = {}
         self._delivery_reasons: dict[UUID, str] = {}
@@ -223,6 +225,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         timeout_seconds: int,
     ) -> ObservedPreviewMessage:
         deadline = self._start_deadline(timeout_seconds)
+        self.relay_pending(correlation_id)
         try:
             while True:
                 listing = self._resend_json("GET", "/emails", None, deadline)
@@ -271,9 +274,10 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 with connection.cursor() as cursor:
                     cursor.execute(
                         "SELECT a.state, a.failure_reason, a.provider_message_id, "
-                        "r.decision "
+                        "r.decision, j.state, j.error_code "
                         "FROM magic_link_attempts a "
                         "LEFT JOIN magic_link_requests r ON r.id = a.request_id "
+                        "LEFT JOIN job_executions j ON j.id = a.job_execution_id "
                         "WHERE r.correlation_id = %s",
                         (str(correlation_id),),
                     )
@@ -283,6 +287,46 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             print(
                 f"SMOKE RESEND attempt query failed: {type(error).__name__}: {error}",
                 file=sys.stderr,
+            )
+
+    def relay_pending(self, correlation_id: UUID) -> None:
+        """Publish this correlation's durable outbox messages to the job queue.
+
+        The deployed scheduler only relays on its cron cadence, which can be
+        minutes after a magic-link request; the smoke relays the pending outbox
+        directly so the worker issues the email promptly.
+        """
+
+        from redis import Redis
+        from rq import Queue
+        from rq.serializers import JSONSerializer
+
+        if not self._redis_url:
+            return
+        import psycopg
+
+        queue = Queue(
+            "umbral",
+            connection=Redis.from_url(self._redis_url),
+            serializer=JSONSerializer(),
+        )
+        with psycopg.connect(self._database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT e.id, o.attempt_number, e.correlation_id "
+                    "FROM job_outbox_messages o "
+                    "JOIN job_executions e ON e.id = o.execution_id "
+                    "WHERE e.correlation_id = %s AND o.state = 'pending'",
+                    (str(correlation_id),),
+                )
+                rows = cursor.fetchall()
+        for execution_id, attempt_number, execution_correlation_id in rows:
+            queue.enqueue(
+                "umbral.workers.worker:run_message",
+                execution_id=str(execution_id),
+                attempt_number=int(attempt_number),
+                correlation_id=str(execution_correlation_id),
+                job_id=f"{execution_id}:{attempt_number}",
             )
 
     def trigger_delivery_event(self, scenario: str, correlation_id: UUID) -> str:
@@ -1191,6 +1235,8 @@ def _built_in_preview_observer(
 ) -> PreviewSmokeObserver:
     database_url_name = os.environ.get("UMBRAL_SMOKE_OPERATOR_DATABASE_URL_ENV", "")
     database_url = os.environ.get(database_url_name, "")
+    redis_url_name = os.environ.get("UMBRAL_SMOKE_OPERATOR_REDIS_URL_ENV", "")
+    redis_url = os.environ.get(redis_url_name, "")
     sender = os.environ.get("RESEND_FROM_EMAIL", "")
     if not database_url_name or not database_url or not sender:
         raise ValueError("preview operator configuration is unavailable")
@@ -1198,6 +1244,7 @@ def _built_in_preview_observer(
         database_url=database_url,
         observation_token=config.resend_observation_token,
         sender=sender,
+        redis_url=redis_url,
         deadline=deadline,
     )
 

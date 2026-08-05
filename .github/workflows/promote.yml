@@ -77,6 +77,8 @@ jobs:
           UMBRAL_SMOKE_INVITEE: ${{ secrets.UMBRAL_SMOKE_INVITEE }}
           UMBRAL_SMOKE_OPERATOR_DATABASE_URL: ${{ secrets.DATABASE_URL }}
           UMBRAL_SMOKE_OPERATOR_DATABASE_URL_ENV: UMBRAL_SMOKE_OPERATOR_DATABASE_URL
+          UMBRAL_SMOKE_OPERATOR_REDIS_URL: ${{ secrets.REDIS_URL }}
+          UMBRAL_SMOKE_OPERATOR_REDIS_URL_ENV: UMBRAL_SMOKE_OPERATOR_REDIS_URL
           UMBRAL_SMOKE_RESEND_OBSERVATION_TOKEN: ${{ secrets.RESEND_API_KEY }}
         run: |
           $manifest = Get-Item artifacts/release/release-manifest.json
