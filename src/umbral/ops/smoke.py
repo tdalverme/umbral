@@ -307,6 +307,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             )
             self._print_rq_job_state(outbox)
             self._print_resend_listing()
+            self._print_issued_detail(correlation_id)
         except Exception as error:
             print(
                 f"SMOKE RESEND attempt query failed: {type(error).__name__}: {error}",
@@ -356,6 +357,40 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         except Exception as error:
             print(
                 f"SMOKE RESEND listing diagnostic failed: "
+                f"{type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+
+    def _print_issued_detail(self, correlation_id: UUID) -> None:
+        issued_id = self._issued_message_id(correlation_id)
+        if issued_id is None:
+            print("SMOKE RESEND issued detail: no issued message id", file=sys.stderr)
+            return
+        try:
+            fresh_deadline = monotonic() + 15
+            detail = self._resend_json(
+                "GET", f"/emails/{issued_id}", None, fresh_deadline
+            )
+            html = detail.get("html")
+            text = detail.get("text")
+            capture = _capture_url_from_resend_detail(detail)
+            if capture is not None:
+                parsed = urlparse(capture)
+                print(
+                    f"SMOKE RESEND issued detail: capture origin="
+                    f"{parsed.scheme}://{parsed.netloc} path={parsed.path}",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"SMOKE RESEND issued detail: no capture url "
+                    f"html_len={len(html) if isinstance(html, str) else None} "
+                    f"text_len={len(text) if isinstance(text, str) else None}",
+                    file=sys.stderr,
+                )
+        except Exception as error:
+            print(
+                f"SMOKE RESEND issued detail failed: "
                 f"{type(error).__name__}: {error}",
                 file=sys.stderr,
             )
