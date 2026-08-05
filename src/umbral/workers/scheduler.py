@@ -10,8 +10,8 @@ from umbral.application.identity.ports import IdentityStore
 from umbral.application.identity.retention import purge_request_fingerprints
 from umbral.application.jobs.ports import JobQueue, JobRuntime
 from umbral.application.jobs.scheduler import InMemoryScheduler
+from umbral.infrastructure.runtime.heartbeat import HEARTBEAT_INTERVAL_SECONDS
 
-HEARTBEAT_INTERVAL_SECONDS = 30
 DEFAULT_DUE_WORK_LIMIT = 100
 
 

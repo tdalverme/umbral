@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI
@@ -30,6 +31,7 @@ from umbral.infrastructure.observability.runtime import (
     initialize_observability,
     shutdown_observability,
 )
+from umbral.infrastructure.runtime.heartbeat import HEARTBEAT_INTERVAL_SECONDS
 
 _RUNTIME_DESCRIPTION = (
     "Foundation operational contract. Product resources will be added below "
@@ -197,12 +199,38 @@ def create_app() -> FastAPI:
 
     dependencies = build_runtime_dependencies()
 
+    def observe_api_surface() -> None:
+        writer = dependencies.heartbeat_writer
+        if writer is None:
+            return
+        try:
+            report = dependencies.readiness.evaluate()
+            writer.observe(
+                "api",
+                state=report.state,
+                checks={check.name: check.state for check in report.checks},
+            )
+        except Exception:
+            pass
+
+    async def api_heartbeat_loop() -> None:
+        while True:
+            await asyncio.to_thread(observe_api_surface)
+            await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+
     @asynccontextmanager
     async def observability_lifespan(_: FastAPI) -> AsyncIterator[None]:
         initialize_observability(dependencies.settings)
+        heartbeat_task: asyncio.Task[None] | None = None
+        if dependencies.heartbeat_writer is not None:
+            heartbeat_task = asyncio.create_task(api_heartbeat_loop())
         try:
             yield
         finally:
+            if heartbeat_task is not None:
+                heartbeat_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await heartbeat_task
             shutdown_observability()
 
     app = FastAPI(

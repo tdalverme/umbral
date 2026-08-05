@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from umbral.application.runtime.version import ReleaseManifest
 from umbral.infrastructure.db.repositories.runtime import SqlAlchemyRuntimeRepository
 
+HEARTBEAT_INTERVAL_SECONDS = 30
+
 
 class RuntimeHeartbeatWriter:
     def __init__(

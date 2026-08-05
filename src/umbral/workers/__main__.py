@@ -6,14 +6,12 @@ import argparse
 import json
 import sys
 import time
+from threading import Event, Thread
 from typing import Any
 
 from umbral.infrastructure.observability.runtime import shutdown_observability
-from umbral.workers.scheduler import (
-    DEFAULT_DUE_WORK_LIMIT,
-    HEARTBEAT_INTERVAL_SECONDS,
-    scheduler_once,
-)
+from umbral.infrastructure.runtime.heartbeat import HEARTBEAT_INTERVAL_SECONDS
+from umbral.workers.scheduler import DEFAULT_DUE_WORK_LIMIT, scheduler_once
 from umbral.workers.worker import build_rq_worker
 
 
@@ -41,8 +39,17 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
             return 2
         if args.command == "worker":
             _heartbeat(active_dependencies, "worker")
-            build_rq_worker(active_dependencies.queue).work()
-            return 0
+            stop = Event()
+            heartbeat_thread = _start_worker_heartbeat(
+                active_dependencies, stop
+            )
+            try:
+                build_rq_worker(active_dependencies.queue).work()
+                return 0
+            finally:
+                stop.set()
+                if heartbeat_thread is not None:
+                    heartbeat_thread.join(timeout=HEARTBEAT_INTERVAL_SECONDS + 5)
         if args.command == "scheduler-once":
             _heartbeat(active_dependencies, "scheduler")
             summary = scheduler_once(
@@ -75,6 +82,26 @@ def _heartbeat(dependencies: Any, surface: str) -> None:
     writer = getattr(dependencies, "heartbeat_writer", None)
     if writer is not None:
         writer.observe(surface, state="ready", checks={"runtime_process": "ready"})
+
+
+def _start_worker_heartbeat(dependencies: Any, stop: Event) -> Thread | None:
+    """Publish the worker surface at a bounded cadence while the worker runs."""
+
+    writer = getattr(dependencies, "heartbeat_writer", None)
+    if writer is None:
+        return None
+
+    def run() -> None:
+        while not stop.is_set():
+            try:
+                _heartbeat(dependencies, "worker")
+            except Exception:
+                pass
+            stop.wait(HEARTBEAT_INTERVAL_SECONDS)
+
+    thread = Thread(target=run, name="worker-heartbeat", daemon=True)
+    thread.start()
+    return thread
 
 
 if __name__ == "__main__":

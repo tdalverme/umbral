@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from threading import Event
 from types import SimpleNamespace
 from typing import cast
 from uuid import UUID, uuid4
@@ -312,6 +314,30 @@ def test_worker_normal_completion_always_exits_zero(
     )
 
     assert main(["worker"], dependencies=dependencies) == 0
+
+
+def test_worker_heartbeat_thread_observes_periodically_and_stops(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observations: list[str] = []
+
+    def observe(surface: str, *, state: str, checks: Mapping[str, object]) -> None:
+        del state, checks
+        observations.append(surface)
+
+    dependencies = SimpleNamespace(heartbeat_writer=SimpleNamespace(observe=observe))
+    monkeypatch.setattr(workers_cli, "HEARTBEAT_INTERVAL_SECONDS", 0.02)
+
+    stop = Event()
+    thread = workers_cli._start_worker_heartbeat(dependencies, stop)
+
+    assert thread is not None
+    assert observations
+    time.sleep(0.05)
+    stop.set()
+    thread.join(timeout=1)
+
+    assert observations.count("worker") >= 2
 
 
 def test_worker_exception_exits_nonzero_without_exposing_dependency_value(
