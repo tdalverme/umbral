@@ -78,6 +78,14 @@ $serviceExtraVars = @{
     api = [ordered]@{ PORT = "8000" }
 }
 
+# Preview app services that would otherwise sleep on idle, breaking the web->api
+# calls the promotion smoke performs after the healthchecks (the api idles for
+# ~10 minutes and the smoke runs later). Keep the HTTP-facing services awake.
+$serviceDeployOverrides = @{
+    web = [ordered]@{ sleepApplication = $false }
+    api = [ordered]@{ sleepApplication = $false }
+}
+
 # The stdin JSON path in `environment edit` does not translate service names to
 # IDs; the backend only applies patches keyed by service ID, so resolve them here.
 $rawStatus = & npx @railway/cli@5.27.2 service status --all -e $Environment --json
@@ -138,6 +146,7 @@ function Test-ServiceAtTarget {
         [AllowNull()] $SvcConfig,
         [Parameter(Mandatory = $true)] $ObservabilityVars,
         [Parameter(Mandatory = $true)] $ObjectStoreVars,
+        [Parameter(Mandatory = $true)] $ServiceDeployOverrides,
         [Parameter(Mandatory = $true)] $ServiceExtraVars
     )
     if ($null -eq $SvcConfig) { return $false }
@@ -154,6 +163,9 @@ function Test-ServiceAtTarget {
     foreach ($key in $ObjectStoreVars.Keys) {
         if ([string]$SvcConfig.variables.$key.value -ne [string]$ObjectStoreVars[$key]) { return $false }
     }
+    if ($ServiceDeployOverrides.ContainsKey($Service)) {
+        if ($null -eq $SvcConfig.deploy -or $null -eq $SvcConfig.deploy.sleepApplication -or [bool]$SvcConfig.deploy.sleepApplication -ne [bool]$ServiceDeployOverrides[$Service].sleepApplication) { return $false }
+    }
     if ($ServiceExtraVars.ContainsKey($Service)) {
         foreach ($key in $ServiceExtraVars[$Service].Keys) {
             if ([string]$SvcConfig.variables.$key.value -ne [string]$ServiceExtraVars[$Service][$key]) { return $false }
@@ -168,7 +180,7 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ($null -ne $currentConfig) {
         $svcConfig = $currentConfig.services.($serviceIdByName[$service])
     }
-    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ServiceExtraVars $serviceExtraVars)
+    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars)
 }
 
 $servicesToPatch = @($serviceArtifacts.Keys | Where-Object { $serviceNeedsPatch[$_] })
@@ -211,6 +223,23 @@ foreach ($service in $servicesToPatch) {
     $patch.services[$serviceIdByName[$service]] = [ordered]@{
         source = [ordered]@{ image = $imageReference }
         variables = $serviceVariables
+    }
+    if ($serviceDeployOverrides.ContainsKey($service)) {
+        # Reconstruct the full deploy object so sleepApplication flips without
+        # dropping the start command, healthcheck or region configuration.
+        $deployPatch = [ordered]@{}
+        if ($null -ne $currentConfig) {
+            $svcDeploySource = $currentConfig.services.($serviceIdByName[$service])
+            if ($null -ne $svcDeploySource -and $null -ne $svcDeploySource.deploy) {
+                $deployPatch = $svcDeploySource.deploy | ConvertTo-Json -Depth 12 | ConvertFrom-Json
+            }
+        }
+        if ($deployPatch -is [System.Management.Automation.PSCustomObject]) {
+            $deployPatch | Add-Member -NotePropertyName sleepApplication -NotePropertyValue $false -Force
+        } else {
+            $deployPatch = [ordered]@{ sleepApplication = $false }
+        }
+        $patch.services[$serviceIdByName[$service]].deploy = $deployPatch
     }
 }
 $patchJson = $patch | ConvertTo-Json -Depth 6
