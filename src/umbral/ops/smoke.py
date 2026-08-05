@@ -301,8 +301,15 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                         (str(correlation_id),),
                     )
                     outbox = cursor.fetchall()
+                    cursor.execute(
+                        "SELECT r.correlation_id, r.decision, r.requested_at "
+                        "FROM magic_link_requests r "
+                        "ORDER BY r.requested_at DESC LIMIT 10"
+                    )
+                    recent = cursor.fetchall()
             print(
-                f"SMOKE RESEND attempt state rows={rows!r} outbox={outbox!r}",
+                f"SMOKE RESEND attempt state rows={rows!r} outbox={outbox!r} "
+                f"recent={recent!r}",
                 file=sys.stderr,
             )
             self._print_rq_job_state(outbox)
