@@ -6,6 +6,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Dump the shape of the smoke web origin without exposing the full URL value.
+$previewBaseUrl = [string]$env:UMBRAL_PREVIEW_BASE_URL
+if ([string]::IsNullOrWhiteSpace($previewBaseUrl)) {
+    Write-Host "UMBRAL_PREVIEW_BASE_URL: <empty>"
+} else {
+    try {
+        $origin = [Uri]$previewBaseUrl
+        Write-Host ("UMBRAL_PREVIEW_BASE_URL origin: scheme={0} host={1} absolutePath='{2}' hasQuery={3} length={4}" -f $origin.Scheme, $origin.Host, $origin.AbsolutePath, ([bool]$origin.Query), $previewBaseUrl.Length)
+    } catch {
+        Write-Host "UMBRAL_PREVIEW_BASE_URL: unparsable"
+    }
+}
+
 # The promote job carries runner-only variables (release metadata, smoke
 # fixtures, preview URL) that Settings validation would reject as unknown and
 # lacks the static preview service variables. Drop the former and set the latter
@@ -211,6 +224,21 @@ function Dump-LiveApiServiceConfig {
     }
 }
 
+function Dump-PreviewPublicDomains {
+    Write-Host ""
+    Write-Host "=== preview public domains ==="
+    try {
+        $raw = & npx @railway/cli@5.27.2 domain list -e preview --json
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($raw)) {
+            Write-Host "domain list failed (exit $LASTEXITCODE)"
+            return
+        }
+        Write-Host $raw
+    } catch {
+        Write-Host ("domain list failed: {0}" -f $_.Exception.Message)
+    }
+}
+
 try {
     Invoke-Diagnostic "scheduler-once (composition + one pass)" $schedulerCode
     Invoke-Diagnostic "worker composition boot" $workerCode
@@ -218,6 +246,7 @@ try {
     Invoke-Diagnostic "api app module import (uvicorn path)" $apiAppCode
     Invoke-RailwayRunDiagnostic
     Dump-LiveApiServiceConfig
+    Dump-PreviewPublicDomains
 } finally {
     foreach ($entry in $savedRunnerOnlyEnv.GetEnumerator()) {
         [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
