@@ -175,12 +175,14 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         observation_token: str,
         sender: str,
         redis_url: str = "",
+        web_origin: str = "",
         deadline: float | None = None,
     ) -> None:
         self._database_url = database_url
         self._observation_token = observation_token
         self._sender = sender
         self._redis_url = redis_url
+        self._web_origin = web_origin.rstrip("/")
         self._deadline = deadline
         self._event_correlations: dict[str, UUID] = {}
         self._delivery_reasons: dict[UUID, str] = {}
@@ -505,6 +507,20 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 "GET", "/webhooks", None, monotonic() + 15
             )
             print(f"SMOKE RESEND webhooks config={listing!r}", file=sys.stderr)
+            data = listing.get("data")
+            if isinstance(data, list) and self._web_origin:
+                expected = f"{self._web_origin}/api/webhooks/email"
+                for item in data:
+                    if not isinstance(item, Mapping):
+                        continue
+                    endpoint = item.get("endpoint")
+                    status = item.get("status")
+                    match = endpoint == expected if isinstance(endpoint, str) else None
+                    print(
+                        f"SMOKE RESEND webhook endpoint match={match} "
+                        f"status={status!r} expected_origin={self._web_origin}",
+                        file=sys.stderr,
+                    )
         except Exception as error:
             print(
                 f"SMOKE RESEND webhooks query failed: "
@@ -1514,6 +1530,7 @@ def _built_in_preview_observer(
         observation_token=config.resend_observation_token,
         sender=sender,
         redis_url=redis_url,
+        web_origin=config.public_web_base_url,
         deadline=deadline,
     )
 

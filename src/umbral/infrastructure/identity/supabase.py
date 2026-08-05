@@ -70,7 +70,11 @@ class SupabaseIdentityAdapter:
     def verify_magic_link(self, *, attempt_id: UUID, token_hash: str, now: datetime) -> ProviderProof:
         try:
             response = self._client.auth.verify_otp(
-                {"type": "magiclink", "token_hash": token_hash}
+                {
+                    "type": "magiclink",
+                    "token_hash": token_hash,
+                    "options": {"shouldCreateUser": True},
+                }
             )
             user = _required_object(response.user)
             session = _required_object(response.session)
