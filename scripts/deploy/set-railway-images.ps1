@@ -74,8 +74,11 @@ $serviceArtifacts = [ordered]@{
 
 # The api runtime binds uvicorn to port 8000; Railway probes the PORT variable
 # to choose the healthcheck target port, so pin it explicitly to match.
+# The web reaches the private api over Railway's internal DNS, which requires the
+# container port; the provisioned UMBRAL_PRIVATE_API_URL must carry it.
 $serviceExtraVars = @{
     api = [ordered]@{ PORT = "8000" }
+    web = [ordered]@{ UMBRAL_PRIVATE_API_URL = "http://api.railway.internal:8000" }
 }
 
 # Preview app services that would otherwise sleep on idle, breaking the web->api

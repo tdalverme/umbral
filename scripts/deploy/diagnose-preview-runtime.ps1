@@ -265,7 +265,7 @@ function Dump-PrivateApiUrlConfiguration {
         }
     }
     try {
-        $shellCommand = 'v="$UMBRAL_RELEASE_MANIFEST"; printf "%s (len %s)" "${v:0:80}" "${#v}"'
+        $shellCommand = 'printf "%s" "$UMBRAL_RELEASE_MANIFEST" | cut -c1-80; printf " (len %s)" "${#UMBRAL_RELEASE_MANIFEST}"'
         $value = & npx @railway/cli@5.27.2 run -e preview --service web -- sh -c $shellCommand 2>&1
         Write-Host ("web UMBRAL_RELEASE_MANIFEST prefix = {0}" -f ($value -join " "))
     } catch {
