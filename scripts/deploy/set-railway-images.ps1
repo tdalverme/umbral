@@ -131,6 +131,16 @@ foreach ($key in @("OBJECT_STORE_BUCKET", "OBJECT_STORE_ENDPOINT_URL", "OBJECT_S
     $objectStoreVars[$key] = [string]$value
 }
 
+# Runtime services also need the current provider credentials so the worker can
+# issue magic links; static provisioning can leave a rotated key behind, which
+# makes the sender return 401 during the smoke.
+$providerVars = [ordered]@{}
+foreach ($key in @("RESEND_API_KEY", "RESEND_FROM_EMAIL")) {
+    $value = [Environment]::GetEnvironmentVariable($key)
+    Require-Condition (-not [string]::IsNullOrWhiteSpace([string]$value)) "Missing ${key} environment value for Railway service variables."
+    $providerVars[$key] = [string]$value
+}
+
 # Compare every app service against its target spec so only the services that
 # actually diverge are patched. This keeps the promote idempotent (no-op when
 # everything is already pinned) while still producing fresh deployments for the
@@ -149,6 +159,7 @@ function Test-ServiceAtTarget {
         [AllowNull()] $SvcConfig,
         [Parameter(Mandatory = $true)] $ObservabilityVars,
         [Parameter(Mandatory = $true)] $ObjectStoreVars,
+        [Parameter(Mandatory = $true)] $ProviderVars,
         [Parameter(Mandatory = $true)] $ServiceDeployOverrides,
         [Parameter(Mandatory = $true)] $ServiceExtraVars
     )
@@ -165,6 +176,11 @@ function Test-ServiceAtTarget {
     }
     foreach ($key in $ObjectStoreVars.Keys) {
         if ([string]$SvcConfig.variables.$key.value -ne [string]$ObjectStoreVars[$key]) { return $false }
+    }
+    if ($Service -ne "web") {
+        foreach ($key in $ProviderVars.Keys) {
+            if ([string]$SvcConfig.variables.$key.value -ne [string]$ProviderVars[$key]) { return $false }
+        }
     }
     if ($ServiceDeployOverrides.ContainsKey($Service)) {
         if ($null -eq $SvcConfig.deploy -or $null -eq $SvcConfig.deploy.sleepApplication -or [bool]$SvcConfig.deploy.sleepApplication -ne [bool]$ServiceDeployOverrides[$Service].sleepApplication) { return $false }
@@ -183,7 +199,7 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ($null -ne $currentConfig) {
         $svcConfig = $currentConfig.services.($serviceIdByName[$service])
     }
-    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars)
+    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars)
 }
 
 $servicesToPatch = @($serviceArtifacts.Keys | Where-Object { $serviceNeedsPatch[$_] })
@@ -217,6 +233,11 @@ foreach ($service in $servicesToPatch) {
     }
     foreach ($key in $ObjectStoreVars.Keys) {
         $serviceVariables[$key] = [ordered]@{ value = $ObjectStoreVars[$key] }
+    }
+    if ($service -ne "web") {
+        foreach ($key in $ProviderVars.Keys) {
+            $serviceVariables[$key] = [ordered]@{ value = $ProviderVars[$key] }
+        }
     }
     if ($serviceExtraVars.ContainsKey($service)) {
         foreach ($key in $serviceExtraVars[$service].Keys) {
