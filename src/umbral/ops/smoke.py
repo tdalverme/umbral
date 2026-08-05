@@ -1180,6 +1180,12 @@ def _confirm_magic_link(
             '{"attemptId":"' + attempt_id + '","tokenHash":"' + token_hash + '"}'
         ).encode(),
     )
+    if response.status_code != 204:
+        print(
+            f"SMOKE confirm status={response.status_code} "
+            f"body={response.body[:200]!r}",
+            file=sys.stderr,
+        )
     return response.status_code
 
 
