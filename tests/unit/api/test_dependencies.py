@@ -10,7 +10,7 @@ from umbral.api.dependencies import _load_settings, build_runtime_dependencies
 from umbral.application.identity.ports import IdentityStore
 from umbral.application.runtime.readiness import ReadinessCheck
 from umbral.infrastructure.config.settings import SettingsValidationError
-from umbral.infrastructure.db.session import SessionProvider
+from umbral.infrastructure.db.session import SessionProvider, create_engine_for_execution
 from umbral.infrastructure.runtime.composition import RuntimeCompositionFactories
 
 
@@ -111,6 +111,14 @@ def test_preview_session_factory_uses_installed_psycopg_driver() -> None:
     )
 
     assert provider.engine.url.drivername == "postgresql+psycopg"
+
+
+def test_engine_construction_resolves_provider_neutral_postgres_driver() -> None:
+    engine = create_engine_for_execution(
+        "postgres://user:pass@db.preview.invalid/app"
+    )
+
+    assert engine.url.drivername == "postgresql+psycopg"
 
 
 def _preview_environment() -> dict[str, str]:

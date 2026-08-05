@@ -65,9 +65,6 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                 time.sleep(HEARTBEAT_INTERVAL_SECONDS)
         return 2
     except Exception:
-        import traceback
-
-        traceback.print_exc()
         print(f"{args.command} failed", file=sys.stderr)
         return 1
     finally:

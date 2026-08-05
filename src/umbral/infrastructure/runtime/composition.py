@@ -51,16 +51,8 @@ _MARKER_KEY = "objects/runtime-readiness/preview-v1"
 
 
 def _build_session_provider(database_url: str) -> SessionProvider:
-    """Select psycopg explicitly; settings retain their provider-neutral URL."""
+    """Delegate to the shared engine constructor; it resolves the psycopg driver."""
 
-    if database_url.startswith("postgres://"):
-        database_url = "postgresql+psycopg://" + database_url.removeprefix(
-            "postgres://"
-        )
-    elif database_url.startswith("postgresql://"):
-        database_url = "postgresql+psycopg://" + database_url.removeprefix(
-            "postgresql://"
-        )
     return SessionProvider(database_url)
 
 

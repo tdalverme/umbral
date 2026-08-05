@@ -60,8 +60,9 @@ def _preload_with_database(email: str, database_url: str) -> str:
     from sqlalchemy.orm import sessionmaker
 
     from umbral.infrastructure.db.repositories.identity import SqlAlchemyIdentityStore
+    from umbral.infrastructure.db.session import resolve_postgres_dialect_url
 
-    engine = create_engine(database_url)
+    engine = create_engine(resolve_postgres_dialect_url(database_url))
     try:
         store = SqlAlchemyIdentityStore(sessionmaker(bind=engine))
         return str(AccessAdministration(store).preload_invitation(email).id)

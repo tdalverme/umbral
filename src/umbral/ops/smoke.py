@@ -330,8 +330,11 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 from umbral.infrastructure.db.repositories.identity import (
                     SqlAlchemyIdentityStore,
                 )
+                from umbral.infrastructure.db.session import (
+                    resolve_postgres_dialect_url,
+                )
 
-                engine = create_engine(self._database_url)
+                engine = create_engine(resolve_postgres_dialect_url(self._database_url))
                 try:
                     store = SqlAlchemyIdentityStore(sessionmaker(bind=engine))
                     with store.transaction():

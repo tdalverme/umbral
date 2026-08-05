@@ -9,6 +9,16 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 
+def resolve_postgres_dialect_url(database_url: str) -> str:
+    """Select psycopg explicitly; settings retain their provider-neutral URL."""
+
+    if database_url.startswith("postgres://"):
+        return "postgresql+psycopg://" + database_url.removeprefix("postgres://")
+    if database_url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + database_url.removeprefix("postgresql://")
+    return database_url
+
+
 def create_engine_for_execution(database_url: str, **kwargs: Any) -> Engine:
     """Create a fresh engine for one runtime process; callers own its disposal."""
 
@@ -17,7 +27,7 @@ def create_engine_for_execution(database_url: str, **kwargs: Any) -> Engine:
         "future": True,
     }
     options.update(kwargs)
-    return create_engine(database_url, **options)
+    return create_engine(resolve_postgres_dialect_url(database_url), **options)
 
 
 def create_session_factory(engine: Engine) -> Callable[[], Session]:
