@@ -15,8 +15,28 @@ foreach ($service in $services) {
     }
 }
 
+function Dump-DeploymentLogs([string]$Service, [string]$DeploymentId, [string]$Environment) {
+    Write-Host "=== Deployment logs for $Service / $DeploymentId ==="
+    try {
+        $raw = & npx @railway/cli@5.27.2 logs --service $Service -e $Environment --lines 200 $DeploymentId 2>&1
+        Write-Host ($raw | Out-String)
+    } catch {
+        Write-Host ("logs fetch failed: {0}" -f $_.Exception.Message)
+    }
+    try {
+        $rawBuild = & npx @railway/cli@5.27.2 logs --build --service $Service -e $Environment --lines 200 $DeploymentId 2>&1
+        if (-not [string]::IsNullOrWhiteSpace($rawBuild)) {
+            Write-Host "=== Build logs for $Service / $DeploymentId ==="
+            Write-Host ($rawBuild | Out-String)
+        }
+    } catch {
+        Write-Host ("build logs fetch failed: {0}" -f $_.Exception.Message)
+    }
+}
+
 $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
 $pending = [System.Collections.Generic.HashSet[string]]::new([string[]]$services)
+$failures = [System.Collections.Generic.List[string]]::new()
 while ($pending.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline) {
     foreach ($service in @($pending)) {
         $expectedId = [string]$deploymentIds.$service
@@ -37,10 +57,27 @@ while ($pending.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline) {
             continue
         }
         if ($deploymentStatus -in @("FAILED", "CRASHED", "REMOVED", "SKIPPED", "CANCELED", "CANCELLED", "ERROR")) {
-            throw ("Railway deployment {0} for {1} finished with {2}." -f $expectedId, $service, $deploymentStatus)
+            $failures.Add(("{0} ({1}) finished with {2}" -f $service, $expectedId, $deploymentStatus))
+            [void]$pending.Remove($service)
         }
     }
     if ($pending.Count -gt 0) { Start-Sleep -Seconds $PollSeconds }
+}
+if ($failures.Count -gt 0) {
+    foreach ($failure in $failures) {
+        Write-Host "FAILED: $failure"
+    }
+    foreach ($service in $services) {
+        $expectedId = [string]$deploymentIds.$service
+        $isFailed = $false
+        foreach ($failure in $failures) {
+            if ($failure -like "$service (*") { $isFailed = $true; break }
+        }
+        if ($isFailed) {
+            Dump-DeploymentLogs -Service $service -DeploymentId $expectedId -Environment $Environment
+        }
+    }
+    throw ("Railway deployments failed: {0}." -f ($failures -join "; "))
 }
 if ($pending.Count -gt 0) {
     throw ("Timed out waiting for Railway deployments: {0}." -f ($pending -join ", "))
