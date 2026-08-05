@@ -121,6 +121,24 @@ foreach ($service in $serviceArtifacts.Keys) {
         Start-Sleep -Seconds 10
     }
     if ([string]::IsNullOrWhiteSpace($deploymentId)) {
+        Write-Host "No new deployment detected for ${service}. Gathering Railway diagnostics..."
+        $artifact = $manifest.artifacts.($serviceArtifacts[$service])
+        Write-Host "Target image: {0}@{1}" -f $artifact.image, $artifact.digest
+        $rawConfig = & npx @railway/cli@5.27.2 environment config -e $Environment --json
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Environment config:"
+            Write-Host ($rawConfig | Out-String)
+        }
+        $rawStatus = & npx @railway/cli@5.27.2 service status --all -e $Environment --json
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Service status:"
+            Write-Host ($rawStatus | Out-String)
+        }
+        $rawList = & npx @railway/cli@5.27.2 deployment list -e $Environment --service $service --json
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Deployment list for ${service}:"
+            Write-Host ($rawList | Out-String)
+        }
         throw ("Railway did not create a new deployment for {0} after applying the image change." -f $service)
     }
     $deploymentIds[$service] = $deploymentId
