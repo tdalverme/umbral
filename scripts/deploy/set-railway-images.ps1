@@ -72,6 +72,12 @@ $serviceArtifacts = [ordered]@{
     scheduler = "runtime"
 }
 
+# The api runtime binds uvicorn to port 8000; Railway probes the PORT variable
+# to choose the healthcheck target port, so pin it explicitly to match.
+$serviceExtraVars = @{
+    api = [ordered]@{ PORT = "8000" }
+}
+
 # The stdin JSON path in `environment edit` does not translate service names to
 # IDs; the backend only applies patches keyed by service ID, so resolve them here.
 $rawStatus = & npx @railway/cli@5.27.2 service status --all -e $Environment --json
@@ -119,6 +125,11 @@ if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($currentConfigRaw
         foreach ($key in $observabilityVars.Keys) {
             if ([string]$svcConfig.variables.$key.value -ne [string]$observabilityVars[$key]) { $alreadyAtTarget = $false; break }
         }
+        if ($serviceExtraVars.ContainsKey($service)) {
+            foreach ($key in $serviceExtraVars[$service].Keys) {
+                if ([string]$svcConfig.variables.$key.value -ne [string]$serviceExtraVars[$service][$key]) { $alreadyAtTarget = $false; break }
+            }
+        }
     }
 }
 if ($alreadyAtTarget) {
@@ -148,6 +159,11 @@ foreach ($service in $serviceArtifacts.Keys) {
     }
     if ($observabilityVars.Contains("OTEL_EXPORTER_OTLP_HEADERS")) {
         $serviceVariables.OTEL_EXPORTER_OTLP_HEADERS = [ordered]@{ value = $observabilityVars.OTEL_EXPORTER_OTLP_HEADERS }
+    }
+    if ($serviceExtraVars.ContainsKey($service)) {
+        foreach ($key in $serviceExtraVars[$service].Keys) {
+            $serviceVariables[$key] = [ordered]@{ value = $serviceExtraVars[$service][$key] }
+        }
     }
     $patch.services[$serviceIdByName[$service]] = [ordered]@{
         source = [ordered]@{ image = $imageReference }
