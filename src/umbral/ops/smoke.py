@@ -361,7 +361,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 rows = cursor.fetchall()
         for execution_id, attempt_number, execution_correlation_id in rows:
             queue.enqueue(
-                "umbral.workers.worker:run_message",
+                "umbral.workers.worker.run_message",
                 execution_id=str(execution_id),
                 attempt_number=int(attempt_number),
                 correlation_id=str(execution_correlation_id),

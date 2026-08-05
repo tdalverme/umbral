@@ -13,7 +13,7 @@ class RQJobQueue:
         self,
         queue: Any,
         *,
-        job_name: str = "umbral.workers.worker:run_message",
+        job_name: str = "umbral.workers.worker.run_message",
     ) -> None:
         self.queue = queue
         self.job_name = job_name
@@ -32,7 +32,7 @@ class RQJobQueue:
         connection: Any,
         *,
         name: str = "umbral",
-        job_name: str = "umbral.workers.worker:run_message",
+        job_name: str = "umbral.workers.worker.run_message",
     ) -> RQJobQueue:
         from rq import Queue
 

@@ -48,7 +48,7 @@ def test_rq_queue_uses_json_serializer_and_forwards_only_contract_payload() -> N
             return object()
 
     fake = FakeQueue()
-    queue = RQJobQueue(fake, job_name="umbral.workers.worker:run_message")
+    queue = RQJobQueue(fake, job_name="umbral.workers.worker.run_message")
     execution_id = uuid4()
     correlation_id = uuid4()
 
@@ -58,7 +58,7 @@ def test_rq_queue_uses_json_serializer_and_forwards_only_contract_payload() -> N
         correlation_id=correlation_id,
     )
 
-    assert fake.calls[0][0] == "umbral.workers.worker:run_message"
+    assert fake.calls[0][0] == "umbral.workers.worker.run_message"
     kwargs = fake.calls[0][1]
     assert kwargs["job_id"] == f"{execution_id}-2"
     assert kwargs["execution_id"] == str(execution_id)
