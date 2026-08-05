@@ -44,6 +44,12 @@ try {
     $env:AWS_SECRET_ACCESS_KEY = $env:OBJECT_STORE_SECRET_KEY
     $env:AWS_EC2_METADATA_DISABLED = "true"
 
+    $databaseUri = [Uri]::new($env:DATABASE_URL)
+    if ([string]::IsNullOrWhiteSpace($databaseUri.Host)) {
+        throw "DATABASE_URL does not contain a host; pg_dump would fall back to a local socket."
+    }
+    Write-Host "Backup database host: $($databaseUri.Host):$($databaseUri.Port)"
+
     $pgDumpError = (& pg_dump --format=custom --file $temporaryDump $env:DATABASE_URL 2>&1 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $temporaryDump)) {
         throw ("Database backup failed: {0}" -f $pgDumpError)
