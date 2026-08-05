@@ -264,6 +264,16 @@ function Dump-PrivateApiUrlConfiguration {
             Write-Host ("{0} {1} query failed: {2}" -f $service, $variable, $_.Exception.Message)
         }
     }
+    # BFF token presence without exposing the secret value.
+    foreach ($service in @("web", "api")) {
+        try {
+            $shellCommand = 'v="$UMBRAL_BFF_TOKEN"; printf "len %s" "${#v}"'
+            $value = & npx @railway/cli@5.27.2 run -e preview --service $service -- sh -c $shellCommand 2>&1
+            Write-Host ("{0} UMBRAL_BFF_TOKEN {1}" -f $service, ($value -join " "))
+        } catch {
+            Write-Host ("{0} UMBRAL_BFF_TOKEN query failed: {1}" -f $service, $_.Exception.Message)
+        }
+    }
     try {
         $shellCommand = 'printf "%s" "$UMBRAL_RELEASE_MANIFEST" | cut -c1-80; printf " (len %s)" "${#UMBRAL_RELEASE_MANIFEST}"'
         $value = & npx @railway/cli@5.27.2 run -e preview --service web -- sh -c $shellCommand 2>&1

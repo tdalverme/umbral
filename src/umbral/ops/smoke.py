@@ -223,41 +223,67 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         timeout_seconds: int,
     ) -> ObservedPreviewMessage:
         deadline = self._start_deadline(timeout_seconds)
-        while True:
-            listing = self._resend_json("GET", "/emails", None, deadline)
-            messages = listing.get("data")
-            if isinstance(messages, list):
-                matches = [
-                    item
-                    for item in messages
-                    if _resend_message_matches(
-                        item, recipient, requested_at, correlation_id
-                    )
-                ]
-                if len(matches) == 1 and isinstance(matches[0], Mapping):
-                    message_id = matches[0].get("id")
-                    if isinstance(message_id, str):
-                        detail = self._resend_json(
-                            "GET", f"/emails/{message_id}", None, deadline
+        try:
+            while True:
+                listing = self._resend_json("GET", "/emails", None, deadline)
+                messages = listing.get("data")
+                if isinstance(messages, list):
+                    matches = [
+                        item
+                        for item in messages
+                        if _resend_message_matches(
+                            item, recipient, requested_at, correlation_id
                         )
-                        capture_url = _capture_url_from_resend_detail(detail)
-                        if capture_url:
-                            self._event_correlations[message_id] = correlation_id
-                            return ObservedPreviewMessage(
-                                message_id, capture_url, correlation_id
+                    ]
+                    if len(matches) == 1 and isinstance(matches[0], Mapping):
+                        message_id = matches[0].get("id")
+                        if isinstance(message_id, str):
+                            detail = self._resend_json(
+                                "GET", f"/emails/{message_id}", None, deadline
                             )
-                if len(matches) > 1:
+                            capture_url = _capture_url_from_resend_detail(detail)
+                            if capture_url:
+                                self._event_correlations[message_id] = correlation_id
+                                return ObservedPreviewMessage(
+                                    message_id, capture_url, correlation_id
+                                )
+                    if len(matches) > 1:
+                        print(
+                            f"SMOKE RESEND ambiguous matches={len(matches)}",
+                            file=sys.stderr,
+                        )
+                        raise ValueError("Resend message correlation is ambiguous")
+                else:
                     print(
-                        f"SMOKE RESEND ambiguous matches={len(matches)}",
+                        f"SMOKE RESEND listing unexpected data={type(messages).__name__}",
                         file=sys.stderr,
                     )
-                    raise ValueError("Resend message correlation is ambiguous")
-            else:
-                print(
-                    f"SMOKE RESEND listing unexpected data={type(messages).__name__}",
-                    file=sys.stderr,
-                )
-            _sleep_remaining(deadline)
+                _sleep_remaining(deadline)
+        except TimeoutError:
+            self._print_attempt_state(correlation_id)
+            raise
+
+    def _print_attempt_state(self, correlation_id: UUID) -> None:
+        import psycopg
+
+        try:
+            with psycopg.connect(self._database_url, connect_timeout=5) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT a.state, a.failure_reason, a.provider_message_id, "
+                        "r.decision "
+                        "FROM magic_link_attempts a "
+                        "LEFT JOIN magic_link_requests r ON r.id = a.request_id "
+                        "WHERE r.correlation_id = %s",
+                        (str(correlation_id),),
+                    )
+                    rows = cursor.fetchall()
+            print(f"SMOKE RESEND attempt state rows={rows!r}", file=sys.stderr)
+        except Exception as error:
+            print(
+                f"SMOKE RESEND attempt query failed: {type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
 
     def trigger_delivery_event(self, scenario: str, correlation_id: UUID) -> str:
         if scenario not in {"delivered", "bounced", "complained"}:
