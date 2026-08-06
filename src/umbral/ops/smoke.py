@@ -339,31 +339,28 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 return
             expected = f"{self._web_origin}/api/webhooks/email"
             for item in data:
-                if not isinstance(item, Mapping):
-                    continue
-                endpoint = item.get("endpoint")
-                webhook_id = item.get("id")
                 if (
-                    isinstance(endpoint, str)
-                    and endpoint == expected
-                    and isinstance(webhook_id, str)
+                    isinstance(item, Mapping)
+                    and item.get("endpoint") == expected
+                    and isinstance(item.get("id"), str)
                 ):
                     self._resend_json(
-                        "DELETE", f"/webhooks/{webhook_id}", None, monotonic() + 15
+                        "DELETE", f"/webhooks/{item['id']}", None, monotonic() + 15
                     )
-                    result = self._resend_json(
-                        "POST",
-                        "/webhooks",
-                        {"url": expected, "events": events, "secret": secret},
-                        monotonic() + 15,
-                    )
-                    print(
-                        f"SMOKE RESEND webhook recreated id={result.get('id')!r} "
-                        f"secret_sha256="
-                        f"{hashlib.sha256(secret.encode()).hexdigest()[:16]}",
-                        file=sys.stderr,
-                    )
-                    return
+                    break
+            result = self._resend_json(
+                "POST",
+                "/webhooks",
+                {"endpoint": expected, "events": events, "secret": secret},
+                monotonic() + 15,
+            )
+            print(
+                f"SMOKE RESEND webhook recreated id={result.get('id')!r} "
+                f"secret_sha256="
+                f"{hashlib.sha256(secret.encode()).hexdigest()[:16]}",
+                file=sys.stderr,
+            )
+            return
         except Exception as error:
             print(
                 f"SMOKE RESEND webhook secret sync failed: "
