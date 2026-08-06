@@ -276,6 +276,19 @@ function Dump-PrivateApiUrlConfiguration {
             Write-Host ("{0} issuer check failed: {1}" -f $service, $_.Exception.Message)
         }
     }
+    # Compare the deployed email webhook secret (hashed) so a drift from the
+    # runner's secret is visible without exposing the value.
+    $runnerWebhookSha = if ([string]::IsNullOrWhiteSpace([string]$env:EMAIL_WEBHOOK_SECRET)) { "<empty>" } else { (& sh -c 'printf "%s" "$1" | sha256sum | cut -c1-16' _ $env:EMAIL_WEBHOOK_SECRET 2>$null | Select-Object -First 1).Trim() }
+    Write-Host ("runner EMAIL_WEBHOOK_SECRET sha256 = {0}" -f $runnerWebhookSha)
+    foreach ($service in @("api", "worker")) {
+        try {
+            $shellCommand = 'printf "%s" "$EMAIL_WEBHOOK_SECRET" | sha256sum | cut -c1-16'
+            $value = & npx @railway/cli@5.27.2 run -e preview --service $service -- sh -c $shellCommand 2>&1
+            Write-Host ("{0} EMAIL_WEBHOOK_SECRET sha256 = {1}" -f $service, ($value -join " "))
+        } catch {
+            Write-Host ("{0} webhook secret check failed: {1}" -f $service, $_.Exception.Message)
+        }
+    }
     # BFF token presence without exposing the secret value.
     foreach ($service in @("web", "api")) {
         try {

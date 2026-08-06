@@ -647,6 +647,11 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         secret = os_module.environ.get("EMAIL_WEBHOOK_SECRET", "")
         if not secret:
             return
+        print(
+            f"SMOKE RESEND webhook secret sha256="
+            f"{hashlib.sha256(secret.encode()).hexdigest()[:16]}",
+            file=sys.stderr,
+        )
         signing_key = _svix_signing_key(secret)
         payload = b'{"data":{"email_id":"umbral-sender-probe","event":"email.delivered"}}'
         svix_id = "probe-" + uuid4().hex
