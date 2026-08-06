@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from time import perf_counter
 from typing import TYPE_CHECKING, Callable
@@ -90,9 +91,18 @@ class InMemoryWorker:
 
 
 def build_rq_worker(queue: RQJobQueue) -> Worker:
-    """Create the long-lived RQ worker with the sole durable queue contract."""
+    """Create the long-lived RQ worker with the sole durable queue contract.
 
-    return Worker(
+    RQ's default worker forks on POSIX only; Windows hosts use the in-process
+    ``SimpleWorker`` so local development can run the same durable queue.
+    """
+
+    worker_class = Worker
+    if os.name == "nt":
+        from rq.worker import SimpleWorker
+
+        worker_class = SimpleWorker  # type: ignore[assignment]
+    return worker_class(
         [queue.queue],
         connection=queue.queue.connection,
         serializer=JSONSerializer,

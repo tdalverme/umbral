@@ -13,7 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from umbral.api.dependencies import build_runtime_dependencies
+from umbral.api.dependencies import RuntimeDependencies, build_runtime_dependencies
 from umbral.api.errors import (
     application_error_handler,
     http_error_handler,
@@ -204,10 +204,11 @@ def _openapi_for_app(app: FastAPI) -> dict[str, Any]:
     return document
 
 
-def create_app() -> FastAPI:
+def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     """Compose the API with validated configuration and safe transport policy."""
 
-    dependencies = build_runtime_dependencies()
+    if dependencies is None:
+        dependencies = build_runtime_dependencies()
 
     def observe_api_surface() -> None:
         writer = dependencies.heartbeat_writer
