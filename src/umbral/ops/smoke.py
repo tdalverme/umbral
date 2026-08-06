@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -646,12 +647,13 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         secret = os_module.environ.get("EMAIL_WEBHOOK_SECRET", "")
         if not secret:
             return
+        signing_key = _svix_signing_key(secret)
         payload = b'{"data":{"email_id":"umbral-sender-probe","event":"email.delivered"}}'
         svix_id = "probe-" + uuid4().hex
         svix_ts = str(int(time_module.time()))
         message = f"{svix_id}.{svix_ts}.{payload.decode()}".encode()
         signature = base64.b64encode(
-            hmac.new(secret.encode(), message, hashlib.sha256).digest()
+            hmac.new(signing_key, message, hashlib.sha256).digest()
         ).decode()
         request = Request(
             f"{self._web_origin}/api/webhooks/email",
@@ -914,8 +916,10 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         ) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "UPDATE product_sessions SET last_activity_at = NOW() - INTERVAL '31 minutes' "
-                    "WHERE product_user_id = %s AND revoked_at IS NULL RETURNING id",
+                    "UPDATE product_sessions SET last_activity_at = "
+                    "NOW() - INTERVAL '8 days' "
+                    "WHERE product_user_id = %s AND revoked_at IS NULL "
+                    "RETURNING id",
                     (str(user_id),),
                 )
                 changed = cursor.fetchone() is not None
@@ -1612,6 +1616,14 @@ def _redaction_clean(evidence: object, *canaries: str) -> bool:
         not canary or all(canary not in value for value in flattened)
         for canary in canaries
     )
+
+
+def _svix_signing_key(secret: str) -> bytes:
+    value = secret[6:] if secret.startswith("whsec_") else secret
+    try:
+        return base64.b64decode(value, validate=True)
+    except (TypeError, ValueError):
+        return value.encode()
 
 
 def _is_sha256(value: str) -> bool:

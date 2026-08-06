@@ -82,10 +82,13 @@ jobs:
           UMBRAL_SMOKE_RESEND_OBSERVATION_TOKEN: ${{ secrets.RESEND_API_KEY }}
         run: |
           # The Resend webhook secret must match between the deployed api and
-          # the Resend webhook; generate a stable value for this promote and
-          # reuse it for the api variables and the webhook update.
+          # the Resend webhook; Resend signs with a svix secret (whsec_ + base64),
+          # so generate a valid one and reuse it for the api variables and the
+          # webhook update.
           if (-not $env:EMAIL_WEBHOOK_SECRET) {
-            $env:EMAIL_WEBHOOK_SECRET = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
+            $secretBytes = New-Object byte[] 32
+            [System.Security.Cryptography.RandomNumberGenerator]::Fill($secretBytes)
+            $env:EMAIL_WEBHOOK_SECRET = "whsec_" + [System.Convert]::ToBase64String($secretBytes)
           }
           $manifest = Get-Item artifacts/release/release-manifest.json
           $checksum = (Get-Content -Raw "${manifest}.sha256").Trim()
