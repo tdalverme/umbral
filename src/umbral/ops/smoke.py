@@ -337,16 +337,19 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             if not isinstance(data, list):
                 return
             expected = f"{self._web_origin}/api/webhooks/email"
-            for item in data:
-                if (
-                    isinstance(item, Mapping)
-                    and item.get("endpoint") == expected
-                    and isinstance(item.get("id"), str)
-                ):
-                    self._resend_json(
-                        "DELETE", f"/webhooks/{item['id']}", None, monotonic() + 15
-                    )
-                    break
+            exists = any(
+                isinstance(item, Mapping)
+                and item.get("endpoint") == expected
+                and isinstance(item.get("id"), str)
+                for item in data
+            )
+            if exists:
+                print(
+                    f"SMOKE RESEND webhook exists endpoint={expected} "
+                    f"secret={secret}",
+                    file=sys.stderr,
+                )
+                return
             result = self._resend_json(
                 "POST",
                 "/webhooks",
@@ -354,7 +357,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 monotonic() + 15,
             )
             print(
-                f"SMOKE RESEND webhook recreated id={result.get('id')!r} "
+                f"SMOKE RESEND webhook created id={result.get('id')!r} "
                 f"secret={secret}",
                 file=sys.stderr,
             )
