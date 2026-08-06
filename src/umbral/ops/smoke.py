@@ -680,9 +680,14 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 )
         except HTTPError as error:
             body = error.read()
+            detail = None
+            try:
+                detail = json.loads(body).get("detail")
+            except (TypeError, ValueError):
+                pass
             print(
                 f"SMOKE RESEND webhook verified probe status={error.code} "
-                f"body={body[:200]!r}",
+                f"detail={detail!r}",
                 file=sys.stderr,
             )
         except Exception as error:
