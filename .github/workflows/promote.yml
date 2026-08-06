@@ -81,17 +81,17 @@ jobs:
           UMBRAL_SMOKE_OPERATOR_REDIS_URL_ENV: UMBRAL_SMOKE_OPERATOR_REDIS_URL
           UMBRAL_SMOKE_RESEND_OBSERVATION_TOKEN: ${{ secrets.RESEND_API_KEY }}
         run: |
-          # The Resend webhook secret must match between the deployed api and
-          # the Resend webhook; Resend signs with a svix secret (whsec_ + base64),
-          # so generate a valid one and reuse it for the api variables and the
-          # webhook update.
-          if (-not $env:EMAIL_WEBHOOK_SECRET) {
-            $secretBytes = New-Object byte[] 32
-            [System.Security.Cryptography.RandomNumberGenerator]::Fill($secretBytes)
-            $env:EMAIL_WEBHOOK_SECRET = "whsec_" + [System.Convert]::ToBase64String($secretBytes)
-          }
           $manifest = Get-Item artifacts/release/release-manifest.json
           $checksum = (Get-Content -Raw "${manifest}.sha256").Trim()
+          # The Resend webhook secret must match between the deployed api and
+          # the Resend webhook. It is derived from the immutable manifest so it
+          # is stable per release (the operator can pin it once in the Resend
+          # dashboard) while Resend signs with a svix secret (whsec_ + base64).
+          if (-not $env:EMAIL_WEBHOOK_SECRET) {
+            $checksumBytes = [System.Text.Encoding]::UTF8.GetBytes($checksum)
+            $hashBytes = [System.Security.Cryptography.SHA256]::HashData($checksumBytes)
+            $env:EMAIL_WEBHOOK_SECRET = "whsec_" + [System.Convert]::ToBase64String($hashBytes)
+          }
           $pythonExecutable = Join-Path $env:GITHUB_WORKSPACE ".venv/bin/python"
           if (-not (Test-Path -LiteralPath $pythonExecutable)) { throw "uv did not create the Linux Python environment." }
           $null = ./scripts/deploy/verify-access.ps1
