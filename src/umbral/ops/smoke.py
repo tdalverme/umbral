@@ -495,6 +495,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             print(f"SMOKE RESEND webhook events rows={rows!r}", file=sys.stderr)
             self._print_resend_webhooks()
             self._print_webhook_probe()
+            self._print_provider_email_state(provider_event_id)
         except Exception as error:
             print(
                 f"SMOKE RESEND webhook events failed: "
@@ -556,6 +557,23 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         except Exception as error:
             print(
                 f"SMOKE RESEND webhook probe failed: "
+                f"{type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+
+    def _print_provider_email_state(self, provider_message_id: str) -> None:
+        try:
+            detail = self._resend_json(
+                "GET", f"/emails/{provider_message_id}", None, monotonic() + 15
+            )
+            print(
+                f"SMOKE RESEND email state last_event={detail.get('last_event')!r} "
+                f"subject={detail.get('subject')!r} bounces={detail.get('bounce')!r}",
+                file=sys.stderr,
+            )
+        except Exception as error:
+            print(
+                f"SMOKE RESEND email state failed: "
                 f"{type(error).__name__}: {error}",
                 file=sys.stderr,
             )
@@ -1342,9 +1360,15 @@ def _confirm_magic_link(
         ).encode(),
     )
     if response.status_code != 204:
+        detail = None
+        try:
+            payload = json.loads(response.body)
+            detail = payload.get("detail")
+        except (TypeError, ValueError):
+            pass
         print(
             f"SMOKE confirm status={response.status_code} "
-            f"body={response.body[:200]!r}",
+            f"detail={detail!r} body={response.body[:120]!r}",
             file=sys.stderr,
         )
     return response.status_code
