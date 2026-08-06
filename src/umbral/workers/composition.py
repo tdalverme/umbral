@@ -19,10 +19,13 @@ from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.repositories.identity import SqlAlchemyIdentityStore
 from umbral.infrastructure.db.session import SessionProvider
 from umbral.infrastructure.identity.registry import build_identity_registry
+from umbral.infrastructure.ingestion.composition import build_ingestion_service
 from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
+from umbral.infrastructure.object_store.factory import build_object_store
 from umbral.infrastructure.observability.runtime import initialize_observability
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
 from umbral.infrastructure.runtime.heartbeat import RuntimeHeartbeatWriter
+from umbral.workers.imports import build_ingestion_registry
 from umbral.workers.registry import JobRegistry
 from umbral.workers.registry import build_identity_registry as build_job_registry
 
@@ -65,6 +68,13 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         capture_origin=active_settings.identity_capture_origin,
     )
     registry = build_job_registry(identity_access)
+    object_store = build_object_store(active_settings)
+    ingestion = build_ingestion_service(
+        session_factory=session_provider.session_factory,
+        object_store=object_store,
+    )
+    for handler in build_ingestion_registry(ingestion).as_mapping().values():
+        registry.register(handler)
     redis_connection = Redis.from_url(active_settings.redis_url)
     queue = RQJobQueue.from_connection(redis_connection)
     runtime = SqlAlchemyJobRuntime(

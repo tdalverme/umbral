@@ -1,0 +1,37 @@
+{
+  "contract_version": "1",
+  "file": {
+    "formats": ["json", "csv"],
+    "encodings": ["utf-8"],
+    "max_file_size_bytes": 10485760,
+    "max_records": 10000,
+    "csv": {
+      "delimiter": ",",
+      "requires_header": true
+    },
+    "json": {
+      "envelope": ["contract_version", "records"]
+    }
+  },
+  "fields": {
+    "external_id": { "required": true, "type": "string", "min_length": 1, "max_length": 500 },
+    "operation": { "required": true, "type": "enum", "values": ["rental"] },
+    "property_type": { "required": true, "type": "enum", "values": ["apartment", "house", "room", "studio", "commercial", "other"] },
+    "price": { "required": true, "type": "number", "gt": 0 },
+    "currency": { "required": true, "type": "enum", "values": ["ARS", "USD"] },
+    "expenses": { "required": false, "type": "number", "ge": 0 },
+    "address_text": { "required": true, "type": "string", "min_length": 1, "max_length": 500 },
+    "neighborhood": { "required": false, "type": "string", "max_length": 200 },
+    "latitude": { "required": false, "type": "number", "ge": -34.75, "max": -34.45 },
+    "longitude": { "required": false, "type": "number", "ge": -58.65, "max": -58.25 },
+    "surface_m2": { "required": false, "type": "number", "gt": 0, "max": 1000000 },
+    "rooms": { "required": false, "type": "integer", "ge": 0, "max": 200 },
+    "bedrooms": { "required": false, "type": "integer", "ge": 0, "max": 100 },
+    "floor": { "required": false, "type": "integer", "ge": -10, "max": 1000 },
+    "amenities": { "required": false, "type": "array_string", "max_items": 100, "item_max_length": 100 },
+    "description": { "required": false, "type": "string", "max_length": 20000 },
+    "media_urls": { "required": false, "type": "array_url", "max_items": 50 },
+    "url": { "required": false, "type": "url" },
+    "published_at": { "required": false, "type": "datetime" }
+  }
+}

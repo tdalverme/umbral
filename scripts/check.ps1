@@ -68,6 +68,14 @@ try {
         Invoke-ChildCheck -Name "Jobs" -Path (Join-Path $PSScriptRoot "check-jobs.ps1")
     }
 
+    $ingestionSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\ingestion"),
+        (Join-Path $repoRoot "tests\integration\ingestion")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($ingestionSurface) {
+        Invoke-ChildCheck -Name "Ingestion" -Path (Join-Path $PSScriptRoot "check-imports.ps1")
+    }
+
     $storageSurface = @(
         (Join-Path $repoRoot "src\umbral\application\objects"),
         (Join-Path $repoRoot "tests\contract\test_object_store.py")

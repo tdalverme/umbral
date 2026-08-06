@@ -67,6 +67,70 @@
       }
     },
     "schemas": {
+      "AbnormalModel": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "signal": {
+            "title": "Signal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "signal",
+          "detail"
+        ],
+        "title": "AbnormalModel",
+        "type": "object"
+      },
+      "Body_submitImportBatch": {
+        "properties": {
+          "batch_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Key"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_version": {
+            "title": "Source Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "source_id",
+          "source_version",
+          "contract_version"
+        ],
+        "title": "Body_submitImportBatch",
+        "type": "object"
+      },
       "CurrentSession": {
         "additionalProperties": false,
         "properties": {
@@ -305,6 +369,99 @@
         "title": "Problem",
         "type": "object"
       },
+      "QualityResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "abnormal_distributions": {
+            "items": {
+              "$ref": "#/components/schemas/AbnormalModel"
+            },
+            "title": "Abnormal Distributions",
+            "type": "array"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/RunCountsModel"
+          },
+          "missing_fields_by_name": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Missing Fields By Name",
+            "type": "object"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "counts",
+          "missing_fields_by_name",
+          "abnormal_distributions"
+        ],
+        "title": "QualityResponse",
+        "type": "object"
+      },
+      "QuarantineResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "record_id": {
+            "format": "uuid",
+            "title": "Record Id",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id",
+          "run_id",
+          "source_id",
+          "code",
+          "rule",
+          "detail",
+          "created_at"
+        ],
+        "title": "QuarantineResponse",
+        "type": "object"
+      },
       "Readiness": {
         "additionalProperties": false,
         "description": "Readiness response contract.",
@@ -356,6 +513,170 @@
           "checks"
         ],
         "title": "Readiness",
+        "type": "object"
+      },
+      "RunCountsModel": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "duplicates": {
+            "title": "Duplicates",
+            "type": "integer"
+          },
+          "missing_fields": {
+            "title": "Missing Fields",
+            "type": "integer"
+          },
+          "quarantined": {
+            "title": "Quarantined",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "accepted",
+          "quarantined",
+          "duplicates",
+          "missing_fields"
+        ],
+        "title": "RunCountsModel",
+        "type": "object"
+      },
+      "RunResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "default": 0,
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "batch_key": {
+            "title": "Batch Key",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duplicates": {
+            "default": 0,
+            "title": "Duplicates",
+            "type": "integer"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
+          "file_format": {
+            "enum": [
+              "csv",
+              "json"
+            ],
+            "title": "File Format",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "file_sha256": {
+            "title": "File Sha256",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "missing_fields": {
+            "default": 0,
+            "title": "Missing Fields",
+            "type": "integer"
+          },
+          "quarantined": {
+            "default": 0,
+            "title": "Quarantined",
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_version": {
+            "title": "Source Version",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "total_records": {
+            "default": 0,
+            "title": "Total Records",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "source_id",
+          "source_version",
+          "contract_version",
+          "batch_key",
+          "file_format",
+          "file_name",
+          "file_sha256",
+          "state",
+          "created_at"
+        ],
+        "title": "RunResponse",
         "type": "object"
       },
       "RuntimeVersion": {
@@ -646,6 +967,244 @@
         "summary": "Get Current Session",
         "tags": [
           "Authentication"
+        ]
+      }
+    },
+    "/api/v1/imports/batches": {
+      "post": {
+        "operationId": "submitImportBatch",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_submitImportBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Batch rejected by the import contract"
+          },
+          "401": {
+            "description": "Missing or invalid session"
+          },
+          "403": {
+            "description": "Operator role required"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Batch",
+        "tags": [
+          "Imports"
+        ]
+      }
+    },
+    "/api/v1/imports/quarantine/{record_id}": {
+      "get": {
+        "operationId": "getQuarantineRecord",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuarantineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing or invalid session"
+          },
+          "403": {
+            "description": "Operator role required"
+          },
+          "404": {
+            "description": "Unknown record"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Quarantine Record",
+        "tags": [
+          "Imports"
+        ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}": {
+      "get": {
+        "operationId": "getImportRun",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing or invalid session"
+          },
+          "403": {
+            "description": "Operator role required"
+          },
+          "404": {
+            "description": "Unknown run"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Import Run",
+        "tags": [
+          "Imports"
+        ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/quality": {
+      "get": {
+        "operationId": "getImportQuality",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QualityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing or invalid session"
+          },
+          "403": {
+            "description": "Operator role required"
+          },
+          "404": {
+            "description": "Unknown run"
+          },
+          "409": {
+            "description": "Run not in a terminal state"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Import Quality",
+        "tags": [
+          "Imports"
+        ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/quality/download": {
+      "get": {
+        "operationId": "downloadImportQuality",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing or invalid session"
+          },
+          "403": {
+            "description": "Operator role required"
+          },
+          "404": {
+            "description": "Unknown run"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Import Quality",
+        "tags": [
+          "Imports"
         ]
       }
     },

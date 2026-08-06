@@ -3,8 +3,8 @@
 import { type DefaultError, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { confirmMagicLink, getCurrentSession, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, logoutCurrentSession, type Options, receiveResendEvent, requestMagicLink } from '../sdk.gen';
-import type { ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RequestMagicLinkData, RequestMagicLinkError } from '../types.gen';
+import { confirmMagicLink, downloadImportQuality, getCurrentSession, getImportQuality, getImportRun, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, logoutCurrentSession, type Options, receiveResendEvent, requestMagicLink, submitImportBatch } from '../sdk.gen';
+import type { ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RequestMagicLinkData, RequestMagicLinkError, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse } from '../types.gen';
 
 /**
  * Logout
@@ -106,6 +106,95 @@ export const getCurrentSessionOptions = (options?: Options<GetCurrentSessionData
         return data;
     },
     queryKey: getCurrentSessionQueryKey(options)
+});
+
+/**
+ * Submit Batch
+ */
+export const submitImportBatchMutation = (options?: Partial<Options<SubmitImportBatchData>>): UseMutationOptions<SubmitImportBatchResponse, SubmitImportBatchError, Options<SubmitImportBatchData>> => {
+    const mutationOptions: UseMutationOptions<SubmitImportBatchResponse, SubmitImportBatchError, Options<SubmitImportBatchData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await submitImportBatch({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const getQuarantineRecordQueryKey = (options?: Options<GetQuarantineRecordData>) => createQueryKey('getQuarantineRecord', options);
+
+/**
+ * Get Quarantine Record
+ */
+export const getQuarantineRecordOptions = (options?: Options<GetQuarantineRecordData>) => queryOptions<GetQuarantineRecordResponse, GetQuarantineRecordError, GetQuarantineRecordResponse, ReturnType<typeof getQuarantineRecordQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getQuarantineRecord({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getQuarantineRecordQueryKey(options)
+});
+
+export const getImportRunQueryKey = (options?: Options<GetImportRunData>) => createQueryKey('getImportRun', options);
+
+/**
+ * Get Import Run
+ */
+export const getImportRunOptions = (options?: Options<GetImportRunData>) => queryOptions<GetImportRunResponse, GetImportRunError, GetImportRunResponse, ReturnType<typeof getImportRunQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getImportRun({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getImportRunQueryKey(options)
+});
+
+export const getImportQualityQueryKey = (options?: Options<GetImportQualityData>) => createQueryKey('getImportQuality', options);
+
+/**
+ * Get Import Quality
+ */
+export const getImportQualityOptions = (options?: Options<GetImportQualityData>) => queryOptions<GetImportQualityResponse, GetImportQualityError, GetImportQualityResponse, ReturnType<typeof getImportQualityQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getImportQuality({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getImportQualityQueryKey(options)
+});
+
+export const downloadImportQualityQueryKey = (options?: Options<DownloadImportQualityData>) => createQueryKey('downloadImportQuality', options);
+
+/**
+ * Download Import Quality
+ */
+export const downloadImportQualityOptions = (options?: Options<DownloadImportQualityData>) => queryOptions<DownloadImportQualityResponse, DownloadImportQualityError, DownloadImportQualityResponse, ReturnType<typeof downloadImportQualityQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await downloadImportQuality({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: downloadImportQualityQueryKey(options)
 });
 
 /**

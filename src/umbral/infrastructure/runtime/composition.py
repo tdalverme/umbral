@@ -14,6 +14,7 @@ from umbral.application.identity.access import IdentityAccess
 from umbral.application.identity.administration import AccessAdministration
 from umbral.application.identity.authorization import AccessControl
 from umbral.application.identity.ports import IdentityStore
+from umbral.application.ingestion.service import ImportRunService
 from umbral.application.jobs.ports import JobQueue, JobRuntime
 from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.application.objects.ports import ObjectStore
@@ -38,6 +39,7 @@ from umbral.infrastructure.identity.registry import (
     build_identity_registry,
 )
 from umbral.infrastructure.identity.supabase import SupabaseIdentityAdapter
+from umbral.infrastructure.ingestion.composition import build_ingestion_service
 from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
 from umbral.infrastructure.object_store.factory import build_object_store
 from umbral.infrastructure.object_store.s3 import S3ObjectStore
@@ -66,6 +68,7 @@ class RuntimeComposition:
     access_control: AccessControl
     administration: AccessAdministration
     job_runtime: JobRuntime
+    ingestion: ImportRunService
     readiness: ReadinessModule
 
 
@@ -97,9 +100,7 @@ class RuntimeCompositionFactories:
             provider.engine, expected_head=expected_head
         )
     )
-    readiness_check: Callable[[DependencyCheckName, bool], ReadinessCheck] | None = (
-        None
-    )
+    readiness_check: Callable[[DependencyCheckName, bool], ReadinessCheck] | None = None
 
 
 def compose_runtime(
@@ -123,6 +124,7 @@ def _compose_local(
     *, settings: Settings, release: ReleaseManifest
 ) -> RuntimeComposition:
     object_store = build_object_store(settings)
+    session_provider = SessionProvider(settings.database_url)
     identity_store = InMemoryIdentityStore(
         fingerprint_key=settings.identity_fingerprint_key.encode()
     )
@@ -135,6 +137,11 @@ def _compose_local(
         registry.email,
         environment=settings.environment,
         capture_origin=settings.identity_capture_origin,
+        job_runtime=runtime,
+    )
+    ingestion = build_ingestion_service(
+        session_factory=session_provider.session_factory,
+        object_store=object_store,
         job_runtime=runtime,
     )
     readiness = ReadinessModule(
@@ -153,7 +160,7 @@ def _compose_local(
         ),
     )
     return _runtime_graph(
-        object_store, identity_store, identity_access, runtime, readiness
+        object_store, identity_store, identity_access, runtime, ingestion, readiness
     )
 
 
@@ -185,6 +192,12 @@ def _compose_preview(
         capture_origin=settings.identity_capture_origin,
         job_runtime=runtime,
     )
+    ingestion = build_ingestion_service(
+        session_factory=session_provider.session_factory,
+        object_store=object_store,
+        job_runtime=runtime,
+    )
+
     def persistence() -> PersistenceProbe:
         return factories.persistence_probe(session_provider, release.database_revision)
 
@@ -210,7 +223,7 @@ def _compose_preview(
         ),
     )
     return _runtime_graph(
-        object_store, identity_store, identity_access, runtime, readiness
+        object_store, identity_store, identity_access, runtime, ingestion, readiness
     )
 
 
@@ -219,6 +232,7 @@ def _runtime_graph(
     identity_store: IdentityStore,
     identity_access: IdentityAccess,
     job_runtime: JobRuntime,
+    ingestion: ImportRunService,
     readiness: ReadinessModule,
 ) -> RuntimeComposition:
     return RuntimeComposition(
@@ -228,6 +242,7 @@ def _runtime_graph(
         access_control=AccessControl(identity_store),
         administration=AccessAdministration(identity_store),
         job_runtime=job_runtime,
+        ingestion=ingestion,
         readiness=readiness,
     )
 
@@ -333,9 +348,8 @@ def _object_storage_readiness(
             content_type="application/octet-stream",
         )
         info = object_store.stat(reference)
-        available = (
-            info.sha256 == _MARKER_DIGEST
-            and info.size_bytes == len(_MARKER_BODY)
+        available = info.sha256 == _MARKER_DIGEST and info.size_bytes == len(
+            _MARKER_BODY
         )
     except Exception:
         available = False

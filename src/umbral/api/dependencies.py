@@ -12,6 +12,7 @@ from umbral.application.identity.access import IdentityAccess
 from umbral.application.identity.administration import AccessAdministration
 from umbral.application.identity.authorization import AccessControl
 from umbral.application.identity.ports import IdentityStore
+from umbral.application.ingestion.service import ImportRunService
 from umbral.application.jobs.ports import JobRuntime
 from umbral.application.objects.ports import ObjectStore
 from umbral.application.runtime.readiness import ReadinessModule
@@ -44,6 +45,7 @@ class RuntimeDependencies:
     identity_access: IdentityAccess
     access_control: AccessControl
     administration: AccessAdministration
+    ingestion: ImportRunService
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
     job_runtime: JobRuntime | None = None
 
@@ -77,6 +79,7 @@ def build_runtime_dependencies(
         identity_access=composition.identity_access,
         access_control=composition.access_control,
         administration=composition.administration,
+        ingestion=composition.ingestion,
         heartbeat_writer=heartbeat_writer,
         job_runtime=composition.job_runtime,
     )

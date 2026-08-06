@@ -1,0 +1,303 @@
+{
+  "contract_version": "1",
+  "records": [
+    {
+      "external_id": "list-0001",
+      "operation": "rental",
+      "property_type": "apartment",
+      "price": 850000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. Corrientes 2400, San Nicolas",
+      "neighborhood": "San Nicolas",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "Departamento luminoso a una cuadra del subte.",
+      "media_urls": [
+        "https://img.example.com/list-0001/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0001",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-0002",
+      "operation": "rental",
+      "property_type": "apartment",
+      "price": 850000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. Corrientes 2400, San Nicolas",
+      "neighborhood": null,
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "Departamento luminoso a una cuadra del subte.",
+      "media_urls": [
+        "https://img.example.com/list-0002/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0002",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-0003",
+      "operation": "rental",
+      "property_type": "studio",
+      "price": 680000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. Corrientes 2400, San Nicolas",
+      "neighborhood": "San Nicolas",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 32,
+      "rooms": 1,
+      "bedrooms": 0,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "Estudio a estrenar.",
+      "media_urls": [
+        "https://img.example.com/list-0003/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0003",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-0004",
+      "operation": "rental",
+      "property_type": "apartment",
+      "price": 1100000,
+      "currency": "ARS",
+      "expenses": null,
+      "address_text": "Av. Belgrano 1400, Montserrat",
+      "neighborhood": "Montserrat",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "Departamento luminoso a una cuadra del subte.",
+      "media_urls": [
+        "https://img.example.com/list-0004/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0004",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-0005",
+      "operation": "rental",
+      "property_type": "house",
+      "price": 1500000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. Corrientes 2400, San Nicolas",
+      "neighborhood": "San Nicolas",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 120,
+      "rooms": 4,
+      "bedrooms": 3,
+      "floor": 0,
+      "amenities": [
+        "patio"
+      ],
+      "description": "Casa con patio en Belgrano.",
+      "media_urls": [
+        "https://img.example.com/list-0005/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0005",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-0006",
+      "operation": "rental",
+      "property_type": "apartment",
+      "price": 790000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. Rivadavia 5100, Caballito",
+      "neighborhood": "Caballito",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "A pasos del Parque Centenario.",
+      "media_urls": [
+        "https://img.example.com/list-0006/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0006",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-0007",
+      "operation": "rental",
+      "property_type": "apartment",
+      "price": 980000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. del Libertador 3800, Palermo",
+      "neighborhood": "Palermo",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "Departamento luminoso a una cuadra del subte.",
+      "media_urls": [
+        "https://img.example.com/list-0007/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0007",
+      "published_at": null
+    },
+    {
+      "external_id": "list-0008",
+      "operation": "rental",
+      "property_type": "room",
+      "price": 320000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. Corrientes 2400, San Nicolas",
+      "neighborhood": "San Nicolas",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 18,
+      "rooms": 1,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [],
+      "description": "Habitacion con desayuno incluido.",
+      "media_urls": [
+        "https://img.example.com/list-0008/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0008",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-0009",
+      "operation": "rental",
+      "property_type": "apartment",
+      "price": 730000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. San Juan 2100, San Cristobal",
+      "neighborhood": "San Cristobal",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "Reciclado a nuevo.",
+      "media_urls": [
+        "https://img.example.com/list-0009/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0009",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-0001",
+      "operation": "rental",
+      "property_type": "apartment",
+      "price": 850000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. Corrientes 2400, San Nicolas",
+      "neighborhood": "San Nicolas",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "Departamento luminoso a una cuadra del subte.",
+      "media_urls": [
+        "https://img.example.com/list-0001/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-0001",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-9001",
+      "operation": "rental",
+      "property_type": "apartment",
+      "price": -50000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Direccion invalida por precio",
+      "neighborhood": "Once",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "Precio invalido.",
+      "media_urls": [
+        "https://img.example.com/list-9001/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-9001",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    },
+    {
+      "external_id": "list-9002",
+      "operation": "sale",
+      "property_type": "apartment",
+      "price": 850000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Operacion no soportada",
+      "neighborhood": "Recoleta",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": [
+        "balcon"
+      ],
+      "description": "Operacion fuera de v1.",
+      "media_urls": [
+        "https://img.example.com/list-9002/main.jpg"
+      ],
+      "url": "https://example.com/listings/list-9002",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    }
+  ]
+}

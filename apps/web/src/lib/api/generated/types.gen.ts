@@ -5,6 +5,50 @@ export type ClientOptions = {
 };
 
 /**
+ * AbnormalModel
+ */
+export type AbnormalModel = {
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Signal
+     */
+    signal: string;
+};
+
+/**
+ * Body_submitImportBatch
+ */
+export type BodySubmitImportBatch = {
+    /**
+     * Batch Key
+     */
+    batch_key?: string | null;
+    /**
+     * Contract Version
+     */
+    contract_version: string;
+    /**
+     * File
+     */
+    file: Blob | File;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Source Version
+     */
+    source_version: string;
+};
+
+/**
  * CurrentSession
  */
 export type CurrentSession = {
@@ -137,6 +181,65 @@ export type Problem = {
 };
 
 /**
+ * QualityResponse
+ */
+export type QualityResponse = {
+    /**
+     * Abnormal Distributions
+     */
+    abnormal_distributions: Array<AbnormalModel>;
+    counts: RunCountsModel;
+    /**
+     * Missing Fields By Name
+     */
+    missing_fields_by_name: {
+        [key: string]: number;
+    };
+    /**
+     * Run Id
+     */
+    run_id: string;
+};
+
+/**
+ * QuarantineResponse
+ */
+export type QuarantineResponse = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * External Id
+     */
+    external_id?: string | null;
+    /**
+     * Record Id
+     */
+    record_id: string;
+    /**
+     * Rule
+     */
+    rule: string;
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Source Id
+     */
+    source_id: string;
+};
+
+/**
  * Readiness
  *
  * Readiness response contract.
@@ -162,6 +265,110 @@ export type Readiness = {
      * Surface
      */
     surface: 'web' | 'api' | 'worker' | 'scheduler';
+};
+
+/**
+ * RunCountsModel
+ */
+export type RunCountsModel = {
+    /**
+     * Accepted
+     */
+    accepted: number;
+    /**
+     * Duplicates
+     */
+    duplicates: number;
+    /**
+     * Missing Fields
+     */
+    missing_fields: number;
+    /**
+     * Quarantined
+     */
+    quarantined: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * RunResponse
+ */
+export type RunResponse = {
+    /**
+     * Accepted
+     */
+    accepted?: number;
+    /**
+     * Batch Key
+     */
+    batch_key: string;
+    /**
+     * Contract Version
+     */
+    contract_version: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Duplicates
+     */
+    duplicates?: number;
+    /**
+     * Error Code
+     */
+    error_code?: string | null;
+    /**
+     * Error Detail
+     */
+    error_detail?: string | null;
+    /**
+     * File Format
+     */
+    file_format: 'csv' | 'json';
+    /**
+     * File Name
+     */
+    file_name: string;
+    /**
+     * File Sha256
+     */
+    file_sha256: string;
+    /**
+     * Finished At
+     */
+    finished_at?: string | null;
+    /**
+     * Missing Fields
+     */
+    missing_fields?: number;
+    /**
+     * Quarantined
+     */
+    quarantined?: number;
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Source Version
+     */
+    source_version: string;
+    /**
+     * State
+     */
+    state: 'pending' | 'running' | 'succeeded' | 'failed';
+    /**
+     * Total Records
+     */
+    total_records?: number;
 };
 
 /**
@@ -374,6 +581,225 @@ export type GetCurrentSessionResponses = {
 };
 
 export type GetCurrentSessionResponse = GetCurrentSessionResponses[keyof GetCurrentSessionResponses];
+
+export type SubmitImportBatchData = {
+    body: BodySubmitImportBatch;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/imports/batches';
+};
+
+export type SubmitImportBatchErrors = {
+    /**
+     * Batch rejected by the import contract
+     */
+    400: unknown;
+    /**
+     * Missing or invalid session
+     */
+    401: unknown;
+    /**
+     * Operator role required
+     */
+    403: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SubmitImportBatchError = SubmitImportBatchErrors[keyof SubmitImportBatchErrors];
+
+export type SubmitImportBatchResponses = {
+    /**
+     * Successful Response
+     */
+    202: RunResponse;
+};
+
+export type SubmitImportBatchResponse = SubmitImportBatchResponses[keyof SubmitImportBatchResponses];
+
+export type GetQuarantineRecordData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/imports/quarantine/{record_id}';
+};
+
+export type GetQuarantineRecordErrors = {
+    /**
+     * Missing or invalid session
+     */
+    401: unknown;
+    /**
+     * Operator role required
+     */
+    403: unknown;
+    /**
+     * Unknown record
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetQuarantineRecordError = GetQuarantineRecordErrors[keyof GetQuarantineRecordErrors];
+
+export type GetQuarantineRecordResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuarantineResponse;
+};
+
+export type GetQuarantineRecordResponse = GetQuarantineRecordResponses[keyof GetQuarantineRecordResponses];
+
+export type GetImportRunData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/imports/runs/{run_id}';
+};
+
+export type GetImportRunErrors = {
+    /**
+     * Missing or invalid session
+     */
+    401: unknown;
+    /**
+     * Operator role required
+     */
+    403: unknown;
+    /**
+     * Unknown run
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetImportRunError = GetImportRunErrors[keyof GetImportRunErrors];
+
+export type GetImportRunResponses = {
+    /**
+     * Successful Response
+     */
+    200: RunResponse;
+};
+
+export type GetImportRunResponse = GetImportRunResponses[keyof GetImportRunResponses];
+
+export type GetImportQualityData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/imports/runs/{run_id}/quality';
+};
+
+export type GetImportQualityErrors = {
+    /**
+     * Missing or invalid session
+     */
+    401: unknown;
+    /**
+     * Operator role required
+     */
+    403: unknown;
+    /**
+     * Unknown run
+     */
+    404: unknown;
+    /**
+     * Run not in a terminal state
+     */
+    409: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetImportQualityError = GetImportQualityErrors[keyof GetImportQualityErrors];
+
+export type GetImportQualityResponses = {
+    /**
+     * Successful Response
+     */
+    200: QualityResponse;
+};
+
+export type GetImportQualityResponse = GetImportQualityResponses[keyof GetImportQualityResponses];
+
+export type DownloadImportQualityData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/imports/runs/{run_id}/quality/download';
+};
+
+export type DownloadImportQualityErrors = {
+    /**
+     * Missing or invalid session
+     */
+    401: unknown;
+    /**
+     * Operator role required
+     */
+    403: unknown;
+    /**
+     * Unknown run
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DownloadImportQualityError = DownloadImportQualityErrors[keyof DownloadImportQualityErrors];
+
+export type DownloadImportQualityResponses = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type DownloadImportQualityResponse = DownloadImportQualityResponses[keyof DownloadImportQualityResponses];
 
 export type ReceiveResendEventData = {
     body?: never;

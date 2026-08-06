@@ -24,6 +24,8 @@ from umbral.api.middleware.correlation import CorrelationMiddleware
 from umbral.api.routers.auth import configure_auth_routes
 from umbral.api.routers.auth import router as auth_router
 from umbral.api.routers.email_webhooks import router as email_webhook_router
+from umbral.api.routers.imports import configure_imports_routes
+from umbral.api.routers.imports import router as imports_router
 from umbral.api.routers.runtime import configure_runtime_routes
 from umbral.api.routers.runtime import router as runtime_router
 from umbral.domain.errors import ApplicationError
@@ -79,9 +81,7 @@ def _apply_runtime_openapi_contract(document: dict[str, Any]) -> None:
     """Add gateway contract metadata without changing runtime authorization."""
 
     document["info"]["description"] = _RUNTIME_DESCRIPTION
-    document["servers"] = [
-        {"url": "http://127.0.0.1:8000", "description": "Local API"}
-    ]
+    document["servers"] = [{"url": "http://127.0.0.1:8000", "description": "Local API"}]
     document["tags"] = [{"name": "Runtime"}]
     document["security"] = [{"environmentAccess": []}]
 
@@ -171,7 +171,9 @@ def _apply_runtime_openapi_contract(document: dict[str, Any]) -> None:
             continue
         for operation in path_item.values():
             if isinstance(operation, dict) and "operationId" in operation:
-                operation["parameters"] = [{"$ref": "#/components/parameters/CorrelationId"}]
+                operation["parameters"] = [
+                    {"$ref": "#/components/parameters/CorrelationId"}
+                ]
 
     health_response = document["paths"]["/health"]["get"]["responses"]["200"]
     health_response["description"] = "Process is alive"
@@ -240,6 +242,7 @@ def create_app() -> FastAPI:
     )
     configure_runtime_routes(dependencies)
     configure_auth_routes(dependencies)
+    configure_imports_routes(dependencies)
     app.add_middleware(CorrelationMiddleware)
     app.add_exception_handler(ApplicationError, application_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -248,6 +251,7 @@ def create_app() -> FastAPI:
     app.include_router(runtime_router)
     app.include_router(auth_router)
     app.include_router(email_webhook_router)
+    app.include_router(imports_router)
 
     def custom_openapi() -> dict[str, Any]:
         return _openapi_for_app(app)
