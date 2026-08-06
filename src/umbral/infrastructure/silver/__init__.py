@@ -1,0 +1,1 @@
+"""Silver normalization infrastructure helpers."""

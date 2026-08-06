@@ -33,6 +33,8 @@ class ObjectStore(Protocol):
 
     def stat(self, provider_ref: ProviderObjectRef) -> ObjectInfo: ...
 
+    def ref_for_key(self, storage_key: str) -> ProviderObjectRef: ...
+
 
 class ObjectMetadataRepository(Protocol):
     """Persistence seam; implementations never commit transactions."""

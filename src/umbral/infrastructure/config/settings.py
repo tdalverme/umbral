@@ -104,18 +104,43 @@ class Settings(BaseSettings):
     supabase_secret_key: str | None = Field(
         default=None, validation_alias="SUPABASE_SECRET_KEY"
     )
-    identity_issuer: str = Field(default="fake://local", validation_alias="IDENTITY_ISSUER")
-    identity_capture_origin: str = Field(default="http://localhost:3000", validation_alias="IDENTITY_CAPTURE_ORIGIN")
+    identity_issuer: str = Field(
+        default="fake://local", validation_alias="IDENTITY_ISSUER"
+    )
+    identity_capture_origin: str = Field(
+        default="http://localhost:3000", validation_alias="IDENTITY_CAPTURE_ORIGIN"
+    )
     email_provider: str = Field(default="recording", validation_alias="EMAIL_PROVIDER")
     resend_api_key: str | None = Field(default=None, validation_alias="RESEND_API_KEY")
     resend_from_email: str | None = Field(
         default=None, validation_alias="RESEND_FROM_EMAIL"
     )
-    email_webhook_secret: str | None = Field(default=None, validation_alias="EMAIL_WEBHOOK_SECRET")
-    bff_token: str = Field(default="local-bff-token", validation_alias="UMBRAL_BFF_TOKEN")
-    identity_fingerprint_key: str = Field(default="local-identity-fingerprint-key", validation_alias="IDENTITY_FINGERPRINT_KEY")
-    session_cookie_name: str = Field(default="__Host-umbral_session", validation_alias="SESSION_COOKIE_NAME")
+    email_webhook_secret: str | None = Field(
+        default=None, validation_alias="EMAIL_WEBHOOK_SECRET"
+    )
+    bff_token: str = Field(
+        default="local-bff-token", validation_alias="UMBRAL_BFF_TOKEN"
+    )
+    identity_fingerprint_key: str = Field(
+        default="local-identity-fingerprint-key",
+        validation_alias="IDENTITY_FINGERPRINT_KEY",
+    )
+    session_cookie_name: str = Field(
+        default="__Host-umbral_session", validation_alias="SESSION_COOKIE_NAME"
+    )
     session_secure: bool = Field(default=True, validation_alias="SESSION_SECURE")
+    silver_geocoding_enabled: bool = Field(
+        default=False, validation_alias="SILVER_GEOCODING_ENABLED"
+    )
+    silver_geocoding_endpoint: str | None = Field(
+        default=None, validation_alias="SILVER_GEOCODING_ENDPOINT"
+    )
+    silver_geocoding_cache_size: int = Field(
+        default=512, validation_alias="SILVER_GEOCODING_CACHE_SIZE"
+    )
+    silver_geocoding_rate_limit: float = Field(
+        default=1.0, validation_alias="SILVER_GEOCODING_RATE_LIMIT"
+    )
 
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
@@ -154,6 +179,10 @@ class Settings(BaseSettings):
             "IDENTITY_FINGERPRINT_KEY",
             "SESSION_COOKIE_NAME",
             "SESSION_SECURE",
+            "SILVER_GEOCODING_ENABLED",
+            "SILVER_GEOCODING_ENDPOINT",
+            "SILVER_GEOCODING_CACHE_SIZE",
+            "SILVER_GEOCODING_RATE_LIMIT",
         }
     )
 
@@ -178,9 +207,7 @@ class Settings(BaseSettings):
             raise SettingsValidationError("CONFIG_FORMAT", "configuration") from error
 
     @classmethod
-    def _validate_environment(
-        cls, values: Mapping[str, str], environment: str
-    ) -> None:
+    def _validate_environment(cls, values: Mapping[str, str], environment: str) -> None:
         for field_name in ("DATABASE_URL", "REDIS_URL", "UMBRAL_API_BASE_URL"):
             cls._reject_example(value=values[field_name], field_name=field_name)
 
@@ -204,9 +231,10 @@ class Settings(BaseSettings):
         api = _url(values["UMBRAL_API_BASE_URL"], "UMBRAL_API_BASE_URL")
 
         if environment == "local":
-            if values["OBJECT_STORE_BACKEND"] == "filesystem" and not values.get(
-                "OBJECT_STORE_ROOT", ""
-            ).strip():
+            if (
+                values["OBJECT_STORE_BACKEND"] == "filesystem"
+                and not values.get("OBJECT_STORE_ROOT", "").strip()
+            ):
                 raise SettingsValidationError("CONFIG_REQUIRED", "OBJECT_STORE_ROOT")
             return
 
@@ -231,8 +259,10 @@ class Settings(BaseSettings):
             and api.scheme == "http"
             and (api.hostname or "").endswith(".railway.internal")
         )
-        if not railway_api and api.scheme == "http" and (api.hostname or "").endswith(
-            ".internal.invalid"
+        if (
+            not railway_api
+            and api.scheme == "http"
+            and (api.hostname or "").endswith(".internal.invalid")
         ):
             raise SettingsValidationError(
                 "CONFIG_PRIVATE_INGRESS", "UMBRAL_API_BASE_URL"
@@ -255,16 +285,20 @@ class Settings(BaseSettings):
         access_mode = values.get("UMBRAL_ACCESS_MODE", "cloudflare")
         if access_mode not in {"product_session", "cloudflare"}:
             raise SettingsValidationError("CONFIG_FORMAT", "UMBRAL_ACCESS_MODE")
-        if access_mode == "cloudflare" and not values.get(
-            "UMBRAL_ACCESS_AUDIENCE", ""
-        ).strip():
+        if (
+            access_mode == "cloudflare"
+            and not values.get("UMBRAL_ACCESS_AUDIENCE", "").strip()
+        ):
             raise SettingsValidationError("CONFIG_REQUIRED", "UMBRAL_ACCESS_AUDIENCE")
         sentry = _url(values["SENTRY_DSN"], "SENTRY_DSN")
         if sentry.scheme != "https":
             raise SettingsValidationError("CONFIG_TLS_REQUIRED", "SENTRY_DSN")
         if environment == "preview":
             cls._validate_preview_providers(values)
-        if values.get("SESSION_COOKIE_NAME", "__Host-umbral_session") != "__Host-umbral_session":
+        if (
+            values.get("SESSION_COOKIE_NAME", "__Host-umbral_session")
+            != "__Host-umbral_session"
+        ):
             raise SettingsValidationError("CONFIG_COOKIE_NAME", "SESSION_COOKIE_NAME")
         if values.get("SESSION_SECURE", "true").lower() not in {"1", "true", "yes"}:
             raise SettingsValidationError("CONFIG_TLS_REQUIRED", "SESSION_SECURE")
@@ -287,10 +321,7 @@ class Settings(BaseSettings):
         if not values["SUPABASE_SECRET_KEY"].startswith("sb_secret_"):
             raise SettingsValidationError("CONFIG_FORMAT", "SUPABASE_SECRET_KEY")
         supabase = _url(values["SUPABASE_URL"], "SUPABASE_URL")
-        if (
-            supabase.scheme != "https"
-            or supabase.hostname != _SUPABASE_PROJECT_HOST
-        ):
+        if supabase.scheme != "https" or supabase.hostname != _SUPABASE_PROJECT_HOST:
             raise SettingsValidationError("CONFIG_FORMAT", "SUPABASE_URL")
 
     @staticmethod

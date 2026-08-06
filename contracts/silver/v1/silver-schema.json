@@ -1,0 +1,46 @@
+{
+  "contract_version": "1",
+  "normalizer_version": "silver-schema-v1",
+  "enums": {
+    "operation_type": ["rental"],
+    "property_type": ["apartment", "house", "room", "studio", "commercial", "other"],
+    "currency_type": ["ARS", "USD"],
+    "geo_precision": ["exact", "block", "neighborhood", "approximate", "unknown"]
+  },
+  "ranges": {
+    "price_value": { "gt": 0 },
+    "expenses_value": { "ge": 0 },
+    "surface_m2": { "gt": 0, "max": 1000000 },
+    "rooms": { "ge": 0, "max": 200 },
+    "bedrooms": { "ge": 0, "max": 100 },
+    "floor": { "ge": -10, "max": 1000 },
+    "amenities": { "max_items": 100, "item_max_length": 100 },
+    "description": { "max_length": 20000 },
+    "location_text": { "max_length": 500 },
+    "neighborhood": { "max_length": 200 },
+    "url": { "max_length": 2000 }
+  },
+  "errors": {
+    "silver.surface_range": "surface outside (0, 1_000_000]",
+    "silver.rooms_range": "rooms outside [0, 200]",
+    "silver.bedrooms_range": "bedrooms outside [0, 100]",
+    "silver.floor_range": "floor outside [-10, 1000]",
+    "silver.amenities_too_long": "amenity exceeds 100 chars",
+    "silver.description_too_long": "description exceeds 20_000 chars",
+    "silver.url_invalid": "url is not a valid http(s) URL",
+    "silver.currency_unsupported": "currency outside ARS/USD"
+  },
+  "precision_rules": {
+    "address_and_coordinates": "exact",
+    "coordinates_only": "block",
+    "neighborhood_only": "neighborhood",
+    "approximate": "approximate",
+    "none": "unknown"
+  },
+  "change_fields": {
+    "price": ["price_value", "price_currency", "expenses_value", "expenses_currency", "total_cost"],
+    "text": ["location_text", "neighborhood", "description_text", "amenities"],
+    "attribute": ["property_type", "surface_m2", "rooms", "bedrooms", "floor", "operation"],
+    "status": []
+  }
+}

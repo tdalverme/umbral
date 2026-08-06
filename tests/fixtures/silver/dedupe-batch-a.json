@@ -1,0 +1,25 @@
+{
+  "contract_version": "1",
+  "records": [
+    {
+      "external_id": "d-a-1",
+      "operation": "rental",
+      "property_type": "apartment",
+      "price": 850000,
+      "currency": "ARS",
+      "expenses": 65000,
+      "address_text": "Av. Corrientes 2400, San Nicolas",
+      "neighborhood": "San Nicolas",
+      "latitude": -34.6037,
+      "longitude": -58.401,
+      "surface_m2": 55,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "amenities": ["balcon"],
+      "description": "Departamento luminoso.",
+      "url": "https://example.com/listings/d-a-1",
+      "published_at": "2026-07-01T10:00:00-03:00"
+    }
+  ]
+}

@@ -56,7 +56,7 @@ Códigos de cuarentena: `contract.range_invalid` (price<0), `contract.enum_inval
 
 - La entrada operativa usa el rol `operator` existente del incremento de
   identidad; no se introdujo backdoor de entorno.
-- El archivo crudo se conserva content-addressable (`ingestion/raw/<sha256>`)
+- El archivo crudo se conserva content-addressable (`objects/raw/<sha256>`)
   en el seam de objetos; no requiere fila de metadata para lecturas
   cross-process.
 - Los eventos de deny del rol se manejan según la semántica existente del

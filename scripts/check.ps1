@@ -76,6 +76,14 @@ try {
         Invoke-ChildCheck -Name "Ingestion" -Path (Join-Path $PSScriptRoot "check-imports.ps1")
     }
 
+    $silverSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\silver"),
+        (Join-Path $repoRoot "tests\integration\silver")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($silverSurface) {
+        Invoke-ChildCheck -Name "Silver" -Path (Join-Path $PSScriptRoot "check-silver.ps1")
+    }
+
     $storageSurface = @(
         (Join-Path $repoRoot "src\umbral\application\objects"),
         (Join-Path $repoRoot "tests\contract\test_object_store.py")

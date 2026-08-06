@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from umbral.application.ingestion.contracts import (
+    ImportRunSnapshot,
     IngestionPermanentError,
     IngestionTransientError,
 )
@@ -18,12 +19,19 @@ from umbral.application.jobs.contracts import (
 )
 from umbral.workers.registry import JobRegistry
 
+NormalizePublisher = Callable[[ImportRunSnapshot], None]
+
 
 class IngestionImportHandler:
     job_type = IMPORT_JOB_TYPE
 
-    def __init__(self, service: ImportRunService) -> None:
+    def __init__(
+        self,
+        service: ImportRunService,
+        publish_normalize: NormalizePublisher | None = None,
+    ) -> None:
         self.service = service
+        self.publish_normalize = publish_normalize
 
     def normalize_target(self, raw_target: str) -> str:
         return normalize_target(raw_target)
@@ -35,6 +43,8 @@ class IngestionImportHandler:
             raise TransientJobError(error.code) from error
         except IngestionPermanentError as error:
             raise PermanentJobError(error.code) from error
+        if snapshot.state == "succeeded" and self.publish_normalize is not None:
+            self.publish_normalize(snapshot)
         return {
             "run_id": str(snapshot.run_id),
             "state": snapshot.state,
@@ -46,7 +56,10 @@ class IngestionImportHandler:
         }
 
 
-def build_ingestion_registry(service: ImportRunService) -> JobRegistry:
-    handler = IngestionImportHandler(service)
+def build_ingestion_registry(
+    service: ImportRunService,
+    publish_normalize: NormalizePublisher | None = None,
+) -> JobRegistry:
+    handler = IngestionImportHandler(service, publish_normalize)
     registry = JobRegistry({handler.job_type: handler})
     return registry

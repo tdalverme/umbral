@@ -110,6 +110,9 @@ class InMemoryRawSnapshotRepository:
             if snapshot.run_id == run_id
         )
 
+    def get(self, snapshot_id: UUID) -> RawListingSnapshot | None:
+        return self.snapshots.get(snapshot_id)
+
 
 class InMemoryQuarantineRepository:
     def __init__(self) -> None:
@@ -173,6 +176,9 @@ class InMemoryObjectStore:
             size_bytes=data[2],
             content_type=data[3],
         )
+
+    def ref_for_key(self, storage_key: str) -> ProviderObjectRef:
+        return ProviderObjectRef(storage_key)
 
 
 def make_import_service(

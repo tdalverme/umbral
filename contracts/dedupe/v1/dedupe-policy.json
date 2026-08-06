@@ -1,0 +1,16 @@
+{
+  "policy_version": "1",
+  "dedupe_policy_version": "dedupe-policy-v1",
+  "strong_fields": ["operation", "property_type", "price_value", "price_currency", "surface_m2", "rooms", "bedrooms", "neighborhood"],
+  "proposal": {
+    "threshold": 0.6,
+    "dimensions": [
+      { "name": "address_tokens", "weight": 0.5 },
+      { "name": "price", "weight": 0.2 },
+      { "name": "surface", "weight": 0.2 },
+      { "name": "rooms", "weight": 0.1 }
+    ]
+  },
+  "states": ["pending", "confirmed", "rejected"],
+  "evidence_required": ["version", "method", "fields"]
+}

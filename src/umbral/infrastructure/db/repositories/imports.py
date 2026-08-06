@@ -174,6 +174,11 @@ class SqlAlchemyRawSnapshotRepository:
             )
             return tuple(_to_domain_snapshot(model) for model in models)
 
+    def get(self, snapshot_id: UUID) -> RawListingSnapshot | None:
+        with self.session_factory() as session:
+            model = session.get(RawListingSnapshotModel, snapshot_id)
+            return _to_domain_snapshot(model) if model is not None else None
+
 
 class SqlAlchemyQuarantineRepository:
     def __init__(self, session_factory: SessionFactory) -> None:

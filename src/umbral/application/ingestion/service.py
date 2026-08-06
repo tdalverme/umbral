@@ -45,12 +45,11 @@ from umbral.application.objects.contracts import (
     ObjectIntegrityError,
     ObjectNotFound,
     ObjectStateError,
-    ProviderObjectRef,
 )
 from umbral.application.objects.ports import ObjectStore
 
 IMPORT_JOB_TYPE = "ingestion.import_batch"
-_RAW_KEY_PREFIX = "ingestion/raw"
+_RAW_KEY_PREFIX = "objects/raw"
 _DETAIL_BOUND = 500
 
 Clock = Callable[[], datetime]
@@ -198,7 +197,7 @@ class ImportRunService:
             raise IngestionPermanentError(code, detail) from error
 
     def _capture(self, run: ImportRun) -> ImportRunSnapshot:
-        provider_ref = ProviderObjectRef(run.raw_storage_key)
+        provider_ref = self.objects.ref_for_key(run.raw_storage_key)
         try:
             info = self.objects.stat(provider_ref)
             if info.sha256 != run.file_sha256 or info.size_bytes != run.file_size_bytes:

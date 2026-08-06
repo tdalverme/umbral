@@ -19,7 +19,7 @@ es otro incremento.
    `contract_version`; opcionalmente una `batch_key` (por defecto es el
    SHA-256 del archivo).
 2. El API crea un `import_run` en estado `pending`, conserva el archivo crudo
-   como objeto inmutable (`ingestion/raw/<sha256>`) y encola el job durable
+   como objeto inmutable (`objects/raw/<sha256>`) y encola el job durable
    `ingestion.import_batch`.
 3. El worker valida cada registro contra el contrato, inserta
    `raw_listing_snapshots` y `quarantine_records`, deriva conteos y deja el run
@@ -56,6 +56,6 @@ ese rol recibe 403. No se aceptan URLs; sólo subida de archivos.
 - Los errores quedan en `import_runs.error_code` / `error_detail` y en el job
   (estado/intentos).
 - El archivo crudo se conserva en object storage bajo
-  `ingestion/raw/<file_sha256>` para auditoría y reparsing.
+   `objects/raw/<file_sha256>` para auditoría y reparsing.
 - La telemetría es metadata-only: nunca registra payload, ruta de archivo ni
   contenido.

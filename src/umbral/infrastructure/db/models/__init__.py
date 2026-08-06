@@ -24,6 +24,12 @@ from umbral.infrastructure.db.models.jobs import (
 )
 from umbral.infrastructure.db.models.objects import StoredObject, StoredObjectVersion
 from umbral.infrastructure.db.models.runtime import RuntimeSurfaceStatus
+from umbral.infrastructure.db.models.silver import (
+    CanonicalProperty,
+    DedupeLink,
+    ListingChange,
+    SilverListing,
+)
 
 __all__ = [
     "ImportRun",
@@ -44,4 +50,8 @@ __all__ = [
     "ProductSession",
     "ProductUser",
     "RoleAssignment",
+    "CanonicalProperty",
+    "SilverListing",
+    "DedupeLink",
+    "ListingChange",
 ]

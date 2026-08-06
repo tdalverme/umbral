@@ -10,6 +10,7 @@ from pathlib import Path
 from redis import Redis
 
 from umbral.application.identity.access import IdentityAccess
+from umbral.application.ingestion.contracts import ImportRunSnapshot
 from umbral.application.runtime.version import (
     ReleaseManifest,
     load_release_manifest,
@@ -25,9 +26,11 @@ from umbral.infrastructure.object_store.factory import build_object_store
 from umbral.infrastructure.observability.runtime import initialize_observability
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
 from umbral.infrastructure.runtime.heartbeat import RuntimeHeartbeatWriter
+from umbral.infrastructure.silver.composition import build_normalize_service
 from umbral.workers.imports import build_ingestion_registry
 from umbral.workers.registry import JobRegistry
 from umbral.workers.registry import build_identity_registry as build_job_registry
+from umbral.workers.silver import build_silver_registry, normalize_publisher
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +76,19 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         session_factory=session_provider.session_factory,
         object_store=object_store,
     )
-    for handler in build_ingestion_registry(ingestion).as_mapping().values():
+    silver = build_normalize_service(
+        session_factory=session_provider.session_factory,
+        geocoding_enabled=active_settings.silver_geocoding_enabled,
+        geocoding_endpoint=active_settings.silver_geocoding_endpoint,
+        geocoding_cache_size=active_settings.silver_geocoding_cache_size,
+        geocoding_rate_limit=active_settings.silver_geocoding_rate_limit,
+    )
+    for handler in build_silver_registry(silver).as_mapping().values():
+        registry.register(handler)
+    normalize_publish = _late_bind_publisher()
+    for handler in (
+        build_ingestion_registry(ingestion, normalize_publish).as_mapping().values()
+    ):
         registry.register(handler)
     redis_connection = Redis.from_url(active_settings.redis_url)
     queue = RQJobQueue.from_connection(redis_connection)
@@ -83,6 +98,7 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         release_id=active_settings.release_id,
         handlers=registry.as_mapping(),
     )
+    normalize_publish.bind(runtime)
     identity_access.job_runtime = runtime
     heartbeat_writer = None
     if active_settings.environment != "local":
@@ -103,6 +119,25 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         worker_id=f"rq:{socket.gethostname()}:{os.getpid()}",
         heartbeat_writer=heartbeat_writer,
     )
+
+
+class _LateBindPublisher:
+    """Publishes the chained normalize job once the runtime is available."""
+
+    def __init__(self) -> None:
+        self._runtime: SqlAlchemyJobRuntime | None = None
+
+    def bind(self, runtime: SqlAlchemyJobRuntime) -> None:
+        self._runtime = runtime
+
+    def __call__(self, snapshot: ImportRunSnapshot) -> None:
+        if self._runtime is None:
+            return
+        normalize_publisher(self._runtime)(snapshot)
+
+
+def _late_bind_publisher() -> _LateBindPublisher:
+    return _LateBindPublisher()
 
 
 def _load_release(settings: Settings) -> ReleaseManifest:
@@ -129,6 +164,7 @@ def _load_settings() -> Settings:
                 "EMAIL_",
                 "RESEND_",
                 "SESSION_",
+                "SILVER_",
             )
         )
     }

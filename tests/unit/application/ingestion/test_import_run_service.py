@@ -59,7 +59,7 @@ def test_submit_creates_pending_run_and_stages_raw_object() -> None:
     run = runs.get(snapshot.run_id)
     assert run is not None
     assert run.job_execution_id is not None
-    assert run.raw_storage_key.startswith("ingestion/raw/")
+    assert run.raw_storage_key.startswith("objects/raw/")
 
 
 def test_submit_is_idempotent_by_source_and_batch_key() -> None:
