@@ -81,6 +81,12 @@ jobs:
           UMBRAL_SMOKE_OPERATOR_REDIS_URL_ENV: UMBRAL_SMOKE_OPERATOR_REDIS_URL
           UMBRAL_SMOKE_RESEND_OBSERVATION_TOKEN: ${{ secrets.RESEND_API_KEY }}
         run: |
+          # The Resend webhook secret must match between the deployed api and
+          # the Resend webhook; generate a stable value for this promote and
+          # reuse it for the api variables and the webhook update.
+          if (-not $env:EMAIL_WEBHOOK_SECRET) {
+            $env:EMAIL_WEBHOOK_SECRET = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
+          }
           $manifest = Get-Item artifacts/release/release-manifest.json
           $checksum = (Get-Content -Raw "${manifest}.sha256").Trim()
           $pythonExecutable = Join-Path $env:GITHUB_WORKSPACE ".venv/bin/python"

@@ -307,6 +307,56 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             self._print_attempt_state(correlation_id)
             raise
 
+    def sync_resend_webhook_secret(self) -> None:
+        """Align the Resend webhook signing secret with the deployed api.
+
+        The webhook secret is a static provisioned value; when it drifts from
+        the secret the api uses, Resend deliveries verify as 401 and the
+        delivery checks see no audit event. The promote passes a stable
+        EMAIL_WEBHOOK_SECRET to the api variables and here, so the webhook is
+        re-pointed at it when needed.
+        """
+
+        import os as os_module
+
+        secret = os_module.environ.get("EMAIL_WEBHOOK_SECRET", "")
+        if not secret or not self._web_origin:
+            return
+        try:
+            listing = self._resend_json("GET", "/webhooks", None, monotonic() + 15)
+            data = listing.get("data")
+            if not isinstance(data, list):
+                return
+            expected = f"{self._web_origin}/api/webhooks/email"
+            for item in data:
+                if not isinstance(item, Mapping):
+                    continue
+                endpoint = item.get("endpoint")
+                webhook_id = item.get("id")
+                if (
+                    isinstance(endpoint, str)
+                    and endpoint == expected
+                    and isinstance(webhook_id, str)
+                ):
+                    result = self._resend_json(
+                        "PATCH",
+                        f"/webhooks/{webhook_id}",
+                        {"secret": secret},
+                        monotonic() + 15,
+                    )
+                    print(
+                        f"SMOKE RESEND webhook secret synced id={webhook_id} "
+                        f"result={result!r}",
+                        file=sys.stderr,
+                    )
+                    return
+        except Exception as error:
+            print(
+                f"SMOKE RESEND webhook secret sync failed: "
+                f"{type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+
     def _print_attempt_state(self, correlation_id: UUID) -> None:
         import psycopg
 
@@ -1561,6 +1611,9 @@ def main(argv: list[str] | None = None) -> int:
         reset = getattr(observer, "reset_request_history", None)
         if callable(reset):
             reset()
+        sync_webhook = getattr(observer, "sync_resend_webhook_secret", None)
+        if callable(sync_webhook):
+            sync_webhook()
         report = run_preview_identity_smoke(
             config,
             http=CookieHttpClient(deadline=deadline),

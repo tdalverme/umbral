@@ -79,17 +79,28 @@ class SupabaseIdentityAdapter:
             user = response.user
             if user is None:
                 raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="provider_user_missing")
-            subject = _required_text(getattr(user, "id", None))
-            verified_email = normalize_email(_required_text(getattr(user, "email", None))).value
-            if not _required_text(getattr(user, "email_confirmed_at", None)):
-                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="email_unconfirmed")
+            subject = getattr(user, "id", None)
+            email = getattr(user, "email", None)
+            if not isinstance(subject, str) or not subject.strip():
+                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="provider_subject_missing")
+            if not isinstance(email, str) or not email.strip():
+                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="provider_email_missing")
+            verified_email = normalize_email(email.strip()).value
             session = response.session
             if session is None:
                 raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="session_missing")
-            access_token = _required_text(getattr(session, "access_token", None))
+            access_token = getattr(session, "access_token", None)
+            if not isinstance(access_token, str) or not access_token.strip():
+                raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="session_token_missing")
             claims = _access_token_claims(access_token)
-            issuer = _required_text(claims.get("iss"))
-            if issuer != self.issuer or _required_text(claims.get("sub")) != subject:
+            issuer = claims.get("iss")
+            subject_claim = claims.get("sub")
+            if (
+                not isinstance(issuer, str)
+                or not isinstance(subject_claim, str)
+                or issuer != self.issuer
+                or subject_claim != subject
+            ):
                 raise IdentityError("auth.link_unavailable", status=410, recovery="request_new_link", detail="issuer_mismatch")
             return ProviderProof(
                 self.provider,
