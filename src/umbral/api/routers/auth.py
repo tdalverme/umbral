@@ -113,6 +113,16 @@ async def confirm_magic_link(
     try:
         _check_bff(x_umbral_bff_token)
         result = _deps().identity_access.confirm_magic_link(attempt_id=payload.attempt_id, token_hash=payload.token_hash, now=datetime.now(timezone.utc))
+        response.set_cookie(
+            key=_deps().settings.session_cookie_name,
+            value=result.token,
+            httponly=True,
+            secure=_deps().settings.session_secure,
+            samesite="lax",
+            path="/",
+        )
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
     except IdentityError as error:
         return _problem(error, request)
     except Exception as error:
@@ -122,16 +132,6 @@ async def confirm_magic_link(
             content={"code": "internal_error", "detail": f"{type(error).__name__}: {error}"},
             headers={"Cache-Control": "no-store"},
         )
-    response.set_cookie(
-        key=_deps().settings.session_cookie_name,
-        value=result.token,
-        httponly=True,
-        secure=_deps().settings.session_secure,
-        samesite="lax",
-        path="/",
-    )
-    response.headers["Cache-Control"] = "private, no-store"
-    return response
 
 
 @router.get("/auth/session", operation_id="getCurrentSession", response_model=CurrentSession)
