@@ -128,7 +128,7 @@ class ResendEmailAdapter:
             return result
         except (UnicodeDecodeError, TypeError, ValueError, KeyError) as exc:
             raise IdentityError(
-                "auth.webhook_invalid", status=401, recovery="none"
+                "auth.webhook_invalid", status=401, recovery="none", detail=str(exc)
             ) from exc
 
     def health(self) -> str:
