@@ -106,14 +106,14 @@ async def request_magic_link(
 async def confirm_magic_link(
     payload: MagicLinkConfirmation,
     request: Request,
-    response: Response,
     x_umbral_bff_token: str | None = Header(default=None, include_in_schema=False),
     x_correlation_id: UUID | None = Header(default=None),
-) -> Response | JSONResponse:
+) -> Response:
     try:
         _check_bff(x_umbral_bff_token)
         result = _deps().identity_access.confirm_magic_link(attempt_id=payload.attempt_id, token_hash=payload.token_hash, now=datetime.now(timezone.utc))
-        response.set_cookie(
+        cookie_response = Response(status_code=204)
+        cookie_response.set_cookie(
             key=_deps().settings.session_cookie_name,
             value=result.token,
             httponly=True,
@@ -121,8 +121,8 @@ async def confirm_magic_link(
             samesite="lax",
             path="/",
         )
-        response.headers["Cache-Control"] = "private, no-store"
-        return response
+        cookie_response.headers["Cache-Control"] = "private, no-store"
+        return cookie_response
     except IdentityError as error:
         return _problem(error, request)
     except Exception as error:
