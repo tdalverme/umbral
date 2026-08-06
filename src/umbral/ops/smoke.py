@@ -663,7 +663,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 "Content-Type": "application/json",
                 "svix-id": svix_id,
                 "svix-timestamp": svix_ts,
-                "svix-signature": f"v1={signature}",
+                "svix-signature": f"v1,{signature}",
                 "User-Agent": "curl/8.7.1",
             },
         )
