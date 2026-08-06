@@ -12,24 +12,32 @@ function allowedSetCookie(value: string | null): string | null {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  let response: Response;
   try {
-    response = await forwardIdentityRequest("/api/v1/auth/magic-link-confirmations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: await request.text(),
-      signal: AbortSignal.timeout(30000),
-    });
+    let response: Response;
+    try {
+      response = await forwardIdentityRequest("/api/v1/auth/magic-link-confirmations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: await request.text(),
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { code: "web.proxy_failed", detail: String(error) },
+        { status: 502, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const headers = new Headers({ "Cache-Control": "private, no-store" });
+    const setCookie = allowedSetCookie(response.headers.get("set-cookie"));
+    if (setCookie) headers.set("Set-Cookie", setCookie);
+    if (response.status === 204) return new NextResponse(null, { status: 204, headers });
+    headers.set("Content-Type", response.headers.get("content-type") || "application/problem+json");
+    const text = await response.text();
+    return new NextResponse(text, { status: response.status, headers });
   } catch (error) {
     return NextResponse.json(
-      { code: "web.proxy_failed", detail: String(error) },
+      { code: "web.confirm_failed", detail: String(error) },
       { status: 502, headers: { "Cache-Control": "no-store" } },
     );
   }
-  const headers = new Headers({ "Cache-Control": "private, no-store" });
-  const setCookie = allowedSetCookie(response.headers.get("set-cookie"));
-  if (setCookie) headers.set("Set-Cookie", setCookie);
-  if (response.status === 204) return new NextResponse(null, { status: 204, headers });
-  headers.set("Content-Type", response.headers.get("content-type") || "application/problem+json");
-  return new NextResponse(await response.text(), { status: response.status, headers });
 }
