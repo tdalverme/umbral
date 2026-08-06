@@ -271,26 +271,26 @@ busqueda, ejecuta hard filters y revisa matches persistentes de punta a punta.
 
 ## Epica H2.1 - Ingestion Bronze
 
-- [ ] **UM-H2-001 [P0] [DATA] Definir la interfaz ImportSource** — Recibe un
+- [x] **UM-H2-001 [P0] [DATA] Definir la interfaz ImportSource** — Recibe un
   lote, identidad de fuente y version; devuelve snapshots y un reporte sin
   conocer Silver. Incluye adapter de archivo y fake de prueba.
-- [ ] **UM-H2-002 [P0] [DATA] Validar archivos CSV/JSON contra el contrato** —
+- [x] **UM-H2-002 [P0] [DATA] Validar archivos CSV/JSON contra el contrato** —
   Rechaza formato, encoding, tamaño o version no soportados con errores por
   registro accionables. Depende de UM-H0-009 y UM-H2-001.
-- [ ] **UM-H2-003 [P0] [OPS] Crear entrada operativa de importacion** — Permite
+- [x] **UM-H2-003 [P0] [OPS] Crear entrada operativa de importacion** — Permite
   subir un lote controlado con permisos, source id, idempotency key y vista de
   progreso; no acepta URLs arbitrarias. Depende de UM-H1-015 y UM-H2-002.
-- [ ] **UM-H2-004 [P0] [DATA] Persistir crawl/import runs** — Registra estado,
+- [x] **UM-H2-004 [P0] [DATA] Persistir crawl/import runs** — Registra estado,
   conteos, version de parser, actor, timestamps y errores resumidos.
-- [ ] **UM-H2-005 [P0] [DATA] Preservar raw listing snapshots inmutables** —
+- [x] **UM-H2-005 [P0] [DATA] Preservar raw listing snapshots inmutables** —
   Guarda payload/hash en Bronze y contenido pesado en object storage antes de
   transformar. Depende de UM-H1-011 y UM-H2-004.
-- [ ] **UM-H2-006 [P0] [DATA] Hacer la captura idempotente** — Repetir un lote
+- [x] **UM-H2-006 [P0] [DATA] Hacer la captura idempotente** — Repetir un lote
   con la misma clave/hash no duplica snapshots ni efectos.
-- [ ] **UM-H2-007 [P0] [DATA] Implementar cuarentena por registro** — Los
+- [x] **UM-H2-007 [P0] [DATA] Implementar cuarentena por registro** — Los
   registros invalidos quedan consultables con codigo, detalle y payload
   referenciado; los validos continuan. Depende de UM-H2-002 y UM-H2-005.
-- [ ] **UM-H2-008 [P1] [OPS] Exponer reporte de calidad del lote** — Muestra
+- [x] **UM-H2-008 [P1] [OPS] Exponer reporte de calidad del lote** — Muestra
   aceptados, duplicados, cuarentena, campos faltantes y distribuciones
   anormales con descarga segura.
 
@@ -869,6 +869,13 @@ El orden recomendado para generar artefactos Spec Kit es:
   y UM-H1-013 a UM-H1-015. Requiere seleccionar providers, implementar
   invitaciones/magic links, mapear identidad externa y aplicar roles
   deny-by-default antes de habilitar usuarios invitados.
+- [x] `bronze-ingestion` — aceptado para cierre local; las 8 stories de la
+  épica H2.1 (UM-H2-001 a UM-H2-008) están marcadas arriba. La evidencia
+  consolidada está en
+  `docs/runbooks/evidence/bronze-ingestion-acceptance.md`. Los slices que
+  requieren Postgres/object storage corren vía testcontainers en CI
+  (`scripts/check-imports.ps1`). La normalización Silver (H2.2) es el
+  siguiente incremento del hito.
 
 Cada incremento debe poder desplegarse, demostrarse y verificarse sin depender
 de que todo el producto este terminado.
