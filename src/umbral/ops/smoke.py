@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import re
@@ -309,13 +310,13 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             raise
 
     def sync_resend_webhook_secret(self) -> None:
-        """Align the Resend webhook signing secret with the deployed api.
+        """Recreate the Resend webhook with the deployed api signing secret.
 
-        The webhook secret is a static provisioned value; when it drifts from
-        the secret the api uses, Resend deliveries verify as 401 and the
-        delivery checks see no audit event. The promote passes a stable
-        EMAIL_WEBHOOK_SECRET to the api variables and here, so the webhook is
-        re-pointed at it when needed.
+        Resend signs webhooks with the secret configured at creation time and
+        does not accept a secret change via PATCH, so a drifted webhook keeps
+        returning 401 to the api. The promote pins a stable EMAIL_WEBHOOK_SECRET
+        on the api variables and re-creates the webhook with that same secret so
+        svix verification passes.
         """
 
         import os as os_module
@@ -323,6 +324,14 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         secret = os_module.environ.get("EMAIL_WEBHOOK_SECRET", "")
         if not secret or not self._web_origin:
             return
+        events = [
+            "email.sent",
+            "email.delivered",
+            "email.delivery_delayed",
+            "email.bounced",
+            "email.complained",
+            "email.failed",
+        ]
         try:
             listing = self._resend_json("GET", "/webhooks", None, monotonic() + 15)
             data = listing.get("data")
@@ -339,15 +348,19 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                     and endpoint == expected
                     and isinstance(webhook_id, str)
                 ):
+                    self._resend_json(
+                        "DELETE", f"/webhooks/{webhook_id}", None, monotonic() + 15
+                    )
                     result = self._resend_json(
-                        "PATCH",
-                        f"/webhooks/{webhook_id}",
-                        {"secret": secret},
+                        "POST",
+                        "/webhooks",
+                        {"url": expected, "events": events, "secret": secret},
                         monotonic() + 15,
                     )
                     print(
-                        f"SMOKE RESEND webhook secret synced id={webhook_id} "
-                        f"result={result!r}",
+                        f"SMOKE RESEND webhook recreated id={result.get('id')!r} "
+                        f"secret_sha256="
+                        f"{hashlib.sha256(secret.encode()).hexdigest()[:16]}",
                         file=sys.stderr,
                     )
                     return
