@@ -479,7 +479,9 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 file=sys.stderr,
             )
 
-    def _print_resend_webhook_events(self) -> None:
+    def _print_resend_webhook_events(
+        self, provider_message_id: str | None = None
+    ) -> None:
         import psycopg
 
         try:
@@ -495,7 +497,8 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             print(f"SMOKE RESEND webhook events rows={rows!r}", file=sys.stderr)
             self._print_resend_webhooks()
             self._print_webhook_probe()
-            self._print_provider_email_state(provider_event_id)
+            if provider_message_id:
+                self._print_provider_email_state(provider_message_id)
         except Exception as error:
             print(
                 f"SMOKE RESEND webhook events failed: "
@@ -772,7 +775,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                     return True
                 _sleep_remaining(deadline)
         except TimeoutError:
-            self._print_resend_webhook_events()
+            self._print_resend_webhook_events(provider_event_id)
             raise
 
     def wait_for_no_magic_link(
