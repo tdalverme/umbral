@@ -12,11 +12,20 @@ function allowedSetCookie(value: string | null): string | null {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const response = await forwardIdentityRequest("/api/v1/auth/magic-link-confirmations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: await request.text(),
-  });
+  let response: Response;
+  try {
+    response = await forwardIdentityRequest("/api/v1/auth/magic-link-confirmations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: await request.text(),
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { code: "web.proxy_failed", detail: String(error) },
+      { status: 502, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const headers = new Headers({ "Cache-Control": "private, no-store" });
   const setCookie = allowedSetCookie(response.headers.get("set-cookie"));
   if (setCookie) headers.set("Set-Cookie", setCookie);
