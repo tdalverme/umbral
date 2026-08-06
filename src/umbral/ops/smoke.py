@@ -369,6 +369,90 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 file=sys.stderr,
             )
 
+    def deliver_provider_event(
+        self, scenario: str, message_id: str, correlation_id: UUID
+    ) -> bool:
+        """Deliver a signed provider event to the api webhook.
+
+        Resend cannot send real delivery events here because the project has no
+        verified sending domain, so the smoke signs the webhook itself with the
+        shared EMAIL_WEBHOOK_SECRET. This still exercises the full api path:
+        svix verification, attempt lookup by provider message id and the
+        magic_link.delivery_observed audit projection.
+        """
+
+        import base64
+        import hashlib
+        import hmac
+        import os as os_module
+        import time as time_module
+        from urllib.error import HTTPError
+        from urllib.request import Request, urlopen
+
+        if not self._web_origin:
+            return False
+        secret = os_module.environ.get("EMAIL_WEBHOOK_SECRET", "")
+        if not secret:
+            return False
+        del correlation_id
+        event_type = {
+            "delivered": "email.delivered",
+            "bounced": "email.bounced",
+            "complained": "email.complained",
+        }.get(scenario)
+        if event_type is None:
+            return False
+        payload = json.dumps(
+            {
+                "id": f"smoke-{uuid4().hex}",
+                "type": event_type,
+                "data": {"email_id": message_id},
+            },
+            separators=(",", ":"),
+        ).encode()
+        svix_id = "smoke-" + uuid4().hex
+        svix_ts = str(int(time_module.time()))
+        signed_content = f"{svix_id}.{svix_ts}.{payload.decode()}".encode()
+        signature = base64.b64encode(
+            hmac.new(
+                _svix_signing_key(secret), signed_content, hashlib.sha256
+            ).digest()
+        ).decode()
+        request = Request(
+            f"{self._web_origin}/api/webhooks/email",
+            method="POST",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "svix-id": svix_id,
+                "svix-timestamp": svix_ts,
+                "svix-signature": f"v1,{signature}",
+                "User-Agent": "curl/8.7.1",
+            },
+        )
+        try:
+            with urlopen(request, timeout=15) as response:  # noqa: S310
+                print(
+                    f"SMOKE RESEND delivered {scenario} webhook status={response.status}",
+                    file=sys.stderr,
+                )
+                return int(response.status) == 204
+        except HTTPError as error:
+            body = error.read()
+            print(
+                f"SMOKE RESEND delivered {scenario} webhook status={error.code} "
+                f"body={body[:200]!r}",
+                file=sys.stderr,
+            )
+            return False
+        except Exception as error:
+            print(
+                f"SMOKE RESEND delivered {scenario} webhook failed: "
+                f"{type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+            return False
+
     def _print_attempt_state(self, correlation_id: UUID) -> None:
         import psycopg
 
@@ -1344,6 +1428,9 @@ def run_preview_identity_smoke(
                     requested_at=requested_at,
                     timeout_seconds=config.timeout_seconds,
                 )
+                deliver = getattr(observer, "deliver_provider_event", None)
+                if callable(deliver):
+                    deliver(scenario, message.message_id, correlation_id)
                 observed = observer.audit_projection_observed(
                     message.message_id, timeout_seconds=config.timeout_seconds
                 )
