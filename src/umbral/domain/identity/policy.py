@@ -40,6 +40,38 @@ ACTION_RULES: dict[str, ActionRule] = {
         frozenset({"user", "operator", "administrator"}),
         True,
     ),
+    "product.search_profile.create": ActionRule(
+        "product.search_profile.create",
+        frozenset({"user", "operator", "administrator"}),
+    ),
+    "product.search_profile.read": ActionRule(
+        "product.search_profile.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.search_profile.update": ActionRule(
+        "product.search_profile.update",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.search_profile.status": ActionRule(
+        "product.search_profile.status",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.matches.read": ActionRule(
+        "product.matches.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.listing.read": ActionRule(
+        "product.listing.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.events.emit": ActionRule(
+        "product.events.emit", frozenset({"user", "operator", "administrator"})
+    ),
     "ops.identity.conflict.review": ActionRule(
         "ops.identity.conflict.review", frozenset({"operator", "administrator"})
     ),

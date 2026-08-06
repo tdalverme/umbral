@@ -1,0 +1,119 @@
+{
+  "schema": "radar.profiles-golden.v1",
+  "cases": [
+    {
+      "id": "valid-basic",
+      "profile": {
+        "name": "Mi depto en Palermo",
+        "operation": "rental",
+        "zones": ["palermo"],
+        "budget_max": 1000,
+        "budget_min": null,
+        "min_rooms": 2,
+        "surface_min": null,
+        "surface_max": null,
+        "status": "active"
+      },
+      "expected": { "valid": true, "error_codes": [] }
+    },
+    {
+      "id": "valid-no-min",
+      "profile": {
+        "name": "Amplio",
+        "operation": "rental",
+        "zones": ["caballito", "almagro"],
+        "budget_max": 800,
+        "budget_min": 300,
+        "min_rooms": 0,
+        "surface_min": 40,
+        "surface_max": 120,
+        "status": "active"
+      },
+      "expected": { "valid": true, "error_codes": [] }
+    },
+    {
+      "id": "invalid-empty-zones",
+      "profile": {
+        "name": "Sin zona",
+        "operation": "rental",
+        "zones": [],
+        "budget_max": 1000,
+        "budget_min": null,
+        "min_rooms": 0,
+        "surface_min": null,
+        "surface_max": null,
+        "status": "active"
+      },
+      "expected": { "valid": false, "error_codes": ["radar.zones_required"] }
+    },
+    {
+      "id": "invalid-zone-unknown",
+      "profile": {
+        "name": "Zona rara",
+        "operation": "rental",
+        "zones": ["la_boca_misteriosa"],
+        "budget_max": 1000,
+        "budget_min": null,
+        "min_rooms": 0,
+        "surface_min": null,
+        "surface_max": null,
+        "status": "active"
+      },
+      "expected": { "valid": false, "error_codes": ["radar.zone_unknown"] }
+    },
+    {
+      "id": "invalid-budget-range",
+      "profile": {
+        "name": "Presupuesto raro",
+        "operation": "rental",
+        "zones": ["palermo"],
+        "budget_max": 500,
+        "budget_min": 800,
+        "min_rooms": 0,
+        "surface_min": null,
+        "surface_max": null,
+        "status": "active"
+      },
+      "expected": { "valid": false, "error_codes": ["radar.budget_range"] }
+    },
+    {
+      "id": "invalid-name-empty",
+      "profile": {
+        "name": "",
+        "operation": "rental",
+        "zones": ["palermo"],
+        "budget_max": 1000,
+        "budget_min": null,
+        "min_rooms": 0,
+        "surface_min": null,
+        "surface_max": null,
+        "status": "active"
+      },
+      "expected": { "valid": false, "error_codes": ["radar.name_required"] }
+    },
+    {
+      "id": "unknown-strategy-defaults",
+      "profile": {
+        "name": "Estrategias",
+        "operation": "rental",
+        "zones": ["palermo"],
+        "budget_max": 1000,
+        "budget_min": null,
+        "min_rooms": 1,
+        "surface_min": null,
+        "surface_max": null,
+        "status": "active"
+      },
+      "expected": {
+        "valid": true,
+        "error_codes": [],
+        "unknown_strategy": {
+          "price": "exclude",
+          "location": "exclude",
+          "rooms": "include",
+          "surface": "include"
+        }
+      }
+    }
+  ]
+}

@@ -23,6 +23,13 @@ from umbral.infrastructure.db.models.jobs import (
     JobSchedule,
 )
 from umbral.infrastructure.db.models.objects import StoredObject, StoredObjectVersion
+from umbral.infrastructure.db.models.radar import (
+    ProductEventRow,
+    RecommendationItem,
+    RecommendationRun,
+    SearchProfile,
+    SearchProfileVersion,
+)
 from umbral.infrastructure.db.models.runtime import RuntimeSurfaceStatus
 from umbral.infrastructure.db.models.silver import (
     CanonicalProperty,
@@ -54,4 +61,9 @@ __all__ = [
     "SilverListing",
     "DedupeLink",
     "ListingChange",
+    "SearchProfile",
+    "SearchProfileVersion",
+    "RecommendationRun",
+    "RecommendationItem",
+    "ProductEventRow",
 ]

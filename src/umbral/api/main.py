@@ -26,8 +26,16 @@ from umbral.api.routers.auth import router as auth_router
 from umbral.api.routers.email_webhooks import router as email_webhook_router
 from umbral.api.routers.imports import configure_imports_routes
 from umbral.api.routers.imports import router as imports_router
+from umbral.api.routers.listings import configure_listings_routes
+from umbral.api.routers.listings import router as listings_router
+from umbral.api.routers.matches import configure_matches_routes
+from umbral.api.routers.matches import router as matches_router
+from umbral.api.routers.product_events import configure_product_events_routes
+from umbral.api.routers.product_events import router as product_events_router
 from umbral.api.routers.runtime import configure_runtime_routes
 from umbral.api.routers.runtime import router as runtime_router
+from umbral.api.routers.search_profiles import configure_search_profiles_routes
+from umbral.api.routers.search_profiles import router as search_profiles_router
 from umbral.domain.errors import ApplicationError
 from umbral.infrastructure.observability.runtime import (
     initialize_observability,
@@ -243,6 +251,10 @@ def create_app() -> FastAPI:
     configure_runtime_routes(dependencies)
     configure_auth_routes(dependencies)
     configure_imports_routes(dependencies)
+    configure_search_profiles_routes(dependencies)
+    configure_matches_routes(dependencies)
+    configure_listings_routes(dependencies)
+    configure_product_events_routes(dependencies)
     app.add_middleware(CorrelationMiddleware)
     app.add_exception_handler(ApplicationError, application_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -252,6 +264,10 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(email_webhook_router)
     app.include_router(imports_router)
+    app.include_router(search_profiles_router)
+    app.include_router(matches_router)
+    app.include_router(listings_router)
+    app.include_router(product_events_router)
 
     def custom_openapi() -> dict[str, Any]:
         return _openapi_for_app(app)

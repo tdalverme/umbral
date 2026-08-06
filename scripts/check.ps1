@@ -84,6 +84,14 @@ try {
         Invoke-ChildCheck -Name "Silver" -Path (Join-Path $PSScriptRoot "check-silver.ps1")
     }
 
+    $radarSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\radar"),
+        (Join-Path $repoRoot "tests\integration\radar")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($radarSurface) {
+        Invoke-ChildCheck -Name "Radar" -Path (Join-Path $PSScriptRoot "check-radar.ps1")
+    }
+
     $storageSurface = @(
         (Join-Path $repoRoot "src\umbral\application\objects"),
         (Join-Path $repoRoot "tests\contract\test_object_store.py")

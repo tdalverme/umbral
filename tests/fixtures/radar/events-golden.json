@@ -1,0 +1,71 @@
+{
+  "schema": "radar.events-golden.v1",
+  "cases": [
+    {
+      "id": "valid-radar-created",
+      "event_type": "radar.created.v1",
+      "payload": {
+        "search_profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "profile_version": 1
+      },
+      "expected": { "valid": true }
+    },
+    {
+      "id": "valid-impression",
+      "event_type": "recommendation.impression.v1",
+      "payload": {
+        "search_profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "run_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "listing_id": "cccccccc-cccc-cccc-cccc-cccccccccccc"
+      },
+      "expected": { "valid": true }
+    },
+    {
+      "id": "valid-source-opened",
+      "event_type": "listing.source_opened.v1",
+      "payload": {
+        "search_profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "run_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "listing_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        "source_id": "fixture-source"
+      },
+      "expected": { "valid": true }
+    },
+    {
+      "id": "invalid-unknown-type",
+      "event_type": "chat.sent.v1",
+      "payload": {},
+      "expected": { "valid": false, "error": "events.unknown_type" }
+    },
+    {
+      "id": "invalid-missing-key",
+      "event_type": "recommendation.impression.v1",
+      "payload": {
+        "search_profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      },
+      "expected": { "valid": false, "error": "events.missing_keys" }
+    },
+    {
+      "id": "invalid-forbidden-key",
+      "event_type": "recommendation.impression.v1",
+      "payload": {
+        "search_profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "run_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "listing_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        "email": "user@example.com"
+      },
+      "expected": { "valid": false, "error": "events.forbidden_keys" }
+    },
+    {
+      "id": "invalid-extra-key",
+      "event_type": "recommendation.impression.v1",
+      "payload": {
+        "search_profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "run_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "listing_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        "score": 0.9
+      },
+      "expected": { "valid": false, "error": "events.extra_keys" }
+    }
+  ]
+}

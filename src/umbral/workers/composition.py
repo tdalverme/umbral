@@ -25,9 +25,11 @@ from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
 from umbral.infrastructure.object_store.factory import build_object_store
 from umbral.infrastructure.observability.runtime import initialize_observability
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
+from umbral.infrastructure.radar.composition import build_radar_service
 from umbral.infrastructure.runtime.heartbeat import RuntimeHeartbeatWriter
 from umbral.infrastructure.silver.composition import build_normalize_service
 from umbral.workers.imports import build_ingestion_registry
+from umbral.workers.radar import build_radar_registry
 from umbral.workers.registry import JobRegistry
 from umbral.workers.registry import build_identity_registry as build_job_registry
 from umbral.workers.silver import build_silver_registry, normalize_publisher
@@ -84,6 +86,12 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         geocoding_rate_limit=active_settings.silver_geocoding_rate_limit,
     )
     for handler in build_silver_registry(silver).as_mapping().values():
+        registry.register(handler)
+    radar = build_radar_service(
+        session_factory=session_provider.session_factory,
+        job_runtime=None,
+    )
+    for handler in build_radar_registry(radar).as_mapping().values():
         registry.register(handler)
     normalize_publish = _late_bind_publisher()
     for handler in (

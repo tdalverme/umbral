@@ -141,6 +141,21 @@ class Settings(BaseSettings):
     silver_geocoding_rate_limit: float = Field(
         default=1.0, validation_alias="SILVER_GEOCODING_RATE_LIMIT"
     )
+    radar_page_size_default: int = Field(
+        default=25, validation_alias="RADAR_PAGE_SIZE_DEFAULT"
+    )
+    radar_page_size_max: int = Field(
+        default=100, validation_alias="RADAR_PAGE_SIZE_MAX"
+    )
+    radar_run_job_type: str = Field(
+        default="recommendation.run", validation_alias="RADAR_RUN_JOB_TYPE"
+    )
+    radar_score_policy_version: str = Field(
+        default="scoring-baseline-v1", validation_alias="RADAR_SCORE_POLICY_VERSION"
+    )
+    radar_run_poll_interval_seconds: int = Field(
+        default=3, validation_alias="RADAR_RUN_POLL_INTERVAL_SECONDS"
+    )
 
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
@@ -183,6 +198,11 @@ class Settings(BaseSettings):
             "SILVER_GEOCODING_ENDPOINT",
             "SILVER_GEOCODING_CACHE_SIZE",
             "SILVER_GEOCODING_RATE_LIMIT",
+            "RADAR_PAGE_SIZE_DEFAULT",
+            "RADAR_PAGE_SIZE_MAX",
+            "RADAR_RUN_JOB_TYPE",
+            "RADAR_SCORE_POLICY_VERSION",
+            "RADAR_RUN_POLL_INTERVAL_SECONDS",
         }
     )
 

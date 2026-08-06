@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses } from './types.gen';
+import type { ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, CreateSearchProfileData, CreateSearchProfileErrors, CreateSearchProfileResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, EmitProductEventData, EmitProductEventErrors, EmitProductEventResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetListingDetailData, GetListingDetailErrors, GetListingDetailResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, GetSearchProfileData, GetSearchProfileErrors, GetSearchProfileResponses, ListMatchesData, ListMatchesErrors, ListMatchesResponses, ListSearchProfilesData, ListSearchProfilesErrors, ListSearchProfilesResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, SetSearchProfileStatusData, SetSearchProfileStatusErrors, SetSearchProfileStatusResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses, UpdateSearchProfileData, UpdateSearchProfileErrors, UpdateSearchProfileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -119,6 +119,94 @@ export const receiveResendEvent = <ThrowOnError extends boolean = false>(options
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/integrations/email/resend-events',
     ...options
+});
+
+/**
+ * Get Listing Detail
+ */
+export const getListingDetail = <ThrowOnError extends boolean = false>(options?: Options<GetListingDetailData, ThrowOnError>): RequestResult<GetListingDetailResponses, GetListingDetailErrors, ThrowOnError> => (options?.client ?? client).get<GetListingDetailResponses, GetListingDetailErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/listings/{listing_id}',
+    ...options
+});
+
+/**
+ * Emit Product Event
+ */
+export const emitProductEvent = <ThrowOnError extends boolean = false>(options: Options<EmitProductEventData, ThrowOnError>): RequestResult<EmitProductEventResponses, EmitProductEventErrors, ThrowOnError> => (options.client ?? client).post<EmitProductEventResponses, EmitProductEventErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/product-events',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Search Profiles
+ */
+export const listSearchProfiles = <ThrowOnError extends boolean = false>(options?: Options<ListSearchProfilesData, ThrowOnError>): RequestResult<ListSearchProfilesResponses, ListSearchProfilesErrors, ThrowOnError> => (options?.client ?? client).get<ListSearchProfilesResponses, ListSearchProfilesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles',
+    ...options
+});
+
+/**
+ * Create Search Profile
+ */
+export const createSearchProfile = <ThrowOnError extends boolean = false>(options: Options<CreateSearchProfileData, ThrowOnError>): RequestResult<CreateSearchProfileResponses, CreateSearchProfileErrors, ThrowOnError> => (options.client ?? client).post<CreateSearchProfileResponses, CreateSearchProfileErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Search Profile
+ */
+export const getSearchProfile = <ThrowOnError extends boolean = false>(options?: Options<GetSearchProfileData, ThrowOnError>): RequestResult<GetSearchProfileResponses, GetSearchProfileErrors, ThrowOnError> => (options?.client ?? client).get<GetSearchProfileResponses, GetSearchProfileErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}',
+    ...options
+});
+
+/**
+ * Update Search Profile
+ */
+export const updateSearchProfile = <ThrowOnError extends boolean = false>(options: Options<UpdateSearchProfileData, ThrowOnError>): RequestResult<UpdateSearchProfileResponses, UpdateSearchProfileErrors, ThrowOnError> => (options.client ?? client).patch<UpdateSearchProfileResponses, UpdateSearchProfileErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Matches
+ */
+export const listMatches = <ThrowOnError extends boolean = false>(options?: Options<ListMatchesData, ThrowOnError>): RequestResult<ListMatchesResponses, ListMatchesErrors, ThrowOnError> => (options?.client ?? client).get<ListMatchesResponses, ListMatchesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/matches',
+    ...options
+});
+
+/**
+ * Set Search Profile Status
+ */
+export const setSearchProfileStatus = <ThrowOnError extends boolean = false>(options: Options<SetSearchProfileStatusData, ThrowOnError>): RequestResult<SetSearchProfileStatusResponses, SetSearchProfileStatusErrors, ThrowOnError> => (options.client ?? client).post<SetSearchProfileStatusResponses, SetSearchProfileStatusErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/status',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

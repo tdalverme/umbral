@@ -1,0 +1,36 @@
+{
+  "contract_version": "1",
+  "score_policy_version": "scoring-baseline-v1",
+  "weights": {
+    "budget": 0.4,
+    "rooms": 0.2,
+    "surface": 0.2,
+    "location_precision": 0.2
+  },
+  "budget_fit": {
+    "kind": "headroom",
+    "formula": "clamp((budget_max - total_cost) / budget_max, 0, 1)"
+  },
+  "rooms_fit": {
+    "equal_min": 1.0,
+    "above_min": 0.85,
+    "unknown": 0.5,
+    "no_min": 1.0
+  },
+  "surface_fit": {
+    "within": 1.0,
+    "above_max_until_1_5x": 0.8,
+    "above_1_5x": 0.6,
+    "unknown": 0.5,
+    "no_bounds": 1.0
+  },
+  "location_precision_fit": {
+    "exact": 1.0,
+    "block": 0.95,
+    "neighborhood": 0.9,
+    "approximate": 0.7,
+    "unknown": 0.5
+  },
+  "tie_break": ["score desc", "total_cost asc", "listing_id asc"],
+  "score_round": 4
+}

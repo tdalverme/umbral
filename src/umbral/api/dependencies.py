@@ -15,6 +15,7 @@ from umbral.application.identity.ports import IdentityStore
 from umbral.application.ingestion.service import ImportRunService
 from umbral.application.jobs.ports import JobRuntime
 from umbral.application.objects.ports import ObjectStore
+from umbral.application.radar.service import RadarService
 from umbral.application.runtime.readiness import ReadinessModule
 from umbral.application.runtime.version import (
     ReleaseArtifact,
@@ -46,6 +47,7 @@ class RuntimeDependencies:
     access_control: AccessControl
     administration: AccessAdministration
     ingestion: ImportRunService
+    radar: RadarService | None = None
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
     job_runtime: JobRuntime | None = None
 
@@ -80,6 +82,7 @@ def build_runtime_dependencies(
         access_control=composition.access_control,
         administration=composition.administration,
         ingestion=composition.ingestion,
+        radar=composition.radar,
         heartbeat_writer=heartbeat_writer,
         job_runtime=composition.job_runtime,
     )

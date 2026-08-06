@@ -49,6 +49,46 @@ export type BodySubmitImportBatch = {
 };
 
 /**
+ * CreateSearchProfileRequest
+ */
+export type CreateSearchProfileRequest = {
+    /**
+     * Budget Max
+     */
+    budget_max: number;
+    /**
+     * Budget Min
+     */
+    budget_min?: number | null;
+    /**
+     * Min Rooms
+     */
+    min_rooms?: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Surface Max
+     */
+    surface_max?: number | null;
+    /**
+     * Surface Min
+     */
+    surface_min?: number | null;
+    /**
+     * Unknown Strategy
+     */
+    unknown_strategy?: {
+        [key: string]: string;
+    } | null;
+    /**
+     * Zones
+     */
+    zones: Array<string>;
+};
+
+/**
  * CurrentSession
  */
 export type CurrentSession = {
@@ -113,6 +153,106 @@ export type Health = {
 };
 
 /**
+ * KnownChangeModel
+ */
+export type KnownChangeModel = {
+    /**
+     * After
+     */
+    after: unknown;
+    /**
+     * Before
+     */
+    before: unknown;
+    /**
+     * Change Type
+     */
+    change_type: string;
+    /**
+     * Field
+     */
+    field: string;
+};
+
+/**
+ * ListingDetailResponse
+ */
+export type ListingDetailResponse = {
+    /**
+     * Amenities
+     */
+    amenities: Array<string>;
+    /**
+     * Bedrooms
+     */
+    bedrooms?: number | null;
+    /**
+     * Description Text
+     */
+    description_text?: string | null;
+    /**
+     * Expenses Value
+     */
+    expenses_value?: number | null;
+    /**
+     * Floor
+     */
+    floor?: number | null;
+    /**
+     * Geo Precision
+     */
+    geo_precision: string;
+    /**
+     * Known Changes
+     */
+    known_changes: Array<KnownChangeModel>;
+    /**
+     * Listing Id
+     */
+    listing_id: string;
+    /**
+     * Neighborhood
+     */
+    neighborhood?: string | null;
+    /**
+     * Normalization Errors
+     */
+    normalization_errors: Array<string>;
+    /**
+     * Price Currency
+     */
+    price_currency: string;
+    /**
+     * Price Value
+     */
+    price_value: number;
+    /**
+     * Property Type
+     */
+    property_type: string;
+    /**
+     * Rooms
+     */
+    rooms?: number | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Surface M2
+     */
+    surface_m2?: number | null;
+    /**
+     * Total Cost
+     */
+    total_cost: number;
+    /**
+     * Url
+     */
+    url?: string | null;
+};
+
+/**
  * MagicLinkConfirmation
  */
 export type MagicLinkConfirmation = {
@@ -134,6 +274,95 @@ export type MagicLinkRequest = {
      * Email
      */
     email: string;
+};
+
+/**
+ * MatchResponse
+ */
+export type MatchResponse = {
+    /**
+     * Contributions
+     */
+    contributions: {
+        [key: string]: unknown;
+    };
+    /**
+     * Geo Precision
+     */
+    geo_precision?: string | null;
+    /**
+     * Geometry
+     */
+    geometry?: [
+        number,
+        number
+    ] | null;
+    /**
+     * Item Id
+     */
+    item_id: string;
+    /**
+     * Listing Id
+     */
+    listing_id: string;
+    /**
+     * Neighborhood
+     */
+    neighborhood?: string | null;
+    /**
+     * Position
+     */
+    position: number;
+    /**
+     * Rooms
+     */
+    rooms?: number | null;
+    /**
+     * Score
+     */
+    score: number;
+    /**
+     * Source Id
+     */
+    source_id?: string | null;
+    /**
+     * Surface M2
+     */
+    surface_m2?: number | null;
+    /**
+     * Total Cost
+     */
+    total_cost?: number | null;
+    /**
+     * Url
+     */
+    url?: string | null;
+};
+
+/**
+ * MatchesResponse
+ */
+export type MatchesResponse = {
+    /**
+     * Items
+     */
+    items: Array<MatchResponse>;
+    /**
+     * Next After Position
+     */
+    next_after_position?: number | null;
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Run State
+     */
+    run_state: string;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
 };
 
 /**
@@ -178,6 +407,44 @@ export type Problem = {
      * Type
      */
     type: string;
+};
+
+/**
+ * ProductEventRequest
+ */
+export type ProductEventRequest = {
+    /**
+     * Event Type
+     */
+    event_type: string;
+    /**
+     * Payload
+     */
+    payload: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * ProductEventResponse
+ */
+export type ProductEventResponse = {
+    /**
+     * Event Id
+     */
+    event_id: string;
+    /**
+     * Event Type
+     */
+    event_type: string;
+    /**
+     * Event Version
+     */
+    event_version: number;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
 };
 
 /**
@@ -294,9 +561,202 @@ export type RunCountsModel = {
 };
 
 /**
+ * RuntimeVersion
+ *
+ * Immutable executing release identity.
+ */
+export type RuntimeVersion = {
+    /**
+     * Artifact Digest
+     */
+    artifact_digest: string;
+    /**
+     * Built At
+     */
+    built_at: string;
+    /**
+     * Contract Major
+     */
+    contract_major: 1;
+    /**
+     * Database Revision
+     */
+    database_revision: string;
+    /**
+     * Git Sha
+     */
+    git_sha: string;
+    /**
+     * Manifest Sha256
+     */
+    manifest_sha256: string;
+    /**
+     * Release Id
+     */
+    release_id: string;
+    /**
+     * Surface
+     */
+    surface: 'web' | 'api' | 'worker' | 'scheduler';
+};
+
+/**
+ * SearchProfileResponse
+ */
+export type SearchProfileResponse = {
+    /**
+     * Budget Max
+     */
+    budget_max: number;
+    /**
+     * Budget Min
+     */
+    budget_min?: number | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    latest_run?: UmbralApiRoutersSearchProfilesRunResponse | null;
+    /**
+     * Min Rooms
+     */
+    min_rooms: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Operation
+     */
+    operation: string;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
+    /**
+     * Status
+     */
+    status: 'active' | 'paused' | 'archived';
+    /**
+     * Surface Max
+     */
+    surface_max?: number | null;
+    /**
+     * Surface Min
+     */
+    surface_min?: number | null;
+    /**
+     * Unknown Strategy
+     */
+    unknown_strategy: {
+        [key: string]: string;
+    };
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Zones
+     */
+    zones: Array<string>;
+};
+
+/**
+ * StatusRequest
+ */
+export type StatusRequest = {
+    /**
+     * Status
+     */
+    status: 'active' | 'paused' | 'archived';
+};
+
+/**
+ * UpdateSearchProfileRequest
+ */
+export type UpdateSearchProfileRequest = {
+    /**
+     * Budget Max
+     */
+    budget_max?: number | null;
+    /**
+     * Budget Min
+     */
+    budget_min?: number | null;
+    /**
+     * Min Rooms
+     */
+    min_rooms?: number | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Surface Max
+     */
+    surface_max?: number | null;
+    /**
+     * Surface Min
+     */
+    surface_min?: number | null;
+    /**
+     * Zones
+     */
+    zones?: Array<string> | null;
+};
+
+/**
+ * ValidationError
+ */
+export type ValidationError = {
+    /**
+     * Context
+     */
+    ctx?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Input
+     */
+    input?: unknown;
+    /**
+     * Location
+     */
+    loc: Array<string | number>;
+    /**
+     * Message
+     */
+    msg: string;
+    /**
+     * Error Type
+     */
+    type: string;
+};
+
+/**
+ * ValidationIssue
+ *
+ * Safe field-level validation metadata for RFC 9457 problems.
+ */
+export type ValidationIssue = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Field
+     */
+    field: string;
+};
+
+/**
  * RunResponse
  */
-export type RunResponse = {
+export type UmbralApiRoutersImportsRunResponse = {
     /**
      * Accepted
      */
@@ -372,87 +832,45 @@ export type RunResponse = {
 };
 
 /**
- * RuntimeVersion
- *
- * Immutable executing release identity.
+ * RunResponse
  */
-export type RuntimeVersion = {
+export type UmbralApiRoutersSearchProfilesRunResponse = {
     /**
-     * Artifact Digest
+     * Candidate Count
      */
-    artifact_digest: string;
+    candidate_count: number;
     /**
-     * Built At
+     * Created At
      */
-    built_at: string;
+    created_at: string;
     /**
-     * Contract Major
+     * Failure Code
      */
-    contract_major: 1;
+    failure_code?: string | null;
     /**
-     * Database Revision
+     * Finished At
      */
-    database_revision: string;
+    finished_at?: string | null;
     /**
-     * Git Sha
+     * Published Item Count
      */
-    git_sha: string;
+    published_item_count: number;
     /**
-     * Manifest Sha256
+     * Run Id
      */
-    manifest_sha256: string;
+    run_id: string;
     /**
-     * Release Id
+     * Score Policy Version
      */
-    release_id: string;
+    score_policy_version: string;
     /**
-     * Surface
+     * State
      */
-    surface: 'web' | 'api' | 'worker' | 'scheduler';
-};
-
-/**
- * ValidationError
- */
-export type ValidationError = {
+    state: 'pending' | 'running' | 'succeeded' | 'failed';
     /**
-     * Context
+     * Trigger
      */
-    ctx?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Input
-     */
-    input?: unknown;
-    /**
-     * Location
-     */
-    loc: Array<string | number>;
-    /**
-     * Message
-     */
-    msg: string;
-    /**
-     * Error Type
-     */
-    type: string;
-};
-
-/**
- * ValidationIssue
- *
- * Safe field-level validation metadata for RFC 9457 problems.
- */
-export type ValidationIssue = {
-    /**
-     * Code
-     */
-    code: string;
-    /**
-     * Field
-     */
-    field: string;
+    trigger: string;
 };
 
 /**
@@ -620,7 +1038,7 @@ export type SubmitImportBatchResponses = {
     /**
      * Successful Response
      */
-    202: RunResponse;
+    202: UmbralApiRoutersImportsRunResponse;
 };
 
 export type SubmitImportBatchResponse = SubmitImportBatchResponses[keyof SubmitImportBatchResponses];
@@ -706,7 +1124,7 @@ export type GetImportRunResponses = {
     /**
      * Successful Response
      */
-    200: RunResponse;
+    200: UmbralApiRoutersImportsRunResponse;
 };
 
 export type GetImportRunResponse = GetImportRunResponses[keyof GetImportRunResponses];
@@ -831,6 +1249,362 @@ export type ReceiveResendEventResponses = {
 };
 
 export type ReceiveResendEventResponse = ReceiveResendEventResponses[keyof ReceiveResendEventResponses];
+
+export type GetListingDetailData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/listings/{listing_id}';
+};
+
+export type GetListingDetailErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetListingDetailError = GetListingDetailErrors[keyof GetListingDetailErrors];
+
+export type GetListingDetailResponses = {
+    /**
+     * Successful Response
+     */
+    200: ListingDetailResponse;
+};
+
+export type GetListingDetailResponse = GetListingDetailResponses[keyof GetListingDetailResponses];
+
+export type EmitProductEventData = {
+    body: ProductEventRequest;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/product-events';
+};
+
+export type EmitProductEventErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Unprocessable Content
+     */
+    422: unknown;
+};
+
+export type EmitProductEventResponses = {
+    /**
+     * Successful Response
+     */
+    201: ProductEventResponse;
+};
+
+export type EmitProductEventResponse = EmitProductEventResponses[keyof EmitProductEventResponses];
+
+export type ListSearchProfilesData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles';
+};
+
+export type ListSearchProfilesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListSearchProfilesError = ListSearchProfilesErrors[keyof ListSearchProfilesErrors];
+
+export type ListSearchProfilesResponses = {
+    /**
+     * Response Listsearchprofiles
+     *
+     * Successful Response
+     */
+    200: Array<SearchProfileResponse>;
+};
+
+export type ListSearchProfilesResponse = ListSearchProfilesResponses[keyof ListSearchProfilesResponses];
+
+export type CreateSearchProfileData = {
+    body: CreateSearchProfileRequest;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles';
+};
+
+export type CreateSearchProfileErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Unprocessable Content
+     */
+    422: unknown;
+};
+
+export type CreateSearchProfileResponses = {
+    /**
+     * Successful Response
+     */
+    201: SearchProfileResponse;
+};
+
+export type CreateSearchProfileResponse = CreateSearchProfileResponses[keyof CreateSearchProfileResponses];
+
+export type GetSearchProfileData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}';
+};
+
+export type GetSearchProfileErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetSearchProfileError = GetSearchProfileErrors[keyof GetSearchProfileErrors];
+
+export type GetSearchProfileResponses = {
+    /**
+     * Successful Response
+     */
+    200: SearchProfileResponse;
+};
+
+export type GetSearchProfileResponse = GetSearchProfileResponses[keyof GetSearchProfileResponses];
+
+export type UpdateSearchProfileData = {
+    body: UpdateSearchProfileRequest;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}';
+};
+
+export type UpdateSearchProfileErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Conflict
+     */
+    409: unknown;
+    /**
+     * Unprocessable Content
+     */
+    422: unknown;
+};
+
+export type UpdateSearchProfileResponses = {
+    /**
+     * Successful Response
+     */
+    200: SearchProfileResponse;
+};
+
+export type UpdateSearchProfileResponse = UpdateSearchProfileResponses[keyof UpdateSearchProfileResponses];
+
+export type ListMatchesData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/matches';
+};
+
+export type ListMatchesErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListMatchesError = ListMatchesErrors[keyof ListMatchesErrors];
+
+export type ListMatchesResponses = {
+    /**
+     * Successful Response
+     */
+    200: MatchesResponse;
+};
+
+export type ListMatchesResponse = ListMatchesResponses[keyof ListMatchesResponses];
+
+export type SetSearchProfileStatusData = {
+    body: StatusRequest;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/status';
+};
+
+export type SetSearchProfileStatusErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Conflict
+     */
+    409: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SetSearchProfileStatusError = SetSearchProfileStatusErrors[keyof SetSearchProfileStatusErrors];
+
+export type SetSearchProfileStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: SearchProfileResponse;
+};
+
+export type SetSearchProfileStatusResponse = SetSearchProfileStatusResponses[keyof SetSearchProfileStatusResponses];
 
 export type GetRuntimeHealthData = {
     body?: never;

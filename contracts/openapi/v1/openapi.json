@@ -131,6 +131,92 @@
         "title": "Body_submitImportBatch",
         "type": "object"
       },
+      "CreateSearchProfileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "budget_max": {
+            "exclusiveMinimum": 0.0,
+            "title": "Budget Max",
+            "type": "number"
+          },
+          "budget_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Min"
+          },
+          "min_rooms": {
+            "default": 0,
+            "maximum": 200.0,
+            "minimum": 0.0,
+            "title": "Min Rooms",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "surface_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Max"
+          },
+          "surface_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Min"
+          },
+          "unknown_strategy": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unknown Strategy"
+          },
+          "zones": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 15,
+            "minItems": 1,
+            "title": "Zones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "zones",
+          "budget_max"
+        ],
+        "title": "CreateSearchProfileRequest",
+        "type": "object"
+      },
       "CurrentSession": {
         "additionalProperties": false,
         "properties": {
@@ -246,6 +332,190 @@
         "title": "Health",
         "type": "object"
       },
+      "KnownChangeModel": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "title": "After"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "change_type": {
+            "title": "Change Type",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "change_type",
+          "field",
+          "before",
+          "after"
+        ],
+        "title": "KnownChangeModel",
+        "type": "object"
+      },
+      "ListingDetailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "amenities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Amenities",
+            "type": "array"
+          },
+          "bedrooms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bedrooms"
+          },
+          "description_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Text"
+          },
+          "expenses_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expenses Value"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
+          "geo_precision": {
+            "title": "Geo Precision",
+            "type": "string"
+          },
+          "known_changes": {
+            "items": {
+              "$ref": "#/components/schemas/KnownChangeModel"
+            },
+            "title": "Known Changes",
+            "type": "array"
+          },
+          "listing_id": {
+            "format": "uuid",
+            "title": "Listing Id",
+            "type": "string"
+          },
+          "neighborhood": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neighborhood"
+          },
+          "normalization_errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Normalization Errors",
+            "type": "array"
+          },
+          "price_currency": {
+            "title": "Price Currency",
+            "type": "string"
+          },
+          "price_value": {
+            "title": "Price Value",
+            "type": "number"
+          },
+          "property_type": {
+            "title": "Property Type",
+            "type": "string"
+          },
+          "rooms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rooms"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "surface_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface M2"
+          },
+          "total_cost": {
+            "title": "Total Cost",
+            "type": "number"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "listing_id",
+          "source_id",
+          "geo_precision",
+          "total_cost",
+          "price_value",
+          "price_currency",
+          "property_type",
+          "amenities",
+          "normalization_errors",
+          "known_changes"
+        ],
+        "title": "ListingDetailResponse",
+        "type": "object"
+      },
       "MagicLinkConfirmation": {
         "additionalProperties": false,
         "properties": {
@@ -282,6 +552,186 @@
           "email"
         ],
         "title": "MagicLinkRequest",
+        "type": "object"
+      },
+      "MatchResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "contributions": {
+            "additionalProperties": true,
+            "title": "Contributions",
+            "type": "object"
+          },
+          "geo_precision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geo Precision"
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geometry"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "listing_id": {
+            "format": "uuid",
+            "title": "Listing Id",
+            "type": "string"
+          },
+          "neighborhood": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neighborhood"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "rooms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rooms"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "surface_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface M2"
+          },
+          "total_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "item_id",
+          "listing_id",
+          "score",
+          "position",
+          "contributions"
+        ],
+        "title": "MatchResponse",
+        "type": "object"
+      },
+      "MatchesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MatchResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_after_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After Position"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "run_state": {
+            "title": "Run State",
+            "type": "string"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_profile_id",
+          "run_id",
+          "run_state",
+          "items"
+        ],
+        "title": "MatchesResponse",
         "type": "object"
       },
       "Problem": {
@@ -367,6 +817,57 @@
           "correlation_id"
         ],
         "title": "Problem",
+        "type": "object"
+      },
+      "ProductEventRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          }
+        },
+        "required": [
+          "event_type",
+          "payload"
+        ],
+        "title": "ProductEventRequest",
+        "type": "object"
+      },
+      "ProductEventResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "event_version": {
+            "title": "Event Version",
+            "type": "integer"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "event_type",
+          "event_version",
+          "occurred_at"
+        ],
+        "title": "ProductEventResponse",
         "type": "object"
       },
       "QualityResponse": {
@@ -549,7 +1050,365 @@
         "title": "RunCountsModel",
         "type": "object"
       },
-      "RunResponse": {
+      "RuntimeVersion": {
+        "additionalProperties": false,
+        "description": "Immutable executing release identity.",
+        "properties": {
+          "artifact_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Artifact Digest",
+            "type": "string"
+          },
+          "built_at": {
+            "format": "date-time",
+            "title": "Built At",
+            "type": "string"
+          },
+          "contract_major": {
+            "const": 1,
+            "title": "Contract Major",
+            "type": "integer"
+          },
+          "database_revision": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Database Revision",
+            "type": "string"
+          },
+          "git_sha": {
+            "pattern": "^[0-9a-f]{40}$",
+            "title": "Git Sha",
+            "type": "string"
+          },
+          "manifest_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifest Sha256",
+            "type": "string"
+          },
+          "release_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Release Id",
+            "type": "string"
+          },
+          "surface": {
+            "enum": [
+              "web",
+              "api",
+              "worker",
+              "scheduler"
+            ],
+            "title": "Surface",
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "release_id",
+          "git_sha",
+          "artifact_digest",
+          "manifest_sha256",
+          "contract_major",
+          "database_revision",
+          "built_at"
+        ],
+        "title": "RuntimeVersion",
+        "type": "object"
+      },
+      "SearchProfileResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "budget_max": {
+            "title": "Budget Max",
+            "type": "number"
+          },
+          "budget_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Min"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/umbral__api__routers__search_profiles__RunResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "min_rooms": {
+            "title": "Min Rooms",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "paused",
+              "archived"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "surface_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Max"
+          },
+          "surface_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Min"
+          },
+          "unknown_strategy": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Unknown Strategy",
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "zones": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "search_profile_id",
+          "name",
+          "operation",
+          "zones",
+          "budget_max",
+          "min_rooms",
+          "status",
+          "unknown_strategy",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SearchProfileResponse",
+        "type": "object"
+      },
+      "StatusRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "active",
+              "paused",
+              "archived"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "StatusRequest",
+        "type": "object"
+      },
+      "UpdateSearchProfileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "budget_max": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Max"
+          },
+          "budget_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Min"
+          },
+          "min_rooms": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Rooms"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "surface_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Max"
+          },
+          "surface_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Min"
+          },
+          "zones": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zones"
+          }
+        },
+        "title": "UpdateSearchProfileRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "ValidationIssue": {
+        "additionalProperties": false,
+        "description": "Safe field-level validation metadata for RFC 9457 problems.",
+        "properties": {
+          "code": {
+            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "code"
+        ],
+        "title": "ValidationIssue",
+        "type": "object"
+      },
+      "umbral__api__routers__imports__RunResponse": {
         "additionalProperties": false,
         "properties": {
           "accepted": {
@@ -679,130 +1538,79 @@
         "title": "RunResponse",
         "type": "object"
       },
-      "RuntimeVersion": {
+      "umbral__api__routers__search_profiles__RunResponse": {
         "additionalProperties": false,
-        "description": "Immutable executing release identity.",
         "properties": {
-          "artifact_digest": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Artifact Digest",
-            "type": "string"
-          },
-          "built_at": {
-            "format": "date-time",
-            "title": "Built At",
-            "type": "string"
-          },
-          "contract_major": {
-            "const": 1,
-            "title": "Contract Major",
+          "candidate_count": {
+            "title": "Candidate Count",
             "type": "integer"
           },
-          "database_revision": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Database Revision",
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
             "type": "string"
           },
-          "git_sha": {
-            "pattern": "^[0-9a-f]{40}$",
-            "title": "Git Sha",
-            "type": "string"
-          },
-          "manifest_sha256": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Manifest Sha256",
-            "type": "string"
-          },
-          "release_id": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Release Id",
-            "type": "string"
-          },
-          "surface": {
-            "enum": [
-              "web",
-              "api",
-              "worker",
-              "scheduler"
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Surface",
+            "title": "Failure Code"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "published_item_count": {
+            "title": "Published Item Count",
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "score_policy_version": {
+            "title": "Score Policy Version",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "trigger": {
+            "title": "Trigger",
             "type": "string"
           }
         },
         "required": [
-          "surface",
-          "release_id",
-          "git_sha",
-          "artifact_digest",
-          "manifest_sha256",
-          "contract_major",
-          "database_revision",
-          "built_at"
+          "run_id",
+          "state",
+          "trigger",
+          "score_policy_version",
+          "candidate_count",
+          "published_item_count",
+          "created_at"
         ],
-        "title": "RuntimeVersion",
-        "type": "object"
-      },
-      "ValidationError": {
-        "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "title": "Location",
-            "type": "array"
-          },
-          "msg": {
-            "title": "Message",
-            "type": "string"
-          },
-          "type": {
-            "title": "Error Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError",
-        "type": "object"
-      },
-      "ValidationIssue": {
-        "additionalProperties": false,
-        "description": "Safe field-level validation metadata for RFC 9457 problems.",
-        "properties": {
-          "code": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Code",
-            "type": "string"
-          },
-          "field": {
-            "title": "Field",
-            "type": "string"
-          }
-        },
-        "required": [
-          "field",
-          "code"
-        ],
-        "title": "ValidationIssue",
+        "title": "RunResponse",
         "type": "object"
       }
     },
@@ -993,7 +1801,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunResponse"
+                  "$ref": "#/components/schemas/umbral__api__routers__imports__RunResponse"
                 }
               }
             },
@@ -1083,7 +1891,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunResponse"
+                  "$ref": "#/components/schemas/umbral__api__routers__imports__RunResponse"
                 }
               }
             },
@@ -1234,6 +2042,397 @@
         "summary": "Receive Email Event",
         "tags": [
           "Authentication"
+        ]
+      }
+    },
+    "/api/v1/listings/{listing_id}": {
+      "get": {
+        "operationId": "getListingDetail",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Listing Detail",
+        "tags": [
+          "Listings"
+        ]
+      }
+    },
+    "/api/v1/product-events": {
+      "post": {
+        "operationId": "emitProductEvent",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductEventResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "422": {
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Emit Product Event",
+        "tags": [
+          "Product Events"
+        ]
+      }
+    },
+    "/api/v1/search-profiles": {
+      "get": {
+        "operationId": "listSearchProfiles",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SearchProfileResponse"
+                  },
+                  "title": "Response Listsearchprofiles",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Search Profiles",
+        "tags": [
+          "Search Profiles"
+        ]
+      },
+      "post": {
+        "operationId": "createSearchProfile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSearchProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "422": {
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Create Search Profile",
+        "tags": [
+          "Search Profiles"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}": {
+      "get": {
+        "operationId": "getSearchProfile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Search Profile",
+        "tags": [
+          "Search Profiles"
+        ]
+      },
+      "patch": {
+        "operationId": "updateSearchProfile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSearchProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Update Search Profile",
+        "tags": [
+          "Search Profiles"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/matches": {
+      "get": {
+        "operationId": "listMatches",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Matches",
+        "tags": [
+          "Matches"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/status": {
+      "post": {
+        "operationId": "setSearchProfileStatus",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Search Profile Status",
+        "tags": [
+          "Search Profiles"
         ]
       }
     },

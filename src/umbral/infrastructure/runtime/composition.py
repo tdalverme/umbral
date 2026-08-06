@@ -18,6 +18,7 @@ from umbral.application.ingestion.service import ImportRunService
 from umbral.application.jobs.ports import JobQueue, JobRuntime
 from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.application.objects.ports import ObjectStore
+from umbral.application.radar.service import RadarService
 from umbral.application.runtime.readiness import (
     DependencyCheckName,
     ReadinessCheck,
@@ -46,6 +47,7 @@ from umbral.infrastructure.object_store.s3 import S3ObjectStore
 from umbral.infrastructure.observability.otel import record_dependency_metric
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
+from umbral.infrastructure.radar.composition import build_radar_service
 
 _MARKER_BODY = b"umbral-preview-readiness-v1"
 _MARKER_DIGEST = hashlib.sha256(_MARKER_BODY).hexdigest()
@@ -69,6 +71,7 @@ class RuntimeComposition:
     administration: AccessAdministration
     job_runtime: JobRuntime
     ingestion: ImportRunService
+    radar: RadarService
     readiness: ReadinessModule
 
 
@@ -144,6 +147,10 @@ def _compose_local(
         object_store=object_store,
         job_runtime=runtime,
     )
+    radar = build_radar_service(
+        session_factory=session_provider.session_factory,
+        job_runtime=runtime,
+    )
     readiness = ReadinessModule(
         surface="api",
         release_id=release.release_id,
@@ -160,7 +167,13 @@ def _compose_local(
         ),
     )
     return _runtime_graph(
-        object_store, identity_store, identity_access, runtime, ingestion, readiness
+        object_store,
+        identity_store,
+        identity_access,
+        runtime,
+        ingestion,
+        radar,
+        readiness,
     )
 
 
@@ -197,6 +210,10 @@ def _compose_preview(
         object_store=object_store,
         job_runtime=runtime,
     )
+    radar = build_radar_service(
+        session_factory=session_provider.session_factory,
+        job_runtime=runtime,
+    )
 
     def persistence() -> PersistenceProbe:
         return factories.persistence_probe(session_provider, release.database_revision)
@@ -223,7 +240,7 @@ def _compose_preview(
         ),
     )
     return _runtime_graph(
-        object_store, identity_store, identity_access, runtime, ingestion, readiness
+        object_store, identity_store, identity_access, runtime, ingestion, radar, readiness
     )
 
 
@@ -233,6 +250,7 @@ def _runtime_graph(
     identity_access: IdentityAccess,
     job_runtime: JobRuntime,
     ingestion: ImportRunService,
+    radar: RadarService,
     readiness: ReadinessModule,
 ) -> RuntimeComposition:
     return RuntimeComposition(
@@ -243,6 +261,7 @@ def _runtime_graph(
         administration=AccessAdministration(identity_store),
         job_runtime=job_runtime,
         ingestion=ingestion,
+        radar=radar,
         readiness=readiness,
     )
 

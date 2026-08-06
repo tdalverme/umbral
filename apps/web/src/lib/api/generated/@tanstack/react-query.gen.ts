@@ -3,8 +3,8 @@
 import { type DefaultError, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { confirmMagicLink, downloadImportQuality, getCurrentSession, getImportQuality, getImportRun, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, logoutCurrentSession, type Options, receiveResendEvent, requestMagicLink, submitImportBatch } from '../sdk.gen';
-import type { ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RequestMagicLinkData, RequestMagicLinkError, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse } from '../types.gen';
+import { confirmMagicLink, createSearchProfile, downloadImportQuality, emitProductEvent, getCurrentSession, getImportQuality, getImportRun, getListingDetail, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, getSearchProfile, listMatches, listSearchProfiles, logoutCurrentSession, type Options, receiveResendEvent, requestMagicLink, setSearchProfileStatus, submitImportBatch, updateSearchProfile } from '../sdk.gen';
+import type { ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, CreateSearchProfileData, CreateSearchProfileResponse, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, EmitProductEventData, EmitProductEventResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetListingDetailData, GetListingDetailError, GetListingDetailResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, GetSearchProfileData, GetSearchProfileError, GetSearchProfileResponse, ListMatchesData, ListMatchesError, ListMatchesResponse, ListSearchProfilesData, ListSearchProfilesError, ListSearchProfilesResponse, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RequestMagicLinkData, RequestMagicLinkError, SetSearchProfileStatusData, SetSearchProfileStatusError, SetSearchProfileStatusResponse, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse, UpdateSearchProfileData, UpdateSearchProfileResponse } from '../types.gen';
 
 /**
  * Logout
@@ -204,6 +204,146 @@ export const receiveResendEventMutation = (options?: Partial<Options<ReceiveRese
     const mutationOptions: UseMutationOptions<ReceiveResendEventResponse, ReceiveResendEventError, Options<ReceiveResendEventData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await receiveResendEvent({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const getListingDetailQueryKey = (options?: Options<GetListingDetailData>) => createQueryKey('getListingDetail', options);
+
+/**
+ * Get Listing Detail
+ */
+export const getListingDetailOptions = (options?: Options<GetListingDetailData>) => queryOptions<GetListingDetailResponse, GetListingDetailError, GetListingDetailResponse, ReturnType<typeof getListingDetailQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getListingDetail({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getListingDetailQueryKey(options)
+});
+
+/**
+ * Emit Product Event
+ */
+export const emitProductEventMutation = (options?: Partial<Options<EmitProductEventData>>): UseMutationOptions<EmitProductEventResponse, DefaultError, Options<EmitProductEventData>> => {
+    const mutationOptions: UseMutationOptions<EmitProductEventResponse, DefaultError, Options<EmitProductEventData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await emitProductEvent({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const listSearchProfilesQueryKey = (options?: Options<ListSearchProfilesData>) => createQueryKey('listSearchProfiles', options);
+
+/**
+ * List Search Profiles
+ */
+export const listSearchProfilesOptions = (options?: Options<ListSearchProfilesData>) => queryOptions<ListSearchProfilesResponse, ListSearchProfilesError, ListSearchProfilesResponse, ReturnType<typeof listSearchProfilesQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listSearchProfiles({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listSearchProfilesQueryKey(options)
+});
+
+/**
+ * Create Search Profile
+ */
+export const createSearchProfileMutation = (options?: Partial<Options<CreateSearchProfileData>>): UseMutationOptions<CreateSearchProfileResponse, DefaultError, Options<CreateSearchProfileData>> => {
+    const mutationOptions: UseMutationOptions<CreateSearchProfileResponse, DefaultError, Options<CreateSearchProfileData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await createSearchProfile({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const getSearchProfileQueryKey = (options?: Options<GetSearchProfileData>) => createQueryKey('getSearchProfile', options);
+
+/**
+ * Get Search Profile
+ */
+export const getSearchProfileOptions = (options?: Options<GetSearchProfileData>) => queryOptions<GetSearchProfileResponse, GetSearchProfileError, GetSearchProfileResponse, ReturnType<typeof getSearchProfileQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getSearchProfile({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getSearchProfileQueryKey(options)
+});
+
+/**
+ * Update Search Profile
+ */
+export const updateSearchProfileMutation = (options?: Partial<Options<UpdateSearchProfileData>>): UseMutationOptions<UpdateSearchProfileResponse, DefaultError, Options<UpdateSearchProfileData>> => {
+    const mutationOptions: UseMutationOptions<UpdateSearchProfileResponse, DefaultError, Options<UpdateSearchProfileData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateSearchProfile({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const listMatchesQueryKey = (options?: Options<ListMatchesData>) => createQueryKey('listMatches', options);
+
+/**
+ * List Matches
+ */
+export const listMatchesOptions = (options?: Options<ListMatchesData>) => queryOptions<ListMatchesResponse, ListMatchesError, ListMatchesResponse, ReturnType<typeof listMatchesQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listMatches({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listMatchesQueryKey(options)
+});
+
+/**
+ * Set Search Profile Status
+ */
+export const setSearchProfileStatusMutation = (options?: Partial<Options<SetSearchProfileStatusData>>): UseMutationOptions<SetSearchProfileStatusResponse, SetSearchProfileStatusError, Options<SetSearchProfileStatusData>> => {
+    const mutationOptions: UseMutationOptions<SetSearchProfileStatusResponse, SetSearchProfileStatusError, Options<SetSearchProfileStatusData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await setSearchProfileStatus({
                 ...options,
                 ...fnOptions,
                 throwOnError: true
