@@ -876,6 +876,18 @@ El orden recomendado para generar artefactos Spec Kit es:
   requieren Postgres/object storage corren vía testcontainers en CI
   (`scripts/check-imports.ps1`). La normalización Silver (H2.2) es el
   siguiente incremento del hito.
+- [x] `silver-normalization` — aceptado para cierre local con Docker; las 10
+  stories de la épica H2.2 (UM-H2-009 a UM-H2-018) están marcadas arriba. La
+  evidencia consolidada está en
+  `docs/runbooks/evidence/silver-normalization-acceptance.md`. El surface
+  completo (unit, contract, migración e integración con Postgres/PostGIS vía
+  testcontainers) pasa 60/60 con `scripts/check-silver.ps1` (registrado en
+  `check.ps1`). Incluye el fix quirúrgico del object-key de Bronze
+  (`objects/raw/<sha256>`) necesario para el E2E; quedan documentados como
+  pre-existentes los fallos de entorno de la suite de integración de Bronze
+  (InMemoryJobRuntime vs FK `job_execution_id`) y los lint/mypy de archivos
+  ajenos. El siguiente incremento del hito es `structured-search-radar`
+  (H2.3, UM-H2-019 a UM-H2-034).
 
 Cada incremento debe poder desplegarse, demostrarse y verificarse sin depender
 de que todo el producto este terminado.
