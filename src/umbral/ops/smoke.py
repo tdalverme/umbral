@@ -547,6 +547,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             print(f"SMOKE RESEND webhook events rows={rows!r}", file=sys.stderr)
             self._print_resend_webhooks()
             self._print_webhook_probe()
+            self._print_webhook_verified_probe()
             if provider_message_id:
                 self._print_provider_email_state(provider_message_id)
         except Exception as error:
@@ -627,6 +628,59 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         except Exception as error:
             print(
                 f"SMOKE RESEND email state failed: "
+                f"{type(error).__name__}: {error}",
+                file=sys.stderr,
+            )
+
+    def _print_webhook_verified_probe(self) -> None:
+        import base64
+        import hashlib
+        import hmac
+        import os as os_module
+        import time as time_module
+        from urllib.error import HTTPError
+        from urllib.request import Request, urlopen
+
+        if not self._web_origin:
+            return
+        secret = os_module.environ.get("EMAIL_WEBHOOK_SECRET", "")
+        if not secret:
+            return
+        payload = b'{"data":{"email_id":"umbral-sender-probe","event":"email.delivered"}}'
+        svix_id = "probe-" + uuid4().hex
+        svix_ts = str(int(time_module.time()))
+        message = f"{svix_id}.{svix_ts}.{payload.decode()}".encode()
+        signature = base64.b64encode(
+            hmac.new(secret.encode(), message, hashlib.sha256).digest()
+        ).decode()
+        request = Request(
+            f"{self._web_origin}/api/webhooks/email",
+            method="POST",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "svix-id": svix_id,
+                "svix-timestamp": svix_ts,
+                "svix-signature": f"v1={signature}",
+                "User-Agent": "curl/8.7.1",
+            },
+        )
+        try:
+            with urlopen(request, timeout=15) as response:  # noqa: S310
+                print(
+                    f"SMOKE RESEND webhook verified probe status={response.status}",
+                    file=sys.stderr,
+                )
+        except HTTPError as error:
+            body = error.read()
+            print(
+                f"SMOKE RESEND webhook verified probe status={error.code} "
+                f"body={body[:200]!r}",
+                file=sys.stderr,
+            )
+        except Exception as error:
+            print(
+                f"SMOKE RESEND webhook verified probe failed: "
                 f"{type(error).__name__}: {error}",
                 file=sys.stderr,
             )
@@ -1224,11 +1278,28 @@ def run_preview_identity_smoke(
     )
     def idle_expiry() -> tuple[str | None, bool]:
         if repeat_capture is None or _confirm_magic_link(config, http, *repeat_capture) != 204:
+            print(
+                f"SMOKE idle_expiry confirm failed "
+                f"repeat_capture={repeat_capture is not None}",
+                file=sys.stderr,
+            )
             return None, False
         active = _public_response(http, "GET", _url(config, "/api/auth/session"), None)
         payload = _json_object(active.body) if active.status_code == 200 else {}
         user_id = payload.get("user_id")
-        return None, isinstance(user_id, str) and observer.backdate_session(UUID(user_id), timeout_seconds=config.timeout_seconds) and _public_response(http, "GET", _url(config, "/api/auth/session"), None).status_code == 401
+        backdated = (
+            isinstance(user_id, str)
+            and observer.backdate_session(
+                UUID(user_id), timeout_seconds=config.timeout_seconds
+            )
+        )
+        after = _public_response(http, "GET", _url(config, "/api/auth/session"), None)
+        print(
+            f"SMOKE idle_expiry session={active.status_code} "
+            f"user_id={user_id!r} backdated={backdated} after={after.status_code}",
+            file=sys.stderr,
+        )
+        return None, backdated and after.status_code == 401
 
     check("idle_expiry", idle_expiry)
     for scenario in ("delivered", "bounced", "complained"):

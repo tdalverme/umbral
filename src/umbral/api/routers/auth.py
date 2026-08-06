@@ -152,7 +152,7 @@ async def get_current_session(request: Request, x_umbral_bff_token: str | None =
 
 
 @router.post("/auth/logout", operation_id="logoutCurrentSession", status_code=204, response_model=None)
-async def logout(request: Request, response: Response, x_umbral_bff_token: str | None = Header(default=None, include_in_schema=False), x_correlation_id: UUID | None = Header(default=None)) -> Response | JSONResponse:
+async def logout(request: Request, x_umbral_bff_token: str | None = Header(default=None, include_in_schema=False), x_correlation_id: UUID | None = Header(default=None)) -> Response:
     try:
         _check_bff(x_umbral_bff_token)
         token = request.cookies.get(_deps().settings.session_cookie_name)
@@ -160,6 +160,7 @@ async def logout(request: Request, response: Response, x_umbral_bff_token: str |
             _deps().identity_access.logout(token, now=datetime.now(timezone.utc), correlation_id=x_correlation_id)
     except IdentityError as error:
         return _problem(error, request)
-    response.delete_cookie(_deps().settings.session_cookie_name, path="/")
-    response.headers["Cache-Control"] = "private, no-store"
-    return response
+    logout_response = Response(status_code=204)
+    logout_response.delete_cookie(_deps().settings.session_cookie_name, path="/")
+    logout_response.headers["Cache-Control"] = "private, no-store"
+    return logout_response
