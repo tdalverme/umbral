@@ -324,51 +324,51 @@ busqueda, ejecuta hard filters y revisa matches persistentes de punta a punta.
 
 ## Epica H2.3 - Busqueda, matching baseline y radar
 
-- [ ] **UM-H2-019 [P0] [APP] Modelar search profiles y snapshots** — Incluye
+- [x] **UM-H2-019 [P0] [APP] Modelar search profiles y snapshots** — Incluye
   nombre, operacion alquiler, zonas CABA, presupuesto, ambientes, superficie,
   estado y politica inicial; cada cambio produce version.
-- [ ] **UM-H2-020 [P0] [APP] Implementar casos de uso de busqueda** — Crear,
+- [x] **UM-H2-020 [P0] [APP] Implementar casos de uso de busqueda** — Crear,
   listar, obtener, editar, pausar y archivar respetan ownership e invariantes.
   Depende de UM-H2-019.
-- [ ] **UM-H2-021 [P0] [APP] Exponer contratos HTTP de busqueda** — Actualiza
+- [x] **UM-H2-021 [P0] [APP] Exponer contratos HTTP de busqueda** — Actualiza
   OpenAPI y cliente web con errores de validacion y concurrencia tipados.
   Depende de UM-H2-020.
-- [ ] **UM-H2-022 [P0] [WEB] Construir onboarding estructurado del radar** —
+- [x] **UM-H2-022 [P0] [WEB] Construir onboarding estructurado del radar** —
   Permite definir presupuesto, zonas y requisitos P0 con shadcn forms,
   validacion accesible, resumen y confirmacion.
-- [ ] **UM-H2-023 [P0] [WEB] Construir selector y administracion de busquedas** —
+- [x] **UM-H2-023 [P0] [WEB] Construir selector y administracion de busquedas** —
   Lista activas, pausadas y archivadas, mantiene contexto en desktop/mobile y
   no mezcla datos entre radares.
-- [ ] **UM-H2-024 [P0] [APP] Implementar hard filters puros** — Presupuesto,
+- [x] **UM-H2-024 [P0] [APP] Implementar hard filters puros** — Presupuesto,
   operacion, ubicacion, ambientes y requisitos obligatorios tienen casos
   golden; desconocido sigue la politica explicita de cada filtro.
-- [ ] **UM-H2-025 [P0] [APP] Recuperar candidatos con SQL/PostGIS** — Aplica
+- [x] **UM-H2-025 [P0] [APP] Recuperar candidatos con SQL/PostGIS** — Aplica
   hard filters y paginacion estable sin embeddings ni LLM. Depende de
   UM-H2-012, UM-H2-019 y UM-H2-024.
-- [ ] **UM-H2-026 [P0] [APP] Calcular scoring baseline versionado** — Ordena
+- [x] **UM-H2-026 [P0] [APP] Calcular scoring baseline versionado** — Ordena
   candidatos por fit objetivo con tie-break estable y retorna contribuciones
   visibles.
-- [ ] **UM-H2-027 [P0] [APP] Persistir recommendation runs/items** — Congela
+- [x] **UM-H2-027 [P0] [APP] Persistir recommendation runs/items** — Congela
   profile snapshot, candidate set, score version, orden y tiempos antes de
   publicar resultados. Depende de UM-H2-026.
-- [ ] **UM-H2-028 [P0] [APP] Exponer listado y detalle de matches** — Incluye
+- [x] **UM-H2-028 [P0] [APP] Exponer listado y detalle de matches** — Incluye
   score, datos esenciales, fuente, precision geografica y lineage permitido.
-- [ ] **UM-H2-029 [P0] [WEB] Construir radar en cards y lista** — Muestra precio
+- [x] **UM-H2-029 [P0] [WEB] Construir radar en cards y lista** — Muestra precio
   total, barrio, superficie, ambientes, score, fuente y estados accesibles con
   paginacion.
-- [ ] **UM-H2-030 [P0] [WEB] Construir mapa sincronizado con resultados** —
+- [x] **UM-H2-030 [P0] [WEB] Construir mapa sincronizado con resultados** —
   Usa MapLibre, respeta precision geografica, sincroniza seleccion y no revela
   coordenadas mas precisas que las autorizadas.
-- [ ] **UM-H2-031 [P0] [WEB] Construir detalle de listing** — Muestra media,
+- [x] **UM-H2-031 [P0] [WEB] Construir detalle de listing** — Muestra media,
   atributos, fuente original, ubicacion, datos faltantes y cambios conocidos
   sin afirmaciones cualitativas no soportadas.
-- [ ] **UM-H2-032 [P0] [WEB] Completar estados responsive y de recuperacion** —
+- [x] **UM-H2-032 [P0] [WEB] Completar estados responsive y de recuperacion** —
   Radar, mapa y detalle distinguen loading, empty, parcial, error recuperable,
   no autorizado y no encontrado en desktop/mobile.
-- [ ] **UM-H2-033 [P0] [PROD] Instrumentar activacion y exploracion** — Emite
+- [x] **UM-H2-033 [P0] [PROD] Instrumentar activacion y exploracion** — Emite
   eventos versionados de crear radar, run publicado, impresion, vista y fuente
   abierta de acuerdo con UM-H0-013.
-- [ ] **UM-H2-034 [P0] [OPS] Verificar el recorrido E2E inicial** — Un lote con
+- [x] **UM-H2-034 [P0] [OPS] Verificar el recorrido E2E inicial** — Un lote con
   validos/invalidos produce reporte, entidades Silver, radar y detalles
   correctos sin duplicacion al reimportar.
 
@@ -852,8 +852,7 @@ El orden recomendado para generar artefactos Spec Kit es:
 1. `foundation-runtime`: UM-H1-001 a UM-H1-012, UM-H1-016 a UM-H1-020.
 2. `private-beta-identity`: UM-H1-023 y UM-H1-013 a UM-H1-015.
 3. `controlled-import`: UM-H2-001 a UM-H2-018.
-4. `structured-search-radar`: UM-H2-019 a UM-H2-034.
-5. `explainable-matching`: UM-H3-001 a UM-H3-022 y UM-H3-032 a UM-H3-035.
+4. `structured-search-radar`: UM-H2-019 a UM-H2-034.5. `explainable-matching`: UM-H3-001 a UM-H3-022 y UM-H3-032 a UM-H3-035.
 6. `feedback-learning`: UM-H3-023 a UM-H3-031.
 7. `conversational-radar`: UM-H4-001 a UM-H4-030.
 8. `proactive-alerts`: UM-H5-001 a UM-H5-020.
@@ -876,6 +875,19 @@ El orden recomendado para generar artefactos Spec Kit es:
   requieren Postgres/object storage corren vía testcontainers en CI
   (`scripts/check-imports.ps1`). La normalización Silver (H2.2) es el
   siguiente incremento del hito.
+- [x] `silver-normalization` — aceptado para cierre local; las 10 stories de
+  la épica H2.2 (UM-H2-009 a UM-H2-018) están marcadas arriba. La evidencia
+  consolidada está en
+  `docs/runbooks/evidence/silver-normalization-acceptance.md`. El radar
+  estructurado (H2.3) es el siguiente incremento del hito.
+- [x] `structured-search-radar` — aceptado para cierre local; las 16 stories
+  de la épica H2.3 (UM-H2-019 a UM-H2-034) están marcadas arriba. La evidencia
+  consolidada está en
+  `docs/runbooks/evidence/structured-search-radar-acceptance.md`. Quedan
+  diferidos a un seguimiento posterior: tests web dedicados (vitest y e2e con
+  axe), la auditoría de accesibilidad e2e y el gate completo desde checkout
+  limpio en CI. El matching explicable (H3) es el siguiente incremento del
+  hito.
 - [x] `silver-normalization` — aceptado para cierre local con Docker; las 10
   stories de la épica H2.2 (UM-H2-009 a UM-H2-018) están marcadas arriba. La
   evidencia consolidada está en
