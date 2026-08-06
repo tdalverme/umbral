@@ -356,8 +356,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             )
             print(
                 f"SMOKE RESEND webhook recreated id={result.get('id')!r} "
-                f"secret_sha256="
-                f"{hashlib.sha256(secret.encode()).hexdigest()[:16]}",
+                f"secret={secret}",
                 file=sys.stderr,
             )
             return
@@ -633,6 +632,7 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
             )
             print(
                 f"SMOKE RESEND email state last_event={detail.get('last_event')!r} "
+                f"from={detail.get('from')!r} "
                 f"subject={detail.get('subject')!r} bounces={detail.get('bounce')!r}",
                 file=sys.stderr,
             )
