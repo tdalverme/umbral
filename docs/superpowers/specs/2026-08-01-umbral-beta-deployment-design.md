@@ -361,3 +361,35 @@ The beta deployment design is complete when:
 - [Grafana Cloud pricing](https://grafana.com/pricing/)
 - [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys)
 - [Resend test email addresses](https://resend.com/docs/dashboard/emails/send-test-emails)
+
+## Close Status (2026-08-06)
+
+Estado de los exit criteria de este diseño tras el cierre del incremento
+`private-beta-identity`:
+
+| Exit criterion | Estado | Evidencia |
+| --- | --- | --- |
+| Public Railway web origin + private FastAPI boundary | Verificado | Smoke `runtime_identity` (surfaces web/api/worker/scheduler) contra `v0.2.18` |
+| Deploy exact-manifest sin rebuild | Verificado | Promote despliega digests del manifest a los 4 servicios |
+| Rollback exact-manifest sin rebuild | Implementado, no ejecutado | `scripts/deploy/rollback.ps1` real; aún no hay un manifiesto previo que haya pasado el smoke completo |
+| Supabase/Resend conformance dentro de DNS-free | Verificado | Dependencias preview: `supabase.issuer`, `supabase.reachability`, `resend.reachability` |
+| Supabase Free pause detection / recovery manual | Operacional, no verificado | Runbook `provision-railway.md` |
+| PostgreSQL/PostGIS/pgvector/Redis/object storage/Grafana/Sentry | Verificado | Conformance preview completo |
+| Evidencia SC-001–SC-010 | Verificado salvo benchmark SC-001 | `docs/runbooks/identity-access.md` |
+| Sin secret/bearer en source/logs/traces/Sentry/artifacts | Verificado en el flujo final | El smoke ya no imprime secretos a stdout; `EMAIL_WEBHOOK_SECRET` derivado del manifest |
+| Railway hard limit USD 20 y costo primera semana | Operacional, no verificado | Config en Railway; fuera del alcance de código |
+| Producción y custom-DNS listados como follow-up | Documentado | Secciones "DNS-Free Provider Testing" y este cierre |
+
+Notas de cierre:
+
+- Los eventos de delivery del smoke se entregan firmados por el propio smoke al
+  webhook del API (ver `identity-access.md`), porque Resend rechaza
+  `onboarding@resend.dev` hacia `@resend.dev` sin dominio verificado
+  (`domain_not_verified`). Esto prueba verificación Svix, dedupe y proyección de
+  audit; la entrega real del webhook por Resend queda como follow-up cuando
+  exista dominio verificado.
+- El `EMAIL_WEBHOOK_SECRET` se deriva del manifest (estable por release) y se
+  comparte entre API, worker y webhook; no requiere modificación manual en
+  Resend.
+- `v0.2.18` es el primer release que pasa el smoke completo; será el primer
+  blanco de rollback válido una vez exista `v0.2.19` o posterior.

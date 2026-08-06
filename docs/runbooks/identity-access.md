@@ -45,7 +45,7 @@ corridas previas documentadas en el ledger SDD (ver `.superpowers/sdd/
 
 | SC | Criterio | Evidencia | Estado |
 | --- | --- | --- | --- |
-| SC-001 | 20 viajes de primer acceso <3 min | `tests/e2e/identity.spec.ts` (7 escenarios, 1 worker) | 7 escenarios verificados (2026-08-04); 20 viajes cronometrados pendientes en preview |
+| SC-001 | 20 viajes de primer acceso <3 min | `tests/e2e/identity.spec.ts` (7 escenarios, 1 worker); smoke preview 15/15 contra el manifiesto vigente | 7 escenarios verificados (2026-08-04); smoke preview 15/15 contra `v0.2.18` (2026-08-06); 20 viajes cronometrados pendientes en preview |
 | SC-002 | 100% corpus no-invitado/deshabilitado/vencido/reutilizado/reemplazado/alterado rechazado sin revelar membresía | unit `test_link_state.py`, `test_access_flow.py`; contract `test_identity_provider.py`; e2e login/capture/expired | verificado (80 regresión + 7 e2e) |
 | SC-003 | 100% matriz identidad/estado/rol/ownership deny-by-default, cero cross-user | unit `test_policy.py`; integración `test_authorization_matrix.py` | verificado (unit + 22 PostgreSQL) |
 | SC-004 | 10 duplicados → máximo 1 consumo/usuario/vínculo/sesión | integración `test_magic_link_flow.py::test_ten_duplicate_confirmations_create_one_session`; conformance `test_concurrent_confirmation_consumes_one_attempt_once` | verificado real-Postgres (2026-08-04) |
@@ -70,6 +70,14 @@ provider-conformance/recovery en task 13. El smoke de release local
   sin signup abierto ni claves de browser expuestas.
 - Resend: el dominio/test mode no puede enviar como producción; click/open
   tracking desactivado; webhook firmado y deduplicado por evento del proveedor.
+- Sin dominio verificado propio, Resend rechaza el envío desde
+  `onboarding@resend.dev` a los buzones de test `@resend.dev`
+  (`domain_not_verified`), por lo que el smoke de preview entrega los eventos
+  de delivery (`email.delivered`/`email.bounced`/`email.complained`) firmados
+  con el `EMAIL_WEBHOOK_SECRET` compartido directamente al webhook del API.
+  Eso sigue ejerciendo verificación Svix, dedupe por evento y la proyección
+  `magic_link.delivery_observed`; no prueba la entrega del webhook por Resend.
+  Revisitar cuando exista un dominio verificado.
 - Cambiar la vigencia de 15 minutos del enlace requiere evidencia y una
   actualización explícita de la especificación; no se extiende por decisión de
   runtime.
@@ -84,9 +92,9 @@ provider-conformance/recovery en task 13. El smoke de release local
   (`scripts/deploy/smoke.ps1 -Mode preview -BaseUrl <origin>`), que requiere
   preview desplegado, `UMBRAL_SMOKE_INVITEE`,
   `UMBRAL_SMOKE_OPERATOR_DATABASE_URL` y token de observación Resend. El commit
-  `49a7c6e` ejecutó la corrida real el 2026-08-01; el worktree extiende el smoke
-  a 15 escenarios y necesita una nueva corrida para cerrar SC-001 y el
-  manifiesto vigente.
+  `49a7c6e` ejecutó la corrida real el 2026-08-01; el worktree extendió el smoke
+  a 15 escenarios y la corrida contra `v0.2.18` (2026-08-06) pasó 15/15. El
+  benchmark de 20 viajes cronometrados de SC-001 sigue pendiente en preview.
 - Medir el rollback de producción <15 min; `docs/runbooks/evidence/
   us4-production-rollback.md` registra que no se ejecutó remotamente.
 - Alinear `docs/runbooks/evidence/us4-preview-release.md` con la plataforma
