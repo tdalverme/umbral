@@ -344,11 +344,6 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 for item in data
             )
             if exists:
-                print(
-                    f"SMOKE RESEND webhook exists endpoint={expected} "
-                    f"secret={secret}",
-                    file=sys.stderr,
-                )
                 return
             result = self._resend_json(
                 "POST",
@@ -356,11 +351,8 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
                 {"endpoint": expected, "events": events, "secret": secret},
                 monotonic() + 15,
             )
-            print(
-                f"SMOKE RESEND webhook created id={result.get('id')!r} "
-                f"secret={secret}",
-                file=sys.stderr,
-            )
+            if not isinstance(result.get("id"), str):
+                raise ValueError("resend webhook creation did not return an id")
             return
         except Exception as error:
             print(
@@ -432,11 +424,14 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         )
         try:
             with urlopen(request, timeout=15) as response:  # noqa: S310
-                print(
-                    f"SMOKE RESEND delivered {scenario} webhook status={response.status}",
-                    file=sys.stderr,
-                )
-                return int(response.status) == 204
+                ok = int(response.status) == 204
+                if not ok:
+                    print(
+                        f"SMOKE RESEND delivered {scenario} webhook "
+                        f"status={response.status}",
+                        file=sys.stderr,
+                    )
+                return ok
         except HTTPError as error:
             body = error.read()
             print(
