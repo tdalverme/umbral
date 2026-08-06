@@ -115,6 +115,13 @@ async def confirm_magic_link(
         result = _deps().identity_access.confirm_magic_link(attempt_id=payload.attempt_id, token_hash=payload.token_hash, now=datetime.now(timezone.utc))
     except IdentityError as error:
         return _problem(error, request)
+    except Exception as error:
+        return JSONResponse(
+            status_code=500,
+            media_type="application/json",
+            content={"code": "internal_error", "detail": f"{type(error).__name__}: {error}"},
+            headers={"Cache-Control": "no-store"},
+        )
     response.set_cookie(
         key=_deps().settings.session_cookie_name,
         value=result.token,
