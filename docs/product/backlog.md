@@ -909,6 +909,21 @@ El orden recomendado para generar artefactos Spec Kit es:
   de H2.3), copy de incertidumbre revisado con producto (UM-H0-007) y gate
   completo desde checkout limpio en CI. El feedback y el aprendizaje controlado
   (H3.3) son el siguiente incremento del hito.
+- [x] `feedback-learning` — aceptado para cierre local; las 9 stories de la
+  épica H3.3 (UM-H3-023 a UM-H3-031) están marcadas arriba. La evidencia
+  consolidada está en
+  `docs/runbooks/evidence/feedback-learning-acceptance.md`. El harness
+  `scripts/check-feedback.ps1` está registrado en `check.ps1`; la migración
+  `0008_feedback_learning` y el cliente web regenerado (feedback, decision
+  items, learning proposals) verificados. Decisiones de clarificación: solo
+  like/dislike con razones ligadas a conceptos cuentan como señales; feedback
+  libre como insumo cualitativo (0 texto en eventos); propuestas descubiertas
+  con banner inline en el radar; política de aprendizaje versionada y
+  determinista. Diferidos a seguimiento: component tests web dedicados
+  (convención de H2.3), copy del feedback libre y del historial revisado con
+  producto (UM-H0-007), actualización de `runtime-local.md` (completada) y
+  gate completo desde checkout limpio en CI. El siguiente incremento del hito
+  es `conversational-radar` (H4, UM-H4-001 a UM-H4-030).
 - [x] `silver-normalization` — aceptado para cierre local con Docker; las 10
   stories de la épica H2.2 (UM-H2-009 a UM-H2-018) están marcadas arriba. La
   evidencia consolidada está en
