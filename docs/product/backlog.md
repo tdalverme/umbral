@@ -382,69 +382,69 @@ features, scoring y evidencia; todo feedback persiste como evento.
 
 ## Epica H3.1 - Criterios y observaciones
 
-- [ ] **UM-H3-001 [P0] [APP] Implementar concept registry v1** — Registra
+- [x] **UM-H3-001 [P0] [APP] Implementar concept registry v1** — Registra
   conceptos curados, aliases, matcher type, fuente, defaults y politica de
   computo; los cambios son versionados.
-- [ ] **UM-H3-002 [P0] [APP] Modelar preference facts** — Guarda valor, peso,
+- [x] **UM-H3-002 [P0] [APP] Modelar preference facts** — Guarda valor, peso,
   polaridad, confianza, fuente, validez y alcance por busqueda.
-- [ ] **UM-H3-003 [P0] [APP] Modelar profile criteria ejecutables** — Separa
+- [x] **UM-H3-003 [P0] [APP] Modelar profile criteria ejecutables** — Separa
   memoria semantica de instrucciones evaluables y valida matcher types y
   parametros permitidos.
-- [ ] **UM-H3-004 [P0] [APP] Compilar ediciones estructuradas a criterios** —
+- [x] **UM-H3-004 [P0] [APP] Compilar ediciones estructuradas a criterios** —
   Produce un conjunto ordenado/versionado con advertencias y no convierte
   preferencias blandas en hard filters sin confirmacion.
-- [ ] **UM-H3-005 [P0] [DATA] Modelar listing observations** — Cada observacion
+- [x] **UM-H3-005 [P0] [DATA] Modelar listing observations** — Cada observacion
   conserva concepto, valor, score, confianza, evidencia, fuente, modelo/prompt
   o regla, version y timestamp.
-- [ ] **UM-H3-006 [P0] [DATA] Extraer features objetivas con reglas** — Balcon,
+- [x] **UM-H3-006 [P0] [DATA] Extraer features objetivas con reglas** — Balcon,
   ambientes, piso, tipo de cocina y otras señales textuales verificables tienen
   evidencia de fragmento y casos golden.
-- [ ] **UM-H3-007 [P0] [DATA] Extraer features cualitativas con salida
+- [x] **UM-H3-007 [P0] [DATA] Extraer features cualitativas con salida
   estructurada** — El modelo solo produce esquemas permitidos, evidencia y
   confianza; resultados invalidos se rechazan o reintentan de forma acotada.
-- [ ] **UM-H3-008 [P0] [AGENT] Versionar modelos, prompts y schemas de
+- [x] **UM-H3-008 [P0] [AGENT] Versionar modelos, prompts y schemas de
   extraccion** — Toda observacion generativa referencia versiones inmutables y
   permite reproducir el input permitido.
-- [ ] **UM-H3-009 [P1] [DATA] Generar embeddings de listings normalizados** —
+- [x] **UM-H3-009 [P1] [DATA] Generar embeddings de listings normalizados** —
   Indexa texto/features permitidos en pgvector con modelo y version, nunca raw
   HTML ni PII.
-- [ ] **UM-H3-010 [P1] [DATA] Incorporar contexto urbano inicial** — Importa o
+- [x] **UM-H3-010 [P1] [DATA] Incorporar contexto urbano inicial** — Importa o
   consulta de forma cacheada cafes, transporte y espacios verdes; cada señal
   guarda fuente, fecha, geometria y algoritmo.
-- [ ] **UM-H3-011 [P0] [DATA] Implementar recomputacion selectiva** — Un cambio
+- [x] **UM-H3-011 [P0] [DATA] Implementar recomputacion selectiva** — Un cambio
   de parser, prompt, modelo o concepto invalida solo observaciones afectadas y
   preserva versiones previas usadas.
 
 ## Epica H3.2 - Scoring y explicaciones
 
-- [ ] **UM-H3-012 [P0] [APP] Definir scoring policy v1** — Fija criterios,
+- [x] **UM-H3-012 [P0] [APP] Definir scoring policy v1** — Fija criterios,
   pesos, normalizacion, gates, confianza, bonuses, penalizaciones y tie-breaks
   en una version inmutable.
-- [ ] **UM-H3-013 [P0] [APP] Implementar evaluadores genericos iniciales** —
+- [x] **UM-H3-013 [P0] [APP] Implementar evaluadores genericos iniciales** —
   Numeric range, categorical, geo proximity y semantic feature comparten un
   contrato pequeño y retornan score/confianza/evidencia.
-- [ ] **UM-H3-014 [P0] [APP] Diferenciar desconocido de evidencia negativa** —
+- [x] **UM-H3-014 [P0] [APP] Diferenciar desconocido de evidencia negativa** —
   Casos golden demuestran que falta de datos baja confianza y no equivale a un
   mismatch observado.
-- [ ] **UM-H3-015 [P0] [APP] Evaluar criterios contra listings** — Persiste
+- [x] **UM-H3-015 [P0] [APP] Evaluar criterios contra listings** — Persiste
   criterion evaluations con inputs versionados, contribucion y razon.
-- [ ] **UM-H3-016 [P0] [APP] Calcular scoring v1 puro y deterministico** — La
+- [x] **UM-H3-016 [P0] [APP] Calcular scoring v1 puro y deterministico** — La
   misma entrada produce el mismo orden y desglose sin llamadas a red, DB o LLM.
-- [ ] **UM-H3-017 [P0] [APP] Publicar recommendation runs atomicos** — Un run
+- [x] **UM-H3-017 [P0] [APP] Publicar recommendation runs atomicos** — Un run
   fallido no reemplaza el ultimo run valido y registra la causa.
-- [ ] **UM-H3-018 [P0] [APP] Generar explicaciones desde evidencia** — Produce
+- [x] **UM-H3-018 [P0] [APP] Generar explicaciones desde evidencia** — Produce
   razones, riesgos, datos faltantes y confianza a partir del desglose; el texto
   generativo opcional no puede agregar hechos.
-- [ ] **UM-H3-019 [P0] [APP] Exponer explicacion por listing y busqueda** —
+- [x] **UM-H3-019 [P0] [APP] Exponer explicacion por listing y busqueda** —
   Devuelve score version, profile snapshot, feature snapshot, criterios y
   evidence refs con permisos.
-- [ ] **UM-H3-020 [P0] [APP] Implementar comparacion estructurada** — Compara
+- [x] **UM-H3-020 [P0] [APP] Implementar comparacion estructurada** — Compara
   hasta el limite definido usando dimensiones homogeneas, faltantes y
   tradeoffs; no inventa un ganador generativo.
-- [ ] **UM-H3-021 [P0] [WEB] Mostrar razones, riesgos e incertidumbre** — Cards y
+- [x] **UM-H3-021 [P0] [WEB] Mostrar razones, riesgos e incertidumbre** — Cards y
   detalle distinguen evidencia fuerte/media/baja, desconocidos y filtros
   cumplidos sin presentar scores como certeza.
-- [ ] **UM-H3-022 [P1] [WEB] Construir comparador persistente** — Selecciona
+- [x] **UM-H3-022 [P1] [WEB] Construir comparador persistente** — Selecciona
   listings del mismo radar, conserva shortlist y muestra una matriz responsive
   con dimensiones auditables.
 
@@ -888,6 +888,27 @@ El orden recomendado para generar artefactos Spec Kit es:
   axe), la auditoría de accesibilidad e2e y el gate completo desde checkout
   limpio en CI. El matching explicable (H3) es el siguiente incremento del
   hito.
+- [x] `criteria-observations` — aceptado para cierre local; las 11 stories de
+  la épica H3.1 (UM-H3-001 a UM-H3-011) están marcadas arriba. La evidencia
+  consolidada está en
+  `docs/runbooks/evidence/criteria-observations-acceptance.md`. El harness
+  `scripts/check-criteria.ps1` está registrado en `check.ps1`. Diferidos a
+  seguimiento: elección de proveedor concreto de extracción/embeddings (ADR
+  del plan) y el gate completo desde checkout limpio en CI. El scoring y las
+  explicaciones (H3.2) son el siguiente incremento del hito.
+- [x] `scoring-explanations` — aceptado para cierre local; las 11 stories de
+  la épica H3.2 (UM-H3-012 a UM-H3-022) están marcadas arriba. La evidencia
+  consolidada está en
+  `docs/runbooks/evidence/scoring-explanations-acceptance.md`. El harness
+  `scripts/check-scoring.ps1` está registrado en `check.ps1`; el cliente web
+  regenerado desde OpenAPI (explicaciones, comparación y shortlist) y la
+  migración `0007_scoring_explanations` verificada. Decisiones de
+  clarificación: copy determinista sin LLM en v1, runs congelados sin
+  invalidación automática, legacy visible sin desglose, dimensiones mixtas del
+  comparador. Diferidos a seguimiento: component tests web dedicados (convención
+  de H2.3), copy de incertidumbre revisado con producto (UM-H0-007) y gate
+  completo desde checkout limpio en CI. El feedback y el aprendizaje controlado
+  (H3.3) son el siguiente incremento del hito.
 - [x] `silver-normalization` — aceptado para cierre local con Docker; las 10
   stories de la épica H2.2 (UM-H2-009 a UM-H2-018) están marcadas arriba. La
   evidencia consolidada está en
