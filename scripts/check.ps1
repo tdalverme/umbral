@@ -108,6 +108,14 @@ try {
         Invoke-ChildCheck -Name "Scoring" -Path (Join-Path $PSScriptRoot "check-scoring.ps1")
     }
 
+    $feedbackSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\feedback"),
+        (Join-Path $repoRoot "tests\integration\feedback")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($feedbackSurface) {
+        Invoke-ChildCheck -Name "Feedback" -Path (Join-Path $PSScriptRoot "check-feedback.ps1")
+    }
+
     $storageSurface = @(
         (Join-Path $repoRoot "src\umbral\application\objects"),
         (Join-Path $repoRoot "tests\contract\test_object_store.py")

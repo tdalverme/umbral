@@ -1,0 +1,64 @@
+{
+  "valid": [
+    {
+      "id": "seed",
+      "reason": {
+        "key": "price_too_high",
+        "label": "Precio demasiado alto",
+        "polarity": "negative",
+        "concept_key": null,
+        "allowed_on": ["dislike", "dismiss"]
+      },
+      "concepts": ["balcon", "ambientes", "piso", "tipo_cocina", "luminosidad", "estado_general"]
+    },
+    {
+      "id": "concept_linked",
+      "reason": {
+        "key": "rooms_wrong",
+        "label": "Ambientes no me sirven",
+        "polarity": "negative",
+        "concept_key": "ambientes",
+        "allowed_on": ["dislike", "dismiss"]
+      },
+      "concepts": ["balcon", "ambientes", "piso", "tipo_cocina", "luminosidad", "estado_general"]
+    }
+  ],
+  "invalid": [
+    {
+      "id": "unknown_concept",
+      "reason": {
+        "key": "ghost",
+        "label": "x",
+        "polarity": "negative",
+        "concept_key": "no_such_concept",
+        "allowed_on": ["dislike"]
+      },
+      "concepts": ["ambientes"],
+      "expected_code": "quick_reasons.unknown_concept"
+    },
+    {
+      "id": "invalid_polarity",
+      "reason": {
+        "key": "bad",
+        "label": "x",
+        "polarity": "sideways",
+        "concept_key": null,
+        "allowed_on": ["dislike"]
+      },
+      "concepts": ["ambientes"],
+      "expected_code": "quick_reasons.invalid_polarity"
+    },
+    {
+      "id": "missing_allowed_on",
+      "reason": {
+        "key": "bad",
+        "label": "x",
+        "polarity": "negative",
+        "concept_key": null,
+        "allowed_on": []
+      },
+      "concepts": ["ambientes"],
+      "expected_code": "quick_reasons.allowed_on_required"
+    }
+  ]
+}

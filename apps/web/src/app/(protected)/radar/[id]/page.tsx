@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { RadarMap, matchPoints } from "@/components/radar/map";
-import { radarApi, type Explanation, type MatchItem, type SearchProfile } from "@/lib/radar/client";
+import { FeedbackActions } from "@/components/radar/feedback-actions";
+import { ProposalBanner } from "@/components/radar/proposal-banner";
+import { radarApi, type Explanation, type FeedbackEventType, type MatchItem, type SearchProfile } from "@/lib/radar/client";
 import { emitExplanationViewed, emitImpression } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
 
@@ -63,6 +65,7 @@ export default function RadarViewPage(): React.ReactElement {
   const [legacyRun, setLegacyRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [decisionStates, setDecisionStates] = useState<Record<string, FeedbackEventType | null>>({});
   const emittedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -111,6 +114,9 @@ export default function RadarViewPage(): React.ReactElement {
           setRunState(page.run_state);
           setNextAfter(page.next_after_position);
           setError(null);
+          const states: Record<string, FeedbackEventType | null> = {};
+          for (const item of page.items) states[item.listing_id] = item.decision_state ?? null;
+          setDecisionStates(states);
           if (page.run_state === "succeeded") loadExplanations(page.run_id);
           page.items.forEach((item) => {
             const key = `${page.run_id}:${item.listing_id}`;
@@ -235,6 +241,12 @@ export default function RadarViewPage(): React.ReactElement {
           <Link href={`/radar/${profileId}/compare`}>
             <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80">Comparar</Button>
           </Link>
+          <Link href={`/radar/${profileId}/shortlist`}>
+            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80">Guardados</Button>
+          </Link>
+          <Link href={`/radar/${profileId}/dismissed`}>
+            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80">Descartados</Button>
+          </Link>
         </div>
       </div>
 
@@ -262,6 +274,8 @@ export default function RadarViewPage(): React.ReactElement {
           run.
         </Alert>
       )}
+
+      <ProposalBanner profileId={profileId} onDecision={() => setReloadKey((current) => current + 1)} />
 
       {!generating && runState === "failed" && (
         <Alert role="alert">
@@ -320,6 +334,17 @@ export default function RadarViewPage(): React.ReactElement {
                       </CardContent>
                     </Card>
                   </Link>
+                  <div className="mt-2 pl-1">
+                    <FeedbackActions
+                      profileId={profileId}
+                      listingId={item.listing_id}
+                      runId={runId}
+                      initialDecisionState={decisionStates[item.listing_id]}
+                      onStateChange={(state) =>
+                        setDecisionStates((current) => ({ ...current, [item.listing_id]: state }))
+                      }
+                    />
+                  </div>
                 </li>
               );
             })}

@@ -1,0 +1,90 @@
+{
+  "contract_version": "1",
+  "registry_version": "quick-reasons-v1",
+  "reasons": [
+    {
+      "key": "price_too_high",
+      "label": "Precio demasiado alto",
+      "polarity": "negative",
+      "concept_key": null,
+      "allowed_on": ["dislike", "dismiss"]
+    },
+    {
+      "key": "price_fits",
+      "label": "Precio acorde",
+      "polarity": "positive",
+      "concept_key": null,
+      "allowed_on": ["like", "save"]
+    },
+    {
+      "key": "expensas_high",
+      "label": "Expensas altas",
+      "polarity": "negative",
+      "concept_key": null,
+      "allowed_on": ["dislike", "dismiss"]
+    },
+    {
+      "key": "location_no",
+      "label": "Ubicacion no me sirve",
+      "polarity": "negative",
+      "concept_key": null,
+      "allowed_on": ["dislike", "dismiss"]
+    },
+    {
+      "key": "location_yes",
+      "label": "Buena ubicacion",
+      "polarity": "positive",
+      "concept_key": null,
+      "allowed_on": ["like", "save"]
+    },
+    {
+      "key": "rooms_wrong",
+      "label": "Ambientes no me sirven",
+      "polarity": "negative",
+      "concept_key": "ambientes",
+      "allowed_on": ["dislike", "dismiss"]
+    },
+    {
+      "key": "surface_wrong",
+      "label": "Superficie chica",
+      "polarity": "negative",
+      "concept_key": null,
+      "allowed_on": ["dislike", "dismiss"]
+    },
+    {
+      "key": "building_state",
+      "label": "Estado del edificio",
+      "polarity": "negative",
+      "concept_key": "estado_general",
+      "allowed_on": ["dislike", "dismiss"]
+    },
+    {
+      "key": "lighting_bad",
+      "label": "Poca luz",
+      "polarity": "negative",
+      "concept_key": "luminosidad",
+      "allowed_on": ["dislike", "dismiss"]
+    },
+    {
+      "key": "balcony_wanted",
+      "label": "Quiero balcon",
+      "polarity": "positive",
+      "concept_key": "balcon",
+      "allowed_on": ["like", "save"]
+    },
+    {
+      "key": "access_ok",
+      "label": "Buen acceso a transporte",
+      "polarity": "positive",
+      "concept_key": null,
+      "allowed_on": ["like", "save"]
+    },
+    {
+      "key": "other",
+      "label": "Otra razon",
+      "polarity": "neutral",
+      "concept_key": null,
+      "allowed_on": ["like", "dislike", "save", "dismiss", "contacted"]
+    }
+  ]
+}

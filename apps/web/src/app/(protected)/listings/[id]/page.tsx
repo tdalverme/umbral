@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { FeedbackActions } from "@/components/radar/feedback-actions";
 import { radarApi, type Explanation, type ListingDetail } from "@/lib/radar/client";
 import { emitDetailViewed, emitExplanationViewed, emitSourceOpened } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
@@ -159,6 +160,12 @@ export default function ListingDetailPage(): React.ReactElement {
         </div>
       )}
 
+      {profileId && (
+        <div className="mb-4">
+          <FeedbackActions profileId={profileId} listingId={listingId} runId={runId || null} />
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader>
@@ -231,20 +238,30 @@ export default function ListingDetailPage(): React.ReactElement {
         </Alert>
       )}
 
-      {detail.known_changes.length > 0 && (
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle className="text-lg">Cambios conocidos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1 text-sm">
-            {detail.known_changes.map((change, index) => (
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle className="text-lg">Historial de precio y cambios</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1 text-sm">
+          {detail.known_changes.length > 0 ? (
+            detail.known_changes.map((change, index) => (
               <p key={`${change.field}-${index}`}>
                 <strong>{change.field}:</strong> {String(change.before)} → {String(change.after)}
+                {change.observed_at ? ` · ${change.observed_at}` : ""}
+                {change.source ? ` · fuente ${change.source}` : ""}
               </p>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+            ))
+          ) : (
+            <p className="text-muted-foreground">
+              Historial insuficiente: todavía no hay suficientes versiones observadas para mostrar cambios confirmados.
+            </p>
+          )}
+          <p className="pt-1 text-xs text-muted-foreground">
+            Se muestran solo cambios confirmados con su fecha y fuente; no se infieren tendencias con muestra
+            insuficiente.
+          </p>
+        </CardContent>
+      </Card>
 
       {detail.description_text && (
         <Card className="mt-4">

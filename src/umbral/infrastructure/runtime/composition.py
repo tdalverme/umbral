@@ -10,6 +10,8 @@ from typing import Any, Literal, cast
 
 from redis import Redis
 
+from umbral.application.criteria.service import CriteriaService
+from umbral.application.feedback.service import FeedbackService
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.identity.administration import AccessAdministration
 from umbral.application.identity.authorization import AccessControl
@@ -29,6 +31,7 @@ from umbral.application.runtime.readiness import (
 from umbral.application.runtime.version import ReleaseManifest
 from umbral.application.scoring.service import ScoringService
 from umbral.infrastructure.config.settings import Settings
+from umbral.infrastructure.criteria.composition import build_criteria_service
 from umbral.infrastructure.db.readiness import PersistenceProbe
 from umbral.infrastructure.db.repositories.identity import (
     InMemoryIdentityStore,
@@ -36,6 +39,7 @@ from umbral.infrastructure.db.repositories.identity import (
 )
 from umbral.infrastructure.db.session import SessionProvider
 from umbral.infrastructure.email.resend import ResendEmailAdapter
+from umbral.infrastructure.feedback.composition import build_feedback_service
 from umbral.infrastructure.identity.registry import (
     IdentityProviderRegistry,
     build_identity_registry,
@@ -75,6 +79,8 @@ class RuntimeComposition:
     ingestion: ImportRunService
     radar: RadarService
     scoring: ScoringService | None
+    criteria: CriteriaService | None
+    feedback: FeedbackService | None
     readiness: ReadinessModule
 
 
@@ -157,6 +163,21 @@ def _compose_local(
         policy_engine=scoring,
         score_policy_version=settings.scoring_policy_seed_version,
     )
+    criteria = _build_and_bind_criteria(settings, session_provider, runtime)
+    feedback = build_feedback_service(
+        session_factory=session_provider.session_factory,
+        policy_seed_version=settings.learning_policy_seed_version,
+        quick_reasons_seed_version=settings.feedback_quick_reasons_seed_version,
+        free_feedback_enabled=settings.feedback_free_feedback_enabled,
+        max_free_feedback_length=settings.feedback_max_free_feedback_length,
+        radar=radar,
+        criteria=criteria,
+    )
+    radar.bind_decision_states(
+        lambda owner, pid, lids: feedback.decision_states(
+            owner_id=owner, profile_id=pid, listing_ids=lids
+        )
+    )
     readiness = ReadinessModule(
         surface="api",
         release_id=release.release_id,
@@ -180,6 +201,8 @@ def _compose_local(
         ingestion,
         radar,
         scoring,
+        criteria,
+        feedback,
         readiness,
     )
 
@@ -224,6 +247,21 @@ def _compose_preview(
         policy_engine=scoring,
         score_policy_version=settings.scoring_policy_seed_version,
     )
+    criteria = _build_and_bind_criteria(settings, session_provider, runtime)
+    feedback = build_feedback_service(
+        session_factory=session_provider.session_factory,
+        policy_seed_version=settings.learning_policy_seed_version,
+        quick_reasons_seed_version=settings.feedback_quick_reasons_seed_version,
+        free_feedback_enabled=settings.feedback_free_feedback_enabled,
+        max_free_feedback_length=settings.feedback_max_free_feedback_length,
+        radar=radar,
+        criteria=criteria,
+    )
+    radar.bind_decision_states(
+        lambda owner, pid, lids: feedback.decision_states(
+            owner_id=owner, profile_id=pid, listing_ids=lids
+        )
+    )
 
     def persistence() -> PersistenceProbe:
         return factories.persistence_probe(session_provider, release.database_revision)
@@ -257,6 +295,8 @@ def _compose_preview(
         ingestion,
         radar,
         scoring,
+        criteria,
+        feedback,
         readiness,
     )
 
@@ -276,6 +316,28 @@ def _build_and_bind_scoring(
     )
 
 
+def _build_and_bind_criteria(
+    settings: Settings,
+    session_provider: SessionProvider,
+    runtime: JobRuntime,
+) -> CriteriaService:
+    return build_criteria_service(
+        session_factory=session_provider.session_factory,
+        job_runtime=runtime,
+        extraction_provider=settings.extraction_provider,
+        extraction_endpoint=None,
+        extraction_api_key=settings.extraction_managed_api_key,
+        extraction_model=settings.extraction_managed_model,
+        qualitative_max_attempts=settings.criteria_qualitative_max_attempts,
+        batch_size=settings.criteria_batch_size,
+        extraction_job_type=settings.criteria_extraction_job_type,
+        recompute_job_type=settings.criteria_recompute_job_type,
+        embeddings_enabled=settings.embeddings_enabled,
+        embedding_model_version_key=settings.embeddings_model_version_key,
+        urban_context_enabled=settings.urban_context_enabled,
+    )
+
+
 def _runtime_graph(
     object_store: ObjectStore,
     identity_store: IdentityStore,
@@ -284,6 +346,8 @@ def _runtime_graph(
     ingestion: ImportRunService,
     radar: RadarService,
     scoring: ScoringService | None,
+    criteria: CriteriaService | None,
+    feedback: FeedbackService | None,
     readiness: ReadinessModule,
 ) -> RuntimeComposition:
     return RuntimeComposition(
@@ -296,6 +360,8 @@ def _runtime_graph(
         ingestion=ingestion,
         radar=radar,
         scoring=scoring,
+        criteria=criteria,
+        feedback=feedback,
         readiness=readiness,
     )
 

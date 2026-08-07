@@ -1,0 +1,80 @@
+{
+  "valid": [
+    {
+      "id": "seed",
+      "policy": {
+        "contract_version": "1",
+        "learning_policy_version": "learning-v1",
+        "min_signals": 3,
+        "window_days": 90,
+        "min_signal_confidence": 1.0,
+        "cooldown_days": 7,
+        "proposal_expiration_days": 30,
+        "default_suggested_weight": 0.3,
+        "default_suggested_confidence": 0.6
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "id": "min_signals_zero",
+      "policy": {
+        "contract_version": "1",
+        "learning_policy_version": "bad",
+        "min_signals": 0,
+        "window_days": 90,
+        "min_signal_confidence": 1.0,
+        "cooldown_days": 7,
+        "proposal_expiration_days": 30,
+        "default_suggested_weight": 0.3,
+        "default_suggested_confidence": 0.6
+      },
+      "expected_code": "learning_policy.min_signals"
+    },
+    {
+      "id": "window_too_small",
+      "policy": {
+        "contract_version": "1",
+        "learning_policy_version": "bad",
+        "min_signals": 3,
+        "window_days": 0,
+        "min_signal_confidence": 1.0,
+        "cooldown_days": 7,
+        "proposal_expiration_days": 30,
+        "default_suggested_weight": 0.3,
+        "default_suggested_confidence": 0.6
+      },
+      "expected_code": "learning_policy.window_days"
+    },
+    {
+      "id": "bad_contract_version",
+      "policy": {
+        "contract_version": "2",
+        "learning_policy_version": "bad",
+        "min_signals": 3,
+        "window_days": 90,
+        "min_signal_confidence": 1.0,
+        "cooldown_days": 7,
+        "proposal_expiration_days": 30,
+        "default_suggested_weight": 0.3,
+        "default_suggested_confidence": 0.6
+      },
+      "expected_code": "learning_policy.unsupported_contract_version"
+    },
+    {
+      "id": "weight_out_of_range",
+      "policy": {
+        "contract_version": "1",
+        "learning_policy_version": "bad",
+        "min_signals": 3,
+        "window_days": 90,
+        "min_signal_confidence": 1.0,
+        "cooldown_days": 7,
+        "proposal_expiration_days": 30,
+        "default_suggested_weight": 1.5,
+        "default_suggested_confidence": 0.6
+      },
+      "expected_code": "learning_policy.suggested_weight"
+    }
+  ]
+}

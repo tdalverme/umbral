@@ -92,6 +92,10 @@ class RadarService:
         run_job_type: str = RADAR_RUN_JOB_TYPE,
         score_policy_version: str = "scoring-baseline-v1",
         policy_engine: PolicyRunEngine | None = None,
+        decision_states: Callable[
+            [UUID, UUID, tuple[UUID, ...]], Mapping[UUID, str]
+        ]
+        | None = None,
         clock: Clock | None = None,
     ) -> None:
         self.profiles = profiles
@@ -108,7 +112,16 @@ class RadarService:
         self.run_job_type = run_job_type
         self.score_policy_version = score_policy_version
         self.policy_engine = policy_engine
+        self.decision_states = decision_states
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+
+    def bind_decision_states(
+        self,
+        reader: Callable[[UUID, UUID, tuple[UUID, ...]], Mapping[UUID, str]],
+    ) -> None:
+        """Wire the feedback decision-state overlay after composition (H3.3)."""
+
+        self.decision_states = reader
 
     # ------------------------------------------------------------------
     # Profile lifecycle
@@ -310,6 +323,63 @@ class RadarService:
                 run = self._submit_run(updated, current_version, trigger="resumed")
         return updated, run
 
+    def bump_profile_version(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[SearchProfile, ProfileVersion]:
+        """Version and snapshot a profile without submitting a run.
+
+        Used by the learning confirm/undo flow (H3.3): the caller records a
+        preference fact and compiles against the new version before the run is
+        submitted. Mirrors ``update_profile`` internals minus the edits path.
+        """
+
+        profile = self._owned(owner_id, profile_id)
+        if profile.status == "archived":
+            raise RadarStateError("archived profiles cannot be edited")
+        now = self.clock()
+        updated = replace(
+            profile,
+            version=profile.version + 1,
+            updated_at=now,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+            correlation_id=correlation_id,
+        )
+        current_version = self.versions.latest_for_profile(profile_id)
+        next_profile_version = (
+            current_version.profile_version + 1 if current_version is not None else 1
+        )
+        version = self._snapshot(
+            updated,
+            _payload_from_profile(updated),
+            profile_version=next_profile_version,
+        )
+        self.profiles.save(
+            replace(
+                profile,
+                current_version_id=version.version_id,
+                updated_at=now,
+            )
+        )
+        updated = replace(updated, current_version_id=version.version_id)
+        return updated, version
+
+    def submit_run(
+        self,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        trigger: str = "edited",
+    ) -> RecommendationRun | None:
+        """Submit the existing recommendation.run job for a profile version."""
+
+        return self._submit_run(profile, version, trigger)
+
     # ------------------------------------------------------------------
     # Matches and detail
     # ------------------------------------------------------------------
@@ -322,6 +392,7 @@ class RadarService:
         run_id: UUID | None,
         after_position: int | None,
         limit: int,
+        include_dismissed: bool = False,
     ) -> MatchPage:
         self._owned(owner_id, profile_id)
         run = (
@@ -336,7 +407,16 @@ class RadarService:
         if run.state != "succeeded":
             return MatchPage(run=run, items=(), next_after_position=None)
         items = self.items.list_for_run(run.run_id, after_position, limit)
-        next_after = items[-1].position if len(items) == limit else None
+        listing_ids = tuple(item.listing_id for item in items)
+        states: Mapping[UUID, str] = {}
+        if self.decision_states is not None:
+            states = self.decision_states(owner_id, profile_id, listing_ids)
+        visible = tuple(
+            item
+            for item in items
+            if include_dismissed or states.get(item.listing_id) != "dismiss"
+        )
+        next_after = visible[-1].position if len(visible) == limit else None
         points = tuple(
             MatchPoint(
                 listing_id=item.listing_id,
@@ -344,7 +424,7 @@ class RadarService:
                 longitude=point[1],
                 geo_precision=point[2],
             )
-            for item in items
+            for item in visible
             if (point := self._listing_point(item.listing_id)) is not None
         )
         summaries = tuple(
@@ -358,15 +438,20 @@ class RadarService:
                 url=summary[5],
                 geo_precision=summary[6],
             )
-            for item in items
+            for item in visible
             if (summary := self._listing_summary(item.listing_id)) is not None
         )
         return MatchPage(
             run=run,
-            items=items,
+            items=visible,
             next_after_position=next_after,
             points=points,
             summaries=summaries,
+            decision_states={
+                listing_id: state
+                for listing_id, state in states.items()
+                if listing_id in {item.listing_id for item in visible}
+            },
         )
 
     def _listing_summary(

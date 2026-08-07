@@ -28,8 +28,12 @@ from umbral.api.routers.comparisons import router as comparisons_router
 from umbral.api.routers.email_webhooks import router as email_webhook_router
 from umbral.api.routers.explanations import configure_explanations_routes
 from umbral.api.routers.explanations import router as explanations_router
+from umbral.api.routers.feedback import configure_feedback_routes
+from umbral.api.routers.feedback import router as feedback_router
 from umbral.api.routers.imports import configure_imports_routes
 from umbral.api.routers.imports import router as imports_router
+from umbral.api.routers.learning import configure_learning_routes
+from umbral.api.routers.learning import router as learning_router
 from umbral.api.routers.listings import configure_listings_routes
 from umbral.api.routers.listings import router as listings_router
 from umbral.api.routers.matches import configure_matches_routes
@@ -262,6 +266,8 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     configure_product_events_routes(dependencies)
     configure_explanations_routes(dependencies)
     configure_comparisons_routes(dependencies)
+    configure_feedback_routes(dependencies)
+    configure_learning_routes(dependencies)
     app.add_middleware(CorrelationMiddleware)
     app.add_exception_handler(ApplicationError, application_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -277,6 +283,8 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     app.include_router(product_events_router)
     app.include_router(explanations_router)
     app.include_router(comparisons_router)
+    app.include_router(feedback_router)
+    app.include_router(learning_router)
 
     def custom_openapi() -> dict[str, Any]:
         return _openapi_for_app(app)

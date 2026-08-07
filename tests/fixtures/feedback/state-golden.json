@@ -1,0 +1,34 @@
+{
+  "chains": [
+    {
+      "id": "like_dislike_like",
+      "actions": [
+        { "event_type": "like", "expected_decision_state": "like", "superseded_count": 0 },
+        { "event_type": "dislike", "expected_decision_state": "dislike", "superseded_count": 1 },
+        { "event_type": "like", "expected_decision_state": "like", "superseded_count": 2 }
+      ]
+    },
+    {
+      "id": "save_then_dismiss",
+      "actions": [
+        { "event_type": "save", "expected_decision_state": "save", "superseded_count": 0 },
+        { "event_type": "dismiss", "expected_decision_state": "dismiss", "superseded_count": 1 }
+      ]
+    },
+    {
+      "id": "noop_same_state",
+      "actions": [
+        { "event_type": "save", "expected_decision_state": "save", "superseded_count": 0 },
+        { "event_type": "save", "expected_decision_state": "save", "superseded_count": 0 }
+      ]
+    },
+    {
+      "id": "contacted_terminal",
+      "actions": [
+        { "event_type": "save", "expected_decision_state": "save", "superseded_count": 0 },
+        { "event_type": "contacted", "expected_decision_state": "contacted", "superseded_count": 1 },
+        { "event_type": "like", "expected_error": "feedback_terminal", "superseded_count": 1 }
+      ]
+    }
+  ]
+}

@@ -42,6 +42,7 @@ class MatchResponse(BaseModel):
     rooms: int | None = None
     source_id: str | None = None
     url: str | None = None
+    decision_state: str | None = None
 
     @classmethod
     def from_domain(
@@ -49,6 +50,7 @@ class MatchResponse(BaseModel):
         item: RecommendationItem,
         point: MatchPoint | None = None,
         summary: ListingSummary | None = None,
+        decision_state: str | None = None,
     ) -> "MatchResponse":
         return cls(
             item_id=item.item_id,
@@ -64,6 +66,7 @@ class MatchResponse(BaseModel):
             rooms=summary.rooms if summary is not None else None,
             source_id=summary.source_id if summary is not None else None,
             url=summary.url if summary is not None else None,
+            decision_state=decision_state,
         )
 
 
@@ -84,9 +87,11 @@ class MatchesResponse(BaseModel):
         next_after_position: int | None,
         points: tuple[MatchPoint, ...] = (),
         summaries: tuple[ListingSummary, ...] = (),
+        decision_states: dict[UUID, str] | None = None,
     ) -> "MatchesResponse":
         points_by_listing = {point.listing_id: point for point in points}
         summaries_by_listing = {summary.listing_id: summary for summary in summaries}
+        states = decision_states or {}
         return cls(
             search_profile_id=profile_id,
             run_id=run.run_id,
@@ -96,6 +101,7 @@ class MatchesResponse(BaseModel):
                     item,
                     points_by_listing.get(item.listing_id),
                     summaries_by_listing.get(item.listing_id),
+                    states.get(item.listing_id),
                 )
                 for item in items
             ],
@@ -192,6 +198,7 @@ async def list_matches(
     run_id: UUID | None = None,
     page_size: int = Query(default=25, ge=1, le=100),
     after_position: int | None = Query(default=None, ge=0),
+    include_dismissed: bool = Query(default=False),
     x_correlation_id: UUID | None = Header(default=None),
 ) -> MatchesResponse | JSONResponse:
     del x_correlation_id
@@ -206,6 +213,7 @@ async def list_matches(
             run_id=run_id,
             after_position=after_position,
             limit=page_size,
+            include_dismissed=include_dismissed,
         )
         return MatchesResponse.from_domain(
             search_profile_id,
@@ -214,6 +222,7 @@ async def list_matches(
             page.next_after_position,
             page.points,
             page.summaries,
+            dict(page.decision_states),
         )
     except RunNotFound as error:
         return _problem(request, 404, error.code, str(error))

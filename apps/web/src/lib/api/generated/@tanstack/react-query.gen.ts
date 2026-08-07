@@ -3,8 +3,8 @@
 import { type DefaultError, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { confirmMagicLink, createComparison, createSearchProfile, downloadImportQuality, emitProductEvent, getComparisonShortlist, getCurrentSession, getExplanation, getImportQuality, getImportRun, getListingDetail, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, getSearchProfile, listExplanations, listMatches, listSearchProfiles, logoutCurrentSession, type Options, receiveResendEvent, requestMagicLink, setComparisonShortlist, setSearchProfileStatus, submitImportBatch, updateSearchProfile } from '../sdk.gen';
-import type { ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, CreateComparisonData, CreateComparisonError, CreateComparisonResponse, CreateSearchProfileData, CreateSearchProfileResponse, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, EmitProductEventData, EmitProductEventResponse, GetComparisonShortlistData, GetComparisonShortlistError, GetComparisonShortlistResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetExplanationData, GetExplanationError, GetExplanationResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetListingDetailData, GetListingDetailError, GetListingDetailResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, GetSearchProfileData, GetSearchProfileError, GetSearchProfileResponse, ListExplanationsData, ListExplanationsError, ListExplanationsResponse, ListMatchesData, ListMatchesError, ListMatchesResponse, ListSearchProfilesData, ListSearchProfilesError, ListSearchProfilesResponse, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RequestMagicLinkData, RequestMagicLinkError, SetComparisonShortlistData, SetComparisonShortlistError, SetComparisonShortlistResponse, SetSearchProfileStatusData, SetSearchProfileStatusError, SetSearchProfileStatusResponse, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse, UpdateSearchProfileData, UpdateSearchProfileResponse } from '../types.gen';
+import { confirmLearningProposal, confirmMagicLink, createComparison, createSearchProfile, downloadImportQuality, emitProductEvent, expandLearningProposal, getComparisonShortlist, getCurrentSession, getExplanation, getImportQuality, getImportRun, getListingDetail, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, getSearchProfile, listDecisionItems, listExplanations, listLearningProposals, listMatches, listSearchProfiles, logoutCurrentSession, type Options, receiveResendEvent, recordFeedback, rejectLearningProposal, requestMagicLink, setComparisonShortlist, setSearchProfileStatus, submitImportBatch, undoLearningProposal, updateSearchProfile } from '../sdk.gen';
+import type { ConfirmLearningProposalData, ConfirmLearningProposalError, ConfirmLearningProposalResponse, ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, CreateComparisonData, CreateComparisonError, CreateComparisonResponse, CreateSearchProfileData, CreateSearchProfileResponse, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, EmitProductEventData, EmitProductEventResponse, ExpandLearningProposalData, ExpandLearningProposalError, ExpandLearningProposalResponse, GetComparisonShortlistData, GetComparisonShortlistError, GetComparisonShortlistResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetExplanationData, GetExplanationError, GetExplanationResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetListingDetailData, GetListingDetailError, GetListingDetailResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, GetSearchProfileData, GetSearchProfileError, GetSearchProfileResponse, ListDecisionItemsData, ListDecisionItemsError, ListDecisionItemsResponse, ListExplanationsData, ListExplanationsError, ListExplanationsResponse, ListLearningProposalsData, ListLearningProposalsError, ListLearningProposalsResponse, ListMatchesData, ListMatchesError, ListMatchesResponse, ListSearchProfilesData, ListSearchProfilesError, ListSearchProfilesResponse, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RecordFeedbackData, RecordFeedbackError, RecordFeedbackResponse, RejectLearningProposalData, RejectLearningProposalError, RejectLearningProposalResponse, RequestMagicLinkData, RequestMagicLinkError, SetComparisonShortlistData, SetComparisonShortlistError, SetComparisonShortlistResponse, SetSearchProfileStatusData, SetSearchProfileStatusError, SetSearchProfileStatusResponse, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse, UndoLearningProposalData, UndoLearningProposalError, UndoLearningProposalResponse, UpdateSearchProfileData, UpdateSearchProfileResponse } from '../types.gen';
 
 /**
  * Logout
@@ -371,6 +371,24 @@ export const createComparisonMutation = (options?: Partial<Options<CreateCompari
     return mutationOptions;
 };
 
+export const listDecisionItemsQueryKey = (options?: Options<ListDecisionItemsData>) => createQueryKey('listDecisionItems', options);
+
+/**
+ * List Decision Items
+ */
+export const listDecisionItemsOptions = (options?: Options<ListDecisionItemsData>) => queryOptions<ListDecisionItemsResponse, ListDecisionItemsError, ListDecisionItemsResponse, ReturnType<typeof listDecisionItemsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listDecisionItems({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listDecisionItemsQueryKey(options)
+});
+
 export const listExplanationsQueryKey = (options?: Options<ListExplanationsData>) => createQueryKey('listExplanations', options);
 
 /**
@@ -406,6 +424,109 @@ export const getExplanationOptions = (options?: Options<GetExplanationData>) => 
     },
     queryKey: getExplanationQueryKey(options)
 });
+
+/**
+ * Record Feedback
+ */
+export const recordFeedbackMutation = (options?: Partial<Options<RecordFeedbackData>>): UseMutationOptions<RecordFeedbackResponse, RecordFeedbackError, Options<RecordFeedbackData>> => {
+    const mutationOptions: UseMutationOptions<RecordFeedbackResponse, RecordFeedbackError, Options<RecordFeedbackData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await recordFeedback({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const listLearningProposalsQueryKey = (options?: Options<ListLearningProposalsData>) => createQueryKey('listLearningProposals', options);
+
+/**
+ * List Learning Proposals
+ */
+export const listLearningProposalsOptions = (options?: Options<ListLearningProposalsData>) => queryOptions<ListLearningProposalsResponse, ListLearningProposalsError, ListLearningProposalsResponse, ReturnType<typeof listLearningProposalsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listLearningProposals({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listLearningProposalsQueryKey(options)
+});
+
+/**
+ * Expand Learning Proposal
+ */
+export const expandLearningProposalMutation = (options?: Partial<Options<ExpandLearningProposalData>>): UseMutationOptions<ExpandLearningProposalResponse, ExpandLearningProposalError, Options<ExpandLearningProposalData>> => {
+    const mutationOptions: UseMutationOptions<ExpandLearningProposalResponse, ExpandLearningProposalError, Options<ExpandLearningProposalData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await expandLearningProposal({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Confirm Learning Proposal
+ */
+export const confirmLearningProposalMutation = (options?: Partial<Options<ConfirmLearningProposalData>>): UseMutationOptions<ConfirmLearningProposalResponse, ConfirmLearningProposalError, Options<ConfirmLearningProposalData>> => {
+    const mutationOptions: UseMutationOptions<ConfirmLearningProposalResponse, ConfirmLearningProposalError, Options<ConfirmLearningProposalData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await confirmLearningProposal({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Reject Learning Proposal
+ */
+export const rejectLearningProposalMutation = (options?: Partial<Options<RejectLearningProposalData>>): UseMutationOptions<RejectLearningProposalResponse, RejectLearningProposalError, Options<RejectLearningProposalData>> => {
+    const mutationOptions: UseMutationOptions<RejectLearningProposalResponse, RejectLearningProposalError, Options<RejectLearningProposalData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await rejectLearningProposal({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Undo Learning Proposal
+ */
+export const undoLearningProposalMutation = (options?: Partial<Options<UndoLearningProposalData>>): UseMutationOptions<UndoLearningProposalResponse, UndoLearningProposalError, Options<UndoLearningProposalData>> => {
+    const mutationOptions: UseMutationOptions<UndoLearningProposalResponse, UndoLearningProposalError, Options<UndoLearningProposalData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await undoLearningProposal({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
 
 export const listMatchesQueryKey = (options?: Options<ListMatchesData>) => createQueryKey('listMatches', options);
 

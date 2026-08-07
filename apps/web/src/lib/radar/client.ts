@@ -47,6 +47,7 @@ export interface MatchItem {
   rooms: number | null;
   source_id: string | null;
   url: string | null;
+  decision_state?: FeedbackEventType | null;
 }
 
 export interface MatchesPage {
@@ -55,6 +56,82 @@ export interface MatchesPage {
   run_state: RunState;
   items: MatchItem[];
   next_after_position: number | null;
+}
+
+export type FeedbackEventType = "like" | "dislike" | "save" | "dismiss" | "contacted";
+export type ProposalState = "pending" | "confirmed" | "rejected" | "expired" | "superseded";
+
+export interface FeedbackRecord {
+  event_id: string;
+  search_profile_id: string;
+  listing_id: string;
+  event_type: FeedbackEventType;
+  decision_state: FeedbackEventType;
+  superseded: boolean;
+  noop: boolean;
+  reason_keys: string[];
+}
+
+export interface DecisionItem {
+  listing_id: string;
+  decision_state: FeedbackEventType;
+  event_id: string;
+  event_type: FeedbackEventType;
+  reason_keys: string[];
+  created_at: string;
+  total_cost: number | null;
+  neighborhood: string | null;
+  surface_m2: number | null;
+  rooms: number | null;
+  source_id: string | null;
+  url: string | null;
+  geo_precision: string | null;
+}
+
+export interface DecisionItemsPage {
+  search_profile_id: string;
+  items: DecisionItem[];
+  next_after_position: number | null;
+}
+
+export interface Proposal {
+  proposal_id: string;
+  search_profile_id: string;
+  concept_key: string;
+  policy_version: string;
+  change: {
+    kind: string;
+    concept_key: string;
+    polarity: string;
+    suggested_weight: number;
+    suggested_confidence: number;
+    value: unknown;
+  };
+  evidence_refs: Array<Record<string, string>>;
+  state: ProposalState;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface ProposalsPage {
+  search_profile_id: string;
+  items: Proposal[];
+  next_after_position: number | null;
+}
+
+export interface Confirmation {
+  proposal: Proposal;
+  applied_profile_version: number;
+  run_id: string | null;
+}
+
+export interface ListingChange {
+  change_type: string;
+  field: string;
+  before: unknown;
+  after: unknown;
+  source?: string | null;
+  observed_at?: string | null;
 }
 
 export interface ListingDetail {
@@ -75,7 +152,7 @@ export interface ListingDetail {
   amenities: string[];
   description_text: string | null;
   normalization_errors: string[];
-  known_changes: Array<{ change_type: string; field: string; before: unknown; after: unknown }>;
+  known_changes: ListingChange[];
 }
 
 export interface Problem {
@@ -186,10 +263,11 @@ export const radarApi = {
     (await sendJson(`/api/radar/profiles/${id}?expected_version=${expectedVersion}`, "PATCH", changes)) as SearchProfile,
   setStatus: async (id: string, expectedVersion: number, status: ProfileStatus): Promise<SearchProfile> =>
     (await sendJson(`/api/radar/profiles/${id}/status?expected_version=${expectedVersion}`, "POST", { status })) as SearchProfile,
-  matches: async (id: string, runId: string | null, pageSize: number, afterPosition: number | null): Promise<MatchesPage> => {
+  matches: async (id: string, runId: string | null, pageSize: number, afterPosition: number | null, includeDismissed = false): Promise<MatchesPage> => {
     const query = new URLSearchParams({ page_size: String(pageSize) });
     if (runId) query.set("run_id", runId);
     if (afterPosition !== null) query.set("after_position", String(afterPosition));
+    if (includeDismissed) query.set("include_dismissed", "true");
     return (await getJson(`/api/radar/profiles/${id}/matches?${query.toString()}`)) as MatchesPage;
   },
   listing: async (listingId: string): Promise<ListingDetail> =>
@@ -221,4 +299,39 @@ export const radarApi = {
     (await sendJson(`/api/radar/profiles/${id}/comparison-shortlist`, "PUT", {
       listing_ids: listingIds,
     })) as Shortlist,
+  recordFeedback: async (
+    id: string,
+    body: {
+      listing_id: string;
+      run_id?: string | null;
+      event_type: FeedbackEventType;
+      reason_keys: string[];
+      idempotency_key: string;
+      free_feedback?: string | null;
+    },
+  ): Promise<FeedbackRecord> =>
+    (await sendJson(`/api/radar/profiles/${id}/feedback`, "POST", body)) as FeedbackRecord,
+  decisionItems: async (
+    id: string,
+    decisionState: FeedbackEventType,
+    pageSize = 100,
+    afterPosition: number | null = null,
+  ): Promise<DecisionItemsPage> => {
+    const query = new URLSearchParams({ page_size: String(pageSize), decision_state: decisionState });
+    if (afterPosition !== null) query.set("after_position", String(afterPosition));
+    return (await getJson(`/api/radar/profiles/${id}/decision-items?${query.toString()}`)) as DecisionItemsPage;
+  },
+  listProposals: async (id: string, state: ProposalState | null = "pending"): Promise<ProposalsPage> => {
+    const query = new URLSearchParams();
+    if (state) query.set("state", state);
+    return (await getJson(`/api/radar/profiles/${id}/learning-proposals?${query.toString()}`)) as ProposalsPage;
+  },
+  expandProposal: async (id: string, proposalId: string, change: Proposal["change"]): Promise<Proposal> =>
+    (await sendJson(`/api/radar/profiles/${id}/learning-proposals/${proposalId}`, "PUT", { change })) as Proposal,
+  confirmProposal: async (id: string, proposalId: string): Promise<Confirmation> =>
+    (await sendJson(`/api/radar/profiles/${id}/learning-proposals/${proposalId}/confirm`, "POST", {})) as Confirmation,
+  rejectProposal: async (id: string, proposalId: string): Promise<Proposal> =>
+    (await sendJson(`/api/radar/profiles/${id}/learning-proposals/${proposalId}/reject`, "POST", {})) as Proposal,
+  undoProposal: async (id: string, proposalId: string): Promise<Proposal> =>
+    (await sendJson(`/api/radar/profiles/${id}/learning-proposals/${proposalId}/undo`, "POST", {})) as Proposal,
 };

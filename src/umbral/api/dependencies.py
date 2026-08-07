@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+from umbral.application.feedback.service import FeedbackService
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.identity.administration import AccessAdministration
 from umbral.application.identity.authorization import AccessControl
@@ -50,6 +51,7 @@ class RuntimeDependencies:
     ingestion: ImportRunService
     radar: RadarService | None = None
     scoring: ScoringService | None = None
+    feedback: FeedbackService | None = None
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
     job_runtime: JobRuntime | None = None
 
@@ -86,6 +88,7 @@ def build_runtime_dependencies(
         ingestion=composition.ingestion,
         radar=composition.radar,
         scoring=composition.scoring,
+        feedback=composition.feedback,
         heartbeat_writer=heartbeat_writer,
         job_runtime=composition.job_runtime,
     )
@@ -108,6 +111,13 @@ def _load_settings(environment: Mapping[str, str]) -> Settings:
                 "EMAIL_",
                 "RESEND_",
                 "SESSION_",
+                "SILVER_",
+                "CRITERIA_",
+                "SCORING_",
+                "LEARNING_",
+                "FEEDBACK_",
+                "EMBEDDINGS_",
+                "URBAN_",
             )
         )
     }

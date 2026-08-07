@@ -248,6 +248,37 @@
         "title": "ComparisonResponse",
         "type": "object"
       },
+      "ConfirmationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "applied_profile_version": {
+            "title": "Applied Profile Version",
+            "type": "integer"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ProposalResponse"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "proposal",
+          "applied_profile_version",
+          "run_id"
+        ],
+        "title": "ConfirmationResponse",
+        "type": "object"
+      },
       "CreateSearchProfileRequest": {
         "additionalProperties": false,
         "properties": {
@@ -361,6 +392,162 @@
           "last_activity_at"
         ],
         "title": "CurrentSession",
+        "type": "object"
+      },
+      "DecisionItemResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision_state": {
+            "title": "Decision State",
+            "type": "string"
+          },
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "geo_precision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geo Precision"
+          },
+          "listing_id": {
+            "format": "uuid",
+            "title": "Listing Id",
+            "type": "string"
+          },
+          "neighborhood": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neighborhood"
+          },
+          "reason_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Keys",
+            "type": "array"
+          },
+          "rooms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rooms"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "surface_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface M2"
+          },
+          "total_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "listing_id",
+          "decision_state",
+          "event_id",
+          "event_type",
+          "reason_keys",
+          "created_at"
+        ],
+        "title": "DecisionItemResponse",
+        "type": "object"
+      },
+      "DecisionItemsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_after_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After Position"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_profile_id",
+          "items"
+        ],
+        "title": "DecisionItemsResponse",
         "type": "object"
       },
       "DependencyCheck": {
@@ -584,6 +771,118 @@
           "items"
         ],
         "title": "ExplanationsResponse",
+        "type": "object"
+      },
+      "FeedbackRecordResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "decision_state": {
+            "title": "Decision State",
+            "type": "string"
+          },
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "listing_id": {
+            "format": "uuid",
+            "title": "Listing Id",
+            "type": "string"
+          },
+          "noop": {
+            "title": "Noop",
+            "type": "boolean"
+          },
+          "reason_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Keys",
+            "type": "array"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          },
+          "superseded": {
+            "title": "Superseded",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "event_id",
+          "search_profile_id",
+          "listing_id",
+          "event_type",
+          "decision_state",
+          "superseded",
+          "noop",
+          "reason_keys"
+        ],
+        "title": "FeedbackRecordResponse",
+        "type": "object"
+      },
+      "FeedbackWriteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "free_feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Feedback"
+          },
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "listing_id": {
+            "format": "uuid",
+            "title": "Listing Id",
+            "type": "string"
+          },
+          "reason_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Keys",
+            "type": "array"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "listing_id",
+          "event_type",
+          "idempotency_key"
+        ],
+        "title": "FeedbackWriteRequest",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -844,6 +1143,17 @@
             "additionalProperties": true,
             "title": "Contributions",
             "type": "object"
+          },
+          "decision_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision State"
           },
           "geo_precision": {
             "anyOf": [
@@ -1151,6 +1461,204 @@
           "occurred_at"
         ],
         "title": "ProductEventResponse",
+        "type": "object"
+      },
+      "ProposalChangeBody": {
+        "additionalProperties": false,
+        "properties": {
+          "concept_key": {
+            "title": "Concept Key",
+            "type": "string"
+          },
+          "kind": {
+            "default": "preference_fact",
+            "title": "Kind",
+            "type": "string"
+          },
+          "polarity": {
+            "title": "Polarity",
+            "type": "string"
+          },
+          "suggested_confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Suggested Confidence",
+            "type": "number"
+          },
+          "suggested_weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Suggested Weight",
+            "type": "number"
+          },
+          "value": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "concept_key",
+          "polarity",
+          "suggested_weight",
+          "suggested_confidence"
+        ],
+        "title": "ProposalChangeBody",
+        "type": "object"
+      },
+      "ProposalChangeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "concept_key": {
+            "title": "Concept Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "polarity": {
+            "title": "Polarity",
+            "type": "string"
+          },
+          "suggested_confidence": {
+            "title": "Suggested Confidence",
+            "type": "number"
+          },
+          "suggested_weight": {
+            "title": "Suggested Weight",
+            "type": "number"
+          },
+          "value": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "kind",
+          "concept_key",
+          "polarity",
+          "suggested_weight",
+          "suggested_confidence"
+        ],
+        "title": "ProposalChangeResponse",
+        "type": "object"
+      },
+      "ProposalResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "$ref": "#/components/schemas/ProposalChangeResponse"
+          },
+          "concept_key": {
+            "title": "Concept Key",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "search_profile_id",
+          "concept_key",
+          "policy_version",
+          "change",
+          "evidence_refs",
+          "state",
+          "expires_at",
+          "created_at"
+        ],
+        "title": "ProposalResponse",
+        "type": "object"
+      },
+      "ProposalWriteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "$ref": "#/components/schemas/ProposalChangeBody"
+          }
+        },
+        "required": [
+          "change"
+        ],
+        "title": "ProposalWriteRequest",
+        "type": "object"
+      },
+      "ProposalsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_after_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After Position"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_profile_id",
+          "items"
+        ],
+        "title": "ProposalsResponse",
         "type": "object"
       },
       "QualityResponse": {
@@ -2901,6 +3409,54 @@
         ]
       }
     },
+    "/api/v1/search-profiles/{search_profile_id}/decision-items": {
+      "get": {
+        "operationId": "listDecisionItems",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionItemsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Decision Items",
+        "tags": [
+          "Feedback"
+        ]
+      }
+    },
     "/api/v1/search-profiles/{search_profile_id}/explanations": {
       "get": {
         "operationId": "listExplanations",
@@ -2994,6 +3550,329 @@
         "summary": "Get Explanation",
         "tags": [
           "Explanations"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/feedback": {
+      "post": {
+        "operationId": "recordFeedback",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackRecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Feedback",
+        "tags": [
+          "Feedback"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/learning-proposals": {
+      "get": {
+        "operationId": "listLearningProposals",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Learning Proposals",
+        "tags": [
+          "Learning"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}": {
+      "put": {
+        "operationId": "expandLearningProposal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposalWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Expand Learning Proposal",
+        "tags": [
+          "Learning"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/confirm": {
+      "post": {
+        "operationId": "confirmLearningProposal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Learning Proposal",
+        "tags": [
+          "Learning"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/reject": {
+      "post": {
+        "operationId": "rejectLearningProposal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Learning Proposal",
+        "tags": [
+          "Learning"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/undo": {
+      "post": {
+        "operationId": "undoLearningProposal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Learning Proposal",
+        "tags": [
+          "Learning"
         ]
       }
     },

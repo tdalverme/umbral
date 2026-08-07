@@ -12,6 +12,13 @@ from umbral.infrastructure.db.models.criteria import (
     RecomputeRun,
     UrbanSignal,
 )
+from umbral.infrastructure.db.models.feedback import (
+    FeedbackEvent,
+    FeedbackEventReason,
+    LearningPolicy,
+    LearningPolicyVersion,
+    LearningProposal,
+)
 from umbral.infrastructure.db.models.identity import (
     AccessAuditEvent,
     ExternalIdentityLink,
@@ -96,4 +103,9 @@ __all__ = [
     "ScoringPolicyVersion",
     "CriterionEvaluation",
     "ComparisonShortlist",
+    "FeedbackEvent",
+    "FeedbackEventReason",
+    "LearningPolicy",
+    "LearningPolicyVersion",
+    "LearningProposal",
 ]

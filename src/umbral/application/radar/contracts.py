@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
@@ -125,6 +125,7 @@ class MatchPage:
     next_after_position: int | None
     points: tuple[MatchPoint, ...] = ()
     summaries: tuple[ListingSummary, ...] = ()
+    decision_states: Mapping[UUID, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

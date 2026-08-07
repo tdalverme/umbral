@@ -146,3 +146,91 @@ def test_scoring_view_events_reject_evidence_and_values() -> None:
         },
     )
     assert error == "events.forbidden_keys"
+
+
+def test_feedback_event_types_are_registered() -> None:
+    for event_type in (
+        "feedback.recorded.v1",
+        "learning.proposal_created.v1",
+        "learning.proposal_confirmed.v1",
+        "learning.proposal_rejected.v1",
+        "learning.proposal_expanded.v1",
+        "learning.proposal_undone.v1",
+        "learning.proposal_expired.v1",
+        "feedback.shortlist_viewed.v1",
+        "feedback.dismissed_viewed.v1",
+    ):
+        assert event_version(REGISTRY, event_type) == 1
+
+
+def test_feedback_server_events_validate_with_ids_and_counts_only() -> None:
+    assert (
+        validate_event(
+            REGISTRY,
+            "feedback.recorded.v1",
+            {
+                "feedback_event_id": "a" * 32,
+                "search_profile_id": "b" * 32,
+                "listing_id": "c" * 32,
+                "event_type": "like",
+                "decision_state": "like",
+                "superseded": False,
+                "reason_count": 1,
+                "has_free_feedback": False,
+            },
+        )
+        is None
+    )
+    assert (
+        validate_event(
+            REGISTRY,
+            "learning.proposal_created.v1",
+            {
+                "proposal_id": "a" * 32,
+                "search_profile_id": "b" * 32,
+                "concept_key": "ambientes",
+                "polarity": "negative",
+                "evidence_count": 3,
+                "policy_version": "1",
+            },
+        )
+        is None
+    )
+
+
+def test_feedback_client_events_validate_with_counts_only() -> None:
+    assert (
+        validate_event(
+            REGISTRY,
+            "feedback.shortlist_viewed.v1",
+            {"search_profile_id": "a" * 32, "item_count": 3},
+        )
+        is None
+    )
+    assert (
+        validate_event(
+            REGISTRY,
+            "feedback.dismissed_viewed.v1",
+            {"search_profile_id": "a" * 32, "item_count": 1},
+        )
+        is None
+    )
+
+
+def test_feedback_events_reject_free_text_and_values() -> None:
+    error = validate_event(
+        REGISTRY,
+        "feedback.recorded.v1",
+        {
+            "feedback_event_id": "a" * 32,
+            "search_profile_id": "b" * 32,
+            "listing_id": "c" * 32,
+            "event_type": "like",
+            "decision_state": "like",
+            "superseded": False,
+            "reason_count": 0,
+            "has_free_feedback": True,
+            "free_feedback": "me gusta",
+        },
+    )
+    assert error == "events.forbidden_keys"

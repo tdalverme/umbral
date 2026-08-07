@@ -202,6 +202,57 @@ class SqlAlchemyShortlistRepository:
                 )
             session.commit()
 
+    def add(
+        self,
+        profile_id: UUID,
+        listing_id: UUID,
+        now: datetime,
+        correlation_id: UUID | None = None,
+    ) -> None:
+        """Upsert a listing at the tail of the profile shortlist (feedback save)."""
+
+        with self.session_factory() as session:
+            existing = session.scalar(
+                select(ComparisonShortlistModel).where(
+                    ComparisonShortlistModel.profile_id == profile_id,
+                    ComparisonShortlistModel.listing_id == listing_id,
+                )
+            )
+            if existing is not None:
+                return
+            tail = session.scalar(
+                select(ComparisonShortlistModel)
+                .where(ComparisonShortlistModel.profile_id == profile_id)
+                .order_by(ComparisonShortlistModel.position.desc())
+                .limit(1)
+            )
+            position = (tail.position + 1) if tail is not None else 0
+            session.add(
+                ComparisonShortlistModel(
+                    id=uuid4(),
+                    created_at=now,
+                    updated_at=now,
+                    actor_kind="service",
+                    actor_id=None,
+                    source="feedback.shortlist",
+                    correlation_id=correlation_id or uuid4(),
+                    profile_id=profile_id,
+                    listing_id=listing_id,
+                    position=position,
+                )
+            )
+            session.commit()
+
+    def remove(self, profile_id: UUID, listing_id: UUID) -> None:
+        """Remove a listing from the profile shortlist (feedback un-save)."""
+
+        with self.session_factory() as session:
+            session.query(ComparisonShortlistModel).filter(
+                ComparisonShortlistModel.profile_id == profile_id,
+                ComparisonShortlistModel.listing_id == listing_id,
+            ).delete()
+            session.commit()
+
     def list_for_profile(self, profile_id: UUID) -> tuple[UUID, ...]:
         with self.session_factory() as session:
             models = session.scalars(

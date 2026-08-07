@@ -202,6 +202,12 @@ def _load_settings() -> Settings:
                 "RESEND_",
                 "SESSION_",
                 "SILVER_",
+                "CRITERIA_",
+                "SCORING_",
+                "LEARNING_",
+                "FEEDBACK_",
+                "EMBEDDINGS_",
+                "URBAN_",
             )
         )
     }

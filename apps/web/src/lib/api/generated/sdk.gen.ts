@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, CreateComparisonData, CreateComparisonErrors, CreateComparisonResponses, CreateSearchProfileData, CreateSearchProfileErrors, CreateSearchProfileResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, EmitProductEventData, EmitProductEventErrors, EmitProductEventResponses, GetComparisonShortlistData, GetComparisonShortlistErrors, GetComparisonShortlistResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetExplanationData, GetExplanationErrors, GetExplanationResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetListingDetailData, GetListingDetailErrors, GetListingDetailResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, GetSearchProfileData, GetSearchProfileErrors, GetSearchProfileResponses, ListExplanationsData, ListExplanationsErrors, ListExplanationsResponses, ListMatchesData, ListMatchesErrors, ListMatchesResponses, ListSearchProfilesData, ListSearchProfilesErrors, ListSearchProfilesResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, SetComparisonShortlistData, SetComparisonShortlistErrors, SetComparisonShortlistResponses, SetSearchProfileStatusData, SetSearchProfileStatusErrors, SetSearchProfileStatusResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses, UpdateSearchProfileData, UpdateSearchProfileErrors, UpdateSearchProfileResponses } from './types.gen';
+import type { ConfirmLearningProposalData, ConfirmLearningProposalErrors, ConfirmLearningProposalResponses, ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, CreateComparisonData, CreateComparisonErrors, CreateComparisonResponses, CreateSearchProfileData, CreateSearchProfileErrors, CreateSearchProfileResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, EmitProductEventData, EmitProductEventErrors, EmitProductEventResponses, ExpandLearningProposalData, ExpandLearningProposalErrors, ExpandLearningProposalResponses, GetComparisonShortlistData, GetComparisonShortlistErrors, GetComparisonShortlistResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetExplanationData, GetExplanationErrors, GetExplanationResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetListingDetailData, GetListingDetailErrors, GetListingDetailResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, GetSearchProfileData, GetSearchProfileErrors, GetSearchProfileResponses, ListDecisionItemsData, ListDecisionItemsErrors, ListDecisionItemsResponses, ListExplanationsData, ListExplanationsErrors, ListExplanationsResponses, ListLearningProposalsData, ListLearningProposalsErrors, ListLearningProposalsResponses, ListMatchesData, ListMatchesErrors, ListMatchesResponses, ListSearchProfilesData, ListSearchProfilesErrors, ListSearchProfilesResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RecordFeedbackData, RecordFeedbackErrors, RecordFeedbackResponses, RejectLearningProposalData, RejectLearningProposalErrors, RejectLearningProposalResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, SetComparisonShortlistData, SetComparisonShortlistErrors, SetComparisonShortlistResponses, SetSearchProfileStatusData, SetSearchProfileStatusErrors, SetSearchProfileStatusResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses, UndoLearningProposalData, UndoLearningProposalErrors, UndoLearningProposalResponses, UpdateSearchProfileData, UpdateSearchProfileErrors, UpdateSearchProfileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -223,6 +223,15 @@ export const createComparison = <ThrowOnError extends boolean = false>(options: 
 });
 
 /**
+ * List Decision Items
+ */
+export const listDecisionItems = <ThrowOnError extends boolean = false>(options?: Options<ListDecisionItemsData, ThrowOnError>): RequestResult<ListDecisionItemsResponses, ListDecisionItemsErrors, ThrowOnError> => (options?.client ?? client).get<ListDecisionItemsResponses, ListDecisionItemsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/decision-items',
+    ...options
+});
+
+/**
  * List Explanations
  */
 export const listExplanations = <ThrowOnError extends boolean = false>(options?: Options<ListExplanationsData, ThrowOnError>): RequestResult<ListExplanationsResponses, ListExplanationsErrors, ThrowOnError> => (options?.client ?? client).get<ListExplanationsResponses, ListExplanationsErrors, ThrowOnError>({
@@ -237,6 +246,68 @@ export const listExplanations = <ThrowOnError extends boolean = false>(options?:
 export const getExplanation = <ThrowOnError extends boolean = false>(options?: Options<GetExplanationData, ThrowOnError>): RequestResult<GetExplanationResponses, GetExplanationErrors, ThrowOnError> => (options?.client ?? client).get<GetExplanationResponses, GetExplanationErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/search-profiles/{search_profile_id}/explanations/{listing_id}',
+    ...options
+});
+
+/**
+ * Record Feedback
+ */
+export const recordFeedback = <ThrowOnError extends boolean = false>(options: Options<RecordFeedbackData, ThrowOnError>): RequestResult<RecordFeedbackResponses, RecordFeedbackErrors, ThrowOnError> => (options.client ?? client).post<RecordFeedbackResponses, RecordFeedbackErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/feedback',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Learning Proposals
+ */
+export const listLearningProposals = <ThrowOnError extends boolean = false>(options?: Options<ListLearningProposalsData, ThrowOnError>): RequestResult<ListLearningProposalsResponses, ListLearningProposalsErrors, ThrowOnError> => (options?.client ?? client).get<ListLearningProposalsResponses, ListLearningProposalsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals',
+    ...options
+});
+
+/**
+ * Expand Learning Proposal
+ */
+export const expandLearningProposal = <ThrowOnError extends boolean = false>(options: Options<ExpandLearningProposalData, ThrowOnError>): RequestResult<ExpandLearningProposalResponses, ExpandLearningProposalErrors, ThrowOnError> => (options.client ?? client).put<ExpandLearningProposalResponses, ExpandLearningProposalErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Confirm Learning Proposal
+ */
+export const confirmLearningProposal = <ThrowOnError extends boolean = false>(options?: Options<ConfirmLearningProposalData, ThrowOnError>): RequestResult<ConfirmLearningProposalResponses, ConfirmLearningProposalErrors, ThrowOnError> => (options?.client ?? client).post<ConfirmLearningProposalResponses, ConfirmLearningProposalErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/confirm',
+    ...options
+});
+
+/**
+ * Reject Learning Proposal
+ */
+export const rejectLearningProposal = <ThrowOnError extends boolean = false>(options?: Options<RejectLearningProposalData, ThrowOnError>): RequestResult<RejectLearningProposalResponses, RejectLearningProposalErrors, ThrowOnError> => (options?.client ?? client).post<RejectLearningProposalResponses, RejectLearningProposalErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/reject',
+    ...options
+});
+
+/**
+ * Undo Learning Proposal
+ */
+export const undoLearningProposal = <ThrowOnError extends boolean = false>(options?: Options<UndoLearningProposalData, ThrowOnError>): RequestResult<UndoLearningProposalResponses, UndoLearningProposalErrors, ThrowOnError> => (options?.client ?? client).post<UndoLearningProposalResponses, UndoLearningProposalErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/undo',
     ...options
 });
 

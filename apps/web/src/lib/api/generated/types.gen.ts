@@ -127,6 +127,21 @@ export type ComparisonResponse = {
 };
 
 /**
+ * ConfirmationResponse
+ */
+export type ConfirmationResponse = {
+    /**
+     * Applied Profile Version
+     */
+    applied_profile_version: number;
+    proposal: ProposalResponse;
+    /**
+     * Run Id
+     */
+    run_id: string | null;
+};
+
+/**
  * CreateSearchProfileRequest
  */
 export type CreateSearchProfileRequest = {
@@ -182,6 +197,82 @@ export type CurrentSession = {
      * User Id
      */
     user_id: string;
+};
+
+/**
+ * DecisionItemResponse
+ */
+export type DecisionItemResponse = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Decision State
+     */
+    decision_state: string;
+    /**
+     * Event Id
+     */
+    event_id: string;
+    /**
+     * Event Type
+     */
+    event_type: string;
+    /**
+     * Geo Precision
+     */
+    geo_precision?: string | null;
+    /**
+     * Listing Id
+     */
+    listing_id: string;
+    /**
+     * Neighborhood
+     */
+    neighborhood?: string | null;
+    /**
+     * Reason Keys
+     */
+    reason_keys: Array<string>;
+    /**
+     * Rooms
+     */
+    rooms?: number | null;
+    /**
+     * Source Id
+     */
+    source_id?: string | null;
+    /**
+     * Surface M2
+     */
+    surface_m2?: number | null;
+    /**
+     * Total Cost
+     */
+    total_cost?: number | null;
+    /**
+     * Url
+     */
+    url?: string | null;
+};
+
+/**
+ * DecisionItemsResponse
+ */
+export type DecisionItemsResponse = {
+    /**
+     * Items
+     */
+    items: Array<DecisionItemResponse>;
+    /**
+     * Next After Position
+     */
+    next_after_position?: number | null;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
 };
 
 /**
@@ -312,6 +403,74 @@ export type ExplanationsResponse = {
      * Search Profile Id
      */
     search_profile_id: string;
+};
+
+/**
+ * FeedbackRecordResponse
+ */
+export type FeedbackRecordResponse = {
+    /**
+     * Decision State
+     */
+    decision_state: string;
+    /**
+     * Event Id
+     */
+    event_id: string;
+    /**
+     * Event Type
+     */
+    event_type: string;
+    /**
+     * Listing Id
+     */
+    listing_id: string;
+    /**
+     * Noop
+     */
+    noop: boolean;
+    /**
+     * Reason Keys
+     */
+    reason_keys: Array<string>;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
+    /**
+     * Superseded
+     */
+    superseded: boolean;
+};
+
+/**
+ * FeedbackWriteRequest
+ */
+export type FeedbackWriteRequest = {
+    /**
+     * Event Type
+     */
+    event_type: string;
+    /**
+     * Free Feedback
+     */
+    free_feedback?: string | null;
+    /**
+     * Idempotency Key
+     */
+    idempotency_key: string;
+    /**
+     * Listing Id
+     */
+    listing_id: string;
+    /**
+     * Reason Keys
+     */
+    reason_keys?: Array<string>;
+    /**
+     * Run Id
+     */
+    run_id?: string | null;
 };
 
 /**
@@ -471,6 +630,10 @@ export type MatchResponse = {
         [key: string]: unknown;
     };
     /**
+     * Decision State
+     */
+    decision_state?: string | null;
+    /**
      * Geo Precision
      */
     geo_precision?: string | null;
@@ -629,6 +792,132 @@ export type ProductEventResponse = {
      * Occurred At
      */
     occurred_at: string;
+};
+
+/**
+ * ProposalChangeBody
+ */
+export type ProposalChangeBody = {
+    /**
+     * Concept Key
+     */
+    concept_key: string;
+    /**
+     * Kind
+     */
+    kind?: string;
+    /**
+     * Polarity
+     */
+    polarity: string;
+    /**
+     * Suggested Confidence
+     */
+    suggested_confidence: number;
+    /**
+     * Suggested Weight
+     */
+    suggested_weight: number;
+    /**
+     * Value
+     */
+    value?: unknown | null;
+};
+
+/**
+ * ProposalChangeResponse
+ */
+export type ProposalChangeResponse = {
+    /**
+     * Concept Key
+     */
+    concept_key: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Polarity
+     */
+    polarity: string;
+    /**
+     * Suggested Confidence
+     */
+    suggested_confidence: number;
+    /**
+     * Suggested Weight
+     */
+    suggested_weight: number;
+    /**
+     * Value
+     */
+    value?: unknown | null;
+};
+
+/**
+ * ProposalResponse
+ */
+export type ProposalResponse = {
+    change: ProposalChangeResponse;
+    /**
+     * Concept Key
+     */
+    concept_key: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Evidence Refs
+     */
+    evidence_refs: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Policy Version
+     */
+    policy_version: string;
+    /**
+     * Proposal Id
+     */
+    proposal_id: string;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
+    /**
+     * State
+     */
+    state: string;
+};
+
+/**
+ * ProposalWriteRequest
+ */
+export type ProposalWriteRequest = {
+    change: ProposalChangeBody;
+};
+
+/**
+ * ProposalsResponse
+ */
+export type ProposalsResponse = {
+    /**
+     * Items
+     */
+    items: Array<ProposalResponse>;
+    /**
+     * Next After Position
+     */
+    next_after_position?: number | null;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
 };
 
 /**
@@ -1923,6 +2212,53 @@ export type CreateComparisonResponses = {
 
 export type CreateComparisonResponse = CreateComparisonResponses[keyof CreateComparisonResponses];
 
+export type ListDecisionItemsData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/decision-items';
+};
+
+export type ListDecisionItemsErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListDecisionItemsError = ListDecisionItemsErrors[keyof ListDecisionItemsErrors];
+
+export type ListDecisionItemsResponses = {
+    /**
+     * Successful Response
+     */
+    200: DecisionItemsResponse;
+};
+
+export type ListDecisionItemsResponse = ListDecisionItemsResponses[keyof ListDecisionItemsResponses];
+
 export type ListExplanationsData = {
     body?: never;
     headers?: {
@@ -2016,6 +2352,308 @@ export type GetExplanationResponses = {
 };
 
 export type GetExplanationResponse = GetExplanationResponses[keyof GetExplanationResponses];
+
+export type RecordFeedbackData = {
+    body: FeedbackWriteRequest;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/feedback';
+};
+
+export type RecordFeedbackErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Conflict
+     */
+    409: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RecordFeedbackError = RecordFeedbackErrors[keyof RecordFeedbackErrors];
+
+export type RecordFeedbackResponses = {
+    /**
+     * Successful Response
+     */
+    200: FeedbackRecordResponse;
+};
+
+export type RecordFeedbackResponse = RecordFeedbackResponses[keyof RecordFeedbackResponses];
+
+export type ListLearningProposalsData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals';
+};
+
+export type ListLearningProposalsErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListLearningProposalsError = ListLearningProposalsErrors[keyof ListLearningProposalsErrors];
+
+export type ListLearningProposalsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProposalsResponse;
+};
+
+export type ListLearningProposalsResponse = ListLearningProposalsResponses[keyof ListLearningProposalsResponses];
+
+export type ExpandLearningProposalData = {
+    body: ProposalWriteRequest;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}';
+};
+
+export type ExpandLearningProposalErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Conflict
+     */
+    409: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExpandLearningProposalError = ExpandLearningProposalErrors[keyof ExpandLearningProposalErrors];
+
+export type ExpandLearningProposalResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProposalResponse;
+};
+
+export type ExpandLearningProposalResponse = ExpandLearningProposalResponses[keyof ExpandLearningProposalResponses];
+
+export type ConfirmLearningProposalData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/confirm';
+};
+
+export type ConfirmLearningProposalErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Conflict
+     */
+    409: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ConfirmLearningProposalError = ConfirmLearningProposalErrors[keyof ConfirmLearningProposalErrors];
+
+export type ConfirmLearningProposalResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConfirmationResponse;
+};
+
+export type ConfirmLearningProposalResponse = ConfirmLearningProposalResponses[keyof ConfirmLearningProposalResponses];
+
+export type RejectLearningProposalData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/reject';
+};
+
+export type RejectLearningProposalErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Conflict
+     */
+    409: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RejectLearningProposalError = RejectLearningProposalErrors[keyof RejectLearningProposalErrors];
+
+export type RejectLearningProposalResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProposalResponse;
+};
+
+export type RejectLearningProposalResponse = RejectLearningProposalResponses[keyof RejectLearningProposalResponses];
+
+export type UndoLearningProposalData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/undo';
+};
+
+export type UndoLearningProposalErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Conflict
+     */
+    409: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UndoLearningProposalError = UndoLearningProposalErrors[keyof UndoLearningProposalErrors];
+
+export type UndoLearningProposalResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProposalResponse;
+};
+
+export type UndoLearningProposalResponse = UndoLearningProposalResponses[keyof UndoLearningProposalResponses];
 
 export type ListMatchesData = {
     body?: never;

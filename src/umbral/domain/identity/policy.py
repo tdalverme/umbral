@@ -84,6 +84,26 @@ ACTION_RULES: dict[str, ActionRule] = {
         frozenset({"user", "operator", "administrator"}),
         True,
     ),
+    "product.feedback.write": ActionRule(
+        "product.feedback.write",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.feedback.read": ActionRule(
+        "product.feedback.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.learning.write": ActionRule(
+        "product.learning.write",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.learning.read": ActionRule(
+        "product.learning.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
     "product.events.emit": ActionRule(
         "product.events.emit", frozenset({"user", "operator", "administrator"})
     ),

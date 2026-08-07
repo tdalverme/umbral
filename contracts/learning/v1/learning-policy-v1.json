@@ -1,0 +1,11 @@
+{
+  "contract_version": "1",
+  "learning_policy_version": "learning-v1",
+  "min_signals": 3,
+  "window_days": 90,
+  "min_signal_confidence": 1.0,
+  "cooldown_days": 7,
+  "proposal_expiration_days": 30,
+  "default_suggested_weight": 0.3,
+  "default_suggested_confidence": 0.6
+}

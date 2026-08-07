@@ -1,0 +1,35 @@
+{
+  "contract_version": "1",
+  "registry_version": "feedback-v1",
+  "event_types": ["like", "dislike", "save", "dismiss", "contacted"],
+  "event_states": ["active", "superseded"],
+  "decision_states": ["like", "dislike", "save", "dismiss", "contacted", "none"],
+  "rules": {
+    "append_only": true,
+    "terminal_event_type": "contacted",
+    "undo_allowed_for": ["like", "dislike", "save", "dismiss"],
+    "same_type_is_noop": true,
+    "free_feedback_max_length": 500,
+    "idempotency_key_max_length": 200,
+    "max_reasons_per_event": 5
+  },
+  "endpoints": {
+    "record_feedback": {
+      "method": "POST",
+      "path": "/api/v1/search-profiles/{id}/feedback",
+      "action": "product.feedback.write",
+      "typed_errors": ["feedback_not_found", "feedback_terminal", "feedback_invalid_reason", "feedback_conflict", "feedback_validation"]
+    },
+    "decision_items": {
+      "method": "GET",
+      "path": "/api/v1/search-profiles/{id}/decision-items",
+      "action": "product.feedback.read",
+      "typed_errors": ["feedback_not_found"]
+    },
+    "matches_dismissed": {
+      "method": "GET",
+      "path": "/api/v1/search-profiles/{id}/matches",
+      "note": "additive include_dismissed=false and decision_state annotation"
+    }
+  }
+}

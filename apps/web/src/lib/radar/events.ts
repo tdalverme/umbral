@@ -57,3 +57,17 @@ export function emitComparisonViewed(profileId: string, runId: string, listingCo
     score_version: scoreVersion,
   });
 }
+
+export function emitShortlistViewed(profileId: string, itemCount: number): void {
+  void emitProductEvent("feedback.shortlist_viewed.v1", {
+    search_profile_id: profileId,
+    item_count: itemCount,
+  });
+}
+
+export function emitDismissedViewed(profileId: string, itemCount: number): void {
+  void emitProductEvent("feedback.dismissed_viewed.v1", {
+    search_profile_id: profileId,
+    item_count: itemCount,
+  });
+}

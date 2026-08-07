@@ -213,6 +213,18 @@ class Settings(BaseSettings):
     scoring_explanations_copy_contract_version: str = Field(
         default="1", validation_alias="SCORING_EXPLANATIONS_COPY_CONTRACT_VERSION"
     )
+    learning_policy_seed_version: str = Field(
+        default="learning-v1", validation_alias="LEARNING_POLICY_SEED_VERSION"
+    )
+    feedback_quick_reasons_seed_version: str = Field(
+        default="quick-reasons-v1", validation_alias="FEEDBACK_QUICK_REASONS_SEED_VERSION"
+    )
+    feedback_free_feedback_enabled: bool = Field(
+        default=False, validation_alias="FEEDBACK_FREE_FEEDBACK_ENABLED"
+    )
+    feedback_max_free_feedback_length: int = Field(
+        default=500, validation_alias="FEEDBACK_MAX_FREE_FEEDBACK_LENGTH"
+    )
 
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
@@ -278,6 +290,10 @@ class Settings(BaseSettings):
             "SCORING_COMPARISON_MAX_LISTINGS",
             "SCORING_COMPARATOR_ENABLED",
             "SCORING_EXPLANATIONS_COPY_CONTRACT_VERSION",
+            "LEARNING_POLICY_SEED_VERSION",
+            "FEEDBACK_QUICK_REASONS_SEED_VERSION",
+            "FEEDBACK_FREE_FEEDBACK_ENABLED",
+            "FEEDBACK_MAX_FREE_FEEDBACK_LENGTH",
         }
     )
 

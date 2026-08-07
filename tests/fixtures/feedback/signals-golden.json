@@ -1,0 +1,109 @@
+{
+  "sufficient": {
+    "id": "three_consistent_dislikes_rooms_wrong",
+    "policy": {
+      "min_signals": 3,
+      "window_days": 90,
+      "min_signal_confidence": 1.0,
+      "cooldown_days": 7,
+      "proposal_expiration_days": 30,
+      "default_suggested_weight": 0.3,
+      "default_suggested_confidence": 0.6
+    },
+    "events": [
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 2 },
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 5 },
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 9 }
+    ],
+    "expected": { "concept_key": "ambientes", "polarity": "negative", "evidence_count": 3 }
+  },
+  "insufficient": {
+    "id": "two_signals",
+    "policy": {
+      "min_signals": 3,
+      "window_days": 90,
+      "min_signal_confidence": 1.0,
+      "cooldown_days": 7,
+      "proposal_expiration_days": 30,
+      "default_suggested_weight": 0.3,
+      "default_suggested_confidence": 0.6
+    },
+    "events": [
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 2 },
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 5 }
+    ],
+    "expected": null
+  },
+  "mixed_polarity": {
+    "id": "conflicting_polarity_no_proposal",
+    "policy": {
+      "min_signals": 3,
+      "window_days": 90,
+      "min_signal_confidence": 1.0,
+      "cooldown_days": 7,
+      "proposal_expiration_days": 30,
+      "default_suggested_weight": 0.3,
+      "default_suggested_confidence": 0.6
+    },
+    "events": [
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 2 },
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 5 },
+      { "event_type": "like", "polarity": "positive", "concept_key": "ambientes", "created_at_offset_days": 9 }
+    ],
+    "expected": null
+  },
+  "outside_window": {
+    "id": "signals_outside_window",
+    "policy": {
+      "min_signals": 3,
+      "window_days": 10,
+      "min_signal_confidence": 1.0,
+      "cooldown_days": 7,
+      "proposal_expiration_days": 30,
+      "default_suggested_weight": 0.3,
+      "default_suggested_confidence": 0.6
+    },
+    "events": [
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 20 },
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 25 },
+      { "event_type": "dislike", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 30 }
+    ],
+    "expected": null
+  },
+  "non_signal_actions_excluded": {
+    "id": "save_dismiss_do_not_propose",
+    "policy": {
+      "min_signals": 3,
+      "window_days": 90,
+      "min_signal_confidence": 1.0,
+      "cooldown_days": 7,
+      "proposal_expiration_days": 30,
+      "default_suggested_weight": 0.3,
+      "default_suggested_confidence": 0.6
+    },
+    "events": [
+      { "event_type": "dismiss", "polarity": "negative", "concept_key": "ambientes", "created_at_offset_days": 2 },
+      { "event_type": "save", "polarity": "positive", "concept_key": "ambientes", "created_at_offset_days": 5 },
+      { "event_type": "contacted", "polarity": "positive", "concept_key": "ambientes", "created_at_offset_days": 9 }
+    ],
+    "expected": null
+  },
+  "concept_locked": {
+    "id": "unlinked_reason_no_signal",
+    "policy": {
+      "min_signals": 3,
+      "window_days": 90,
+      "min_signal_confidence": 1.0,
+      "cooldown_days": 7,
+      "proposal_expiration_days": 30,
+      "default_suggested_weight": 0.3,
+      "default_suggested_confidence": 0.6
+    },
+    "events": [
+      { "event_type": "dislike", "polarity": "negative", "concept_key": null, "created_at_offset_days": 2 },
+      { "event_type": "dislike", "polarity": "negative", "concept_key": null, "created_at_offset_days": 5 },
+      { "event_type": "dislike", "polarity": "negative", "concept_key": null, "created_at_offset_days": 9 }
+    ],
+    "expected": null
+  }
+}
