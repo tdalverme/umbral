@@ -1,0 +1,38 @@
+{
+  "cases": [
+    {
+      "id": "two_listings_fixed_and_criterion",
+      "score_version": "scoring-policy-v1",
+      "limit": 6,
+      "listings": [
+        { "listing_id": "11111111-1111-1111-1111-111111111111", "position": 0, "total_cost": 450000, "expenses_value": 15000, "surface_m2": 55, "rooms": 2, "bedrooms": 2, "neighborhood": "palermo", "geo_precision": "exact", "score": 0.72 },
+        { "listing_id": "22222222-2222-2222-2222-222222222222", "position": 1, "total_cost": 480000, "expenses_value": null, "surface_m2": null, "rooms": 3, "bedrooms": 2, "neighborhood": "recoleta", "geo_precision": "block", "score": 0.66 }
+      ],
+      "policy_criteria": [
+        { "key": "presupuesto", "concept": "presupuesto", "matcher_type": "numeric_range" },
+        { "key": "luminosidad", "concept": "luminosidad", "matcher_type": "semantic_feature" }
+      ],
+      "evaluations": {
+        "11111111-1111-1111-1111-111111111111": {
+          "presupuesto": { "state": "match", "score": 0.3, "confidence": 1.0, "reason_code": "budget_within_headroom", "evidence_refs": [{ "kind": "listing_field", "ref": "total_cost", "version": "silver-v1" }] },
+          "luminosidad": { "state": "unknown", "score": 0.0, "confidence": 0.0, "reason_code": "no_observation_data", "evidence_refs": [] },
+          "balcon": { "state": "match", "score": 1.0, "confidence": 1.0, "reason_code": "concept_observed", "evidence_refs": [{ "kind": "observation", "ref": "obs-3", "version": "v1" }] },
+          "estado_general": { "state": "match", "score": 0.6, "confidence": 0.7, "reason_code": "concept_observed", "evidence_refs": [{ "kind": "observation", "ref": "obs-4", "version": "v1" }] }
+        },
+        "22222222-2222-2222-2222-222222222222": {
+          "presupuesto": { "state": "match", "score": 0.2, "confidence": 1.0, "reason_code": "budget_within_headroom", "evidence_refs": [{ "kind": "listing_field", "ref": "total_cost", "version": "silver-v1" }] },
+          "luminosidad": { "state": "match", "score": 0.8, "confidence": 0.7, "reason_code": "concept_observed", "evidence_refs": [{ "kind": "observation", "ref": "obs-2", "version": "v1" }] },
+          "balcon": { "state": "mismatch", "score": 0.0, "confidence": 1.0, "reason_code": "concept_missing", "evidence_refs": [{ "kind": "observation", "ref": "obs-5", "version": "v1" }] },
+          "estado_general": { "state": "unknown", "score": 0.0, "confidence": 0.0, "reason_code": "no_observation_data", "evidence_refs": [] }
+        }
+      },
+      "expected": {
+        "fixed_dimension_keys": ["total_cost", "expenses", "surface_m2", "rooms", "bedrooms", "location", "score"],
+        "criterion_dimension_keys": ["balcon", "luminosidad", "estado_general"],
+        "missing_cells": [["22222222-2222-2222-2222-222222222222", "expenses"], ["22222222-2222-2222-2222-222222222222", "surface_m2"]],
+        "unknown_cells": [["11111111-1111-1111-1111-111111111111", "luminosidad"], ["22222222-2222-2222-2222-222222222222", "estado_general"]],
+        "no_winner": true
+      }
+    }
+  ]
+}

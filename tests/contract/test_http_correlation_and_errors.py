@@ -44,8 +44,7 @@ def _assert_identity_headers(response: Any) -> None:
 
 def _assert_problem(response: Any) -> dict[str, object]:
     assert (
-        response.headers["content-type"].split(";", 1)[0]
-        == "application/problem+json"
+        response.headers["content-type"].split(";", 1)[0] == "application/problem+json"
     )
     assert 400 <= response.status_code <= 599
     _assert_identity_headers(response)

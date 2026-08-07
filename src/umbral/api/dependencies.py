@@ -23,6 +23,7 @@ from umbral.application.runtime.version import (
     load_release_manifest,
     parse_release_manifest,
 )
+from umbral.application.scoring.service import ScoringService
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.session import SessionProvider
 from umbral.infrastructure.runtime.composition import (
@@ -48,6 +49,7 @@ class RuntimeDependencies:
     administration: AccessAdministration
     ingestion: ImportRunService
     radar: RadarService | None = None
+    scoring: ScoringService | None = None
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
     job_runtime: JobRuntime | None = None
 
@@ -83,6 +85,7 @@ def build_runtime_dependencies(
         administration=composition.administration,
         ingestion=composition.ingestion,
         radar=composition.radar,
+        scoring=composition.scoring,
         heartbeat_writer=heartbeat_writer,
         job_runtime=composition.job_runtime,
     )

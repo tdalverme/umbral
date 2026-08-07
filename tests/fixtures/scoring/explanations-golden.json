@@ -1,0 +1,79 @@
+{
+  "cases": [
+    {
+      "id": "match_and_unknown",
+      "score_version": "scoring-policy-v1",
+      "run_confidence": 0.3,
+      "confidence_policy": { "unknown_penalty": 0.2, "strong_threshold": 0.8, "medium_threshold": 0.5 },
+      "profile_filters": ["budget_max", "zones", "min_rooms"],
+      "evaluations": [
+        {
+          "criterion_key": "presupuesto",
+          "state": "match",
+          "score": 0.3,
+          "confidence": 1.0,
+          "contribution": 0.075,
+          "reason_code": "budget_within_headroom",
+          "evidence_refs": [{ "kind": "listing_field", "ref": "total_cost", "version": "silver-v1" }]
+        },
+        {
+          "criterion_key": "luminosidad",
+          "state": "unknown",
+          "score": 0.0,
+          "confidence": 0.0,
+          "contribution": 0.0,
+          "reason_code": "no_observation_data",
+          "evidence_refs": []
+        }
+      ],
+      "expected": {
+        "reason_count": 1,
+        "risk_count": 1,
+        "missing_data": ["luminosidad"],
+        "reasons": [
+          {
+            "criterion_key": "presupuesto",
+            "state": "match",
+            "evidence_level": "strong",
+            "text": "Dentro del presupuesto con margen."
+          }
+        ],
+        "risks": [{"criterion_key": "luminosidad", "state": "unknown"}],
+        "satisfied_filters": ["budget_max", "zones", "min_rooms"]
+      }
+    },
+    {
+      "id": "low_confidence_risk",
+      "score_version": "scoring-policy-v1",
+      "run_confidence": 0.55,
+      "confidence_policy": { "unknown_penalty": 0.2, "strong_threshold": 0.8, "medium_threshold": 0.5 },
+      "profile_filters": ["budget_max"],
+      "evaluations": [
+        {
+          "criterion_key": "estado_general",
+          "state": "match",
+          "score": 0.7,
+          "confidence": 0.4,
+          "contribution": 0.035,
+          "reason_code": "concept_observed",
+          "evidence_refs": [{ "kind": "observation", "ref": "obs-1", "version": "v1" }]
+        }
+      ],
+      "expected": {
+        "reason_count": 1,
+        "risk_count": 1,
+        "missing_data": [],
+        "reasons": [
+          {
+            "criterion_key": "estado_general",
+            "state": "match",
+            "evidence_level": "low",
+            "text": "Se observo estado_general en el listing."
+          }
+        ],
+        "risks": [{"criterion_key": "estado_general", "state": "match"}],
+        "satisfied_filters": ["budget_max"]
+      }
+    }
+  ]
+}

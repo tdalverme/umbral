@@ -131,6 +131,123 @@
         "title": "Body_submitImportBatch",
         "type": "object"
       },
+      "CellResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "dimension_key": {
+            "title": "Dimension Key",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "listing_id": {
+            "format": "uuid",
+            "title": "Listing Id",
+            "type": "string"
+          },
+          "missing": {
+            "title": "Missing",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "listing_id",
+          "dimension_key",
+          "value",
+          "state",
+          "missing"
+        ],
+        "title": "CellResponse",
+        "type": "object"
+      },
+      "ComparisonRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "listing_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Listing Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "listing_ids"
+        ],
+        "title": "ComparisonRequest",
+        "type": "object"
+      },
+      "ComparisonResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/CellResponse"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/DimensionResponse"
+            },
+            "title": "Dimensions",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "listings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Listings",
+            "type": "array"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "score_version": {
+            "title": "Score Version",
+            "type": "string"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_profile_id",
+          "run_id",
+          "score_version",
+          "limit",
+          "listings",
+          "dimensions",
+          "cells"
+        ],
+        "title": "ComparisonResponse",
+        "type": "object"
+      },
       "CreateSearchProfileRequest": {
         "additionalProperties": false,
         "properties": {
@@ -301,6 +418,172 @@
           "critical"
         ],
         "title": "DependencyCheck",
+        "type": "object"
+      },
+      "DimensionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "concept": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concept"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "label"
+        ],
+        "title": "DimensionResponse",
+        "type": "object"
+      },
+      "ExplanationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "feature_snapshot": {
+            "additionalProperties": true,
+            "title": "Feature Snapshot",
+            "type": "object"
+          },
+          "listing_id": {
+            "format": "uuid",
+            "title": "Listing Id",
+            "type": "string"
+          },
+          "missing_data": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Data",
+            "type": "array"
+          },
+          "profile_snapshot": {
+            "additionalProperties": true,
+            "title": "Profile Snapshot",
+            "type": "object"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonResponse"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/RiskResponse"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "satisfied_filters": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Satisfied Filters",
+            "type": "array"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "score_version": {
+            "title": "Score Version",
+            "type": "string"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_profile_id",
+          "run_id",
+          "listing_id",
+          "score_version",
+          "score",
+          "confidence",
+          "reasons",
+          "risks",
+          "missing_data",
+          "satisfied_filters",
+          "profile_snapshot",
+          "feature_snapshot"
+        ],
+        "title": "ExplanationResponse",
+        "type": "object"
+      },
+      "ExplanationsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExplanationResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_after_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After Position"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "run_state": {
+            "title": "Run State",
+            "type": "string"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_profile_id",
+          "run_id",
+          "run_state",
+          "items"
+        ],
+        "title": "ExplanationsResponse",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -1016,6 +1299,93 @@
         "title": "Readiness",
         "type": "object"
       },
+      "ReasonResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "contribution": {
+            "title": "Contribution",
+            "type": "number"
+          },
+          "criterion_key": {
+            "title": "Criterion Key",
+            "type": "string"
+          },
+          "evidence_level": {
+            "title": "Evidence Level",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "criterion_key",
+          "state",
+          "score",
+          "confidence",
+          "contribution",
+          "evidence_level",
+          "reason_code",
+          "evidence_refs",
+          "text"
+        ],
+        "title": "ReasonResponse",
+        "type": "object"
+      },
+      "RiskResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "criterion_key": {
+            "title": "Criterion Key",
+            "type": "string"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "criterion_key",
+          "state",
+          "reason_code",
+          "text"
+        ],
+        "title": "RiskResponse",
+        "type": "object"
+      },
       "RunCountsModel": {
         "additionalProperties": false,
         "properties": {
@@ -1234,6 +1604,48 @@
           "updated_at"
         ],
         "title": "SearchProfileResponse",
+        "type": "object"
+      },
+      "ShortlistRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "listing_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Listing Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "listing_ids"
+        ],
+        "title": "ShortlistRequest",
+        "type": "object"
+      },
+      "ShortlistResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "listing_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Listing Ids",
+            "type": "array"
+          },
+          "search_profile_id": {
+            "format": "uuid",
+            "title": "Search Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_profile_id",
+          "listing_ids"
+        ],
+        "title": "ShortlistResponse",
         "type": "object"
       },
       "StatusRequest": {
@@ -2324,6 +2736,264 @@
         "summary": "Update Search Profile",
         "tags": [
           "Search Profiles"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/comparison-shortlist": {
+      "get": {
+        "operationId": "getComparisonShortlist",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortlistResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Shortlist",
+        "tags": [
+          "Comparisons"
+        ]
+      },
+      "put": {
+        "operationId": "setComparisonShortlist",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShortlistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortlistResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Shortlist",
+        "tags": [
+          "Comparisons"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/comparisons": {
+      "post": {
+        "operationId": "createComparison",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComparisonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Comparison",
+        "tags": [
+          "Comparisons"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/explanations": {
+      "get": {
+        "operationId": "listExplanations",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplanationsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Explanations",
+        "tags": [
+          "Explanations"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/explanations/{listing_id}": {
+      "get": {
+        "operationId": "getExplanation",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplanationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Explanation",
+        "tags": [
+          "Explanations"
         ]
       }
     },

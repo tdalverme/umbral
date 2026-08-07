@@ -156,6 +156,63 @@ class Settings(BaseSettings):
     radar_run_poll_interval_seconds: int = Field(
         default=3, validation_alias="RADAR_RUN_POLL_INTERVAL_SECONDS"
     )
+    criteria_seed_version: str = Field(
+        default="concepts-v1", validation_alias="CRITERIA_SEED_VERSION"
+    )
+    criteria_qualitative_max_attempts: int = Field(
+        default=2, validation_alias="CRITERIA_QUALITATIVE_MAX_ATTEMPTS"
+    )
+    criteria_batch_size: int = Field(
+        default=250, validation_alias="CRITERIA_BATCH_SIZE"
+    )
+    criteria_extraction_job_type: str = Field(
+        default="extraction.run", validation_alias="CRITERIA_EXTRACTION_JOB_TYPE"
+    )
+    criteria_recompute_job_type: str = Field(
+        default="extraction.recompute", validation_alias="CRITERIA_RECOMPUTE_JOB_TYPE"
+    )
+    extraction_provider: str = Field(
+        default="fake", validation_alias="EXTRACTION_PROVIDER"
+    )
+    extraction_managed_model: str | None = Field(
+        default=None, validation_alias="EXTRACTION_MANAGED_MODEL"
+    )
+    extraction_managed_api_key: str | None = Field(
+        default=None,
+        validation_alias="EXTRACTION_MANAGED_API_KEY",
+        repr=False,
+    )
+    embeddings_enabled: bool = Field(
+        default=False, validation_alias="EMBEDDINGS_ENABLED"
+    )
+    embeddings_dimension: int = Field(
+        default=1536, validation_alias="EMBEDDINGS_DIMENSION"
+    )
+    embeddings_model_version_key: str | None = Field(
+        default=None, validation_alias="EMBEDDINGS_MODEL_VERSION_KEY"
+    )
+    urban_context_enabled: bool = Field(
+        default=False, validation_alias="URBAN_CONTEXT_ENABLED"
+    )
+    urban_source_limits: str | None = Field(
+        default=None, validation_alias="URBAN_SOURCE_LIMITS"
+    )
+    scoring_policy_seed_version: str = Field(
+        default="scoring-policy-v1", validation_alias="SCORING_POLICY_SEED_VERSION"
+    )
+    scoring_legacy_score_policy_version: str = Field(
+        default="scoring-baseline-v1",
+        validation_alias="SCORING_LEGACY_SCORE_POLICY_VERSION",
+    )
+    scoring_comparison_max_listings: int = Field(
+        default=6, validation_alias="SCORING_COMPARISON_MAX_LISTINGS"
+    )
+    scoring_comparator_enabled: bool = Field(
+        default=False, validation_alias="SCORING_COMPARATOR_ENABLED"
+    )
+    scoring_explanations_copy_contract_version: str = Field(
+        default="1", validation_alias="SCORING_EXPLANATIONS_COPY_CONTRACT_VERSION"
+    )
 
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
@@ -203,6 +260,24 @@ class Settings(BaseSettings):
             "RADAR_RUN_JOB_TYPE",
             "RADAR_SCORE_POLICY_VERSION",
             "RADAR_RUN_POLL_INTERVAL_SECONDS",
+            "CRITERIA_SEED_VERSION",
+            "CRITERIA_QUALITATIVE_MAX_ATTEMPTS",
+            "CRITERIA_BATCH_SIZE",
+            "CRITERIA_EXTRACTION_JOB_TYPE",
+            "CRITERIA_RECOMPUTE_JOB_TYPE",
+            "EXTRACTION_PROVIDER",
+            "EXTRACTION_MANAGED_MODEL",
+            "EXTRACTION_MANAGED_API_KEY",
+            "EMBEDDINGS_ENABLED",
+            "EMBEDDINGS_DIMENSION",
+            "EMBEDDINGS_MODEL_VERSION_KEY",
+            "URBAN_CONTEXT_ENABLED",
+            "URBAN_SOURCE_LIMITS",
+            "SCORING_POLICY_SEED_VERSION",
+            "SCORING_LEGACY_SCORE_POLICY_VERSION",
+            "SCORING_COMPARISON_MAX_LISTINGS",
+            "SCORING_COMPARATOR_ENABLED",
+            "SCORING_EXPLANATIONS_COPY_CONTRACT_VERSION",
         }
     )
 

@@ -1,0 +1,63 @@
+{
+  "contract_version": "1",
+  "valid": [
+    {
+      "event_type": "criteria.concept_version_created.v1",
+      "payload": {"concept_key": "balcon", "concept_version": 1}
+    },
+    {
+      "event_type": "criteria.compilation_created.v1",
+      "payload": {
+        "profile_id": "11111111-1111-1111-1111-111111111111",
+        "profile_version": 1,
+        "compilation_version": 1,
+        "criterion_count": 2,
+        "warning_count": 0
+      }
+    },
+    {
+      "event_type": "criteria.observation_batch_published.v1",
+      "payload": {
+        "scope_kind": "concept",
+        "scope_key": "balcon",
+        "extraction_version_id": "22222222-2222-2222-2222-222222222222",
+        "published_count": 3,
+        "superseded_count": 1,
+        "failed_count": 0
+      }
+    },
+    {
+      "event_type": "criteria.recompute_completed.v1",
+      "payload": {
+        "recompute_run_id": "33333333-3333-3333-3333-333333333333",
+        "scope_kind": "concept",
+        "scope_key": "balcon",
+        "cause": "new balcon rule v2",
+        "state": "succeeded",
+        "published_count": 3,
+        "failed_count": 0
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "event_type": "criteria.concept_version_created.v1",
+      "payload": {"concept_key": "balcon"},
+      "reason": "missing concept_version"
+    },
+    {
+      "event_type": "criteria.recompute_completed.v1",
+      "payload": {
+        "recompute_run_id": "33333333-3333-3333-3333-333333333333",
+        "scope_kind": "concept",
+        "scope_key": "balcon",
+        "cause": "causa",
+        "state": "succeeded",
+        "published_count": 3,
+        "failed_count": 0,
+        "fragment": "texto de evidencia"
+      },
+      "reason": "forbidden key fragment"
+    }
+  ]
+}

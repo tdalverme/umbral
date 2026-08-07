@@ -1,0 +1,41 @@
+{
+  "contract_version": "1",
+  "cases": [
+    {
+      "scenario": "ordered_criteria_with_warnings",
+      "edits": [
+        {
+          "concept_key": "balcon",
+          "matcher_type": "categorical",
+          "params": {"allowed_values": ["true"]},
+          "source_ref": "fact:11111111-1111-1111-1111-111111111111",
+          "soft_to_hard": false
+        },
+        {
+          "concept_key": "luminosidad",
+          "matcher_type": "semantic_feature",
+          "params": {"concept": "luminosidad"},
+          "source_ref": "edit:memory",
+          "soft_to_hard": false
+        }
+      ],
+      "expected_criteria_count": 2,
+      "expected_warning": "semantic_memory_needs_explicit_edit"
+    },
+    {
+      "scenario": "soft_to_hard_without_confirmation_rejected",
+      "edits": [
+        {
+          "concept_key": "balcon",
+          "matcher_type": "categorical",
+          "params": {"allowed_values": ["true"]},
+          "source_ref": "fact:11111111-1111-1111-1111-111111111111",
+          "soft_to_hard": true
+        }
+      ],
+      "confirmations": [],
+      "expected_rejected": true,
+      "expected_code": "criteria.soft_to_hard_requires_confirmation"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "contract_version": "1",
+  "registry_version": "observations-v1",
+  "identity": {
+    "one_active_per": ["listing_id", "concept_key", "source"]
+  },
+  "states": ["active", "invalidated", "superseded", "failed"],
+  "transitions": {
+    "active_to_invalidated": "automatic on version change of concept, extraction artifact or parser",
+    "invalidated_to_superseded": "recompute publishes the replacement in the same transaction",
+    "active_to_superseded": "direct replacement by a recompute",
+    "failed": "rejected after bounded retries with failure_code"
+  },
+  "usable_in_new_results": ["active"]
+}

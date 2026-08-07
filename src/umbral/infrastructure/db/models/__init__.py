@@ -1,6 +1,17 @@
 """All foundation database mappings are imported from this module."""
 # ruff: noqa: E501
 
+from umbral.infrastructure.db.models.criteria import (
+    Concept,
+    ConceptVersion,
+    ExtractionVersion,
+    ListingEmbedding,
+    ListingObservation,
+    PreferenceFact,
+    ProfileCriteriaCompilation,
+    RecomputeRun,
+    UrbanSignal,
+)
 from umbral.infrastructure.db.models.identity import (
     AccessAuditEvent,
     ExternalIdentityLink,
@@ -31,6 +42,12 @@ from umbral.infrastructure.db.models.radar import (
     SearchProfileVersion,
 )
 from umbral.infrastructure.db.models.runtime import RuntimeSurfaceStatus
+from umbral.infrastructure.db.models.scoring import (
+    ComparisonShortlist,
+    CriterionEvaluation,
+    ScoringPolicy,
+    ScoringPolicyVersion,
+)
 from umbral.infrastructure.db.models.silver import (
     CanonicalProperty,
     DedupeLink,
@@ -39,6 +56,15 @@ from umbral.infrastructure.db.models.silver import (
 )
 
 __all__ = [
+    "Concept",
+    "ConceptVersion",
+    "PreferenceFact",
+    "ProfileCriteriaCompilation",
+    "ExtractionVersion",
+    "ListingObservation",
+    "RecomputeRun",
+    "ListingEmbedding",
+    "UrbanSignal",
     "ImportRun",
     "QuarantineRecord",
     "RawListingSnapshot",
@@ -66,4 +92,8 @@ __all__ = [
     "RecommendationRun",
     "RecommendationItem",
     "ProductEventRow",
+    "ScoringPolicy",
+    "ScoringPolicyVersion",
+    "CriterionEvaluation",
+    "ComparisonShortlist",
 ]

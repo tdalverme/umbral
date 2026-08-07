@@ -142,13 +142,65 @@ def test_store_finds_current_attempt_and_applies_exact_rate_window(
 ) -> None:
     """Catches stores that return stale attempts or include the 15-minute boundary."""
 
-    user = ProductUser(uuid4(), "rate@example.com", created_at=NOW, status_changed_at=NOW)
-    current_request = MagicLinkRequest(uuid4(), b"e" * 32, b"o" * 32, "eligible", NOW, NOW + timedelta(hours=24), uuid4())
-    current = MagicLinkAttempt(uuid4(), current_request.id, "product_user", None, user.id, state="issued", issued_at=NOW, expires_at=NOW + timedelta(minutes=15))
-    newer_request = MagicLinkRequest(uuid4(), b"e" * 32, b"n" * 32, "eligible", NOW + timedelta(seconds=1), NOW + timedelta(hours=24), uuid4())
-    newer = MagicLinkAttempt(uuid4(), newer_request.id, "product_user", None, user.id, state="issued", issued_at=NOW + timedelta(seconds=1), expires_at=NOW + timedelta(minutes=15))
-    boundary_request = MagicLinkRequest(uuid4(), b"e" * 32, b"x" * 32, "eligible", NOW - timedelta(minutes=15), NOW, uuid4())
-    recent_request = MagicLinkRequest(uuid4(), b"e" * 32, b"y" * 32, "eligible", NOW - timedelta(minutes=14, seconds=59), NOW, uuid4())
+    user = ProductUser(
+        uuid4(), "rate@example.com", created_at=NOW, status_changed_at=NOW
+    )
+    current_request = MagicLinkRequest(
+        uuid4(),
+        b"e" * 32,
+        b"o" * 32,
+        "eligible",
+        NOW,
+        NOW + timedelta(hours=24),
+        uuid4(),
+    )
+    current = MagicLinkAttempt(
+        uuid4(),
+        current_request.id,
+        "product_user",
+        None,
+        user.id,
+        state="issued",
+        issued_at=NOW,
+        expires_at=NOW + timedelta(minutes=15),
+    )
+    newer_request = MagicLinkRequest(
+        uuid4(),
+        b"e" * 32,
+        b"n" * 32,
+        "eligible",
+        NOW + timedelta(seconds=1),
+        NOW + timedelta(hours=24),
+        uuid4(),
+    )
+    newer = MagicLinkAttempt(
+        uuid4(),
+        newer_request.id,
+        "product_user",
+        None,
+        user.id,
+        state="issued",
+        issued_at=NOW + timedelta(seconds=1),
+        expires_at=NOW + timedelta(minutes=15),
+    )
+    boundary_request = MagicLinkRequest(
+        uuid4(),
+        b"e" * 32,
+        b"x" * 32,
+        "eligible",
+        NOW - timedelta(minutes=15),
+        NOW,
+        uuid4(),
+    )
+    recent_request = MagicLinkRequest(
+        uuid4(),
+        b"e" * 32,
+        b"y" * 32,
+        "eligible",
+        NOW - timedelta(minutes=14, seconds=59),
+        NOW,
+        uuid4(),
+    )
 
     with store.transaction():
         store.save_user(user)
@@ -170,10 +222,28 @@ def test_store_persists_reloaded_transitions_for_every_mutable_record(
     """Catches adapters that save only creations or retain stale record versions."""
 
     invitation = Invitation.new("transition@example.com")
-    user = ProductUser(uuid4(), "transition@example.com", created_at=NOW, status_changed_at=NOW)
-    link = ExternalIdentityLink(uuid4(), user.id, "provider", "issuer", "subject-transition", user.normalized_email, NOW)
+    user = ProductUser(
+        uuid4(), "transition@example.com", created_at=NOW, status_changed_at=NOW
+    )
+    link = ExternalIdentityLink(
+        uuid4(),
+        user.id,
+        "provider",
+        "issuer",
+        "subject-transition",
+        user.normalized_email,
+        NOW,
+    )
     role = RoleAssignment(uuid4(), user.id, "user", NOW)
-    request = MagicLinkRequest(uuid4(), b"r" * 32, b"o" * 32, "eligible", NOW, NOW + timedelta(hours=24), uuid4())
+    request = MagicLinkRequest(
+        uuid4(),
+        b"r" * 32,
+        b"o" * 32,
+        "eligible",
+        NOW,
+        NOW + timedelta(hours=24),
+        uuid4(),
+    )
     attempt = MagicLinkAttempt(uuid4(), request.id, "product_user", None, user.id)
     session = ProductSession(uuid4(), user.id, attempt.id, b"s" * 32, NOW)
     with store.transaction():
@@ -184,12 +254,18 @@ def test_store_persists_reloaded_transitions_for_every_mutable_record(
         store.save_request(request)
         store.save_attempt(attempt)
         store.save_session(session)
-        invitation = replace(invitation, status="accepted", accepted_user_id=user.id, accepted_at=NOW)
-        user = replace(user, status="disabled", disabled_reason="review", status_changed_at=NOW)
+        invitation = replace(
+            invitation, status="accepted", accepted_user_id=user.id, accepted_at=NOW
+        )
+        user = replace(
+            user, status="disabled", disabled_reason="review", status_changed_at=NOW
+        )
         link = replace(link, verified_normalized_email="new@example.com")
         role = replace(role, revoked_at=NOW)
         request = replace(request, decision="email_limited")
-        attempt = replace(attempt, state="failed", failure_reason="job_submission_failed")
+        attempt = replace(
+            attempt, state="failed", failure_reason="job_submission_failed"
+        )
         session = replace(session, revoked_at=NOW, revocation_reason="logout")
         store.save_invitation(invitation)
         store.save_user(user)
@@ -214,7 +290,16 @@ def test_store_rolls_back_provider_dedupe_deeply_and_reentrantly(
     """Catches inner rollback corruption of state or a permanently claimed event."""
 
     invitation = Invitation.new("nested@example.com")
-    event = AccessAuditEvent(uuid4(), "magic_link.delivery_observed.v1", "observed", "email_delivered", uuid4(), NOW, provider="email", provider_event_id="evt-nested")
+    event = AccessAuditEvent(
+        uuid4(),
+        "magic_link.delivery_observed.v1",
+        "observed",
+        "email_delivered",
+        uuid4(),
+        NOW,
+        provider="email",
+        provider_event_id="evt-nested",
+    )
 
     with store.transaction():
         store.save_invitation(invitation)

@@ -9,12 +9,45 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { RadarMap, matchPoints } from "@/components/radar/map";
-import { radarApi, type MatchItem, type SearchProfile } from "@/lib/radar/client";
-import { emitImpression } from "@/lib/radar/events";
+import { radarApi, type Explanation, type MatchItem, type SearchProfile } from "@/lib/radar/client";
+import { emitExplanationViewed, emitImpression } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
 
 const PAGE_SIZE = 25;
 const POLL_INTERVAL_MS = 3000;
+const LEGACY_SCORE_POLICY = "scoring-baseline-v1";
+const EVIDENCE_LABEL: Record<string, string> = { strong: "fuerte", medium: "media", low: "baja" };
+
+function EvidenceBadge({ level }: { level: "strong" | "medium" | "low" }): React.ReactElement {
+  return (
+    <span
+      className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+      aria-label={`evidencia ${EVIDENCE_LABEL[level]}`}
+    >
+      evidencia {EVIDENCE_LABEL[level]}
+    </span>
+  );
+}
+
+function ReasonsStrip({ explanation }: { explanation: Explanation }): React.ReactElement {
+  const top = explanation.reasons.slice(0, 3);
+  if (top.length === 0 && explanation.missing_data.length === 0) return <span />;
+  return (
+    <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="razones del match">
+      {top.map((reason) => (
+        <li key={reason.criterion_key} className="flex items-center gap-1">
+          <span className="text-xs">{reason.text}</span>
+          <EvidenceBadge level={reason.evidence_level} />
+        </li>
+      ))}
+      {explanation.missing_data.length > 0 && (
+        <li className="text-xs text-muted-foreground">
+          sin datos: {explanation.missing_data.join(", ")}
+        </li>
+      )}
+    </ul>
+  );
+}
 
 export default function RadarViewPage(): React.ReactElement {
   const params = useParams<{ id: string }>();
@@ -26,6 +59,8 @@ export default function RadarViewPage(): React.ReactElement {
   const [runState, setRunState] = useState<string | null>(null);
   const [nextAfter, setNextAfter] = useState<number | null>(null);
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+  const [explanations, setExplanations] = useState<Record<string, Explanation>>({});
+  const [legacyRun, setLegacyRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const emittedRef = useRef<Set<string>>(new Set());
@@ -37,12 +72,34 @@ export default function RadarViewPage(): React.ReactElement {
         setProfile(value);
         setRunState(value.latest_run?.state ?? null);
         setRunId(value.latest_run?.run_id ?? null);
+        setLegacyRun(value.latest_run?.score_policy_version === LEGACY_SCORE_POLICY);
         setError(null);
       })
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : "radar.error");
       });
   }, [profileId, reloadKey]);
+
+  const loadExplanations = useCallback(
+    (run: string) => {
+      radarApi
+        .explanations(profileId, run, PAGE_SIZE, null)
+        .then((page) => {
+          const byListing: Record<string, Explanation> = {};
+          for (const item of page.items) byListing[item.listing_id] = item;
+          setExplanations(byListing);
+          setError(null);
+        })
+        .catch((reason: unknown) => {
+          if (reason instanceof Error && reason.message === "explanation_unavailable") {
+            setLegacyRun(true);
+            return;
+          }
+          setError(reason instanceof Error ? reason.message : "radar.error");
+        });
+    },
+    [profileId],
+  );
 
   const loadMatches = useCallback(
     (run: string | null) => {
@@ -54,6 +111,7 @@ export default function RadarViewPage(): React.ReactElement {
           setRunState(page.run_state);
           setNextAfter(page.next_after_position);
           setError(null);
+          if (page.run_state === "succeeded") loadExplanations(page.run_id);
           page.items.forEach((item) => {
             const key = `${page.run_id}:${item.listing_id}`;
             if (!emittedRef.current.has(key)) {
@@ -66,7 +124,7 @@ export default function RadarViewPage(): React.ReactElement {
           setError(reason instanceof Error ? reason.message : "radar.error");
         });
     },
-    [profileId],
+    [profileId, loadExplanations],
   );
 
   useEffect(() => {
@@ -174,6 +232,9 @@ export default function RadarViewPage(): React.ReactElement {
               Archivar
             </Button>
           )}
+          <Link href={`/radar/${profileId}/compare`}>
+            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80">Comparar</Button>
+          </Link>
         </div>
       </div>
 
@@ -193,6 +254,13 @@ export default function RadarViewPage(): React.ReactElement {
         <div className="mb-4 flex items-center gap-2 text-muted-foreground" role="status">
           <Spinner /> Generando resultados…
         </div>
+      )}
+
+      {legacyRun && !generating && (
+        <Alert role="status">
+          La explicación no está disponible para este run. Los resultados se generarán con razones completas en el próximo
+          run.
+        </Alert>
       )}
 
       {!generating && runState === "failed" && (
@@ -218,31 +286,43 @@ export default function RadarViewPage(): React.ReactElement {
       {runState === "succeeded" && items.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
           <ul className="space-y-3">
-            {items.map((item) => (
-              <li key={item.item_id}>
-                <Link
-                  href={`/listings/${item.listing_id}?profile=${profileId}&run=${runId ?? ""}`}
-                  onClick={() => setSelectedListingId(item.listing_id)}
-                >
-                  <Card className="transition-colors hover:border-ring" data-testid="match-card">
-                    <CardContent className="flex items-center justify-between gap-4 py-4">
-                      <div>
-                        <p className="font-medium">
-                          {item.neighborhood ?? "Barrio no declarado"} · $
-                          {Number(item.total_cost ?? 0).toLocaleString("es-AR")}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {item.surface_m2 !== null ? `${item.surface_m2} m²` : "superficie no declarada"} ·{" "}
-                          {item.rooms !== null ? `${item.rooms} ambientes` : "ambientes no declarados"} ·{" "}
-                          {item.source_id ?? "fuente no declarada"}
-                        </p>
-                      </div>
-                      <span className="rounded-md bg-muted px-2 py-1 text-sm font-medium">Score {item.score.toFixed(2)}</span>
-                    </CardContent>
-                  </Card>
-                </Link>
-              </li>
-            ))}
+            {items.map((item) => {
+              const explanation = explanations[item.listing_id];
+              return (
+                <li key={item.item_id}>
+                  <Link
+                    href={`/listings/${item.listing_id}?profile=${profileId}&run=${runId ?? ""}`}
+                    onClick={() => {
+                      setSelectedListingId(item.listing_id);
+                      if (explanation) {
+                        emitExplanationViewed(profileId, explanation.run_id, item.listing_id, explanation.score_version);
+                      }
+                    }}
+                  >
+                    <Card className="transition-colors hover:border-ring" data-testid="match-card">
+                      <CardContent className="flex items-center justify-between gap-4 py-4">
+                        <div>
+                          <p className="font-medium">
+                            {item.neighborhood ?? "Barrio no declarado"} · $
+                            {Number(item.total_cost ?? 0).toLocaleString("es-AR")}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {item.surface_m2 !== null ? `${item.surface_m2} m²` : "superficie no declarada"} ·{" "}
+                            {item.rooms !== null ? `${item.rooms} ambientes` : "ambientes no declarados"} ·{" "}
+                            {item.source_id ?? "fuente no declarada"}
+                          </p>
+                          {explanation && <ReasonsStrip explanation={explanation} />}
+                        </div>
+                        <span className="rounded-md bg-muted px-2 py-1 text-sm font-medium">
+                          Score {item.score.toFixed(2)}
+                          {explanation ? ` · confianza ${explanation.confidence.toFixed(2)}` : ""}
+                        </span>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
           <div className="sticky top-4 h-[420px]">
             <RadarMap

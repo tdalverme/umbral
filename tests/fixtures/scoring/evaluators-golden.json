@@ -1,0 +1,34 @@
+{
+  "numeric_range": [
+    { "id": "within_bounds", "input": { "value": 3, "params": { "min": 2, "max": 5 } }, "expected": { "score": 1.0, "confidence": 1.0, "state": "match" } },
+    { "id": "above_max", "input": { "value": 7, "params": { "min": 2, "max": 5 } }, "expected": { "score": 0.7, "confidence": 1.0, "state": "match" } },
+    { "id": "below_min", "input": { "value": 1, "params": { "min": 2, "max": 5 } }, "expected": { "score": 0.0, "confidence": 1.0, "state": "mismatch" } },
+    { "id": "no_value", "input": { "value": null, "params": { "min": 2, "max": 5 } }, "expected": { "score": 0.0, "confidence": 0.0, "state": "unknown" } }
+  ],
+  "categorical": [
+    { "id": "allowed_value", "input": { "value": "si", "params": { "allowed_values": ["si"] } }, "expected": { "score": 1.0, "confidence": 1.0, "state": "match" } },
+    { "id": "disallowed_value", "input": { "value": "no", "params": { "allowed_values": ["si"] } }, "expected": { "score": 0.0, "confidence": 1.0, "state": "mismatch" } },
+    { "id": "no_value", "input": { "value": null, "params": { "allowed_values": ["si"] } }, "expected": { "score": 0.0, "confidence": 0.0, "state": "unknown" } }
+  ],
+  "semantic_feature": [
+    { "id": "above_threshold", "input": { "score": 0.9, "confidence": 0.8, "params": { "threshold": 0.5 } }, "expected": { "score": 0.9, "confidence": 0.8, "state": "match" } },
+    { "id": "below_threshold", "input": { "score": 0.2, "confidence": 0.8, "params": { "threshold": 0.5 } }, "expected": { "score": 0.2, "confidence": 0.8, "state": "mismatch" } },
+    { "id": "no_observation", "input": { "score": null, "confidence": null, "params": { "threshold": 0.5 } }, "expected": { "score": 0.0, "confidence": 0.0, "state": "unknown" } }
+  ],
+  "geo_proximity": [
+    { "id": "in_zone_exact", "input": { "in_zone": true, "precision": "exact" }, "expected": { "score": 1.0, "confidence": 1.0, "state": "match" } },
+    { "id": "in_zone_approximate", "input": { "in_zone": true, "precision": "approximate" }, "expected": { "score": 1.0, "confidence": 0.7, "state": "match" } },
+    { "id": "out_of_zone", "input": { "in_zone": false, "precision": "exact" }, "expected": { "score": 0.3, "confidence": 1.0, "state": "mismatch" } },
+    { "id": "precision_unknown", "input": { "in_zone": true, "precision": "unknown" }, "expected": { "score": 1.0, "confidence": 0.5, "state": "match" } }
+  ],
+  "fixed": [
+    { "id": "budget_headroom", "input": { "kind": "presupuesto", "budget_max": 1000, "total_cost": 700 }, "expected": { "score": 0.3, "confidence": 1.0, "state": "match" } },
+    { "id": "budget_over", "input": { "kind": "presupuesto", "budget_max": 1000, "total_cost": 1100 }, "expected": { "score": 0.0, "confidence": 1.0, "state": "mismatch" } },
+    { "id": "rooms_equal", "input": { "kind": "ambientes", "min_rooms": 2, "rooms": 2 }, "expected": { "score": 1.0, "confidence": 1.0, "state": "match" } },
+    { "id": "rooms_above", "input": { "kind": "ambientes", "min_rooms": 2, "rooms": 3 }, "expected": { "score": 0.85, "confidence": 1.0, "state": "match" } },
+    { "id": "rooms_unknown", "input": { "kind": "ambientes", "min_rooms": 2, "rooms": null }, "expected": { "score": 0.5, "confidence": 0.0, "state": "unknown" } },
+    { "id": "surface_within", "input": { "kind": "superficie", "surface_min": 40, "surface_max": 80, "surface_m2": 55 }, "expected": { "score": 1.0, "confidence": 1.0, "state": "match" } },
+    { "id": "surface_above_1_5x", "input": { "kind": "superficie", "surface_min": 40, "surface_max": 80, "surface_m2": 130 }, "expected": { "score": 0.6, "confidence": 1.0, "state": "match" } },
+    { "id": "surface_below_min", "input": { "kind": "superficie", "surface_min": 40, "surface_max": 80, "surface_m2": 30 }, "expected": { "score": 0.5, "confidence": 1.0, "state": "mismatch" } }
+  ]
+}

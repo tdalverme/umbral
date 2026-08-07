@@ -3,8 +3,8 @@
 import { type DefaultError, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { confirmMagicLink, createSearchProfile, downloadImportQuality, emitProductEvent, getCurrentSession, getImportQuality, getImportRun, getListingDetail, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, getSearchProfile, listMatches, listSearchProfiles, logoutCurrentSession, type Options, receiveResendEvent, requestMagicLink, setSearchProfileStatus, submitImportBatch, updateSearchProfile } from '../sdk.gen';
-import type { ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, CreateSearchProfileData, CreateSearchProfileResponse, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, EmitProductEventData, EmitProductEventResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetListingDetailData, GetListingDetailError, GetListingDetailResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, GetSearchProfileData, GetSearchProfileError, GetSearchProfileResponse, ListMatchesData, ListMatchesError, ListMatchesResponse, ListSearchProfilesData, ListSearchProfilesError, ListSearchProfilesResponse, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RequestMagicLinkData, RequestMagicLinkError, SetSearchProfileStatusData, SetSearchProfileStatusError, SetSearchProfileStatusResponse, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse, UpdateSearchProfileData, UpdateSearchProfileResponse } from '../types.gen';
+import { confirmMagicLink, createComparison, createSearchProfile, downloadImportQuality, emitProductEvent, getComparisonShortlist, getCurrentSession, getExplanation, getImportQuality, getImportRun, getListingDetail, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, getSearchProfile, listExplanations, listMatches, listSearchProfiles, logoutCurrentSession, type Options, receiveResendEvent, requestMagicLink, setComparisonShortlist, setSearchProfileStatus, submitImportBatch, updateSearchProfile } from '../sdk.gen';
+import type { ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, CreateComparisonData, CreateComparisonError, CreateComparisonResponse, CreateSearchProfileData, CreateSearchProfileResponse, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, EmitProductEventData, EmitProductEventResponse, GetComparisonShortlistData, GetComparisonShortlistError, GetComparisonShortlistResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetExplanationData, GetExplanationError, GetExplanationResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetListingDetailData, GetListingDetailError, GetListingDetailResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, GetSearchProfileData, GetSearchProfileError, GetSearchProfileResponse, ListExplanationsData, ListExplanationsError, ListExplanationsResponse, ListMatchesData, ListMatchesError, ListMatchesResponse, ListSearchProfilesData, ListSearchProfilesError, ListSearchProfilesResponse, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RequestMagicLinkData, RequestMagicLinkError, SetComparisonShortlistData, SetComparisonShortlistError, SetComparisonShortlistResponse, SetSearchProfileStatusData, SetSearchProfileStatusError, SetSearchProfileStatusResponse, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse, UpdateSearchProfileData, UpdateSearchProfileResponse } from '../types.gen';
 
 /**
  * Logout
@@ -318,6 +318,94 @@ export const updateSearchProfileMutation = (options?: Partial<Options<UpdateSear
     };
     return mutationOptions;
 };
+
+export const getComparisonShortlistQueryKey = (options?: Options<GetComparisonShortlistData>) => createQueryKey('getComparisonShortlist', options);
+
+/**
+ * Get Shortlist
+ */
+export const getComparisonShortlistOptions = (options?: Options<GetComparisonShortlistData>) => queryOptions<GetComparisonShortlistResponse, GetComparisonShortlistError, GetComparisonShortlistResponse, ReturnType<typeof getComparisonShortlistQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getComparisonShortlist({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getComparisonShortlistQueryKey(options)
+});
+
+/**
+ * Set Shortlist
+ */
+export const setComparisonShortlistMutation = (options?: Partial<Options<SetComparisonShortlistData>>): UseMutationOptions<SetComparisonShortlistResponse, SetComparisonShortlistError, Options<SetComparisonShortlistData>> => {
+    const mutationOptions: UseMutationOptions<SetComparisonShortlistResponse, SetComparisonShortlistError, Options<SetComparisonShortlistData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await setComparisonShortlist({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Create Comparison
+ */
+export const createComparisonMutation = (options?: Partial<Options<CreateComparisonData>>): UseMutationOptions<CreateComparisonResponse, CreateComparisonError, Options<CreateComparisonData>> => {
+    const mutationOptions: UseMutationOptions<CreateComparisonResponse, CreateComparisonError, Options<CreateComparisonData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await createComparison({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const listExplanationsQueryKey = (options?: Options<ListExplanationsData>) => createQueryKey('listExplanations', options);
+
+/**
+ * List Explanations
+ */
+export const listExplanationsOptions = (options?: Options<ListExplanationsData>) => queryOptions<ListExplanationsResponse, ListExplanationsError, ListExplanationsResponse, ReturnType<typeof listExplanationsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listExplanations({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listExplanationsQueryKey(options)
+});
+
+export const getExplanationQueryKey = (options?: Options<GetExplanationData>) => createQueryKey('getExplanation', options);
+
+/**
+ * Get Explanation
+ */
+export const getExplanationOptions = (options?: Options<GetExplanationData>) => queryOptions<GetExplanationResponse, GetExplanationError, GetExplanationResponse, ReturnType<typeof getExplanationQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getExplanation({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getExplanationQueryKey(options)
+});
 
 export const listMatchesQueryKey = (options?: Options<ListMatchesData>) => createQueryKey('listMatches', options);
 

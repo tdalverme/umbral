@@ -17,7 +17,7 @@ def test_identity_tooling_is_declared_for_local_and_ci_runs() -> None:
 
     assert '"pytest-asyncio' in pyproject
     assert '"identity:' in pyproject
-    assert "asyncio_mode = \"auto\"" in pyproject
+    assert 'asyncio_mode = "auto"' in pyproject
     assert "test:identity" in package["scripts"]
     assert "test:e2e:identity" in package["scripts"]
     assert "tests/unit/identity" in workflow

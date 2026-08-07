@@ -1,0 +1,34 @@
+{
+  "contract_version": "1",
+  "evidence_levels": {
+    "strong": { "min_confidence": 0.8 },
+    "medium": { "min_confidence": 0.5 },
+    "low": { "min_confidence": 0.0 }
+  },
+  "reason_codes": {
+    "budget_within_headroom": { "state": "match", "copy_key": "reason.budget_within_headroom" },
+    "rooms_match": { "state": "match", "copy_key": "reason.rooms_match" },
+    "rooms_above_min": { "state": "match", "copy_key": "reason.rooms_above_min" },
+    "surface_within_bounds": { "state": "match", "copy_key": "reason.surface_within_bounds" },
+    "location_near_preferred": { "state": "match", "copy_key": "reason.location_near_preferred" },
+    "concept_observed": { "state": "match", "copy_key": "reason.concept_observed" },
+    "budget_over_max": { "state": "mismatch", "copy_key": "reason.budget_over_max" },
+    "concept_missing": { "state": "mismatch", "copy_key": "reason.concept_missing" },
+    "no_observation_data": { "state": "unknown", "copy_key": "reason.no_observation_data" },
+    "location_precision_low": { "state": "unknown", "copy_key": "reason.location_precision_low" }
+  },
+  "copy_templates": {
+    "reason.budget_within_headroom": "Dentro del presupuesto con margen.",
+    "reason.rooms_match": "Coincide con los ambientes buscados.",
+    "reason.rooms_above_min": "Supera el minimo de ambientes.",
+    "reason.surface_within_bounds": "Superficie dentro del rango buscado.",
+    "reason.location_near_preferred": "Ubicacion cercana a la preferida.",
+    "reason.concept_observed": "Se observo {concept} en el listing.",
+    "reason.budget_over_max": "El costo total supera el presupuesto.",
+    "reason.concept_missing": "No cumple {concept} (evidencia negativa).",
+    "reason.no_observation_data": "Sin datos suficientes para evaluar {criterion}.",
+    "reason.location_precision_low": "Ubicacion con precision baja; no se pudo evaluar.",
+    "notice.legacy_run": "La explicacion no esta disponible para este run.",
+    "notice.score_confidence": "Indicador con confianza {confidence}."
+  }
+}

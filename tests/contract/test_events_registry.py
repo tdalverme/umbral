@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from tests.fixtures.criteria import golden as criteria_golden
 from tests.fixtures.radar.golden import load_events_golden
 from umbral.application.events.registry import (
     event_version,
@@ -57,3 +58,91 @@ def test_unknown_type_and_extra_keys_are_rejected() -> None:
         },
     )
     assert error == "events.extra_keys"
+
+
+def test_criteria_event_types_are_registered() -> None:
+    for event_type in (
+        "criteria.concept_version_created.v1",
+        "criteria.compilation_created.v1",
+        "criteria.observation_batch_published.v1",
+        "criteria.recompute_completed.v1",
+    ):
+        assert event_version(REGISTRY, event_type) == 1
+
+
+def test_criteria_golden_events_validate_as_declared() -> None:
+    cases = criteria_golden.events_golden()
+    for case in cases["valid"]:
+        assert validate_event(REGISTRY, case["event_type"], case["payload"]) is None
+    for case in cases["invalid"]:
+        assert validate_event(REGISTRY, case["event_type"], case["payload"]) is not None
+
+
+def test_criteria_events_forbid_values_and_fragments() -> None:
+    error = validate_event(
+        REGISTRY,
+        "criteria.recompute_completed.v1",
+        {
+            "recompute_run_id": "a" * 32,
+            "scope_kind": "concept",
+            "scope_key": "balcon",
+            "cause": "causa",
+            "state": "succeeded",
+            "published_count": 3,
+            "failed_count": 0,
+            "fragment": "texto",
+        },
+    )
+    assert error == "events.forbidden_keys"
+
+
+def test_scoring_event_types_are_registered() -> None:
+    for event_type in (
+        "recommendation.explanation_viewed.v1",
+        "recommendation.comparison_viewed.v1",
+    ):
+        assert event_version(REGISTRY, event_type) == 1
+
+
+def test_scoring_view_events_validate_with_ids_and_counts_only() -> None:
+    assert (
+        validate_event(
+            REGISTRY,
+            "recommendation.explanation_viewed.v1",
+            {
+                "search_profile_id": "a" * 32,
+                "run_id": "b" * 32,
+                "listing_id": "c" * 32,
+                "score_version": "scoring-policy-v1",
+            },
+        )
+        is None
+    )
+    assert (
+        validate_event(
+            REGISTRY,
+            "recommendation.comparison_viewed.v1",
+            {
+                "search_profile_id": "a" * 32,
+                "run_id": "b" * 32,
+                "listing_count": 3,
+                "score_version": "scoring-policy-v1",
+            },
+        )
+        is None
+    )
+
+
+def test_scoring_view_events_reject_evidence_and_values() -> None:
+    error = validate_event(
+        REGISTRY,
+        "recommendation.explanation_viewed.v1",
+        {
+            "search_profile_id": "a" * 32,
+            "run_id": "b" * 32,
+            "listing_id": "c" * 32,
+            "score_version": "scoring-policy-v1",
+            "value": 0.7,
+        },
+    )
+    assert error == "events.forbidden_keys"

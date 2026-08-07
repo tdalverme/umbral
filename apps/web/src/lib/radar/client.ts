@@ -84,6 +84,72 @@ export interface Problem {
   status: number;
 }
 
+export interface ExplanationReason {
+  criterion_key: string;
+  state: "match" | "mismatch" | "unknown";
+  score: number;
+  confidence: number;
+  contribution: number;
+  evidence_level: "strong" | "medium" | "low";
+  reason_code: string;
+  evidence_refs: Array<Record<string, string>>;
+  text: string;
+}
+
+export interface ExplanationRisk {
+  criterion_key: string;
+  state: "match" | "mismatch" | "unknown";
+  reason_code: string;
+  text: string;
+}
+
+export interface Explanation {
+  search_profile_id: string;
+  run_id: string;
+  listing_id: string;
+  score_version: string;
+  score: number;
+  confidence: number;
+  reasons: ExplanationReason[];
+  risks: ExplanationRisk[];
+  missing_data: string[];
+  satisfied_filters: string[];
+  profile_snapshot: Record<string, string>;
+  feature_snapshot: Record<string, string>;
+}
+
+export interface ExplanationsPage {
+  search_profile_id: string;
+  run_id: string;
+  run_state: RunState;
+  items: Explanation[];
+  next_after_position: number | null;
+}
+
+export interface ComparisonCell {
+  listing_id: string;
+  dimension_key: string;
+  value: unknown;
+  state: "match" | "mismatch" | "unknown";
+  missing: boolean;
+  evidence_refs: Array<Record<string, string>>;
+}
+
+export interface Comparison {
+  search_profile_id: string;
+  run_id: string;
+  score_version: string;
+  limit: number;
+  listings: Array<{ listing_id: string; position: number }>;
+  dimensions: Array<{ kind: "fixed" | "criterion"; key: string; label: string; concept: string | null }>;
+  cells: ComparisonCell[];
+}
+
+export interface Shortlist {
+  search_profile_id: string;
+  listing_ids: string[];
+}
+
 async function parseResponse(response: Response): Promise<unknown> {
   if (response.ok) return response.json();
   let problem: Problem | null = null;
@@ -128,4 +194,31 @@ export const radarApi = {
   },
   listing: async (listingId: string): Promise<ListingDetail> =>
     (await getJson(`/api/radar/listings/${listingId}`)) as ListingDetail,
+  explanations: async (
+    id: string,
+    runId: string | null,
+    pageSize: number,
+    afterPosition: number | null,
+  ): Promise<ExplanationsPage> => {
+    const query = new URLSearchParams({ page_size: String(pageSize) });
+    if (runId) query.set("run_id", runId);
+    if (afterPosition !== null) query.set("after_position", String(afterPosition));
+    return (await getJson(`/api/radar/profiles/${id}/explanations?${query.toString()}`)) as ExplanationsPage;
+  },
+  explanation: async (id: string, listingId: string, runId: string | null): Promise<Explanation> => {
+    const query = new URLSearchParams();
+    if (runId) query.set("run_id", runId);
+    const suffix = query.toString();
+    return (await getJson(
+      `/api/radar/profiles/${id}/explanations/${listingId}${suffix ? `?${suffix}` : ""}`,
+    )) as Explanation;
+  },
+  comparison: async (id: string, listingIds: string[]): Promise<Comparison> =>
+    (await sendJson(`/api/radar/profiles/${id}/comparisons`, "POST", { listing_ids: listingIds })) as Comparison,
+  getShortlist: async (id: string): Promise<Shortlist> =>
+    (await getJson(`/api/radar/profiles/${id}/comparison-shortlist`)) as Shortlist,
+  setShortlist: async (id: string, listingIds: string[]): Promise<Shortlist> =>
+    (await sendJson(`/api/radar/profiles/${id}/comparison-shortlist`, "PUT", {
+      listing_ids: listingIds,
+    })) as Shortlist,
 };

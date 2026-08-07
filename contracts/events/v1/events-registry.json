@@ -32,6 +32,67 @@
       "version": 1,
       "emitted_by": "client",
       "required_keys": ["search_profile_id", "run_id", "listing_id", "source_id"]
+    },
+    "criteria.concept_version_created.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["concept_key", "concept_version"]
+    },
+    "criteria.compilation_created.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": [
+        "profile_id",
+        "profile_version",
+        "compilation_version",
+        "criterion_count",
+        "warning_count"
+      ]
+    },
+    "criteria.observation_batch_published.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": [
+        "scope_kind",
+        "scope_key",
+        "extraction_version_id",
+        "published_count",
+        "superseded_count",
+        "failed_count"
+      ]
+    },
+    "criteria.recompute_completed.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": [
+        "recompute_run_id",
+        "scope_kind",
+        "scope_key",
+        "cause",
+        "state",
+        "published_count",
+        "failed_count"
+      ]
+    },
+    "recommendation.explanation_viewed.v1": {
+      "version": 1,
+      "emitted_by": "client",
+      "required_keys": [
+        "search_profile_id",
+        "run_id",
+        "listing_id",
+        "score_version"
+      ]
+    },
+    "recommendation.comparison_viewed.v1": {
+      "version": 1,
+      "emitted_by": "client",
+      "required_keys": [
+        "search_profile_id",
+        "run_id",
+        "listing_count",
+        "score_version"
+      ]
     }
   },
   "forbidden_keys": [
@@ -44,7 +105,9 @@
     "password",
     "description_text",
     "location_text",
-    "geometry"
+    "geometry",
+    "value",
+    "fragment"
   ],
   "common_fields": [
     "event_id",

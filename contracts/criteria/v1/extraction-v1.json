@@ -1,0 +1,78 @@
+{
+  "contract_version": "1",
+  "registry_version": "extraction-v1",
+  "allowed_input_fields": [
+    "description_text",
+    "location_text",
+    "amenities",
+    "property_type",
+    "rooms",
+    "floor",
+    "surface_m2",
+    "neighborhood"
+  ],
+  "forbidden_input_keys": [
+    "url",
+    "source_id",
+    "external_id",
+    "snapshot_id",
+    "normalizer_version",
+    "correlation_id",
+    "actor_id"
+  ],
+  "evidence": {
+    "fragment": "string|null",
+    "span": "[start,end]|null",
+    "matched_on": "[field]"
+  },
+  "qualitative_max_attempts": 2,
+  "concepts": {
+    "balcon": {
+      "source": "rule",
+      "rule": "balcon",
+      "input_fields": ["description_text", "amenities"]
+    },
+    "ambientes": {
+      "source": "rule",
+      "rule": "ambientes",
+      "input_fields": ["description_text", "rooms"]
+    },
+    "piso": {
+      "source": "rule",
+      "rule": "piso",
+      "input_fields": ["description_text", "floor"]
+    },
+    "tipo_cocina": {
+      "source": "rule",
+      "rule": "tipo_cocina",
+      "input_fields": ["description_text"]
+    },
+    "luminosidad": {
+      "source": "model",
+      "schema": {
+        "type": "object",
+        "required": ["value", "evidence", "confidence"],
+        "properties": {
+          "value": {"type": "string", "enum": ["baja", "media", "alta"]},
+          "evidence": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "estado_general": {
+      "source": "model",
+      "schema": {
+        "type": "object",
+        "required": ["value", "evidence", "confidence"],
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": ["malo", "regular", "bueno", "muy_bueno"]
+          },
+          "evidence": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    }
+  }
+}

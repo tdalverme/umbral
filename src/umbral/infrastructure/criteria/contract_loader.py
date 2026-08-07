@@ -1,0 +1,57 @@
+"""Loads the published criteria contracts from the repository contracts tree."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from umbral.application.criteria.extractor import (
+    ExtractionContractSpec,
+    parse_extraction_contract,
+)
+from umbral.application.criteria.registry import (
+    ConceptsSeedSpec,
+    MatcherTypesSpec,
+    parse_concepts_seed,
+    parse_matcher_types,
+)
+
+_CONCEPTS_SEED_PATH = (
+    Path(__file__).resolve().parents[4]
+    / "contracts"
+    / "criteria"
+    / "v1"
+    / "concepts-seed-v1.json"
+)
+_MATCHER_TYPES_PATH = (
+    Path(__file__).resolve().parents[4]
+    / "contracts"
+    / "criteria"
+    / "v1"
+    / "matcher-types-v1.json"
+)
+_EXTRACTION_PATH = (
+    Path(__file__).resolve().parents[4]
+    / "contracts"
+    / "criteria"
+    / "v1"
+    / "extraction-v1.json"
+)
+
+
+def load_concepts_seed(path: Path | None = None) -> ConceptsSeedSpec:
+    source = path or _CONCEPTS_SEED_PATH
+    data = json.loads(source.read_text(encoding="utf-8"))
+    return parse_concepts_seed(data)
+
+
+def load_matcher_types(path: Path | None = None) -> MatcherTypesSpec:
+    source = path or _MATCHER_TYPES_PATH
+    data = json.loads(source.read_text(encoding="utf-8"))
+    return parse_matcher_types(data)
+
+
+def load_extraction_contract(path: Path | None = None) -> ExtractionContractSpec:
+    source = path or _EXTRACTION_PATH
+    data = json.loads(source.read_text(encoding="utf-8"))
+    return parse_extraction_contract(data)

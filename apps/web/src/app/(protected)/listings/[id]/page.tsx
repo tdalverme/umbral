@@ -8,9 +8,54 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { radarApi, type ListingDetail } from "@/lib/radar/client";
-import { emitDetailViewed, emitSourceOpened } from "@/lib/radar/events";
+import { radarApi, type Explanation, type ListingDetail } from "@/lib/radar/client";
+import { emitDetailViewed, emitExplanationViewed, emitSourceOpened } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
+
+const EVIDENCE_LABEL: Record<string, string> = { strong: "fuerte", medium: "media", low: "baja" };
+
+function Breakdown({ explanation }: { explanation: Explanation }): React.ReactElement {
+  return (
+    <CardContent className="space-y-3 text-sm">
+      <p>
+        <strong>Confianza del match:</strong> {explanation.confidence.toFixed(2)} ·{" "}
+        <strong>Score:</strong> {explanation.score.toFixed(2)} (indicador con confianza, no certeza)
+      </p>
+      {explanation.satisfied_filters.length > 0 && (
+        <p>
+          <strong>Filtros cumplidos:</strong> {explanation.satisfied_filters.join(", ")}
+        </p>
+      )}
+      {explanation.reasons.length > 0 && (
+        <ul className="space-y-1">
+          {explanation.reasons.map((reason) => (
+            <li key={reason.criterion_key} className="flex items-start gap-2">
+              <span>{reason.text}</span>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                evidencia {EVIDENCE_LABEL[reason.evidence_level]}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {explanation.risks.length > 0 && (
+        <div>
+          <p className="font-medium">Riesgos e incertidumbre</p>
+          <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+            {explanation.risks.map((risk) => (
+              <li key={`${risk.criterion_key}-${risk.state}`}>{risk.text}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {explanation.missing_data.length > 0 && (
+        <p className="text-muted-foreground">
+          <strong>Sin datos para evaluar:</strong> {explanation.missing_data.join(", ")}
+        </p>
+      )}
+    </CardContent>
+  );
+}
 
 export default function ListingDetailPage(): React.ReactElement {
   const params = useParams<{ id: string }>();
@@ -20,6 +65,8 @@ export default function ListingDetailPage(): React.ReactElement {
   const runId = searchParams.get("run") ?? "";
 
   const [detail, setDetail] = useState<ListingDetail | null>(null);
+  const [explanation, setExplanation] = useState<Explanation | null>(null);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,6 +81,20 @@ export default function ListingDetailPage(): React.ReactElement {
         setError(reason instanceof Error ? reason.message : "radar.error");
       });
   }, [listingId, profileId, runId]);
+
+  useEffect(() => {
+    if (!profileId || !runId) return;
+    radarApi
+      .explanation(profileId, listingId, runId)
+      .then((value) => {
+        setExplanation(value);
+        setExplanationError(null);
+        emitExplanationViewed(profileId, value.run_id, listingId, value.score_version);
+      })
+      .catch((reason: unknown) => {
+        setExplanationError(reason instanceof Error ? reason.message : "radar.error");
+      });
+  }, [profileId, listingId, runId]);
 
   const loading = detail === null && error === null;
 
@@ -142,17 +203,25 @@ export default function ListingDetailPage(): React.ReactElement {
           <CardHeader>
             <CardTitle className="text-lg">Por qué aparece acá</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p className="text-muted-foreground">
-              Aproximación de ajuste a tu radar, sin evidencia: el desglose completo llega más adelante.
-            </p>
-            <ul className="list-disc space-y-1 pl-5">
-              <li>Presupuesto: encaja dentro del máximo declarado</li>
-              <li>Ambientes: compatible con el mínimo pedido</li>
-              <li>Superficie: dentro de los rangos declarados</li>
-              <li>Ubicación: dentro de los barrios elegidos</li>
-            </ul>
-          </CardContent>
+          {explanation ? (
+            <Breakdown explanation={explanation} />
+          ) : explanationError === "explanation_unavailable" ? (
+            <CardContent className="space-y-2 text-sm">
+              <p className="text-muted-foreground">
+                La explicación no está disponible para este run; se generará con razones completas en el próximo run.
+              </p>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Presupuesto: encaja dentro del máximo declarado</li>
+                <li>Ambientes: compatible con el mínimo pedido</li>
+                <li>Superficie: dentro de los rangos declarados</li>
+                <li>Ubicación: dentro de los barrios elegidos</li>
+              </ul>
+            </CardContent>
+          ) : (
+            <CardContent className="space-y-2 text-sm">
+              <p className="text-muted-foreground">Cargando razones…</p>
+            </CardContent>
+          )}
         </Card>
       </div>
 

@@ -92,6 +92,22 @@ try {
         Invoke-ChildCheck -Name "Radar" -Path (Join-Path $PSScriptRoot "check-radar.ps1")
     }
 
+    $criteriaSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\criteria"),
+        (Join-Path $repoRoot "tests\integration\criteria")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($criteriaSurface) {
+        Invoke-ChildCheck -Name "Criterios" -Path (Join-Path $PSScriptRoot "check-criteria.ps1")
+    }
+
+    $scoringSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\scoring"),
+        (Join-Path $repoRoot "tests\integration\scoring")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($scoringSurface) {
+        Invoke-ChildCheck -Name "Scoring" -Path (Join-Path $PSScriptRoot "check-scoring.ps1")
+    }
+
     $storageSurface = @(
         (Join-Path $repoRoot "src\umbral\application\objects"),
         (Join-Path $repoRoot "tests\contract\test_object_store.py")

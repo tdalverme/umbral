@@ -63,6 +63,8 @@ from umbral.application.radar.scoring import (
     ScoringBaselineSpec,
     compute_score,
 )
+from umbral.application.scoring.contracts import CriterionEvaluation
+from umbral.application.scoring.engine import PolicyRunEngine
 from umbral.application.silver.contracts import NormalizedListing
 from umbral.domain.audit import AuditActor
 from umbral.domain.errors import ConcurrencyConflict
@@ -89,6 +91,7 @@ class RadarService:
         job_runtime: JobRuntime | None,
         run_job_type: str = RADAR_RUN_JOB_TYPE,
         score_policy_version: str = "scoring-baseline-v1",
+        policy_engine: PolicyRunEngine | None = None,
         clock: Clock | None = None,
     ) -> None:
         self.profiles = profiles
@@ -104,6 +107,7 @@ class RadarService:
         self.job_runtime = job_runtime
         self.run_job_type = run_job_type
         self.score_policy_version = score_policy_version
+        self.policy_engine = policy_engine
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     # ------------------------------------------------------------------
@@ -458,37 +462,68 @@ class RadarService:
             for listing in candidates
             if apply_hard_filters(cast(CandidateListing, listing), profile)
         )
-        scored: list[tuple[float, NormalizedListing, Mapping[str, float]]] = []
-        for listing in passed:
-            score, contributions = compute_score(
-                profile, cast(ScorableListing, listing), self.scoring
-            )
-            scored.append((score, listing, contributions))
-        scored.sort(
-            key=lambda pair: (
-                -pair[0],
-                pair[1].total_cost,
-                str(pair[1].listing_id),
-            )
-        )
-        now = self.clock()
-        items = tuple(
-            RecommendationItem(
-                item_id=uuid4(),
+        items: tuple[RecommendationItem, ...]
+        evaluations: tuple[CriterionEvaluation, ...] = ()
+        if self.policy_engine is not None:
+            compilation = self.policy_engine.compilation_for(profile_version_id)
+        else:
+            compilation = None
+        if self.policy_engine is not None and compilation is not None:
+            scored_v1 = self.policy_engine.score_run(
+                profile=profile,
+                compilation=compilation,
+                candidates=passed,
                 run_id=run.run_id,
-                listing_id=listing.listing_id,
-                score=score,
-                position=position,
-                contributions={
-                    "budget": contributions["budget"],
-                    "rooms": contributions["rooms"],
-                    "surface": contributions["surface"],
-                    "location_precision": contributions["location_precision"],
-                    "score_policy_version": self.scoring.score_policy_version,
-                },
+                correlation_id=run.correlation_id,
             )
-            for position, (score, listing, contributions) in enumerate(scored)
-        )
+            items = tuple(
+                RecommendationItem(
+                    item_id=uuid4(),
+                    run_id=run.run_id,
+                    listing_id=candidate.listing_id,
+                    score=candidate.score,
+                    position=position,
+                    contributions=dict(candidate.contributions),
+                )
+                for position, candidate in enumerate(scored_v1)
+            )
+            evaluations = tuple(
+                evaluation
+                for candidate in scored_v1
+                for evaluation in candidate.evaluations
+            )
+        else:
+            scored: list[tuple[float, NormalizedListing, Mapping[str, float]]] = []
+            for listing in passed:
+                score, contributions = compute_score(
+                    profile, cast(ScorableListing, listing), self.scoring
+                )
+                scored.append((score, listing, contributions))
+            scored.sort(
+                key=lambda pair: (
+                    -pair[0],
+                    pair[1].total_cost,
+                    str(pair[1].listing_id),
+                )
+            )
+            items = tuple(
+                RecommendationItem(
+                    item_id=uuid4(),
+                    run_id=run.run_id,
+                    listing_id=listing.listing_id,
+                    score=score,
+                    position=position,
+                    contributions={
+                        "budget": contributions["budget"],
+                        "rooms": contributions["rooms"],
+                        "surface": contributions["surface"],
+                        "location_precision": contributions["location_precision"],
+                        "score_policy_version": self.scoring.score_policy_version,
+                    },
+                )
+                for position, (score, listing, contributions) in enumerate(scored)
+            )
+        now = self.clock()
         event = ProductEvent(
             event_id=uuid4(),
             event_type="recommendation.run_published.v1",
@@ -512,7 +547,7 @@ class RadarService:
                 published_item_count=len(items),
                 finished_at=now,
             )
-            self.runs.publish(published, items, event)
+            self.runs.publish(published, items, event, evaluations)
         except ConcurrencyConflict:
             raise RadarTransientError(
                 "radar.run_race", "run publication lost the optimistic lock"

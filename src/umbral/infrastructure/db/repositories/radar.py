@@ -24,6 +24,7 @@ from umbral.application.radar.contracts import (
     SearchProfile,
     SearchProfileState,
 )
+from umbral.application.scoring.contracts import CriterionEvaluation
 from umbral.application.silver.contracts import GeoPrecision, NormalizedListing
 from umbral.domain.errors import ConcurrencyConflict
 from umbral.infrastructure.db.models.radar import (
@@ -40,6 +41,9 @@ from umbral.infrastructure.db.models.radar import (
 )
 from umbral.infrastructure.db.models.radar import (
     SearchProfileVersion as SearchProfileVersionModel,
+)
+from umbral.infrastructure.db.models.scoring import (
+    CriterionEvaluation as CriterionEvaluationModel,
 )
 from umbral.infrastructure.db.models.silver import (
     ListingChange as ListingChangeModel,
@@ -237,6 +241,7 @@ class SqlAlchemyRunRepository:
         run: RecommendationRun,
         items: tuple[RecommendationItem, ...],
         event: ProductEvent,
+        evaluations: tuple[CriterionEvaluation, ...] = (),
     ) -> None:
         now = datetime.now(timezone.utc)
         with self.session_factory() as session:
@@ -267,6 +272,31 @@ class SqlAlchemyRunRepository:
                         score=item.score,
                         position=item.position,
                         contributions=dict(item.contributions),
+                    )
+                )
+            for evaluation in evaluations:
+                session.add(
+                    CriterionEvaluationModel(
+                        id=evaluation.evaluation_id,
+                        created_at=evaluation.created_at,
+                        updated_at=evaluation.created_at,
+                        actor_kind="system",
+                        actor_id=None,
+                        source="radar.run",
+                        correlation_id=evaluation.correlation_id,
+                        run_id=evaluation.run_id,
+                        listing_id=evaluation.listing_id,
+                        criterion_key=evaluation.criterion_key,
+                        criterion_version=evaluation.criterion_version,
+                        matcher_type=evaluation.matcher_type,
+                        params=dict(evaluation.params),
+                        input_refs=[dict(ref) for ref in evaluation.input_refs],
+                        score=evaluation.score,
+                        confidence=evaluation.confidence,
+                        state=evaluation.state,
+                        contribution=evaluation.contribution,
+                        reason_code=evaluation.reason_code,
+                        evidence_refs=[dict(ref) for ref in evaluation.evidence_refs],
                     )
                 )
             session.add(

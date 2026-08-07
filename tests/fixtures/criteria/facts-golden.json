@@ -1,0 +1,24 @@
+{
+  "contract_version": "1",
+  "cases": [
+    {
+      "scenario": "change_supersedes",
+      "profile_id": "11111111-1111-1111-1111-111111111111",
+      "concept_key": "balcon",
+      "first": {
+        "value": "true",
+        "weight": 0.8,
+        "polarity": "positive",
+        "confidence": 0.9,
+        "fact_source": "harness"
+      },
+      "second": {
+        "value": "false",
+        "weight": 0.6,
+        "polarity": "negative",
+        "confidence": 0.7,
+        "fact_source": "harness"
+      }
+    }
+  ]
+}

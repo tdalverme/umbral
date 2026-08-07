@@ -1,0 +1,32 @@
+{
+  "contract_version": "1",
+  "seed_version": "concepts-v1",
+  "valid_concepts": [
+    {
+      "key": "balcon",
+      "name": "Balcon",
+      "aliases": ["balcon"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["true", "false"]},
+      "source": "seed",
+      "defaults": {"value": "false"},
+      "compute_policy": {"unknown": "penalize", "qualitative": false}
+    }
+  ],
+  "invalid_concepts": [
+    {
+      "key": "invalido",
+      "name": "Invalido",
+      "aliases": [],
+      "matcher_type": "matcher_no_soportado",
+      "params_schema": {},
+      "source": "seed",
+      "defaults": {},
+      "compute_policy": {"unknown": "exclude", "qualitative": false}
+    }
+  ],
+  "alias_collisions": [
+    {"key": "balcon", "alias": "terraza"},
+    {"key": "piso", "alias": "terraza"}
+  ]
+}

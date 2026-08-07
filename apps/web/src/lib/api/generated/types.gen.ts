@@ -49,6 +49,84 @@ export type BodySubmitImportBatch = {
 };
 
 /**
+ * CellResponse
+ */
+export type CellResponse = {
+    /**
+     * Dimension Key
+     */
+    dimension_key: string;
+    /**
+     * Evidence Refs
+     */
+    evidence_refs?: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Listing Id
+     */
+    listing_id: string;
+    /**
+     * Missing
+     */
+    missing: boolean;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Value
+     */
+    value: unknown;
+};
+
+/**
+ * ComparisonRequest
+ */
+export type ComparisonRequest = {
+    /**
+     * Listing Ids
+     */
+    listing_ids: Array<string>;
+};
+
+/**
+ * ComparisonResponse
+ */
+export type ComparisonResponse = {
+    /**
+     * Cells
+     */
+    cells: Array<CellResponse>;
+    /**
+     * Dimensions
+     */
+    dimensions: Array<DimensionResponse>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Listings
+     */
+    listings: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Score Version
+     */
+    score_version: string;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
+};
+
+/**
  * CreateSearchProfileRequest
  */
 export type CreateSearchProfileRequest = {
@@ -128,6 +206,112 @@ export type DependencyCheck = {
      * State
      */
     state: 'ready' | 'degraded' | 'unavailable';
+};
+
+/**
+ * DimensionResponse
+ */
+export type DimensionResponse = {
+    /**
+     * Concept
+     */
+    concept?: string | null;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * ExplanationResponse
+ */
+export type ExplanationResponse = {
+    /**
+     * Confidence
+     */
+    confidence: number;
+    /**
+     * Feature Snapshot
+     */
+    feature_snapshot: {
+        [key: string]: unknown;
+    };
+    /**
+     * Listing Id
+     */
+    listing_id: string;
+    /**
+     * Missing Data
+     */
+    missing_data: Array<string>;
+    /**
+     * Profile Snapshot
+     */
+    profile_snapshot: {
+        [key: string]: unknown;
+    };
+    /**
+     * Reasons
+     */
+    reasons: Array<ReasonResponse>;
+    /**
+     * Risks
+     */
+    risks: Array<RiskResponse>;
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Satisfied Filters
+     */
+    satisfied_filters: Array<string>;
+    /**
+     * Score
+     */
+    score: number;
+    /**
+     * Score Version
+     */
+    score_version: string;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
+};
+
+/**
+ * ExplanationsResponse
+ */
+export type ExplanationsResponse = {
+    /**
+     * Items
+     */
+    items: Array<ExplanationResponse>;
+    /**
+     * Next After Position
+     */
+    next_after_position?: number | null;
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Run State
+     */
+    run_state: string;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
 };
 
 /**
@@ -535,6 +719,72 @@ export type Readiness = {
 };
 
 /**
+ * ReasonResponse
+ */
+export type ReasonResponse = {
+    /**
+     * Confidence
+     */
+    confidence: number;
+    /**
+     * Contribution
+     */
+    contribution: number;
+    /**
+     * Criterion Key
+     */
+    criterion_key: string;
+    /**
+     * Evidence Level
+     */
+    evidence_level: string;
+    /**
+     * Evidence Refs
+     */
+    evidence_refs: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Reason Code
+     */
+    reason_code: string;
+    /**
+     * Score
+     */
+    score: number;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * RiskResponse
+ */
+export type RiskResponse = {
+    /**
+     * Criterion Key
+     */
+    criterion_key: string;
+    /**
+     * Reason Code
+     */
+    reason_code: string;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
  * RunCountsModel
  */
 export type RunCountsModel = {
@@ -663,6 +913,30 @@ export type SearchProfileResponse = {
      * Zones
      */
     zones: Array<string>;
+};
+
+/**
+ * ShortlistRequest
+ */
+export type ShortlistRequest = {
+    /**
+     * Listing Ids
+     */
+    listing_ids: Array<string>;
+};
+
+/**
+ * ShortlistResponse
+ */
+export type ShortlistResponse = {
+    /**
+     * Listing Ids
+     */
+    listing_ids: Array<string>;
+    /**
+     * Search Profile Id
+     */
+    search_profile_id: string;
 };
 
 /**
@@ -1507,6 +1781,241 @@ export type UpdateSearchProfileResponses = {
 };
 
 export type UpdateSearchProfileResponse = UpdateSearchProfileResponses[keyof UpdateSearchProfileResponses];
+
+export type GetComparisonShortlistData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/comparison-shortlist';
+};
+
+export type GetComparisonShortlistErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetComparisonShortlistError = GetComparisonShortlistErrors[keyof GetComparisonShortlistErrors];
+
+export type GetComparisonShortlistResponses = {
+    /**
+     * Successful Response
+     */
+    200: ShortlistResponse;
+};
+
+export type GetComparisonShortlistResponse = GetComparisonShortlistResponses[keyof GetComparisonShortlistResponses];
+
+export type SetComparisonShortlistData = {
+    body: ShortlistRequest;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/comparison-shortlist';
+};
+
+export type SetComparisonShortlistErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SetComparisonShortlistError = SetComparisonShortlistErrors[keyof SetComparisonShortlistErrors];
+
+export type SetComparisonShortlistResponses = {
+    /**
+     * Successful Response
+     */
+    200: ShortlistResponse;
+};
+
+export type SetComparisonShortlistResponse = SetComparisonShortlistResponses[keyof SetComparisonShortlistResponses];
+
+export type CreateComparisonData = {
+    body: ComparisonRequest;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/comparisons';
+};
+
+export type CreateComparisonErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateComparisonError = CreateComparisonErrors[keyof CreateComparisonErrors];
+
+export type CreateComparisonResponses = {
+    /**
+     * Successful Response
+     */
+    200: ComparisonResponse;
+};
+
+export type CreateComparisonResponse = CreateComparisonResponses[keyof CreateComparisonResponses];
+
+export type ListExplanationsData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/explanations';
+};
+
+export type ListExplanationsErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListExplanationsError = ListExplanationsErrors[keyof ListExplanationsErrors];
+
+export type ListExplanationsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExplanationsResponse;
+};
+
+export type ListExplanationsResponse = ListExplanationsResponses[keyof ListExplanationsResponses];
+
+export type GetExplanationData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/explanations/{listing_id}';
+};
+
+export type GetExplanationErrors = {
+    /**
+     * Bad Request
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetExplanationError = GetExplanationErrors[keyof GetExplanationErrors];
+
+export type GetExplanationResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExplanationResponse;
+};
+
+export type GetExplanationResponse = GetExplanationResponses[keyof GetExplanationResponses];
 
 export type ListMatchesData = {
     body?: never;

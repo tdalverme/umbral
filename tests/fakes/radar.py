@@ -15,6 +15,7 @@ from umbral.application.radar.contracts import (
     SearchProfile,
     SearchProfileState,
 )
+from umbral.application.scoring.contracts import CriterionEvaluation
 from umbral.application.silver.contracts import NormalizedListing
 from umbral.domain.errors import ConcurrencyConflict
 
@@ -77,6 +78,9 @@ class FakeRunRepository:
     rows: dict[UUID, RecommendationRun] = field(default_factory=dict)
     events: list[ProductEvent] = field(default_factory=list)
     items_by_run: dict[UUID, list[RecommendationItem]] = field(default_factory=dict)
+    evaluations_by_run: dict[UUID, list[CriterionEvaluation]] = field(
+        default_factory=dict
+    )
 
     def insert(self, run: RecommendationRun) -> None:
         self.rows[run.run_id] = run
@@ -129,6 +133,7 @@ class FakeRunRepository:
         run: RecommendationRun,
         items: tuple[RecommendationItem, ...],
         event: ProductEvent,
+        evaluations: tuple[CriterionEvaluation, ...] = (),
     ) -> None:
         current = self.rows.get(run.run_id)
         if current is None:
@@ -155,6 +160,8 @@ class FakeRunRepository:
         )
         self.items_by_run[run.run_id] = list(items)
         self.events.append(event)
+        if evaluations:
+            self.evaluations_by_run.setdefault(run.run_id, []).extend(evaluations)
 
     def fail(self, run: RecommendationRun, failure_code: str) -> None:
         current = self.rows.get(run.run_id)

@@ -8,7 +8,12 @@ from umbral.infrastructure.db.migrations import expected_schema
 
 
 def test_identity_revision_is_linear_and_metadata_has_all_tables() -> None:
-    path = Path(__file__).parents[2] / "alembic" / "versions" / "0002_private_beta_identity.py"
+    path = (
+        Path(__file__).parents[2]
+        / "alembic"
+        / "versions"
+        / "0002_private_beta_identity.py"
+    )
     spec = importlib.util.spec_from_file_location("identity_revision", path)
     assert spec and spec.loader
     revision = importlib.util.module_from_spec(spec)

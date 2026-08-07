@@ -79,8 +79,9 @@ def _settings() -> Settings:
     )
 
 
-def test_runtime_initializes_safe_observability_once_without_affecting_product(
-) -> None:
+def test_runtime_initializes_safe_observability_once_without_affecting_product() -> (
+    None
+):
     captured: list[_CapturedProvider] = []
     sentry_calls: list[tuple[str | None, str]] = []
 
@@ -88,8 +89,7 @@ def test_runtime_initializes_safe_observability_once_without_affecting_product(
         *, settings: Settings, resource_attributes: dict[str, str]
     ) -> bool:
         assert (
-            settings.otel_exporter_otlp_headers
-            == "authorization=CANARY_OTLP_API_KEY"
+            settings.otel_exporter_otlp_headers == "authorization=CANARY_OTLP_API_KEY"
         )
         captured.append(_CapturedProvider(resource_attributes))
         return True
@@ -230,14 +230,18 @@ def test_otel_uses_bounded_resource_and_standard_signal_configuration(
             {"shared": "one two", "override": "generic"},
         ),
     }
-    assert resources == [
-        {
-            "service.name": "umbral",
-            "deployment.environment.name": "preview",
-            "service.version": "preview-20260801",
-            "umbral.release.digest": "sha256:" + "a" * 64,
-        }
-    ] * 2
+    assert (
+        resources
+        == [
+            {
+                "service.name": "umbral",
+                "deployment.environment.name": "preview",
+                "service.version": "preview-20260801",
+                "umbral.release.digest": "sha256:" + "a" * 64,
+            }
+        ]
+        * 2
+    )
     for provider in providers:
         provider.shutdown()
 
@@ -287,21 +291,25 @@ def test_otel_uses_signal_specific_endpoints_as_is_and_normalizes_legacy_base(
 
     assert captured == {
         "trace": _ExporterConfig(
-            "https://collector.invalid/custom-traces", {},
+            "https://collector.invalid/custom-traces",
+            {},
         ),
         "metric": _ExporterConfig(
-            "https://collector.invalid/custom-metrics", {},
+            "https://collector.invalid/custom-metrics",
+            {},
         ),
     }
 
 
 def test_otel_normalizes_legacy_trace_suffix_without_doubling_paths() -> None:
-    assert _endpoint_for(
-        "traces", "https://otel.preview.invalid/v1/traces"
-    ) == "https://otel.preview.invalid/v1/traces"
-    assert _endpoint_for(
-        "metrics", "https://otel.preview.invalid/v1/traces"
-    ) == "https://otel.preview.invalid/v1/metrics"
+    assert (
+        _endpoint_for("traces", "https://otel.preview.invalid/v1/traces")
+        == "https://otel.preview.invalid/v1/traces"
+    )
+    assert (
+        _endpoint_for("metrics", "https://otel.preview.invalid/v1/traces")
+        == "https://otel.preview.invalid/v1/metrics"
+    )
 
 
 def test_malformed_otlp_headers_fail_closed_without_exposing_canary(

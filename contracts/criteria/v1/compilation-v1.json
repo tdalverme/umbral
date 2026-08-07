@@ -1,0 +1,17 @@
+{
+  "contract_version": "1",
+  "registry_version": "compilation-v1",
+  "criterion": {
+    "concept_key": "string",
+    "matcher_type": "string",
+    "params": "object",
+    "source_ref": "string",
+    "soft_to_hard": "boolean"
+  },
+  "rules": {
+    "semantic_memory_never_compiled": true,
+    "soft_to_hard_requires_confirmation": true,
+    "invalid_criteria_rejected": true,
+    "output_ordered_and_versioned": true
+  }
+}

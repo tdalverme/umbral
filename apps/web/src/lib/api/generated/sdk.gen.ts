@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, CreateSearchProfileData, CreateSearchProfileErrors, CreateSearchProfileResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, EmitProductEventData, EmitProductEventErrors, EmitProductEventResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetListingDetailData, GetListingDetailErrors, GetListingDetailResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, GetSearchProfileData, GetSearchProfileErrors, GetSearchProfileResponses, ListMatchesData, ListMatchesErrors, ListMatchesResponses, ListSearchProfilesData, ListSearchProfilesErrors, ListSearchProfilesResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, SetSearchProfileStatusData, SetSearchProfileStatusErrors, SetSearchProfileStatusResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses, UpdateSearchProfileData, UpdateSearchProfileErrors, UpdateSearchProfileResponses } from './types.gen';
+import type { ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, CreateComparisonData, CreateComparisonErrors, CreateComparisonResponses, CreateSearchProfileData, CreateSearchProfileErrors, CreateSearchProfileResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, EmitProductEventData, EmitProductEventErrors, EmitProductEventResponses, GetComparisonShortlistData, GetComparisonShortlistErrors, GetComparisonShortlistResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetExplanationData, GetExplanationErrors, GetExplanationResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetListingDetailData, GetListingDetailErrors, GetListingDetailResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, GetSearchProfileData, GetSearchProfileErrors, GetSearchProfileResponses, ListExplanationsData, ListExplanationsErrors, ListExplanationsResponses, ListMatchesData, ListMatchesErrors, ListMatchesResponses, ListSearchProfilesData, ListSearchProfilesErrors, ListSearchProfilesResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, SetComparisonShortlistData, SetComparisonShortlistErrors, SetComparisonShortlistResponses, SetSearchProfileStatusData, SetSearchProfileStatusErrors, SetSearchProfileStatusResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses, UpdateSearchProfileData, UpdateSearchProfileErrors, UpdateSearchProfileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -185,6 +185,59 @@ export const updateSearchProfile = <ThrowOnError extends boolean = false>(option
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Get Shortlist
+ */
+export const getComparisonShortlist = <ThrowOnError extends boolean = false>(options?: Options<GetComparisonShortlistData, ThrowOnError>): RequestResult<GetComparisonShortlistResponses, GetComparisonShortlistErrors, ThrowOnError> => (options?.client ?? client).get<GetComparisonShortlistResponses, GetComparisonShortlistErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/comparison-shortlist',
+    ...options
+});
+
+/**
+ * Set Shortlist
+ */
+export const setComparisonShortlist = <ThrowOnError extends boolean = false>(options: Options<SetComparisonShortlistData, ThrowOnError>): RequestResult<SetComparisonShortlistResponses, SetComparisonShortlistErrors, ThrowOnError> => (options.client ?? client).put<SetComparisonShortlistResponses, SetComparisonShortlistErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/comparison-shortlist',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create Comparison
+ */
+export const createComparison = <ThrowOnError extends boolean = false>(options: Options<CreateComparisonData, ThrowOnError>): RequestResult<CreateComparisonResponses, CreateComparisonErrors, ThrowOnError> => (options.client ?? client).post<CreateComparisonResponses, CreateComparisonErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/comparisons',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Explanations
+ */
+export const listExplanations = <ThrowOnError extends boolean = false>(options?: Options<ListExplanationsData, ThrowOnError>): RequestResult<ListExplanationsResponses, ListExplanationsErrors, ThrowOnError> => (options?.client ?? client).get<ListExplanationsResponses, ListExplanationsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/explanations',
+    ...options
+});
+
+/**
+ * Get Explanation
+ */
+export const getExplanation = <ThrowOnError extends boolean = false>(options?: Options<GetExplanationData, ThrowOnError>): RequestResult<GetExplanationResponses, GetExplanationErrors, ThrowOnError> => (options?.client ?? client).get<GetExplanationResponses, GetExplanationErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/explanations/{listing_id}',
+    ...options
 });
 
 /**

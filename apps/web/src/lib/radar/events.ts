@@ -39,3 +39,21 @@ export function emitSourceOpened(profileId: string, runId: string, listingId: st
     source_id: sourceId,
   });
 }
+
+export function emitExplanationViewed(profileId: string, runId: string, listingId: string, scoreVersion: string): void {
+  void emitProductEvent("recommendation.explanation_viewed.v1", {
+    search_profile_id: profileId,
+    run_id: runId,
+    listing_id: listingId,
+    score_version: scoreVersion,
+  });
+}
+
+export function emitComparisonViewed(profileId: string, runId: string, listingCount: number, scoreVersion: string): void {
+  void emitProductEvent("recommendation.comparison_viewed.v1", {
+    search_profile_id: profileId,
+    run_id: runId,
+    listing_count: listingCount,
+    score_version: scoreVersion,
+  });
+}

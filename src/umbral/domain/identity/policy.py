@@ -64,6 +64,21 @@ ACTION_RULES: dict[str, ActionRule] = {
         frozenset({"user", "operator", "administrator"}),
         True,
     ),
+    "product.explanation.read": ActionRule(
+        "product.explanation.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.comparison.read": ActionRule(
+        "product.comparison.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.comparison.write": ActionRule(
+        "product.comparison.write",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
     "product.listing.read": ActionRule(
         "product.listing.read",
         frozenset({"user", "operator", "administrator"}),

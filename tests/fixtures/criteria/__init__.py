@@ -1,0 +1,1 @@
+"""Criteria golden fixtures package."""

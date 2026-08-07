@@ -1,0 +1,18 @@
+{
+  "contract_version": "1",
+  "registry_version": "matcher-types-v1",
+  "matcher_types": {
+    "numeric_range": {
+      "allowed_params": ["min", "max", "unit"]
+    },
+    "categorical": {
+      "allowed_params": ["allowed_values"]
+    },
+    "geo_proximity": {
+      "allowed_params": ["radius_m"]
+    },
+    "semantic_feature": {
+      "allowed_params": ["concept", "threshold"]
+    }
+  }
+}

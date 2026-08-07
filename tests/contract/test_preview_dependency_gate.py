@@ -89,8 +89,9 @@ def _config() -> dict[str, str]:
     }
 
 
-def test_preview_dependency_gate_runs_all_remote_checks_without_secret_evidence(
-) -> None:
+def test_preview_dependency_gate_runs_all_remote_checks_without_secret_evidence() -> (
+    None
+):
     from umbral.ops.provider_conformance import (
         PreviewDependencyClients,
         run_preview_dependency_conformance,

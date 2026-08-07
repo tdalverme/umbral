@@ -17,6 +17,7 @@ from umbral.application.runtime.version import (
     parse_release_manifest,
 )
 from umbral.infrastructure.config.settings import Settings
+from umbral.infrastructure.criteria.composition import build_criteria_service
 from umbral.infrastructure.db.repositories.identity import SqlAlchemyIdentityStore
 from umbral.infrastructure.db.session import SessionProvider
 from umbral.infrastructure.identity.registry import build_identity_registry
@@ -27,7 +28,9 @@ from umbral.infrastructure.observability.runtime import initialize_observability
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
 from umbral.infrastructure.radar.composition import build_radar_service
 from umbral.infrastructure.runtime.heartbeat import RuntimeHeartbeatWriter
+from umbral.infrastructure.scoring.composition import build_scoring_service
 from umbral.infrastructure.silver.composition import build_normalize_service
+from umbral.workers.criteria import build_criteria_registry
 from umbral.workers.imports import build_ingestion_registry
 from umbral.workers.radar import build_radar_registry
 from umbral.workers.registry import JobRegistry
@@ -87,11 +90,37 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
     )
     for handler in build_silver_registry(silver).as_mapping().values():
         registry.register(handler)
+    scoring = build_scoring_service(
+        session_factory=session_provider.session_factory,
+        policy_seed_version=active_settings.scoring_policy_seed_version,
+        legacy_score_policy_version=active_settings.scoring_legacy_score_policy_version,
+        comparison_max_listings=active_settings.scoring_comparison_max_listings,
+        comparator_enabled=active_settings.scoring_comparator_enabled,
+    )
     radar = build_radar_service(
         session_factory=session_provider.session_factory,
         job_runtime=None,
+        policy_engine=scoring,
+        score_policy_version=active_settings.scoring_policy_seed_version,
     )
     for handler in build_radar_registry(radar).as_mapping().values():
+        registry.register(handler)
+    criteria = build_criteria_service(
+        session_factory=session_provider.session_factory,
+        job_runtime=None,
+        extraction_provider=active_settings.extraction_provider,
+        extraction_endpoint=None,
+        extraction_api_key=active_settings.extraction_managed_api_key,
+        extraction_model=active_settings.extraction_managed_model,
+        qualitative_max_attempts=active_settings.criteria_qualitative_max_attempts,
+        batch_size=active_settings.criteria_batch_size,
+        extraction_job_type=active_settings.criteria_extraction_job_type,
+        recompute_job_type=active_settings.criteria_recompute_job_type,
+        embeddings_enabled=active_settings.embeddings_enabled,
+        embedding_model_version_key=active_settings.embeddings_model_version_key,
+        urban_context_enabled=active_settings.urban_context_enabled,
+    )
+    for handler in build_criteria_registry(criteria).as_mapping().values():
         registry.register(handler)
     normalize_publish = _late_bind_publisher()
     for handler in (

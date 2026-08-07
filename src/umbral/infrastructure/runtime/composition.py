@@ -27,6 +27,7 @@ from umbral.application.runtime.readiness import (
     login_dependency_probes,
 )
 from umbral.application.runtime.version import ReleaseManifest
+from umbral.application.scoring.service import ScoringService
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.readiness import PersistenceProbe
 from umbral.infrastructure.db.repositories.identity import (
@@ -48,6 +49,7 @@ from umbral.infrastructure.observability.otel import record_dependency_metric
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
 from umbral.infrastructure.radar.composition import build_radar_service
+from umbral.infrastructure.scoring.composition import build_scoring_service
 
 _MARKER_BODY = b"umbral-preview-readiness-v1"
 _MARKER_DIGEST = hashlib.sha256(_MARKER_BODY).hexdigest()
@@ -72,6 +74,7 @@ class RuntimeComposition:
     job_runtime: JobRuntime
     ingestion: ImportRunService
     radar: RadarService
+    scoring: ScoringService | None
     readiness: ReadinessModule
 
 
@@ -147,9 +150,12 @@ def _compose_local(
         object_store=object_store,
         job_runtime=runtime,
     )
+    scoring = _build_and_bind_scoring(settings, session_provider, runtime)
     radar = build_radar_service(
         session_factory=session_provider.session_factory,
         job_runtime=runtime,
+        policy_engine=scoring,
+        score_policy_version=settings.scoring_policy_seed_version,
     )
     readiness = ReadinessModule(
         surface="api",
@@ -173,6 +179,7 @@ def _compose_local(
         runtime,
         ingestion,
         radar,
+        scoring,
         readiness,
     )
 
@@ -210,9 +217,12 @@ def _compose_preview(
         object_store=object_store,
         job_runtime=runtime,
     )
+    scoring = _build_and_bind_scoring(settings, session_provider, runtime)
     radar = build_radar_service(
         session_factory=session_provider.session_factory,
         job_runtime=runtime,
+        policy_engine=scoring,
+        score_policy_version=settings.scoring_policy_seed_version,
     )
 
     def persistence() -> PersistenceProbe:
@@ -240,7 +250,29 @@ def _compose_preview(
         ),
     )
     return _runtime_graph(
-        object_store, identity_store, identity_access, runtime, ingestion, radar, readiness
+        object_store,
+        identity_store,
+        identity_access,
+        runtime,
+        ingestion,
+        radar,
+        scoring,
+        readiness,
+    )
+
+
+def _build_and_bind_scoring(
+    settings: Settings,
+    session_provider: SessionProvider,
+    runtime: JobRuntime,
+) -> ScoringService:
+    del runtime
+    return build_scoring_service(
+        session_factory=session_provider.session_factory,
+        policy_seed_version=settings.scoring_policy_seed_version,
+        legacy_score_policy_version=settings.scoring_legacy_score_policy_version,
+        comparison_max_listings=settings.scoring_comparison_max_listings,
+        comparator_enabled=settings.scoring_comparator_enabled,
     )
 
 
@@ -251,6 +283,7 @@ def _runtime_graph(
     job_runtime: JobRuntime,
     ingestion: ImportRunService,
     radar: RadarService,
+    scoring: ScoringService | None,
     readiness: ReadinessModule,
 ) -> RuntimeComposition:
     return RuntimeComposition(
@@ -262,6 +295,7 @@ def _runtime_graph(
         job_runtime=job_runtime,
         ingestion=ingestion,
         radar=radar,
+        scoring=scoring,
         readiness=readiness,
     )
 

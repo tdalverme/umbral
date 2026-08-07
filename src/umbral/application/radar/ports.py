@@ -15,6 +15,7 @@ from umbral.application.radar.contracts import (
     SearchProfile,
     SearchProfileState,
 )
+from umbral.application.scoring.contracts import CriterionEvaluation
 from umbral.application.silver.contracts import NormalizedListing
 
 
@@ -62,6 +63,7 @@ class RunRepository(Protocol):
         run: RecommendationRun,
         items: tuple[RecommendationItem, ...],
         event: ProductEvent,
+        evaluations: tuple[CriterionEvaluation, ...] = (),
     ) -> None: ...
 
     def fail(self, run: RecommendationRun, failure_code: str) -> None: ...

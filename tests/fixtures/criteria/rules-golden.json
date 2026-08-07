@@ -1,0 +1,67 @@
+{
+  "contract_version": "1",
+  "cases": [
+    {
+      "concept": "balcon",
+      "input": {
+        "description_text": "Departamento con balcon y cocina separada.",
+        "amenities": []
+      },
+      "expected": {"value": "true", "has_evidence": true}
+    },
+    {
+      "concept": "balcon",
+      "input": {
+        "description_text": "Monoambiente sin balcon.",
+        "amenities": []
+      },
+      "expected": {"value": "false", "has_evidence": true}
+    },
+    {
+      "concept": "balcon",
+      "input": {
+        "description_text": "Piso luminoso.",
+        "amenities": []
+      },
+      "expected": {"value": null, "has_evidence": false}
+    },
+    {
+      "concept": "ambientes",
+      "input": {
+        "description_text": "Departamento de 3 ambientes.",
+        "rooms": null
+      },
+      "expected": {"value": 3, "has_evidence": true}
+    },
+    {
+      "concept": "ambientes",
+      "input": {
+        "description_text": "Monoambiente luminoso.",
+        "rooms": 1
+      },
+      "expected": {"value": 1, "has_evidence": false}
+    },
+    {
+      "concept": "piso",
+      "input": {
+        "description_text": "Departamento en el piso 5 con ascensor.",
+        "floor": null
+      },
+      "expected": {"value": 5, "has_evidence": true}
+    },
+    {
+      "concept": "tipo_cocina",
+      "input": {
+        "description_text": "Cocina separada con lavadero."
+      },
+      "expected": {"value": "separada", "has_evidence": true}
+    },
+    {
+      "concept": "tipo_cocina",
+      "input": {
+        "description_text": "Living comedor con cocina integrada."
+      },
+      "expected": {"value": "integrada", "has_evidence": true}
+    }
+  ]
+}

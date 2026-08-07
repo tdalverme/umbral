@@ -71,9 +71,7 @@ def _profile_from(payload: Mapping[str, Any]) -> SearchProfile:
 
 def _listing_from(payload: Mapping[str, Any]) -> _Listing:
     return _Listing(
-        listing_id=UUID(payload["listing_id"])
-        if "listing_id" in payload
-        else uuid4(),
+        listing_id=UUID(payload["listing_id"]) if "listing_id" in payload else uuid4(),
         total_cost=float(payload["total_cost"]),
         rooms=payload.get("rooms"),
         surface_m2=payload.get("surface_m2"),
