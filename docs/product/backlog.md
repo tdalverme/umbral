@@ -296,30 +296,30 @@ busqueda, ejecuta hard filters y revisa matches persistentes de punta a punta.
 
 ## Epica H2.2 - Normalizacion Silver
 
-- [ ] **UM-H2-009 [P0] [DATA] Normalizar listing sources y versions** — Conserva
+- [x] **UM-H2-009 [P0] [DATA] Normalizar listing sources y versions** — Conserva
   external id, URL, fuente, publicacion, ultima observacion y payload de origen.
-- [ ] **UM-H2-010 [P0] [DATA] Normalizar precio y costo total** — Preserva
+- [x] **UM-H2-010 [P0] [DATA] Normalizar precio y costo total** — Preserva
   moneda/valor original, expensas, supuestos y errores; no convierte moneda sin
   una tasa versionada.
-- [ ] **UM-H2-011 [P0] [DATA] Normalizar atributos inmobiliarios** — Superficie,
+- [x] **UM-H2-011 [P0] [DATA] Normalizar atributos inmobiliarios** — Superficie,
   ambientes, dormitorios, piso, tipo, operacion y amenities usan unidades,
   enums y rangos validados.
-- [ ] **UM-H2-012 [P0] [DATA] Normalizar ubicacion y granularidad** — Guarda
+- [x] **UM-H2-012 [P0] [DATA] Normalizar ubicacion y granularidad** — Guarda
   texto original, barrio, geometria y precision exact/block/barrio/aproximada/
   desconocida sin inventar direccion.
-- [ ] **UM-H2-013 [P1] [DATA] Geocodificar ubicaciones permitidas** — Usa cache,
+- [x] **UM-H2-013 [P1] [DATA] Geocodificar ubicaciones permitidas** — Usa cache,
   rate limits, adapter y fuente registrada; no mejora artificialmente la
   precision. Depende de UM-H2-012.
-- [ ] **UM-H2-014 [P0] [DATA] Crear canonical properties** — Separa la propiedad
+- [x] **UM-H2-014 [P0] [DATA] Crear canonical properties** — Separa la propiedad
   real de sus publicaciones y versiones, preservando lineage a Bronze.
-- [ ] **UM-H2-015 [P0] [DATA] Aplicar dedupe deterministico** — Vincula matches
+- [x] **UM-H2-015 [P0] [DATA] Aplicar dedupe deterministico** — Vincula matches
   exactos por identidad de fuente/hash/datos fuertes y registra evidencia.
-- [ ] **UM-H2-016 [P1] [DATA] Proponer dedupe probabilistico no destructivo** —
+- [x] **UM-H2-016 [P1] [DATA] Proponer dedupe probabilistico no destructivo** —
   Genera dedupe links con score, evidencia y estado pendiente/confirmado/
   rechazado; no fusiona automaticamente casos ambiguos.
-- [ ] **UM-H2-017 [P0] [DATA] Registrar cambios entre versiones** — Detecta
+- [x] **UM-H2-017 [P0] [DATA] Registrar cambios entre versiones** — Detecta
   precio, estado, texto y atributos; conserva before/after y origen.
-- [ ] **UM-H2-018 [P0] [DATA] Probar lineage Bronze-Silver** — Para cada entidad
+- [x] **UM-H2-018 [P0] [DATA] Probar lineage Bronze-Silver** — Para cada entidad
   de referencia se puede volver al snapshot y parser que la produjo.
 
 ## Epica H2.3 - Busqueda, matching baseline y radar
@@ -450,28 +450,28 @@ features, scoring y evidencia; todo feedback persiste como evento.
 
 ## Epica H3.3 - Feedback y aprendizaje controlado
 
-- [ ] **UM-H3-023 [P0] [APP] Modelar feedback events inmutables** — Soporta
+- [x] **UM-H3-023 [P0] [APP] Modelar feedback events inmutables** — Soporta
   like, dislike, save, dismiss, contacted y reasons; conserva actor, contexto,
   recommendation item y timestamp.
-- [ ] **UM-H3-024 [P0] [APP] Registrar feedback de forma idempotente** — Repetir
+- [x] **UM-H3-024 [P0] [APP] Registrar feedback de forma idempotente** — Repetir
   una accion no duplica eventos; cambiar decision genera un nuevo evento o
   compensacion trazable.
-- [ ] **UM-H3-025 [P0] [WEB] Implementar guardar, descartar y razones rapidas** —
+- [x] **UM-H3-025 [P0] [WEB] Implementar guardar, descartar y razones rapidas** —
   Ofrece feedback accesible desde card/detalle, confirmacion visible y estados
   optimistas reversibles.
-- [ ] **UM-H3-026 [P0] [WEB] Construir shortlist y descartados** — Son vistas
+- [x] **UM-H3-026 [P0] [WEB] Construir shortlist y descartados** — Son vistas
   persistentes por busqueda, con filtros y retorno al detalle.
-- [ ] **UM-H3-027 [P1] [WEB] Capturar feedback libre contextual** — Permite
+- [x] **UM-H3-027 [P1] [WEB] Capturar feedback libre contextual** — Permite
   explicar un like/dislike sin forzar texto; muestra como se usara y evita PII
   en analytics.
-- [ ] **UM-H3-028 [P0] [APP] Proponer aprendizaje desde feedback** — Convierte
+- [x] **UM-H3-028 [P0] [APP] Proponer aprendizaje desde feedback** — Convierte
   señales suficientes en una propuesta de preference fact/criterion, sin
   aplicar cambios globales automaticamente.
-- [ ] **UM-H3-029 [P0] [WEB] Confirmar, deshacer o ampliar aprendizaje** —
+- [x] **UM-H3-029 [P0] [WEB] Confirmar, deshacer o ampliar aprendizaje** —
   Muestra el cambio exacto, alcance de busqueda y efecto esperado.
-- [ ] **UM-H3-030 [P0] [APP] Recalcular tras cambios relevantes** — Versiona el
+- [x] **UM-H3-030 [P0] [APP] Recalcular tras cambios relevantes** — Versiona el
   perfil, crea un nuevo run y conserva el anterior para auditoria.
-- [ ] **UM-H3-031 [P1] [WEB] Mostrar historial de precio y cambios** — Usa
+- [x] **UM-H3-031 [P1] [WEB] Mostrar historial de precio y cambios** — Usa
   listing versions, fechas y fuente sin inferir tendencias con muestra
   insuficiente.
 
