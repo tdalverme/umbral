@@ -2,10 +2,10 @@
 
 **Feature**: 011-conversational-ui | **Date**: 2026-08-10 | **Branch**: `main`
 
-Estado de cierre local del incremento `conversational-ui` (Épica H4.3,
-UM-H4-017 a UM-H4-025). Spec: `specs/011-conversational-ui/spec.md`; plan:
+Cierre local del incremento `conversational-ui` (Épica H4.3, UM-H4-017 a
+UM-H4-025). Spec: `specs/011-conversational-ui/spec.md`; plan:
 `specs/011-conversational-ui/plan.md`; tareas: `specs/011-conversational-ui/tasks.md`
-(59/65 completadas; commits `ab5a0e6` y `729da9e`).
+(60/65 completadas; commits `ab5a0e6`, `729da9e` y `bd0e886`).
 
 ## Resumen del incremento
 
@@ -45,15 +45,22 @@ UM-H4-017 a UM-H4-025). Spec: `specs/011-conversational-ui/spec.md`; plan:
 
 | Escenario quickstart | Resultado |
 | --- | --- |
-| 1. Conformance contratos v3 + streaming events | PASS (80 tests en suite no-Docker) |
+| 1. Conformance contratos v3 + streaming events | PASS |
 | 2. Compilación de intención y política intent→tools | PASS |
 | 3. Aclaraciones de alto impacto | PASS |
 | 4. HITL: propose → interrupt → approve/reject/edit (runtime + edit chain) | PASS |
 | 5. Respuestas grounded (refs scope + cap) | PASS |
 | 6. Contrato HTTP de chat (router SSE sobre TestClient, errores tipados, decision_pending) | PASS |
-| 7. E2E de composición con Postgres real (testcontainers) | PENDIENTE de ejecutar en este entorno (Docker daemon lento); escrito en `tests/integration/api/test_chat_e2e.py` |
-| 8. Web: typecheck + lint + vitest | PASS (27/28; `runtime-routes.test.ts` pre-existente dependiente del entorno) |
+| 7. E2E de composición con Postgres real (testcontainers) | PASS (2 corridas; requiere engine Docker estable) |
+| 8. Web: typecheck + lint + vitest | PASS (35/36; `runtime-routes.test.ts` pre-existente dependiente del entorno) |
 | 9. Suite de abuso v3 + arquitectura + migración 0011 | PASS |
+
+El harness del incremento `.\scripts\check-chat.ps1` pasa **81 tests** en
+este entorno local con Docker (incluye el E2E de composición sobre Postgres
+real y la migración `0011` aplicada al head). El engine de Docker Desktop
+resultó ser lento/transitorio en operaciones de contenedores (requirió un
+restart de Docker Desktop y reintentos); los tests que dependen de
+testcontainers se validaron una vez el engine se asentó.
 
 Comandos:
 
@@ -81,16 +88,16 @@ se aplica al head en los tests de integración (alembic upgrade → head).
 
 ## Diferidos a seguimiento
 
-- Correr en CI los tests de integración que requieren Docker/testcontainers
-  (el daemon Docker de este entorno quedó colgado para operaciones de
-  contenedores): `tests/integration/api/test_chat_e2e.py` (T062, escrito y
-  recogido correctamente), `test_update_proposals_list` (T047, cubierto a
-  nivel unit) y los suites existentes; `check.ps1` completo desde checkout
-  limpio y marcar UM-H4-017 a UM-H4-025 en `docs/product/backlog.md`.
-- Tests web periféricos restantes (T055 segunda pestaña, T058 contextual
-  vitest) y `test_send_replay.py` (T034; la idempotencia está garantizada a
-  nivel de servicio y el `client_message_id` ya se hila por HTTP).
+- Gate completo `.\scripts\check.ps1` desde checkout limpio en CI (incluye
+  los suites que requieren Docker; el engine local fue transitorio).
+- Tests periféricos con cobertura equivalente o pendiente: `test_send_replay.py`
+  (T034; idempotencia cubierta a nivel de servicio y `client_message_id`
+  hilado por HTTP), `test_update_proposals_list.py` (T047; cubierto a nivel
+  unit con `waiting_run`), resume/reconexión E2E (T053) y tests web menores
+  (T055 segunda pestaña, T058 contextual vitest).
 - Fallos pre-existentes ajenos a este incremento, dependientes del entorno:
-  `runtime-routes.test.ts` (web, env de release manifest) y
-  `test_supabase_adapter.py` (identity, último commit `fcda7ce`).
+  `runtime-routes.test.ts` (web, env de release manifest),
+  `test_supabase_adapter.py` (identity, último commit `fcda7ce`) y el
+  `PermissionError` de pytest-asyncio sobre el temp dir
+  (`pytest-of-Usuario`), que afecta a tests async pre-existentes.
 - ADR del proveedor de modelo y evals del graph (H4.4).
