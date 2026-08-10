@@ -39,6 +39,7 @@ def scheduler_once(
     identity_store: IdentityStore,
     limit: int = DEFAULT_DUE_WORK_LIMIT,
     agent_purge: Callable[[datetime], int] | None = None,
+    proposal_expire: Callable[[datetime], int] | None = None,
 ) -> dict[str, int]:
     """Run one durable cron pass in the required recovery-first order."""
 
@@ -66,4 +67,6 @@ def scheduler_once(
     }
     if agent_purge is not None:
         summary["purged_agent_checkpoints"] = agent_purge(datetime.now(timezone.utc))
+    if proposal_expire is not None:
+        summary["expired_proposals"] = proposal_expire(datetime.now(timezone.utc))
     return summary

@@ -14,7 +14,12 @@ from umbral.agent.events import (
     RunStarted,
     RuntimeEvent,
 )
-from umbral.agent.graph import TOPOLOGY_VERSION, AgentGraph, build_input_state
+from umbral.agent.graph import (
+    TOPOLOGY_VERSION,
+    AgentGraph,
+    AgentGraphV2,
+    build_input_state,
+)
 from umbral.agent.state import STATE_SCHEMA_VERSION
 from umbral.application.agent.contracts import AgentRunNotFound, GraphRun
 from umbral.application.agent.ports import GraphRunRepository, RunRecorder
@@ -22,6 +27,8 @@ from umbral.application.chat.contracts import ChatExecutionInProgress
 from umbral.application.chat.ports import ConversationGateway
 
 Clock = Callable[[], datetime]
+
+GraphLike = AgentGraph | AgentGraphV2
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,17 +45,21 @@ class ChatRuntime:
     def __init__(
         self,
         *,
-        graph: AgentGraph,
+        graph: GraphLike,
         conversation: ConversationGateway,
         runs: GraphRunRepository,
         recorder: RunRecorder,
         clock: Clock | None = None,
+        state_schema_version: int = STATE_SCHEMA_VERSION,
+        topology_version: int = TOPOLOGY_VERSION,
     ) -> None:
         self.graph = graph
         self.conversation = conversation
         self.runs = runs
         self.recorder = recorder
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self.state_schema_version = state_schema_version
+        self.topology_version = topology_version
 
     def run_turn(
         self,
@@ -72,8 +83,8 @@ class ChatRuntime:
         run = GraphRun(
             run_id=run_id,
             session_id=session.session_id,
-            state_schema_version=STATE_SCHEMA_VERSION,
-            topology_version=TOPOLOGY_VERSION,
+            state_schema_version=self.state_schema_version,
+            topology_version=self.topology_version,
             status="running",
             attempt=attempt,
             correlation_id=correlation_id,
@@ -107,6 +118,7 @@ class ChatRuntime:
                     user_id=user_id,
                     correlation_id=correlation_id,
                     user_message_text=text,
+                    schema_version=self.state_schema_version,
                 )
             else:
                 stream_input = None
@@ -115,7 +127,7 @@ class ChatRuntime:
             ):
                 pass
             values = self.graph.compiled.get_state(config).values
-            if values.get("schema_version") != STATE_SCHEMA_VERSION:
+            if values.get("schema_version") != self.state_schema_version:
                 finished = self.clock()
                 latency_ms = _elapsed_ms(run.started_at, finished)
                 self.runs.mark(

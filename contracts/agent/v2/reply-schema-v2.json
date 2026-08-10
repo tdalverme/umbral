@@ -1,0 +1,32 @@
+{
+  "registry_version": "agent-reply-schema-v2",
+  "contract_version": "2",
+  "schema_version": "reply-v2",
+  "fields": {
+    "reply_text": {
+      "kind": "string",
+      "min_length": 1,
+      "max_length": 2000,
+      "required": true
+    },
+    "refs": {
+      "kind": "list",
+      "item": {
+        "entity": "string",
+        "id": "string"
+      },
+      "required": true,
+      "description": "Typed product references populated from tool results; never outside the session scope."
+    },
+    "tool_calls": {
+      "kind": "list",
+      "item": {
+        "tool": "string",
+        "args": "object"
+      },
+      "max_items": 5,
+      "required": true,
+      "description": "Tool calls of the turn; each tool must exist in the tool contract and args must satisfy its input_schema."
+    }
+  }
+}

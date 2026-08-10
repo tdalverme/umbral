@@ -170,6 +170,16 @@
       "version": 1,
       "emitted_by": "server",
       "required_keys": ["session_id", "message_id", "role"]
+    },
+    "search_profile.update_proposed.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["proposal_id", "search_profile_id", "base_profile_version"]
+    },
+    "search_profile.update_applied.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["proposal_id", "search_profile_id", "profile_version"]
     }
   },
   "forbidden_keys": [

@@ -189,18 +189,21 @@ class FeedbackService:
             },
         )
         if stored.event_type in _SIGNAL_TYPES:
-            self._evaluate_learning(
+            learning_proposal_id = self._evaluate_learning(
                 profile=profile,
                 event=stored,
                 correlation_id=correlation_id,
                 actor_kind=actor_kind,
                 actor_id=actor_id,
             )
+        else:
+            learning_proposal_id = None
         return FeedbackRecord(
             event=stored,
             decision_state=stored.event_type,
             superseded=superseded,
             noop=False,
+            learning_proposal_id=learning_proposal_id,
         )
 
     def decision_state(
@@ -614,13 +617,14 @@ class FeedbackService:
         correlation_id: UUID,
         actor_kind: str,
         actor_id: str | None,
-    ) -> None:
+    ) -> UUID | None:
         polarity = _EVENT_POLARITY.get(event.event_type)
         if polarity is None:
-            return
+            return None
         policy = self.latest_learning_document()
         window_start = self.clock() - timedelta(days=policy.window_days)
         cooldown_start = self.clock() - timedelta(days=policy.cooldown_days)
+        created: UUID | None = None
         for reason in event.reasons:
             if reason.concept_key is None:
                 continue
@@ -692,6 +696,7 @@ class FeedbackService:
                 actor_id=actor_id,
             )
             self.proposals.insert(proposal)
+            created = proposal.proposal_id
             self._emit_server_event(
                 event_type="learning.proposal_created.v1",
                 correlation_id=correlation_id,
@@ -705,6 +710,7 @@ class FeedbackService:
                     "policy_version": version.contract_version,
                 },
             )
+        return created
 
     def _expire_if_overdue(self, proposal: LearningProposal) -> LearningProposal:
         if proposal.state != "pending":

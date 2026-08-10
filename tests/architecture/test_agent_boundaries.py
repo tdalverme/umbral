@@ -88,6 +88,14 @@ def test_agent_layer_never_imports_infrastructure() -> None:
     assert violations == []
 
 
+def test_agent_tools_layer_consumes_only_application_and_domain_ports() -> None:
+    # The explicit tool surface is a permissioned contract layer: it may
+    # depend on application services and agent/domain contracts, never on
+    # infrastructure, API, workers or transport (Principle III, R-01).
+    violations = _collect_violations(_SRC / "agent" / "tools", _AGENT_FORBIDDEN)
+    assert violations == []
+
+
 def test_workers_do_not_import_the_agent_runtime() -> None:
     violations = _collect_violations(_SRC / "workers", ("umbral.agent",))
     assert violations == []

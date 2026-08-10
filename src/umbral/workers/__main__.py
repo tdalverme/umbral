@@ -58,6 +58,9 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                 agent_purge=getattr(
                     active_dependencies, "agent_checkpoint_purge", None
                 ),
+                proposal_expire=getattr(
+                    active_dependencies, "proposal_expire", None
+                ),
             )
             print(json.dumps(summary, sort_keys=True, separators=(",", ":")))
             return 0
@@ -71,6 +74,9 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                     limit=DEFAULT_DUE_WORK_LIMIT,
                     agent_purge=getattr(
                         active_dependencies, "agent_checkpoint_purge", None
+                    ),
+                    proposal_expire=getattr(
+                        active_dependencies, "proposal_expire", None
                     ),
                 )
                 time.sleep(HEARTBEAT_INTERVAL_SECONDS)

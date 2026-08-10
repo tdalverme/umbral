@@ -206,6 +206,29 @@ class RadarService:
         profile = self._owned(owner_id, profile_id)
         return profile
 
+    def validate_change(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        changes: Mapping[str, object],
+    ) -> SearchProfile:
+        """Validate a proposed profile change without persisting (H4.2).
+
+        Uses the exact same validation path as ``update_profile`` so a change
+        that passes here can be applied later with the same guarantee; raises
+        ``RadarValidationError``/``RadarStateError`` otherwise.
+        """
+
+        profile = self._owned(owner_id, profile_id)
+        if profile.status == "archived":
+            raise RadarStateError("archived profiles cannot be edited")
+        current_payload = _payload_from_profile(profile)
+        merged = dict(current_payload)
+        merged.update(changes)
+        self._validate(merged)
+        return profile
+
     def profile_with_latest_run(
         self, owner_id: UUID, profile_id: UUID
     ) -> tuple[SearchProfile, RecommendationRun | None]:

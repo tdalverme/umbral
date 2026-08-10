@@ -1,4 +1,4 @@
-"""Auditable agent graph runs, node runs and model calls (H4.1)."""
+"""Auditable agent graph runs, node runs, model calls and proposals (H4.1/H4.2)."""
 
 from __future__ import annotations
 
@@ -30,6 +30,13 @@ AGENT_CALL_STATE = ENUM(
     "error",
     "retried",
     name="agent_call_state",
+    create_type=True,
+)
+PROPOSAL_STATE = ENUM(
+    "pending",
+    "approved",
+    "rejected",
+    name="proposal_state",
     create_type=True,
 )
 
@@ -125,3 +132,51 @@ class AgentModelCall(IdentityAuditMixin, Base):
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
+class SearchProfileUpdateProposal(IdentityAuditMixin, Base):
+    """Durable, auditable proposal to change a search profile (FR-008)."""
+
+    __tablename__ = "search_profile_update_proposals"
+    __mapper_args__ = {"version_id_col": IdentityAuditMixin.version}
+    __table_args__ = (
+        Index(
+            "uq_proposals_profile_idempotency",
+            "search_profile_id",
+            "applied_idempotency_key",
+            unique=True,
+            postgresql_where=text("applied_idempotency_key IS NOT NULL"),
+        ),
+        Index("ix_proposals_profile", "search_profile_id", "state"),
+        Index("ix_proposals_session", "session_id"),
+    )
+
+    session_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("chat_sessions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    search_profile_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("search_profiles.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    base_profile_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    diff: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    impact: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(PROPOSAL_STATE, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    applied_idempotency_key: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
+    applied_profile_version: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    applied_run_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )

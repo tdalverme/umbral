@@ -22,6 +22,9 @@ from umbral.infrastructure.agent.checkpointer import (
     close_postgres_saver,
     create_postgres_saver,
 )
+from umbral.infrastructure.agent.proposals.expire import (
+    expire_search_profile_proposals,
+)
 from umbral.infrastructure.agent.purge import (
     PostgresThreadStore,
     SqlAlchemyStaleSessionFinder,
@@ -62,6 +65,7 @@ class ProcessDependencies:
     worker_id: str
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
     agent_checkpoint_purge: Callable[[datetime], int] | None = None
+    proposal_expire: Callable[[datetime], int] | None = None
 
     @property
     def handlers(self) -> dict[str, object]:
@@ -168,7 +172,22 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         worker_id=f"rq:{socket.gethostname()}:{os.getpid()}",
         heartbeat_writer=heartbeat_writer,
         agent_checkpoint_purge=_build_agent_purge(active_settings),
+        proposal_expire=_build_proposal_expire(active_settings),
     )
+
+
+def _build_proposal_expire(settings: Settings) -> Callable[[datetime], int]:
+    """Build the scheduler maintenance duty that expires pending proposals."""
+
+    def expire(now: datetime) -> int:
+        session_factory = SessionProvider(settings.database_url).session_factory
+        return expire_search_profile_proposals(
+            session_factory,
+            ttl_hours=settings.agent_proposal_ttl_hours,
+            now=now,
+        )
+
+    return expire
 
 
 def _build_agent_purge(settings: Settings) -> Callable[[datetime], int]:

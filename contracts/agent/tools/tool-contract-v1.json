@@ -1,0 +1,94 @@
+{
+  "registry_version": "agent-tool-contract-v1",
+  "contract_version": "1",
+  "tools": [
+    {
+      "name": "get_search_profile",
+      "description": "Lee el perfil autorizado de la sesion: snapshot vigente, criterios ejecutables y estado del radar.",
+      "mutating": false,
+      "requires_confirmation": false,
+      "idempotent": false,
+      "timeout_seconds": 10,
+      "input_schema": {},
+      "output_schema": {"profile_id": "uuid", "state": "string", "snapshot": "object", "criteria": "array"},
+      "output_limits": {"max_items": 1, "forbidden_keys": ["geometry", "value", "free_feedback"]}
+    },
+    {
+      "name": "propose_search_profile_update",
+      "description": "Produce un diff validado con impacto y crea una propuesta durable pendiente; no modifica el perfil.",
+      "mutating": true,
+      "requires_confirmation": false,
+      "idempotent": true,
+      "timeout_seconds": 10,
+      "input_schema": {"change": "object"},
+      "output_schema": {"proposal_id": "uuid", "diff": "object", "impact": "object", "state": "string", "expires_at": "datetime"},
+      "output_limits": {"max_items": 1, "forbidden_keys": ["value", "free_feedback"]}
+    },
+    {
+      "name": "apply_search_profile_update",
+      "description": "Aplica una propuesta pendiente con confirmacion explicita e idempotency key; versiona el perfil y dispara recomputacion.",
+      "mutating": true,
+      "requires_confirmation": true,
+      "idempotent": true,
+      "timeout_seconds": 10,
+      "input_schema": {"proposal_id": "uuid", "confirmation": "boolean", "idempotency_key": "string"},
+      "output_schema": {"proposal_id": "uuid", "state": "string", "profile_version": "integer", "run_id": "uuid"},
+      "output_limits": {"max_items": 1, "forbidden_keys": ["value", "free_feedback"]}
+    },
+    {
+      "name": "find_matches",
+      "description": "Devuelve los recommendation items persistentes del ultimo run publicado; solo lectura, nunca calcula.",
+      "mutating": false,
+      "requires_confirmation": false,
+      "idempotent": false,
+      "timeout_seconds": 10,
+      "input_schema": {"page": "integer", "limit": "integer"},
+      "output_schema": {"run_id": "uuid|null", "items": "array", "total": "integer", "stale": "boolean"},
+      "output_limits": {"max_items": 20, "forbidden_keys": ["geometry", "value", "fragment"]}
+    },
+    {
+      "name": "explain_match",
+      "description": "Recupera la explicacion persistida de un item y declara datos faltantes e incertidumbre.",
+      "mutating": false,
+      "requires_confirmation": false,
+      "idempotent": false,
+      "timeout_seconds": 10,
+      "input_schema": {"listing_id": "uuid"},
+      "output_schema": {"listing_id": "uuid", "score_version": "string", "reasons": "array", "risks": "array", "missing_data": "array", "evidence_refs": "array"},
+      "output_limits": {"max_items": 20, "forbidden_keys": ["geometry", "value", "fragment"]}
+    },
+    {
+      "name": "compare_listings",
+      "description": "Compara listings del radar de la sesion con la comparacion estructurada persistida; sin ganador generativo.",
+      "mutating": false,
+      "requires_confirmation": false,
+      "idempotent": false,
+      "timeout_seconds": 10,
+      "input_schema": {"listing_ids": "array"},
+      "output_schema": {"comparison": "object", "dimensions": "array", "missing": "array"},
+      "output_limits": {"max_items": 20, "forbidden_keys": ["geometry", "value"]}
+    },
+    {
+      "name": "record_feedback",
+      "description": "Registra like/dislike con razones opcionales, idempotente; devuelve la propuesta de aprendizaje cuando aplica.",
+      "mutating": true,
+      "requires_confirmation": false,
+      "idempotent": true,
+      "timeout_seconds": 10,
+      "input_schema": {"listing_id": "uuid", "decision": "string", "reason_keys": "array", "idempotency_key": "string"},
+      "output_schema": {"event_id": "uuid", "noop": "boolean", "learning_proposal_id": "uuid|null"},
+      "output_limits": {"max_items": 1, "forbidden_keys": ["value", "free_feedback"]}
+    },
+    {
+      "name": "search_urban_context",
+      "description": "Consulta signals urbanas versionadas de un listing respetando la precision geografica autorizada.",
+      "mutating": false,
+      "requires_confirmation": false,
+      "idempotent": false,
+      "timeout_seconds": 10,
+      "input_schema": {"listing_id": "uuid", "signal_types": "array"},
+      "output_schema": {"signals": "array", "precision": "string"},
+      "output_limits": {"max_items": 20, "forbidden_keys": ["geometry", "value", "fragment"]}
+    }
+  ]
+}

@@ -1,10 +1,11 @@
-"""Versioned agent state schema v1 (UM-H4-002, FR-004/FR-005)."""
+"""Versioned agent state schemas v1/v2 (UM-H4-002, FR-004/FR-005)."""
 
 from __future__ import annotations
 
 from typing import Any, TypedDict
 
 STATE_SCHEMA_VERSION = 1
+TOOLS_STATE_SCHEMA_VERSION = 2
 
 
 class AgentState(TypedDict, total=False):
@@ -15,6 +16,7 @@ class AgentState(TypedDict, total=False):
     context: dict[str, object]
     intent: object | None
     pending_action: object | None
+    tool_calls: list[dict[str, object]]
     tool_results: list[dict[str, object]]
     errors: list[dict[str, object]]
 
@@ -28,7 +30,7 @@ def build_initial_state(
     correlation_id: str,
     user_message_text: str,
 ) -> AgentState:
-    """Build the v1 initial state for a fresh graph run."""
+    """Build the initial state for a fresh graph run (v1 or v2)."""
     return AgentState(
         schema_version=schema_version,
         messages=[{"role": "user", "content": user_message_text}],
@@ -43,6 +45,7 @@ def build_initial_state(
         },
         intent=None,
         pending_action=None,
+        tool_calls=[],
         tool_results=[],
         errors=[],
     )
@@ -54,6 +57,7 @@ def as_serializable(state: AgentState) -> dict[str, Any]:
     context = dict(state.get("context") or {})
     data["context"] = context
     data["messages"] = [dict(item) for item in state.get("messages") or []]
+    data["tool_calls"] = [dict(item) for item in state.get("tool_calls") or []]
     data["tool_results"] = [dict(item) for item in state.get("tool_results") or []]
     data["errors"] = [dict(item) for item in state.get("errors") or []]
     return data

@@ -644,6 +644,18 @@ class CriteriaService:
             count += 1
         return count
 
+    def list_urban_signals(self, listing_id: UUID) -> tuple[Mapping[str, object], ...]:
+        """Read seam for versioned urban signals (H4.2, FR-021).
+
+        The caller (tool) is responsible for scope (listing accessibility);
+        this service only reads signals the ingestion already authorized with
+        the configured geographic-precision policy.
+        """
+
+        if self.urban_signals is None:
+            return ()
+        return self.urban_signals.list_for_listing(listing_id)
+
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------

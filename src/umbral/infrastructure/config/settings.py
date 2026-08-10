@@ -274,6 +274,27 @@ class Settings(BaseSettings):
     chat_message_max_length: int = Field(
         default=4000, validation_alias="CHAT_MESSAGE_MAX_LENGTH"
     )
+    agent_tools_state_schema_version: int = Field(
+        default=2, validation_alias="AGENT_TOOLS_STATE_SCHEMA_VERSION"
+    )
+    agent_tools_topology_version: int = Field(
+        default=2, validation_alias="AGENT_TOOLS_TOPOLOGY_VERSION"
+    )
+    agent_tools_contract_version: str = Field(
+        default="v1", validation_alias="AGENT_TOOLS_CONTRACT_VERSION"
+    )
+    agent_tools_max_calls_per_turn: int = Field(
+        default=5, validation_alias="AGENT_TOOLS_MAX_CALLS_PER_TURN"
+    )
+    agent_tools_timeout_seconds: float = Field(
+        default=10.0, validation_alias="AGENT_TOOLS_TIMEOUT_SECONDS"
+    )
+    agent_tools_output_max_items: int = Field(
+        default=20, validation_alias="AGENT_TOOLS_OUTPUT_MAX_ITEMS"
+    )
+    agent_proposal_ttl_hours: int = Field(
+        default=24, validation_alias="AGENT_PROPOSAL_TTL_HOURS"
+    )
 
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
@@ -358,6 +379,13 @@ class Settings(BaseSettings):
             "AGENT_CHECKPOINT_RETENTION_DAYS",
             "AGENT_STRICT_MSGPACK",
             "CHAT_MESSAGE_MAX_LENGTH",
+            "AGENT_TOOLS_STATE_SCHEMA_VERSION",
+            "AGENT_TOOLS_TOPOLOGY_VERSION",
+            "AGENT_TOOLS_CONTRACT_VERSION",
+            "AGENT_TOOLS_MAX_CALLS_PER_TURN",
+            "AGENT_TOOLS_TIMEOUT_SECONDS",
+            "AGENT_TOOLS_OUTPUT_MAX_ITEMS",
+            "AGENT_PROPOSAL_TTL_HOURS",
         }
     )
 

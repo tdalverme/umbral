@@ -1,4 +1,4 @@
-"""SQLAlchemy repositories for agent run auditing (H4.1)."""
+"""SQLAlchemy repositories for agent run auditing and proposals (H4.1/H4.2)."""
 
 from __future__ import annotations
 
@@ -7,15 +7,21 @@ from datetime import datetime, timezone
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from umbral.application.agent.contracts import GraphRun, ModelCall, NodeRun, RunStatus
+from umbral.application.agent.tools.contracts import (
+    Proposal,
+    ProposalRejectionReason,
+    ProposalState,
+)
 from umbral.infrastructure.db.models.agent import (
     AgentGraphRun,
     AgentModelCall,
     AgentNodeRun,
+    SearchProfileUpdateProposal,
 )
 
 SessionFactory = Callable[[], Session]
@@ -183,4 +189,142 @@ def _to_run(model: AgentGraphRun) -> GraphRun:
         latency_ms=model.latency_ms,
         error_summary=dict(model.error_summary or {}),
         token_usage=dict(model.token_usage or {}),
+    )
+
+
+class SqlAlchemyProposalRepository:
+    """Scoped persistence for durable proposals (FR-008, R-03)."""
+
+    def __init__(self, session_factory: SessionFactory) -> None:
+        self.session_factory = session_factory
+
+    def insert(self, proposal: Proposal) -> Proposal:
+        with self.session_factory() as current:
+            current.add(_proposal_model(proposal))
+            current.commit()
+        return proposal
+
+    def get(
+        self, proposal_id: UUID, session_id: UUID, user_id: UUID
+    ) -> Proposal | None:
+        with self.session_factory() as current:
+            model = current.scalar(
+                select(SearchProfileUpdateProposal).where(
+                    SearchProfileUpdateProposal.id == proposal_id,
+                    SearchProfileUpdateProposal.session_id == session_id,
+                )
+            )
+            return _to_proposal(model) if model is not None else None
+
+    def latest_pending_for_profile(
+        self, search_profile_id: UUID, session_id: UUID
+    ) -> Proposal | None:
+        with self.session_factory() as current:
+            model = current.scalar(
+                select(SearchProfileUpdateProposal)
+                .where(
+                    SearchProfileUpdateProposal.search_profile_id
+                    == search_profile_id,
+                    SearchProfileUpdateProposal.session_id == session_id,
+                    SearchProfileUpdateProposal.state == "pending",
+                )
+                .order_by(SearchProfileUpdateProposal.created_at.desc())
+                .limit(1)
+            )
+            return _to_proposal(model) if model is not None else None
+
+    def mark_approved(
+        self,
+        proposal_id: UUID,
+        applied_idempotency_key: str,
+        *,
+        profile_version: int | None = None,
+        run_id: UUID | None = None,
+    ) -> Proposal | None:
+        with self.session_factory() as current:
+            model = current.get(SearchProfileUpdateProposal, proposal_id)
+            if model is None:
+                return None
+            model.state = "approved"
+            model.applied_idempotency_key = applied_idempotency_key
+            model.rejection_reason = None
+            model.applied_profile_version = profile_version
+            model.applied_run_id = run_id
+            model.updated_at = datetime.now(timezone.utc)
+            current.commit()
+            return _to_proposal(model)
+
+    def mark_rejected(
+        self,
+        proposal_id: UUID,
+        rejection_reason: str,
+        rejection_at: datetime,
+    ) -> Proposal | None:
+        with self.session_factory() as current:
+            model = current.get(SearchProfileUpdateProposal, proposal_id)
+            if model is None:
+                return None
+            model.state = "rejected"
+            model.rejection_reason = rejection_reason
+            model.updated_at = rejection_at
+            current.commit()
+            return _to_proposal(model)
+
+    def expire_pending(self, expired_before: datetime) -> int:
+        with self.session_factory() as current:
+            result = current.execute(
+                update(SearchProfileUpdateProposal)
+                .where(
+                    SearchProfileUpdateProposal.state == "pending",
+                    SearchProfileUpdateProposal.expires_at < expired_before,
+                )
+                .values(
+                    state="rejected",
+                    rejection_reason="expired",
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+            current.commit()
+            return int(result.rowcount or 0)  # type: ignore[attr-defined]
+
+
+def _proposal_model(proposal: Proposal) -> SearchProfileUpdateProposal:
+    now = proposal.expires_at
+    return SearchProfileUpdateProposal(
+        id=proposal.proposal_id,
+        created_at=now,
+        updated_at=now,
+        actor_kind="service",
+        actor_id=str(proposal.session_id),
+        source="agent.tool",
+        correlation_id=proposal.correlation_id or proposal.proposal_id,
+        session_id=proposal.session_id,
+        search_profile_id=proposal.search_profile_id,
+        base_profile_version=proposal.base_profile_version,
+        diff=dict(proposal.diff),
+        impact=dict(proposal.impact),
+        state=proposal.state,
+        expires_at=proposal.expires_at,
+        applied_idempotency_key=proposal.applied_idempotency_key,
+        rejection_reason=proposal.rejection_reason,
+        applied_profile_version=proposal.applied_profile_version,
+        applied_run_id=proposal.applied_run_id,
+    )
+
+
+def _to_proposal(model: SearchProfileUpdateProposal) -> Proposal:
+    return Proposal(
+        proposal_id=model.id,
+        session_id=model.session_id,
+        search_profile_id=model.search_profile_id,
+        base_profile_version=model.base_profile_version,
+        diff=dict(model.diff or {}),
+        impact=dict(model.impact or {}),
+        state=cast(ProposalState, model.state),
+        expires_at=model.expires_at,
+        applied_idempotency_key=model.applied_idempotency_key,
+        rejection_reason=cast(ProposalRejectionReason | None, model.rejection_reason),
+        applied_profile_version=model.applied_profile_version,
+        applied_run_id=model.applied_run_id,
+        correlation_id=model.correlation_id,
     )

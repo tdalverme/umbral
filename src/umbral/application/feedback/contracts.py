@@ -81,6 +81,7 @@ class FeedbackRecord:
     decision_state: DecisionState
     superseded: bool
     noop: bool
+    learning_proposal_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

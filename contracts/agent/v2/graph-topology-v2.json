@@ -1,0 +1,30 @@
+{
+  "registry_version": "agent-graph-topology-v2",
+  "contract_version": "2",
+  "topology_version": 2,
+  "entry": "start",
+  "nodes": [
+    {"name": "start", "kind": "node"},
+    {"name": "generate_reply", "kind": "node"},
+    {"name": "run_tools", "kind": "node"},
+    {"name": "persist_reply", "kind": "node"}
+  ],
+  "edges": [
+    {"from": "start", "to": "generate_reply"},
+    {"from": "generate_reply", "to": "run_tools", "condition": "tool_calls"},
+    {"from": "run_tools", "to": "generate_reply", "condition": "loop"},
+    {"from": "generate_reply", "to": "persist_reply", "condition": "no_tool_calls"},
+    {"from": "persist_reply", "to": "end"}
+  ],
+  "tools": [
+    "get_search_profile",
+    "propose_search_profile_update",
+    "apply_search_profile_update",
+    "find_matches",
+    "explain_match",
+    "compare_listings",
+    "record_feedback",
+    "search_urban_context"
+  ],
+  "interrupts": []
+}

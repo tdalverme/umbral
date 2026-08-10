@@ -30,6 +30,36 @@ def test_agent_settings_have_safe_defaults() -> None:
     assert settings.agent_checkpoint_retention_days == 30
     assert settings.agent_strict_msgpack is True
     assert settings.chat_message_max_length == 4000
+    assert settings.agent_tools_state_schema_version == 2
+    assert settings.agent_tools_topology_version == 2
+    assert settings.agent_tools_contract_version == "v1"
+    assert settings.agent_tools_max_calls_per_turn == 5
+    assert settings.agent_tools_timeout_seconds == 10.0
+    assert settings.agent_tools_output_max_items == 20
+    assert settings.agent_proposal_ttl_hours == 24
+
+
+def test_agent_tools_overrides_are_accepted() -> None:
+    values = dict(_LOCAL_BASE)
+    values.update(
+        {
+            "AGENT_TOOLS_STATE_SCHEMA_VERSION": "3",
+            "AGENT_TOOLS_TOPOLOGY_VERSION": "3",
+            "AGENT_TOOLS_CONTRACT_VERSION": "v2",
+            "AGENT_TOOLS_MAX_CALLS_PER_TURN": "10",
+            "AGENT_TOOLS_TIMEOUT_SECONDS": "5",
+            "AGENT_TOOLS_OUTPUT_MAX_ITEMS": "50",
+            "AGENT_PROPOSAL_TTL_HOURS": "48",
+        }
+    )
+    settings = Settings.from_environment(values)
+    assert settings.agent_tools_state_schema_version == 3
+    assert settings.agent_tools_topology_version == 3
+    assert settings.agent_tools_contract_version == "v2"
+    assert settings.agent_tools_max_calls_per_turn == 10
+    assert settings.agent_tools_timeout_seconds == 5.0
+    assert settings.agent_tools_output_max_items == 50
+    assert settings.agent_proposal_ttl_hours == 48
 
 
 def test_agent_overrides_are_accepted() -> None:

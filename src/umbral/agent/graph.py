@@ -1,9 +1,10 @@
-"""Topology v1 graph for the conversational runtime (UM-H4-002, FR-016).
+"""Topology v1/v2 graph for the conversational runtime (UM-H4-002, FR-016).
 
 The graph is provider-agnostic: model gateway, conversation sink, run
-recorder and checkpointer arrive via the constructor (the agent layer never
-imports infrastructure, R-03). Effects are deduplicated through the
-``context.effects_applied`` ledger so a resume never repeats them (FR-014).
+recorder, checkpointer and (v2) the tool executor arrive via the constructor
+(the agent layer never imports infrastructure, R-03). Effects are deduplicated
+through the ``context.effects_applied`` ledger so a resume never repeats them
+(FR-014).
 """
 
 from __future__ import annotations
@@ -22,11 +23,13 @@ from umbral.agent.state import (
     AgentState,
     build_initial_state,
 )
+from umbral.agent.tools.executor import ToolExecutor
 from umbral.application.agent.contracts import ModelCall, ModelResult, NodeRun
 from umbral.application.agent.ports import ModelGateway, RunRecorder
 from umbral.application.chat.ports import ConversationGateway
 
 TOPOLOGY_VERSION = 1
+TOOLS_TOPOLOGY_VERSION = 2
 
 _EFFECT_USER_MESSAGE = "user_message"
 _EFFECT_ASSISTANT_MESSAGE = "assistant_message"
@@ -58,6 +61,22 @@ class AgentGraph:
 
     compiled: Any
     deps: GraphDeps
+
+
+@dataclass(slots=True)
+class GraphDepsV2(GraphDeps):
+    """Topology v2 dependencies: v1 plus the tool executor and loop bound."""
+
+    tool_executor: ToolExecutor
+    max_calls_per_turn: int
+
+
+@dataclass(frozen=True, slots=True)
+class AgentGraphV2:
+    """The compiled topology v2 graph plus its per-run dependency holder."""
+
+    compiled: Any
+    deps: GraphDepsV2
 
 
 def build_topology_v1(
@@ -225,6 +244,258 @@ def build_topology_v1(
     builder.add_edge("persist_reply", END)
     compiled = builder.compile(checkpointer=saver)
     return AgentGraph(compiled=compiled, deps=deps)
+
+
+def build_topology_v2(
+    *,
+    gateway: ModelGateway,
+    conversation: ConversationGateway,
+    recorder: RunRecorder,
+    saver: Any,
+    tool_executor: ToolExecutor,
+    clock: Callable[[], datetime],
+    model_version: str,
+    prompt_version: str,
+    schema_version: str,
+    reply_schema: Mapping[str, object],
+    max_calls_per_turn: int,
+) -> AgentGraphV2:
+    """Build the topology v2 graph with the bounded tool loop (R-14).
+
+    ``generate_reply`` may emit ``tool_calls``; the ``run_tools`` node
+    executes them through the executor (recording one tool run per call),
+    accumulates redacted results and loops back to ``generate_reply`` so the
+    final reply can be grounded. The loop is bounded by ``max_calls_per_turn``.
+    """
+
+    deps = GraphDepsV2(
+        gateway=gateway,
+        conversation=conversation,
+        recorder=recorder,
+        sinks=GraphSinks(),
+        clock=clock,
+        model_version=model_version,
+        prompt_version=prompt_version,
+        schema_version=schema_version,
+        reply_schema=reply_schema,
+        tool_executor=tool_executor,
+        max_calls_per_turn=max_calls_per_turn,
+    )
+
+    def _start(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        node_started = deps.clock()
+        effects = dict(_effects(context))
+        if _EFFECT_USER_MESSAGE not in effects:
+            conversation.append_user_message(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                text=str(context.get("user_message_text", "")),
+                correlation_id=_uuid(context, "correlation_id"),
+                now=deps.clock(),
+            )
+            effects[_EFFECT_USER_MESSAGE] = _str(context, "run_id")
+        context["effects_applied"] = effects
+        _finish_node(
+            recorder=recorder,
+            node_name="start",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context}
+
+    def _generate_reply(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        run_id = _uuid(context, "run_id")
+        node_started = deps.clock()
+        errors = list(state.get("errors") or [])
+        messages = [_user_message(context)]
+        results_context = context.get("tool_results_context")
+        if results_context:
+            messages.append({"role": "tool", "content": results_context})
+        try:
+            result = deps.gateway.generate_structured(
+                messages=tuple(messages),
+                schema=deps.reply_schema,
+                schema_version=deps.schema_version,
+                prompt_version=deps.prompt_version,
+                model_version=deps.model_version,
+            )
+        except Exception as exc:  # noqa: BLE001 - unknown provider failure
+            _finish_node(
+                recorder=recorder,
+                node_name="generate_reply",
+                graph_run_id=run_id,
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="interrupted",
+                error_summary={
+                    "code": "agent.provider_exception",
+                    "kind": type(exc).__name__,
+                },
+            )
+            raise
+
+        deps.recorder.record_model_call(
+            ModelCall(
+                call_id=uuid4(),
+                graph_run_id=run_id,
+                model_version=result.model_version,
+                prompt_version=deps.prompt_version,
+                schema_version=deps.schema_version,
+                status=result.status,
+                correlation_id=_uuid(context, "correlation_id"),
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                total_tokens=result.total_tokens,
+                latency_ms=result.latency_ms,
+                error_code=result.error_code,
+            )
+        )
+        raw_usage = context.get("token_usage")
+        usage: Mapping[str, object] = (
+            raw_usage if isinstance(raw_usage, Mapping) else {}
+        )
+        tool_calls: list[dict[str, object]] = []
+        if result.status == "success" and result.content is not None:
+            text = str(result.content.get("reply_text", ""))
+            refs = result.content.get("refs")
+            ref_list = [dict(item) for item in refs] if isinstance(refs, list) else []
+            calls = result.content.get("tool_calls")
+            if isinstance(calls, list):
+                tool_calls = [
+                    dict(item) for item in calls if isinstance(item, Mapping)
+                ]
+            deps.sinks.emit(ReplyFragment(run_id=run_id, delta=text))
+            context["generated_reply"] = {"text": text, "refs": ref_list}
+            context["token_usage"] = _accumulate_usage(usage, result)
+        else:
+            errors.append({"code": result.error_code or "agent.generation_failed"})
+        _finish_node(
+            recorder=recorder,
+            node_name="generate_reply",
+            graph_run_id=run_id,
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="failed" if errors else "completed",
+            error_summary=errors[-1] if errors else None,
+        )
+        return {"context": context, "errors": errors, "tool_calls": tool_calls}
+
+    def _route_from_generate(state: AgentState) -> str:
+        calls = state.get("tool_calls") or []
+        if not calls:
+            return "persist_reply"
+        count = _as_int(_context(state).get("tool_loop_count"), 0)
+        if count >= max_calls_per_turn:
+            return "persist_reply"
+        return "run_tools"
+
+    def _run_tools(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        calls = state.get("tool_calls") or []
+        count = _as_int(context.get("tool_loop_count"), 0)
+        budget = max_calls_per_turn - count
+        if budget <= 0 or not calls:
+            context["tool_loop_exhausted"] = True
+            return {"context": context, "tool_calls": []}
+        runnable = calls[:budget]
+        results: list[dict[str, object]] = []
+        for call in runnable:
+            name = str(call.get("tool", ""))
+            raw_args = call.get("args")
+            args = dict(raw_args) if isinstance(raw_args, Mapping) else {}
+            outcome = deps.tool_executor.execute(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                name=name,
+                args=args,
+            )
+            results.append(
+                {
+                    "tool": name,
+                    "status": outcome.status,
+                    "result": dict(outcome.result) if outcome.result else None,
+                    "error_code": outcome.error_code,
+                }
+            )
+        context["tool_loop_count"] = count + len(runnable)
+        context["tool_results_context"] = results
+        existing = list(state.get("tool_results") or [])
+        return {
+            "context": context,
+            "tool_calls": [],
+            "tool_results": existing + results,
+        }
+
+    def _route_from_tools(state: AgentState) -> str:
+        if _context(state).get("tool_loop_exhausted"):
+            return "persist_reply"
+        return "generate_reply"
+
+    def _persist_reply(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        effects = dict(_effects(context))
+        if _EFFECT_ASSISTANT_MESSAGE in effects:
+            return {"context": context}
+        reply = context.get("generated_reply")
+        if not isinstance(reply, Mapping):
+            return {"context": context}
+        node_started = deps.clock()
+        message = deps.conversation.persist_assistant_message(
+            user_id=_uuid(context, "user_id"),
+            session_id=_uuid(context, "session_id"),
+            text=str(reply.get("text", "")),
+            refs=tuple(
+                {"entity": str(item["entity"]), "id": str(item["id"])}
+                for item in reply.get("refs", [])
+                if isinstance(item, Mapping)
+            ),
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            now=deps.clock(),
+        )
+        effects[_EFFECT_ASSISTANT_MESSAGE] = _str(context, "run_id")
+        context["effects_applied"] = effects
+        context["assistant_message_id"] = str(message.message_id)
+        _finish_node(
+            recorder=recorder,
+            node_name="persist_reply",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context}
+
+    builder = StateGraph(AgentState)
+    builder.add_node("start", _start)
+    builder.add_node("generate_reply", _generate_reply)
+    builder.add_node("run_tools", _run_tools)
+    builder.add_node("persist_reply", _persist_reply)
+    builder.add_edge(START, "start")
+    builder.add_edge("start", "generate_reply")
+    builder.add_conditional_edges(
+        "generate_reply",
+        _route_from_generate,
+        {"run_tools": "run_tools", "persist_reply": "persist_reply"},
+    )
+    builder.add_conditional_edges(
+        "run_tools",
+        _route_from_tools,
+        {"generate_reply": "generate_reply", "persist_reply": "persist_reply"},
+    )
+    builder.add_edge("persist_reply", END)
+    compiled = builder.compile(checkpointer=saver)
+    return AgentGraphV2(compiled=compiled, deps=deps)
 
 
 def build_input_state(
