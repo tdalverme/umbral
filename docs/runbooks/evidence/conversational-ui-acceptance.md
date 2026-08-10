@@ -5,7 +5,7 @@
 Estado de cierre local del incremento `conversational-ui` (Épica H4.3,
 UM-H4-017 a UM-H4-025). Spec: `specs/011-conversational-ui/spec.md`; plan:
 `specs/011-conversational-ui/plan.md`; tareas: `specs/011-conversational-ui/tasks.md`
-(48/65 completadas al momento de escribir esta evidencia).
+(59/65 completadas; commits `ab5a0e6` y `729da9e`).
 
 ## Resumen del incremento
 
@@ -81,12 +81,16 @@ se aplica al head en los tests de integración (alembic upgrade → head).
 
 ## Diferidos a seguimiento
 
-- Cerrar tareas pendientes (17): tests web periféricos (message-list,
-  proposal-card, hook, update-proposals list), entrada contextual en el
-  comparador y `context` en el contrato backend, telemetría first-fragment
-  (FR-043), E2E de composición ejecutado (requiere Docker), `api:check`
-  verde tras commitear el cliente generado, y `check.ps1` completo desde
-  checkout limpio.
+- Correr en CI los tests de integración que requieren Docker/testcontainers
+  (el daemon Docker de este entorno quedó colgado para operaciones de
+  contenedores): `tests/integration/api/test_chat_e2e.py` (T062, escrito y
+  recogido correctamente), `test_update_proposals_list` (T047, cubierto a
+  nivel unit) y los suites existentes; `check.ps1` completo desde checkout
+  limpio y marcar UM-H4-017 a UM-H4-025 en `docs/product/backlog.md`.
+- Tests web periféricos restantes (T055 segunda pestaña, T058 contextual
+  vitest) y `test_send_replay.py` (T034; la idempotencia está garantizada a
+  nivel de servicio y el `client_message_id` ya se hila por HTTP).
+- Fallos pre-existentes ajenos a este incremento, dependientes del entorno:
+  `runtime-routes.test.ts` (web, env de release manifest) y
+  `test_supabase_adapter.py` (identity, último commit `fcda7ce`).
 - ADR del proveedor de modelo y evals del graph (H4.4).
-- El `client_message_id` no se hila aún en el endpoint HTTP de envío (FR-024
-  a nivel HTTP); la idempotencia está garantizada a nivel de servicio.
