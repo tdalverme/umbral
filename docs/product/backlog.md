@@ -499,21 +499,21 @@ persistentes mediante tools, sin SQL libre ni ranking generativo.
 
 ## Epica H4.1 - Runtime LangGraph
 
-- [ ] **UM-H4-001 [P0] [APP] Modelar sesiones y mensajes persistentes** —
+- [x] **UM-H4-001 [P0] [APP] Modelar sesiones y mensajes persistentes** —
   Vincula cada session a usuario y search profile, conserva roles, contenido
   permitido, estado y lineage a graph runs.
-- [ ] **UM-H4-002 [P0] [AGENT] Definir state schema y topologia v1** — Separa
+- [x] **UM-H4-002 [P0] [AGENT] Definir state schema y topologia v1** — Separa
   mensajes, contexto, intencion, pending action, tool results y errores; todo
   valor checkpointed es serializable y versionado.
-- [ ] **UM-H4-003 [P0] [AGENT] Configurar checkpointer Postgres** — Threads se
+- [x] **UM-H4-003 [P0] [AGENT] Configurar checkpointer Postgres** — Threads se
   aislan por usuario/session, persisten entre requests y tienen politica de
   retencion y migracion.
-- [ ] **UM-H4-004 [P0] [AGENT] Implementar adapter de modelo con structured
+- [x] **UM-H4-004 [P0] [AGENT] Implementar adapter de modelo con structured
   outputs** — Centraliza modelo, timeout, retry acotado, token usage y versiones
   sin filtrar proveedor al dominio.
-- [ ] **UM-H4-005 [P0] [AGENT] Implementar ejecucion streaming y reanudable** —
+- [x] **UM-H4-005 [P0] [AGENT] Implementar ejecucion streaming y reanudable** —
   Entrega eventos tipados, reanuda tras desconexion y evita repetir efectos.
-- [ ] **UM-H4-006 [P0] [AGENT] Registrar graph runs y node/tool runs** — Guarda
+- [x] **UM-H4-006 [P0] [AGENT] Registrar graph runs y node/tool runs** — Guarda
   version, latencia, estado, errores, uso y correlacion sin copiar PII
   innecesaria.
 
@@ -941,6 +941,25 @@ El orden recomendado para generar artefactos Spec Kit es:
   del historial con producto (UM-H0-007) y gate completo desde checkout limpio
   en CI. El siguiente incremento del hito es `conversational-radar` (H4,
   UM-H4-001 a UM-H4-030).
+- [x] `langgraph-runtime` — aceptado para cierre local con Docker; las 6
+  stories de la épica H4.1 (UM-H4-001 a UM-H4-006) están marcadas arriba. La
+  evidencia consolidada está en
+  `docs/runbooks/evidence/langgraph-runtime-acceptance.md`. El harness
+  `scripts/check-agent.ps1` está registrado en `check.ps1` y pasa 66 tests
+  (unit, contract, migración 0009, arquitectura e integración con
+  Postgres/testcontainers); la migración `0009_langgraph_runtime` (5 tablas,
+  índice único parcial para 0 runs paralelos) y el events registry ampliado
+  (`chat.session_created.v1`, `chat.message_created.v1`) verificados; las
+  tablas del checkpointer LangGraph quedan excluidas del drift de Alembic.
+  Decisiones de clarificación (2026-08-09): retención por cuenta para
+  sesiones/mensajes y ventana corta de inactividad (default 30 días) para
+  checkpoints; una segunda solicitud a una sesión con ejecución activa se
+  rechaza con estado tipado; el estado de la sesión espeja el del search
+  profile; solo respuestas completas se persisten (0 mensajes parciales).
+  Diferidos a seguimiento: gate completo desde checkout limpio en CI,
+  composición del runtime para producción (con H4.3) y ADR de proveedor de
+  modelo (H4.4). El siguiente incremento del hito es `agent-tools` (H4.2,
+  UM-H4-007 a UM-H4-016).
 - [x] `silver-normalization` — aceptado para cierre local con Docker; las 10
   stories de la épica H2.2 (UM-H2-009 a UM-H2-018) están marcadas arriba. La
   evidencia consolidada está en
