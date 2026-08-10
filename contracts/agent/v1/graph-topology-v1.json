@@ -1,0 +1,18 @@
+{
+  "registry_version": "agent-graph-topology-v1",
+  "contract_version": "1",
+  "topology_version": 1,
+  "entry": "start",
+  "nodes": [
+    {"name": "start", "kind": "node"},
+    {"name": "generate_reply", "kind": "node"},
+    {"name": "persist_reply", "kind": "node"}
+  ],
+  "edges": [
+    {"from": "start", "to": "generate_reply"},
+    {"from": "generate_reply", "to": "persist_reply"},
+    {"from": "persist_reply", "to": "end"}
+  ],
+  "tools": [],
+  "interrupts": []
+}

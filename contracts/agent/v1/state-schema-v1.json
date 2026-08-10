@@ -1,0 +1,53 @@
+{
+  "registry_version": "agent-state-schema-v1",
+  "contract_version": "1",
+  "schema_version": 1,
+  "serializable": true,
+  "fields": [
+    {
+      "name": "schema_version",
+      "kind": "integer",
+      "required": true,
+      "description": "Version of this state schema; recorded in every checkpoint."
+    },
+    {
+      "name": "messages",
+      "kind": "list",
+      "item": "chat_message",
+      "required": true,
+      "description": "Messages of the current turn; history is mirrored in chat_messages."
+    },
+    {
+      "name": "context",
+      "kind": "object",
+      "serializable": true,
+      "required": true,
+      "description": "Serializable execution context; the effects_applied ledger lives here."
+    },
+    {
+      "name": "intent",
+      "kind": "nullable_object",
+      "required": true,
+      "description": "Compiled intent; always null in v1 (H4.3 fills it)."
+    },
+    {
+      "name": "pending_action",
+      "kind": "nullable_object",
+      "required": true,
+      "description": "Proposed action awaiting confirmation; modeled but always null in v1 (H4.3 consumes it)."
+    },
+    {
+      "name": "tool_results",
+      "kind": "list",
+      "required": true,
+      "description": "Tool results; always empty in v1 (tools are H4.2)."
+    },
+    {
+      "name": "errors",
+      "kind": "list",
+      "item": "typed_error",
+      "required": true,
+      "description": "Typed errors of the run; no conversation content."
+    }
+  ]
+}

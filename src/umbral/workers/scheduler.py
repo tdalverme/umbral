@@ -38,6 +38,7 @@ def scheduler_once(
     queue: JobQueue,
     identity_store: IdentityStore,
     limit: int = DEFAULT_DUE_WORK_LIMIT,
+    agent_purge: Callable[[datetime], int] | None = None,
 ) -> dict[str, int]:
     """Run one durable cron pass in the required recovery-first order."""
 
@@ -55,7 +56,7 @@ def scheduler_once(
     purged_requests = purge_request_fingerprints(
         identity_store, now=datetime.now(timezone.utc)
     )
-    return {
+    summary: dict[str, int] = {
         "reclaimed_outbox": reclaimed_outbox,
         "reaped_jobs": reaped_jobs,
         "scheduled": scheduled,
@@ -63,3 +64,6 @@ def scheduler_once(
         "failed": relay.failed,
         "purged_requests": purged_requests,
     }
+    if agent_purge is not None:
+        summary["purged_agent_checkpoints"] = agent_purge(datetime.now(timezone.utc))
+    return summary

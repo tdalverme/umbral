@@ -233,6 +233,48 @@ class Settings(BaseSettings):
     matching_regression_gate_enabled: bool = Field(
         default=True, validation_alias="MATCHING_REGRESSION_GATE_ENABLED"
     )
+    agent_model_provider: str = Field(
+        default="fake", validation_alias="AGENT_MODEL_PROVIDER"
+    )
+    agent_model_name: str = Field(
+        default="local-fake", validation_alias="AGENT_MODEL_NAME"
+    )
+    agent_model_timeout_seconds: float = Field(
+        default=30.0, validation_alias="AGENT_MODEL_TIMEOUT_SECONDS"
+    )
+    agent_model_max_retries: int = Field(
+        default=2, validation_alias="AGENT_MODEL_MAX_RETRIES"
+    )
+    agent_managed_endpoint: str | None = Field(
+        default=None, validation_alias="AGENT_MANAGED_ENDPOINT"
+    )
+    agent_managed_api_key: str | None = Field(
+        default=None,
+        validation_alias="AGENT_MANAGED_API_KEY",
+        repr=False,
+    )
+    agent_state_schema_version: int = Field(
+        default=1, validation_alias="AGENT_STATE_SCHEMA_VERSION"
+    )
+    agent_graph_topology_version: int = Field(
+        default=1, validation_alias="AGENT_GRAPH_TOPOLOGY_VERSION"
+    )
+    agent_prompt_version: str = Field(
+        default="agent-chat-v1", validation_alias="AGENT_PROMPT_VERSION"
+    )
+    agent_reply_schema_version: str = Field(
+        default="reply-v1", validation_alias="AGENT_REPLY_SCHEMA_VERSION"
+    )
+    agent_checkpoint_retention_days: int = Field(
+        default=30, validation_alias="AGENT_CHECKPOINT_RETENTION_DAYS"
+    )
+    agent_strict_msgpack: bool = Field(
+        default=True, validation_alias="AGENT_STRICT_MSGPACK"
+    )
+    chat_message_max_length: int = Field(
+        default=4000, validation_alias="CHAT_MESSAGE_MAX_LENGTH"
+    )
+
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
             "UMBRAL_ENV",
@@ -303,6 +345,19 @@ class Settings(BaseSettings):
             "FEEDBACK_MAX_FREE_FEEDBACK_LENGTH",
             "MATCHING_GOLDEN_DATASET_VERSION",
             "MATCHING_REGRESSION_GATE_ENABLED",
+            "AGENT_MODEL_PROVIDER",
+            "AGENT_MODEL_NAME",
+            "AGENT_MODEL_TIMEOUT_SECONDS",
+            "AGENT_MODEL_MAX_RETRIES",
+            "AGENT_MANAGED_ENDPOINT",
+            "AGENT_MANAGED_API_KEY",
+            "AGENT_STATE_SCHEMA_VERSION",
+            "AGENT_GRAPH_TOPOLOGY_VERSION",
+            "AGENT_PROMPT_VERSION",
+            "AGENT_REPLY_SCHEMA_VERSION",
+            "AGENT_CHECKPOINT_RETENTION_DAYS",
+            "AGENT_STRICT_MSGPACK",
+            "CHAT_MESSAGE_MAX_LENGTH",
         }
     )
 

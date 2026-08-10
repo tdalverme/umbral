@@ -160,6 +160,16 @@
       "version": 1,
       "emitted_by": "client",
       "required_keys": ["search_profile_id", "item_count"]
+    },
+    "chat.session_created.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["session_id", "search_profile_id"]
+    },
+    "chat.message_created.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["session_id", "message_id", "role"]
     }
   },
   "forbidden_keys": [

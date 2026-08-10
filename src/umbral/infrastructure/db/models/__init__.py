@@ -1,6 +1,12 @@
 """All foundation database mappings are imported from this module."""
 # ruff: noqa: E501
 
+from umbral.infrastructure.db.models.agent import (
+    AgentGraphRun,
+    AgentModelCall,
+    AgentNodeRun,
+)
+from umbral.infrastructure.db.models.chat import ChatMessage, ChatSession
 from umbral.infrastructure.db.models.criteria import (
     Concept,
     ConceptVersion,
@@ -63,6 +69,11 @@ from umbral.infrastructure.db.models.silver import (
 )
 
 __all__ = [
+    "AgentGraphRun",
+    "AgentNodeRun",
+    "AgentModelCall",
+    "ChatSession",
+    "ChatMessage",
     "Concept",
     "ConceptVersion",
     "PreferenceFact",

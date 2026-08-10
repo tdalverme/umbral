@@ -40,9 +40,7 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
         if args.command == "worker":
             _heartbeat(active_dependencies, "worker")
             stop = Event()
-            heartbeat_thread = _start_worker_heartbeat(
-                active_dependencies, stop
-            )
+            heartbeat_thread = _start_worker_heartbeat(active_dependencies, stop)
             try:
                 build_rq_worker(active_dependencies.queue).work()
                 return 0
@@ -57,6 +55,9 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                 queue=active_dependencies.queue,
                 identity_store=active_dependencies.identity_store,
                 limit=DEFAULT_DUE_WORK_LIMIT,
+                agent_purge=getattr(
+                    active_dependencies, "agent_checkpoint_purge", None
+                ),
             )
             print(json.dumps(summary, sort_keys=True, separators=(",", ":")))
             return 0
@@ -68,6 +69,9 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                     queue=active_dependencies.queue,
                     identity_store=active_dependencies.identity_store,
                     limit=DEFAULT_DUE_WORK_LIMIT,
+                    agent_purge=getattr(
+                        active_dependencies, "agent_checkpoint_purge", None
+                    ),
                 )
                 time.sleep(HEARTBEAT_INTERVAL_SECONDS)
         return 2

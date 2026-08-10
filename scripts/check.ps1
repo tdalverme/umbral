@@ -124,6 +124,14 @@ try {
         Invoke-ChildCheck -Name "Matching" -Path (Join-Path $PSScriptRoot "check-matching.ps1")
     }
 
+    $agentSurface = @(
+        (Join-Path $repoRoot "src\umbral\agent"),
+        (Join-Path $repoRoot "tests\contract\test_agent_state_schema.py")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($agentSurface) {
+        Invoke-ChildCheck -Name "Agent" -Path (Join-Path $PSScriptRoot "check-agent.ps1")
+    }
+
     $storageSurface = @(
         (Join-Path $repoRoot "src\umbral\application\objects"),
         (Join-Path $repoRoot "tests\contract\test_object_store.py")

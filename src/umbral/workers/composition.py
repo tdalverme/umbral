@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import socket
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from redis import Redis
@@ -15,6 +17,15 @@ from umbral.application.runtime.version import (
     ReleaseManifest,
     load_release_manifest,
     parse_release_manifest,
+)
+from umbral.infrastructure.agent.checkpointer import (
+    close_postgres_saver,
+    create_postgres_saver,
+)
+from umbral.infrastructure.agent.purge import (
+    PostgresThreadStore,
+    SqlAlchemyStaleSessionFinder,
+    purge_agent_checkpoints,
 )
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.criteria.composition import build_criteria_service
@@ -50,6 +61,7 @@ class ProcessDependencies:
     registry: JobRegistry
     worker_id: str
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
+    agent_checkpoint_purge: Callable[[datetime], int] | None = None
 
     @property
     def handlers(self) -> dict[str, object]:
@@ -155,7 +167,30 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         registry=registry,
         worker_id=f"rq:{socket.gethostname()}:{os.getpid()}",
         heartbeat_writer=heartbeat_writer,
+        agent_checkpoint_purge=_build_agent_purge(active_settings),
     )
+
+
+def _build_agent_purge(settings: Settings) -> Callable[[datetime], int]:
+    """Build the scheduler maintenance duty that purges expired checkpoints."""
+
+    def purge(now: datetime) -> int:
+        session_factory = SessionProvider(settings.database_url).session_factory
+        finder = SqlAlchemyStaleSessionFinder(session_factory)
+        saver = create_postgres_saver(
+            settings.database_url, strict_msgpack=settings.agent_strict_msgpack
+        )
+        try:
+            return purge_agent_checkpoints(
+                finder=finder,
+                threads=PostgresThreadStore(saver),
+                retention_days=settings.agent_checkpoint_retention_days,
+                now=now,
+            )
+        finally:
+            close_postgres_saver(saver)
+
+    return purge
 
 
 class _LateBindPublisher:
