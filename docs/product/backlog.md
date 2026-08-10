@@ -477,15 +477,15 @@ features, scoring y evidencia; todo feedback persiste como evento.
 
 ## Epica H3.4 - Calidad del matching
 
-- [ ] **UM-H3-032 [P0] [PROD] Crear dataset golden de recomendaciones** —
+- [x] **UM-H3-032 [P0] [PROD] Crear dataset golden de recomendaciones** —
   Incluye perfiles/listings, hard filter violations, unknowns, preferencias
   subjetivas y orden esperado revisado por producto.
-- [ ] **UM-H3-033 [P0] [APP] Automatizar regresiones de scoring** — Compara
+- [x] **UM-H3-033 [P0] [APP] Automatizar regresiones de scoring** — Compara
   versiones sobre el dataset golden y bloquea cambios no explicados.
-- [ ] **UM-H3-034 [P0] [AGENT] Evaluar fidelidad de explicaciones** — Mide
+- [x] **UM-H3-034 [P0] [AGENT] Evaluar fidelidad de explicaciones** — Mide
   cobertura de evidencia, contradicciones, afirmaciones no soportadas y copy de
   incertidumbre.
-- [ ] **UM-H3-035 [P1] [TRUST] Revisar fairness y lenguaje geografico** — Evita
+- [x] **UM-H3-035 [P1] [TRUST] Revisar fairness y lenguaje geografico** — Evita
   inferencias sensibles, proxies discriminatorios y afirmaciones normativas
   sobre zonas; documenta features prohibidas.
 
@@ -924,6 +924,23 @@ El orden recomendado para generar artefactos Spec Kit es:
   producto (UM-H0-007), actualización de `runtime-local.md` (completada) y
   gate completo desde checkout limpio en CI. El siguiente incremento del hito
   es `conversational-radar` (H4, UM-H4-001 a UM-H4-030).
+- [x] `matching-quality` — aceptado para cierre local; las 4 stories de la
+  épica H3.4 (UM-H3-032 a UM-H3-035) están marcadas arriba. La evidencia
+  consolidada está en
+  `docs/runbooks/evidence/matching-quality-acceptance.md`. El harness
+  `scripts/check-matching.ps1` está registrado en `check.ps1`; el módulo
+  `application/matching` es puro y test-only (0 API/workers/DB/migraciones/
+  endpoints/eventos web). Decisiones de clarificación (2026-08-09): gate de
+  regresión estricto (cualquier cambio de orden relativo o de hard filters
+  bloquea; score deltas sin cambio de orden son informativos); un cambio está
+  "explicado" solo si la release declara exactamente los casos afectados
+  detectados; threshold estricto de fidelidad (100% supported, 0 unsupported,
+  0 contradictions). El flag aditivo `compute_policy.computable` en el concepts
+  seed marca `barrio_seguro` como no computable con enforcement en el
+  compilador. Diferidos a seguimiento: revisión del copy del feedback libre y
+  del historial con producto (UM-H0-007) y gate completo desde checkout limpio
+  en CI. El siguiente incremento del hito es `conversational-radar` (H4,
+  UM-H4-001 a UM-H4-030).
 - [x] `silver-normalization` — aceptado para cierre local con Docker; las 10
   stories de la épica H2.2 (UM-H2-009 a UM-H2-018) están marcadas arriba. La
   evidencia consolidada está en
