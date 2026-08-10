@@ -573,18 +573,18 @@ persistentes mediante tools, sin SQL libre ni ranking generativo.
 
 ## Epica H4.4 - Evals, costos y operacion
 
-- [ ] **UM-H4-026 [P0] [PROD] Crear dataset de conversaciones golden** â€” Cubre
+- [x] **UM-H4-026 [P0] [PROD] Crear dataset de conversaciones golden** â€” Cubre
   onboarding, cambios ambiguos, explicacion, comparacion, feedback, injection y
   rechazo seguro.
-- [ ] **UM-H4-027 [P0] [AGENT] Automatizar evals del graph** â€” Mide seleccion de
+- [x] **UM-H4-027 [P0] [AGENT] Automatizar evals del graph** â€” Mide seleccion de
   tool, argumentos, grounding, confirmacion, outcome y costo por caso.
-- [ ] **UM-H4-028 [P0] [AGENT] Versionar prompts y graph releases** â€” Una
+- [x] **UM-H4-028 [P0] [AGENT] Versionar prompts y graph releases** â€” Una
   release registra modelos/schemas/nodos y puede compararse o revertirse sin
   mutar runs previos.
-- [ ] **UM-H4-029 [P0] [OPS] Aplicar presupuestos y rate limits** â€” Limita
+- [x] **UM-H4-029 [P0] [OPS] Aplicar presupuestos y rate limits** â€” Limita
   tokens, tools, concurrencia y costo por usuario/session; comunica limites
   recuperables.
-- [ ] **UM-H4-030 [P1] [OPS] Publicar dashboard del agente** â€” Muestra latencia,
+- [x] **UM-H4-030 [P1] [OPS] Publicar dashboard del agente** â€” Muestra latencia,
   errores, tool success, interrupts, tokens, costo y regresiones de eval.
 
 # H5 - Proactividad controlada
@@ -994,6 +994,24 @@ El orden recomendado para generar artefactos Spec Kit es:
   lentitud transitoria del daemon local), ADR de proveedor de modelo y evals
   del graph (H4.4). El siguiente incremento del hito es evals, costos y
   operación (H4.4).
+- [x] `graph-evals-ops` — aceptado para cierre local con Docker; las 5
+  stories de la épica H4.4 (UM-H4-026 a UM-H4-030) están marcadas arriba y
+  cierra el hito `conversational-radar` (UM-H4-001 a UM-H4-030). La evidencia
+  consolidada está en
+  `docs/runbooks/evidence/graph-evals-ops-acceptance.md`. El harness
+  `scripts/check-evals.ps1` está registrado en `check.ps1` y pasa 85 tests
+  (dataset golden, evals con adapter determinista, gate de regresiones,
+  releases, budgets, dashboard, ADR y migración 0012 con Postgres/
+  testcontainers). Decisiones de clarificación (2026-08-10): el ADR de
+  proveedor de modelo se incluye como entregable (diferido H4.1/H4.2/H4.3);
+  gate estricto en señales deterministas con umbrales para costo/latencia;
+  presupuesto agotado = bloqueo duro recuperable; evals híbridos (adapter
+  simulado en CI, proveedor real en flujo opt-in); dataset golden >=3 casos
+  por familia (21); activación de releases híbrida (aprobación de operador
+  para prompts/modelos). Diferidos a seguimiento: gate completo desde
+  checkout limpio en CI, wiring de producción del runtime/dashboard en
+  `api/dependencies.py` y el cliente web regenerado sin commitear
+  (`api:check`). El siguiente hito es la proactividad controlada (H5).
 - [x] `silver-normalization` â€” aceptado para cierre local con Docker; las 10
   stories de la Ã©pica H2.2 (UM-H2-009 a UM-H2-018) estÃ¡n marcadas arriba. La
   evidencia consolidada estÃ¡ en
