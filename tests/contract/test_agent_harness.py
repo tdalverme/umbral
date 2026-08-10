@@ -45,13 +45,10 @@ def test_harness_script_declares_the_expected_test_paths() -> None:
         assert path in script, f"harness missing test path: {path}"
 
 
-def test_no_http_chat_contracts_or_tools_are_added() -> None:
-    # FR-020: 0 HTTP chat contracts, 0 tools, 0 web chat surfaces.
-    assert not (ROOT / "src" / "umbral" / "api" / "routers" / "chat.py").exists()
-    assert not list((ROOT / "src" / "umbral" / "api" / "routers").glob("chat*.py"))
-    web_chat = ROOT / "apps" / "web" / "src" / "app" / "(protected)" / "chat"
-    assert not web_chat.exists()
-
+def test_audited_v1_topology_remains_tool_and_interrupt_free() -> None:
+    # The v1 agent topology is the audited prior version (H4.1): it must stay
+    # unchanged even though H4.2 added tools and H4.3 added HTTP chat and the
+    # HITL interrupt (they live in v2/v3 contracts, not in the audited v1).
     topology = json.loads(
         (ROOT / "contracts" / "agent" / "v1" / "graph-topology-v1.json").read_text(
             encoding="utf-8"
@@ -59,3 +56,8 @@ def test_no_http_chat_contracts_or_tools_are_added() -> None:
     )
     assert topology["tools"] == []
     assert topology["interrupts"] == []
+
+
+def test_chat_http_contracts_exist_as_expected_in_h4_3() -> None:
+    # H4.3 owns the chat HTTP surface (FR-025 of H4.2 deferred it here).
+    assert (ROOT / "src" / "umbral" / "api" / "routers" / "chat.py").exists()
