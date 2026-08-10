@@ -31,6 +31,15 @@ class ConceptLike(Protocol):
     @property
     def params_schema(self) -> Mapping[str, object]: ...
 
+    @property
+    def compute_policy(self) -> Mapping[str, object]: ...
+
+
+def is_computable(compute_policy: Mapping[str, object]) -> bool:
+    """Return whether a concept is computable; additive flag, default true."""
+    value = compute_policy.get("computable", True)
+    return bool(value) if isinstance(value, bool) else True
+
 
 @dataclass(frozen=True, slots=True)
 class ConceptSeed:

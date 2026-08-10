@@ -1,0 +1,22 @@
+{
+  "contract_version": "1",
+  "registry_version": "forbidden-features-v1",
+  "forbidden_concepts": [
+    {
+      "concept_key": "barrio_seguro",
+      "justification": "Inferencia sensible sobre seguridad del barrio: no computable hasta politica y fuente de datos aprobadas."
+    }
+  ],
+  "forbidden_proxies": [
+    {
+      "proxy_key": "nivel_socioeconomico_zona",
+      "justification": "Proxy discriminatorio por nivel socioeconomico estimado de la zona; prohibido como feature de matching."
+    }
+  ],
+  "normative_phrases": [
+    "mejor barrio",
+    "zona peligrosa",
+    "barrio exclusivo",
+    "la mejor zona"
+  ]
+}

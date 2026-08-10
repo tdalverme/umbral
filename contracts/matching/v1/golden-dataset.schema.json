@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://umbral.dev/contracts/matching/v1/golden-dataset.schema.json",
+  "title": "Golden recommendation dataset",
+  "description": "Versioned, immutable golden dataset of recommendation cases with product-reviewed expected order. Each case is self-contained: profile criteria, candidate listings with observations, expected ranking and hard-filter expectations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "registry_version",
+    "reviewed_by",
+    "reviewed_at",
+    "baseline_score_policy_version",
+    "cases"
+  ],
+  "properties": {
+    "contract_version": { "const": "1" },
+    "registry_version": { "const": "golden-dataset-v1" },
+    "reviewed_by": { "type": "string", "minLength": 1 },
+    "reviewed_at": { "type": "string", "format": "date" },
+    "baseline_score_policy_version": { "type": "string", "minLength": 1 },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "tags",
+        "profile",
+        "listings",
+        "expected_ranking",
+        "expected_hard_filter"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9-]+$" },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "hard_filter_violation",
+              "unknown",
+              "subjective_preference",
+              "price_boundary",
+              "legacy_no_breakdown"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "profile": { "$ref": "#/$defs/profile" },
+        "listings": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/listing" }
+        },
+        "expected_ranking": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "expected_hard_filter": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": ["pass", "excluded_budget", "excluded_zone", "excluded_rooms"]
+          }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zones", "budget_max", "min_rooms"],
+      "properties": {
+        "zones": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "budget_max": { "type": "number", "exclusiveMinimum": 0 },
+        "budget_min": { "type": "number", "minimum": 0 },
+        "min_rooms": { "type": "integer", "minimum": 0 },
+        "surface_min": { "type": "number", "minimum": 0 },
+        "surface_max": { "type": "number", "minimum": 0 }
+      }
+    },
+    "listing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "listing_id",
+        "total_cost",
+        "rooms",
+        "surface_m2",
+        "neighborhood",
+        "geo_precision"
+      ],
+      "properties": {
+        "listing_id": { "type": "string", "minLength": 1 },
+        "total_cost": { "type": "number", "minimum": 0 },
+        "rooms": { "type": ["integer", "null"], "minimum": 0 },
+        "surface_m2": { "type": ["number", "null"], "minimum": 0 },
+        "neighborhood": { "type": ["string", "null"] },
+        "geo_precision": {
+          "enum": ["exact", "block", "neighborhood", "approximate", "unknown"]
+        },
+        "legacy": { "type": "boolean" },
+        "observations": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/observation" }
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "score", "confidence"],
+      "properties": {
+        "value": {},
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

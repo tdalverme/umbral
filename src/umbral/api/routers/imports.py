@@ -1,4 +1,4 @@
-﻿"""Operator entry for controlled Bronze ingestion (H2.1)."""
+"""Operator entry for controlled Bronze ingestion (H2.1)."""
 
 from __future__ import annotations
 

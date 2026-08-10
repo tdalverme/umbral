@@ -217,7 +217,8 @@ class Settings(BaseSettings):
         default="learning-v1", validation_alias="LEARNING_POLICY_SEED_VERSION"
     )
     feedback_quick_reasons_seed_version: str = Field(
-        default="quick-reasons-v1", validation_alias="FEEDBACK_QUICK_REASONS_SEED_VERSION"
+        default="quick-reasons-v1",
+        validation_alias="FEEDBACK_QUICK_REASONS_SEED_VERSION",
     )
     feedback_free_feedback_enabled: bool = Field(
         default=False, validation_alias="FEEDBACK_FREE_FEEDBACK_ENABLED"
@@ -225,7 +226,13 @@ class Settings(BaseSettings):
     feedback_max_free_feedback_length: int = Field(
         default=500, validation_alias="FEEDBACK_MAX_FREE_FEEDBACK_LENGTH"
     )
-
+    matching_golden_dataset_version: str = Field(
+        default="golden-dataset-v1",
+        validation_alias="MATCHING_GOLDEN_DATASET_VERSION",
+    )
+    matching_regression_gate_enabled: bool = Field(
+        default=True, validation_alias="MATCHING_REGRESSION_GATE_ENABLED"
+    )
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
             "UMBRAL_ENV",
@@ -294,6 +301,8 @@ class Settings(BaseSettings):
             "FEEDBACK_QUICK_REASONS_SEED_VERSION",
             "FEEDBACK_FREE_FEEDBACK_ENABLED",
             "FEEDBACK_MAX_FREE_FEEDBACK_LENGTH",
+            "MATCHING_GOLDEN_DATASET_VERSION",
+            "MATCHING_REGRESSION_GATE_ENABLED",
         }
     )
 

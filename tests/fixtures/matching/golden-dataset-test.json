@@ -1,0 +1,50 @@
+{
+  "contract_version": "1",
+  "registry_version": "golden-dataset-v1",
+  "reviewed_by": "test",
+  "reviewed_at": "2026-08-09",
+  "baseline_score_policy_version": "scoring-policy-test-v1",
+  "cases": [
+    {
+      "id": "test-001",
+      "tags": ["price_boundary"],
+      "profile": {
+        "zones": ["palermo"],
+        "budget_max": 1000.0,
+        "budget_min": null,
+        "min_rooms": 2,
+        "surface_min": null,
+        "surface_max": null
+      },
+      "criteria": [
+        { "concept_key": "presupuesto", "matcher_type": "numeric_range", "params": { "min": 0, "max": 1 } },
+        { "concept_key": "ambientes", "matcher_type": "numeric_range", "params": { "min": 0, "max": 200 } },
+        { "concept_key": "superficie", "matcher_type": "numeric_range", "params": { "min": 0, "max": 2000 } }
+      ],
+      "listings": [
+        {
+          "listing_id": "test-a",
+          "total_cost": 700.0,
+          "rooms": 2,
+          "surface_m2": 50.0,
+          "neighborhood": "palermo",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {}
+        },
+        {
+          "listing_id": "test-b",
+          "total_cost": 500.0,
+          "rooms": 3,
+          "surface_m2": 70.0,
+          "neighborhood": "palermo",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {}
+        }
+      ],
+      "expected_ranking": ["test-a", "test-b"],
+      "expected_hard_filter": { "test-a": "pass", "test-b": "pass" }
+    }
+  ]
+}

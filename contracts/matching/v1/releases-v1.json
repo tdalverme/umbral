@@ -1,0 +1,15 @@
+{
+  "contract_version": "1",
+  "registry_version": "matching-releases-v1",
+  "releases": [
+    {
+      "id": "rel-001",
+      "artifact": "scoring.policy",
+      "artifact_version": "scoring-policy-v2",
+      "owner": "scoring-owner",
+      "justification": "Ajuste de pesos de presupuesto y superficie tras revision de producto; el dataset golden-001..005 fue revisado contra la nueva version.",
+      "affected_case_ids": ["golden-001-budget-match", "golden-003-unknown"],
+      "date": "2026-08-09"
+    }
+  ]
+}

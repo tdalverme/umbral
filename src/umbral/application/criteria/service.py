@@ -58,6 +58,7 @@ from umbral.application.criteria.registry import (
     ConceptSeed,
     ConceptsSeedSpec,
     MatcherTypesSpec,
+    is_computable,
     validate_concept_seed,
 )
 from umbral.application.criteria.rules import rule_version, run_rule
@@ -715,6 +716,7 @@ class CriteriaService:
         return tuple(
             (concept.key, self._concept_source(concept.key))
             for concept in self.concepts_seed.concepts
+            if is_computable(concept.compute_policy)
         )
 
     def _concept_source(self, concept_key: str) -> str:

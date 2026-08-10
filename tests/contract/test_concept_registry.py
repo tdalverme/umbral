@@ -48,6 +48,7 @@ def test_contract_documents_parse_and_match_the_published_contracts() -> None:
         "tipo_cocina",
         "luminosidad",
         "estado_general",
+        "barrio_seguro",
     }
     assert set(parsed_types.matcher_types) == {
         "numeric_range",

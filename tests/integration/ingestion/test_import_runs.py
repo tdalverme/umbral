@@ -1,4 +1,4 @@
-﻿"""Repository persistence and run state transitions on real PostgreSQL."""
+"""Repository persistence and run state transitions on real PostgreSQL."""
 
 from __future__ import annotations
 

@@ -116,6 +116,14 @@ try {
         Invoke-ChildCheck -Name "Feedback" -Path (Join-Path $PSScriptRoot "check-feedback.ps1")
     }
 
+    $matchingSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\matching"),
+        (Join-Path $repoRoot "tests\contract\test_matching_golden.py")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($matchingSurface) {
+        Invoke-ChildCheck -Name "Matching" -Path (Join-Path $PSScriptRoot "check-matching.ps1")
+    }
+
     $storageSurface = @(
         (Join-Path $repoRoot "src\umbral\application\objects"),
         (Join-Path $repoRoot "tests\contract\test_object_store.py")

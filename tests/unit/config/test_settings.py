@@ -119,3 +119,23 @@ def test_preview_rejects_supabase_url_outside_the_configured_project(
 
     assert raised.value.rule_code == "CONFIG_FORMAT"
     assert raised.value.field_name == "SUPABASE_URL"
+
+
+def test_matching_settings_have_safe_defaults_and_are_known() -> None:
+    values = _case_environment(
+        next(case for case in ACCEPTED_CASES if case["id"] == "local-valid")
+    )
+    settings = Settings.from_environment(values)
+    assert settings.matching_golden_dataset_version == "golden-dataset-v1"
+    assert settings.matching_regression_gate_enabled is True
+
+
+def test_matching_settings_are_accepted_from_environment() -> None:
+    values = _case_environment(
+        next(case for case in ACCEPTED_CASES if case["id"] == "local-valid")
+    )
+    values["MATCHING_GOLDEN_DATASET_VERSION"] = "golden-dataset-v2"
+    values["MATCHING_REGRESSION_GATE_ENABLED"] = "false"
+    settings = Settings.from_environment(values)
+    assert settings.matching_golden_dataset_version == "golden-dataset-v2"
+    assert settings.matching_regression_gate_enabled is False

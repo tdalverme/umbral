@@ -17,6 +17,7 @@ from umbral.application.criteria.registry import (
     ConceptLike,
     ConceptsSeedSpec,
     MatcherTypesSpec,
+    is_computable,
     resolve_alias,
 )
 
@@ -64,6 +65,8 @@ def compile_criteria(
         concept = _lookup_concept(by_key, concept_key)
         if concept is None:
             raise _validation("criteria.concept_not_found", concept_key)
+        if not is_computable(_compute_policy(concept)):
+            raise _validation("criteria.concept_not_computable", concept_key)
         matcher_type = str(raw.get("matcher_type", ""))
         if matcher_type != concept.matcher_type:
             raise _validation(
@@ -136,6 +139,10 @@ def _concept_map(concepts: Mapping[str, ConceptLike]) -> Mapping[str, ConceptLik
             concept.key: cast(ConceptLike, concept) for concept in concepts.concepts
         }
     return concepts
+
+
+def _compute_policy(concept: ConceptLike) -> Mapping[str, object]:
+    return dict(concept.compute_policy)
 
 
 def _lookup_concept(

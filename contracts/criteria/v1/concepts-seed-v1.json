@@ -10,7 +10,7 @@
       "params_schema": {"allowed_values": ["true", "false"]},
       "source": "seed",
       "defaults": {"value": "false"},
-      "compute_policy": {"unknown": "penalize", "qualitative": false}
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
     },
     {
       "key": "ambientes",
@@ -20,7 +20,7 @@
       "params_schema": {"min": 0, "max": 200},
       "source": "seed",
       "defaults": {"min": 1},
-      "compute_policy": {"unknown": "penalize", "qualitative": false}
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
     },
     {
       "key": "piso",
@@ -30,7 +30,7 @@
       "params_schema": {"min": -10, "max": 1000},
       "source": "seed",
       "defaults": {"min": 1},
-      "compute_policy": {"unknown": "penalize", "qualitative": false}
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
     },
     {
       "key": "tipo_cocina",
@@ -40,7 +40,7 @@
       "params_schema": {"allowed_values": ["none", "separada", "integrada", "otra"]},
       "source": "seed",
       "defaults": {"value": "otra"},
-      "compute_policy": {"unknown": "penalize", "qualitative": false}
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
     },
     {
       "key": "luminosidad",
@@ -50,7 +50,7 @@
       "params_schema": {"concept": "luminosidad"},
       "source": "seed",
       "defaults": {},
-      "compute_policy": {"unknown": "exclude", "qualitative": true}
+      "compute_policy": {"unknown": "exclude", "qualitative": true, "computable": true}
     },
     {
       "key": "estado_general",
@@ -60,7 +60,17 @@
       "params_schema": {"concept": "estado_general"},
       "source": "seed",
       "defaults": {},
-      "compute_policy": {"unknown": "exclude", "qualitative": true}
+      "compute_policy": {"unknown": "exclude", "qualitative": true, "computable": true}
+    },
+    {
+      "key": "barrio_seguro",
+      "name": "Seguridad del barrio",
+      "aliases": ["barrio seguro"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["true", "false"]},
+      "source": "seed",
+      "defaults": {},
+      "compute_policy": {"unknown": "exclude", "qualitative": true, "computable": false}
     }
   ]
 }

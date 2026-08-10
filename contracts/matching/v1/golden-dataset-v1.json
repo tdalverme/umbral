@@ -1,0 +1,225 @@
+{
+  "contract_version": "1",
+  "registry_version": "golden-dataset-v1",
+  "reviewed_by": "product-h3.4",
+  "reviewed_at": "2026-08-09",
+  "baseline_score_policy_version": "scoring-policy-v1",
+  "cases": [
+    {
+      "id": "golden-001-budget-match",
+      "tags": ["price_boundary"],
+      "profile": {
+        "zones": ["palermo"],
+        "budget_max": 500000,
+        "budget_min": null,
+        "min_rooms": 2,
+        "surface_min": 40,
+        "surface_max": 90
+      },
+      "criteria": [
+        { "concept_key": "presupuesto", "matcher_type": "numeric_range", "params": { "min": 0, "max": 1 } },
+        { "concept_key": "ambientes", "matcher_type": "numeric_range", "params": { "min": 0, "max": 200 } },
+        { "concept_key": "superficie", "matcher_type": "numeric_range", "params": { "min": 0, "max": 2000 } },
+        { "concept_key": "ubicacion", "matcher_type": "geo_proximity", "params": { "radius_m": 1500 } }
+      ],
+      "listings": [
+        {
+          "listing_id": "golden-001-a",
+          "total_cost": 460000,
+          "rooms": 2,
+          "surface_m2": 62,
+          "neighborhood": "palermo",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {}
+        },
+        {
+          "listing_id": "golden-001-b",
+          "total_cost": 490000,
+          "rooms": 3,
+          "surface_m2": 74,
+          "neighborhood": "palermo",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {}
+        }
+      ],
+      "expected_ranking": ["golden-001-a", "golden-001-b"],
+      "expected_hard_filter": {
+        "golden-001-a": "pass",
+        "golden-001-b": "pass"
+      }
+    },
+    {
+      "id": "golden-002-budget-over",
+      "tags": ["hard_filter_violation"],
+      "profile": {
+        "zones": ["recoleta"],
+        "budget_max": 300000,
+        "budget_min": null,
+        "min_rooms": 1,
+        "surface_min": null,
+        "surface_max": null
+      },
+      "criteria": [
+        { "concept_key": "presupuesto", "matcher_type": "numeric_range", "params": { "min": 0, "max": 1 } },
+        { "concept_key": "ambientes", "matcher_type": "numeric_range", "params": { "min": 0, "max": 200 } },
+        { "concept_key": "ubicacion", "matcher_type": "geo_proximity", "params": { "radius_m": 1500 } }
+      ],
+      "listings": [
+        {
+          "listing_id": "golden-002-a",
+          "total_cost": 280000,
+          "rooms": 1,
+          "surface_m2": 40,
+          "neighborhood": "recoleta",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {}
+        },
+        {
+          "listing_id": "golden-002-b",
+          "total_cost": 320000,
+          "rooms": 2,
+          "surface_m2": 55,
+          "neighborhood": "recoleta",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {}
+        }
+      ],
+      "expected_ranking": ["golden-002-a"],
+      "expected_hard_filter": {
+        "golden-002-a": "pass",
+        "golden-002-b": "excluded_budget"
+      }
+    },
+    {
+      "id": "golden-003-unknown",
+      "tags": ["unknown"],
+      "profile": {
+        "zones": ["caballito"],
+        "budget_max": 400000,
+        "budget_min": null,
+        "min_rooms": 2,
+        "surface_min": 50,
+        "surface_max": null
+      },
+      "criteria": [
+        { "concept_key": "presupuesto", "matcher_type": "numeric_range", "params": { "min": 0, "max": 1 } },
+        { "concept_key": "ambientes", "matcher_type": "numeric_range", "params": { "min": 0, "max": 200 } },
+        { "concept_key": "superficie", "matcher_type": "numeric_range", "params": { "min": 0, "max": 2000 } },
+        { "concept_key": "ubicacion", "matcher_type": "geo_proximity", "params": { "radius_m": 1500 } }
+      ],
+      "listings": [
+        {
+          "listing_id": "golden-003-a",
+          "total_cost": 380000,
+          "rooms": 2,
+          "surface_m2": null,
+          "neighborhood": "caballito",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {}
+        },
+        {
+          "listing_id": "golden-003-b",
+          "total_cost": 360000,
+          "rooms": 2,
+          "surface_m2": 58,
+          "neighborhood": "caballito",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {}
+        }
+      ],
+      "expected_ranking": ["golden-003-b", "golden-003-a"],
+      "expected_hard_filter": {
+        "golden-003-a": "pass",
+        "golden-003-b": "pass"
+      }
+    },
+    {
+      "id": "golden-004-subjective",
+      "tags": ["subjective_preference"],
+      "profile": {
+        "zones": ["palermo"],
+        "budget_max": 450000,
+        "budget_min": null,
+        "min_rooms": 2,
+        "surface_min": null,
+        "surface_max": null
+      },
+      "criteria": [
+        { "concept_key": "presupuesto", "matcher_type": "numeric_range", "params": { "min": 0, "max": 1 } },
+        { "concept_key": "ambientes", "matcher_type": "numeric_range", "params": { "min": 0, "max": 200 } },
+        { "concept_key": "ubicacion", "matcher_type": "geo_proximity", "params": { "radius_m": 1500 } },
+        { "concept_key": "balcon", "matcher_type": "categorical", "params": { "allowed_values": ["true"] } },
+        { "concept_key": "luminosidad", "matcher_type": "semantic_feature", "params": { "concept": "luminosidad", "threshold": 0.5 } }
+      ],
+      "listings": [
+        {
+          "listing_id": "golden-004-a",
+          "total_cost": 430000,
+          "rooms": 2,
+          "surface_m2": 60,
+          "neighborhood": "palermo",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {
+            "balcon": { "value": "true", "score": 1.0, "confidence": 1.0 },
+            "luminosidad": { "value": "alta", "score": 0.9, "confidence": 0.8 }
+          }
+        },
+        {
+          "listing_id": "golden-004-b",
+          "total_cost": 420000,
+          "rooms": 2,
+          "surface_m2": 58,
+          "neighborhood": "palermo",
+          "geo_precision": "neighborhood",
+          "legacy": false,
+          "observations": {
+            "balcon": { "value": "false", "score": 0.0, "confidence": 1.0 },
+            "luminosidad": { "value": "media", "score": 0.5, "confidence": 0.7 }
+          }
+        }
+      ],
+      "expected_ranking": ["golden-004-a", "golden-004-b"],
+      "expected_hard_filter": {
+        "golden-004-a": "pass",
+        "golden-004-b": "pass"
+      }
+    },
+    {
+      "id": "golden-005-legacy",
+      "tags": ["legacy_no_breakdown"],
+      "profile": {
+        "zones": ["villa_crespo"],
+        "budget_max": 350000,
+        "budget_min": null,
+        "min_rooms": 1,
+        "surface_min": null,
+        "surface_max": null
+      },
+      "criteria": [
+        { "concept_key": "presupuesto", "matcher_type": "numeric_range", "params": { "min": 0, "max": 1 } },
+        { "concept_key": "ambientes", "matcher_type": "numeric_range", "params": { "min": 0, "max": 200 } }
+      ],
+      "listings": [
+        {
+          "listing_id": "golden-005-a",
+          "total_cost": 330000,
+          "rooms": 1,
+          "surface_m2": 35,
+          "neighborhood": "villa_crespo",
+          "geo_precision": "approximate",
+          "legacy": true,
+          "observations": {}
+        }
+      ],
+      "expected_ranking": ["golden-005-a"],
+      "expected_hard_filter": { "golden-005-a": "pass" }
+    }
+  ]
+}
