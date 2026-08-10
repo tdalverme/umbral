@@ -172,6 +172,7 @@ def _run_model(run: GraphRun) -> AgentGraphRun:
         latency_ms=run.latency_ms,
         error_summary=dict(run.error_summary) if run.error_summary else None,
         token_usage=dict(run.token_usage) if run.token_usage else None,
+        release_id=run.release_id,
     )
 
 
@@ -189,6 +190,7 @@ def _to_run(model: AgentGraphRun) -> GraphRun:
         latency_ms=model.latency_ms,
         error_summary=dict(model.error_summary or {}),
         token_usage=dict(model.token_usage or {}),
+        release_id=model.release_id,
     )
 
 

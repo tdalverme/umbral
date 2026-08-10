@@ -1441,6 +1441,37 @@ export type UmbralApiRoutersSearchProfilesRunResponse = {
  */
 export type CorrelationId = string;
 
+export type AgentOpsOverviewData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent/ops/overview';
+};
+
+export type AgentOpsOverviewErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+};
+
+export type AgentOpsOverviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type LogoutCurrentSessionData = {
     body?: never;
     headers?: {

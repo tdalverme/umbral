@@ -52,6 +52,15 @@ class RunInterrupted:
     run_id: UUID
 
 
+@dataclass(frozen=True, slots=True)
+class BudgetWarning:
+    """The session is approaching its budget; the turn continues (FR-013)."""
+
+    run_id: UUID | None
+    session_id: UUID
+    ratio: float
+
+
 RuntimeEvent = (
     RunStarted
     | ReplyFragment
@@ -60,4 +69,5 @@ RuntimeEvent = (
     | RunCompleted
     | RunFailed
     | RunInterrupted
+    | BudgetWarning
 )

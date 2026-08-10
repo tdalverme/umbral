@@ -190,6 +190,21 @@
       "version": 1,
       "emitted_by": "server",
       "required_keys": ["proposal_id", "search_profile_id", "profile_version"]
+    },
+    "agent.budget_warning.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["session_id", "ratio"]
+    },
+    "agent.budget_exhausted.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["session_id", "limit_kind"]
+    },
+    "agent.rate_limit_exceeded.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["session_id", "limit_kind"]
     }
   },
   "forbidden_keys": [

@@ -23,6 +23,8 @@ from umbral.api.errors import (
 from umbral.api.middleware.correlation import CorrelationMiddleware
 from umbral.api.routers.auth import configure_auth_routes
 from umbral.api.routers.auth import router as auth_router
+from umbral.api.routers.agent_ops import configure_agent_ops_routes
+from umbral.api.routers.agent_ops import router as agent_ops_router
 from umbral.api.routers.chat import configure_chat_routes
 from umbral.api.routers.chat import router as chat_router
 from umbral.api.routers.comparisons import configure_comparisons_routes
@@ -271,6 +273,7 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     configure_feedback_routes(dependencies)
     configure_learning_routes(dependencies)
     configure_chat_routes(dependencies)
+    configure_agent_ops_routes(dependencies)
     app.add_middleware(CorrelationMiddleware)
     app.add_exception_handler(ApplicationError, application_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -278,6 +281,7 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     app.add_exception_handler(Exception, unhandled_error_handler)
     app.include_router(runtime_router)
     app.include_router(auth_router)
+    app.include_router(agent_ops_router)
     app.include_router(email_webhook_router)
     app.include_router(imports_router)
     app.include_router(search_profiles_router)

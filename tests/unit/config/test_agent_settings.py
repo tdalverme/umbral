@@ -46,6 +46,20 @@ def test_agent_settings_have_safe_defaults() -> None:
     assert settings.agent_clarification_max_rounds == 2
     assert settings.agent_reply_max_refs == 10
     assert settings.agent_reply_chunk_words == 8
+    assert settings.agent_evals_dataset_version == "conversations-golden-v1"
+    assert settings.agent_evals_releases_version == "graph-releases-v1"
+    assert settings.agent_evals_price_table_version == "price-table-v1"
+    assert settings.agent_evals_gate_enabled is True
+    assert settings.agent_evals_cost_threshold_pct == 20.0
+    assert settings.agent_evals_latency_threshold_ms == 1500
+    assert settings.agent_graph_release_id == "graph-release-001"
+    assert settings.agent_budget_window_hours == 24
+    assert settings.agent_budget_session_token_cap == 150000
+    assert settings.agent_budget_user_token_cap == 500000
+    assert settings.agent_budget_session_tool_call_cap == 40
+    assert settings.agent_budget_user_cost_cap_usd == 5.0
+    assert settings.agent_budget_user_concurrency_cap == 2
+    assert settings.agent_budget_warning_ratio == 0.8
 
 
 def test_agent_tools_overrides_are_accepted() -> None:
@@ -68,6 +82,20 @@ def test_agent_tools_overrides_are_accepted() -> None:
             "AGENT_CLARIFICATION_MAX_ROUNDS": "3",
             "AGENT_REPLY_MAX_REFS": "5",
             "AGENT_REPLY_CHUNK_WORDS": "4",
+            "AGENT_EVALS_DATASET_VERSION": "conversations-golden-v2",
+            "AGENT_EVALS_RELEASES_VERSION": "graph-releases-v2",
+            "AGENT_EVALS_PRICE_TABLE_VERSION": "price-table-v2",
+            "AGENT_EVALS_GATE_ENABLED": "false",
+            "AGENT_EVALS_COST_THRESHOLD_PCT": "30",
+            "AGENT_EVALS_LATENCY_THRESHOLD_MS": "3000",
+            "AGENT_GRAPH_RELEASE_ID": "graph-release-002",
+            "AGENT_BUDGET_WINDOW_HOURS": "48",
+            "AGENT_BUDGET_SESSION_TOKEN_CAP": "100000",
+            "AGENT_BUDGET_USER_TOKEN_CAP": "300000",
+            "AGENT_BUDGET_SESSION_TOOL_CALL_CAP": "20",
+            "AGENT_BUDGET_USER_COST_CAP_USD": "10",
+            "AGENT_BUDGET_USER_CONCURRENCY_CAP": "3",
+            "AGENT_BUDGET_WARNING_RATIO": "0.9",
         }
     )
     settings = Settings.from_environment(values)
@@ -87,6 +115,20 @@ def test_agent_tools_overrides_are_accepted() -> None:
     assert settings.agent_clarification_max_rounds == 3
     assert settings.agent_reply_max_refs == 5
     assert settings.agent_reply_chunk_words == 4
+    assert settings.agent_evals_dataset_version == "conversations-golden-v2"
+    assert settings.agent_evals_releases_version == "graph-releases-v2"
+    assert settings.agent_evals_price_table_version == "price-table-v2"
+    assert settings.agent_evals_gate_enabled is False
+    assert settings.agent_evals_cost_threshold_pct == 30.0
+    assert settings.agent_evals_latency_threshold_ms == 3000
+    assert settings.agent_graph_release_id == "graph-release-002"
+    assert settings.agent_budget_window_hours == 48
+    assert settings.agent_budget_session_token_cap == 100000
+    assert settings.agent_budget_user_token_cap == 300000
+    assert settings.agent_budget_session_tool_call_cap == 20
+    assert settings.agent_budget_user_cost_cap_usd == 10.0
+    assert settings.agent_budget_user_concurrency_cap == 3
+    assert settings.agent_budget_warning_ratio == 0.9
 
 
 def test_agent_overrides_are_accepted() -> None:

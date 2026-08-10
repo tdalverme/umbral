@@ -322,6 +322,51 @@ class Settings(BaseSettings):
     agent_reply_chunk_words: int = Field(
         default=8, validation_alias="AGENT_REPLY_CHUNK_WORDS"
     )
+    agent_evals_dataset_version: str = Field(
+        default="conversations-golden-v1",
+        validation_alias="AGENT_EVALS_DATASET_VERSION",
+    )
+    agent_evals_releases_version: str = Field(
+        default="graph-releases-v1",
+        validation_alias="AGENT_EVALS_RELEASES_VERSION",
+    )
+    agent_evals_price_table_version: str = Field(
+        default="price-table-v1",
+        validation_alias="AGENT_EVALS_PRICE_TABLE_VERSION",
+    )
+    agent_evals_gate_enabled: bool = Field(
+        default=True, validation_alias="AGENT_EVALS_GATE_ENABLED"
+    )
+    agent_evals_cost_threshold_pct: float = Field(
+        default=20.0, validation_alias="AGENT_EVALS_COST_THRESHOLD_PCT"
+    )
+    agent_evals_latency_threshold_ms: int = Field(
+        default=1500, validation_alias="AGENT_EVALS_LATENCY_THRESHOLD_MS"
+    )
+    agent_graph_release_id: str = Field(
+        default="graph-release-001", validation_alias="AGENT_GRAPH_RELEASE_ID"
+    )
+    agent_budget_window_hours: int = Field(
+        default=24, validation_alias="AGENT_BUDGET_WINDOW_HOURS"
+    )
+    agent_budget_session_token_cap: int = Field(
+        default=150000, validation_alias="AGENT_BUDGET_SESSION_TOKEN_CAP"
+    )
+    agent_budget_user_token_cap: int = Field(
+        default=500000, validation_alias="AGENT_BUDGET_USER_TOKEN_CAP"
+    )
+    agent_budget_session_tool_call_cap: int = Field(
+        default=40, validation_alias="AGENT_BUDGET_SESSION_TOOL_CALL_CAP"
+    )
+    agent_budget_user_cost_cap_usd: float = Field(
+        default=5.0, validation_alias="AGENT_BUDGET_USER_COST_CAP_USD"
+    )
+    agent_budget_user_concurrency_cap: int = Field(
+        default=2, validation_alias="AGENT_BUDGET_USER_CONCURRENCY_CAP"
+    )
+    agent_budget_warning_ratio: float = Field(
+        default=0.8, validation_alias="AGENT_BUDGET_WARNING_RATIO"
+    )
 
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
@@ -422,6 +467,20 @@ class Settings(BaseSettings):
             "AGENT_CLARIFICATION_MAX_ROUNDS",
             "AGENT_REPLY_MAX_REFS",
             "AGENT_REPLY_CHUNK_WORDS",
+            "AGENT_EVALS_DATASET_VERSION",
+            "AGENT_EVALS_RELEASES_VERSION",
+            "AGENT_EVALS_PRICE_TABLE_VERSION",
+            "AGENT_EVALS_GATE_ENABLED",
+            "AGENT_EVALS_COST_THRESHOLD_PCT",
+            "AGENT_EVALS_LATENCY_THRESHOLD_MS",
+            "AGENT_GRAPH_RELEASE_ID",
+            "AGENT_BUDGET_WINDOW_HOURS",
+            "AGENT_BUDGET_SESSION_TOKEN_CAP",
+            "AGENT_BUDGET_USER_TOKEN_CAP",
+            "AGENT_BUDGET_SESSION_TOOL_CALL_CAP",
+            "AGENT_BUDGET_USER_COST_CAP_USD",
+            "AGENT_BUDGET_USER_CONCURRENCY_CAP",
+            "AGENT_BUDGET_WARNING_RATIO",
         }
     )
 

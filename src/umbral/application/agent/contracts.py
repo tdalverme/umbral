@@ -29,6 +29,7 @@ class GraphRun:
     latency_ms: int | None = None
     error_summary: Mapping[str, object] | None = None
     token_usage: Mapping[str, object] | None = None
+    release_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,3 +96,42 @@ class AgentStateIncompatible(AgentError):
     """A checkpoint state schema cannot be resumed."""
 
     code = "agent.state_incompatible"
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetVerdict:
+    """Result of evaluating budget consumption against a policy (R-09)."""
+
+    level: Literal["ok", "warning", "exhausted"]
+    kind: str | None = None
+    ratio: float | None = None
+
+
+class AgentBudgetWarning(AgentError):
+    """The session is approaching its budget; no interruption (FR-013)."""
+
+    code = "agent.budget_warning"
+
+    def __init__(self, ratio: float) -> None:
+        self.ratio = ratio
+        super().__init__(f"budget at {ratio:.0%}")
+
+
+class AgentBudgetExhausted(AgentError):
+    """The session/user budget is exhausted; hard recoverable block (FR-014)."""
+
+    code = "agent.budget_exhausted"
+
+    def __init__(self, kind: str) -> None:
+        self.kind = kind
+        super().__init__(f"budget exhausted: {kind}")
+
+
+class AgentRateLimitExceeded(AgentError):
+    """A concurrency or rate limit was exceeded; typed and recoverable (FR-015)."""
+
+    code = "agent.rate_limit_exceeded"
+
+    def __init__(self, kind: str) -> None:
+        self.kind = kind
+        super().__init__(f"rate limit exceeded: {kind}")

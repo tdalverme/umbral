@@ -1,0 +1,28 @@
+{
+  "contract_version": "1",
+  "registry_version": "graph-releases-v1",
+  "releases": [
+    {
+      "id": "graph-release-001",
+      "components": {
+        "prompt_versions": ["agent-intent-v1", "agent-reply-v2"],
+        "model_version": "provider-x-model-y",
+        "state_schema_version": "chat-state-v3",
+        "topology_version": "chat-topology-v3",
+        "intent_schema_version": "intent-schema-v3",
+        "price_table_version": "price-table-v1",
+        "touches_prompts_or_model": false
+      },
+      "owner": "team-agent",
+      "justification": "Release inicial del graph v3 (H4.3): fija las versiones de prompts, modelo y schemas sobre las que se corren los evals de linea base.",
+      "affected_case_ids": [],
+      "activation": {
+        "status": "active",
+        "approved_by": null,
+        "approval_evidence": null,
+        "reverted_reason": null
+      },
+      "date": "2026-08-10"
+    }
+  ]
+}

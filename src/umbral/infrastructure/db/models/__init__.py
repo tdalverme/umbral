@@ -6,6 +6,7 @@ from umbral.infrastructure.db.models.agent import (
     AgentModelCall,
     AgentNodeRun,
 )
+from umbral.infrastructure.db.models.agent_evals import AgentEvalCaseResult, AgentEvalSuite
 from umbral.infrastructure.db.models.chat import ChatMessage, ChatSession
 from umbral.infrastructure.db.models.criteria import (
     Concept,
@@ -72,6 +73,8 @@ __all__ = [
     "AgentGraphRun",
     "AgentNodeRun",
     "AgentModelCall",
+    "AgentEvalSuite",
+    "AgentEvalCaseResult",
     "ChatSession",
     "ChatMessage",
     "Concept",

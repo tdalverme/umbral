@@ -148,6 +148,14 @@ try {
         Invoke-ChildCheck -Name "Chat Conversacional" -Path (Join-Path $PSScriptRoot "check-chat.ps1")
     }
 
+    $agentEvalsSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\agent_evals"),
+        (Join-Path $repoRoot "tests\contract\test_agent_evals_golden.py")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($agentEvalsSurface) {
+        Invoke-ChildCheck -Name "Agent Evals" -Path (Join-Path $PSScriptRoot "check-evals.ps1")
+    }
+
     $storageSurface = @(
         (Join-Path $repoRoot "src\umbral\application\objects"),
         (Join-Path $repoRoot "tests\contract\test_object_store.py")

@@ -58,6 +58,7 @@ class RuntimeDependencies:
     agent_runtime: object | None = None
     proposals: object | None = None
     graph_runs: object | None = None
+    ops_overview: object | None = None
 
 
 def build_runtime_dependencies(

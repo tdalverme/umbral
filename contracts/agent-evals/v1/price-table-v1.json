@@ -1,0 +1,12 @@
+{
+  "contract_version": "1",
+  "registry_version": "price-table-v1",
+  "currency": "usd",
+  "prices": [
+    {
+      "model_version": "provider-x-model-y",
+      "price_input_per_1k": 0.0005,
+      "price_output_per_1k": 0.0015
+    }
+  ]
+}

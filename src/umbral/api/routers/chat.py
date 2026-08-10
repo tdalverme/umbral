@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from umbral.agent.events import (
+    BudgetWarning,
     InterruptWaiting,
     ReplyFragment,
     RunCompleted,
@@ -30,7 +31,11 @@ from umbral.agent.events import (
     ToolActivity,
 )
 from umbral.agent.runtime import ChatRuntime
-from umbral.application.agent.contracts import AgentRunNotFound
+from umbral.application.agent.contracts import (
+    AgentBudgetExhausted,
+    AgentRateLimitExceeded,
+    AgentRunNotFound,
+)
 from umbral.application.agent.tools.contracts import ProposalError
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.chat.contracts import (
@@ -157,6 +162,10 @@ def _error_problem(request: Request, error: Exception) -> JSONResponse | None:
         return _problem(request, 409, code or "chat.error", str(error))
     if isinstance(error, AgentRunNotFound):
         return _problem(request, 404, "agent.run_not_found", str(error))
+    if isinstance(error, AgentBudgetExhausted):
+        return _problem(request, 429, "agent.budget_exhausted", str(error))
+    if isinstance(error, AgentRateLimitExceeded):
+        return _problem(request, 429, "agent.rate_limit_exceeded", str(error))
     if code == "agent.state_incompatible":
         return _problem(request, 409, "agent.state_incompatible", str(error))
     if isinstance(error, ProposalError):
@@ -216,6 +225,15 @@ def _serialize_event(event: RuntimeEvent, sequence: int) -> str | None:
             "chat.run_interrupted",
             sequence,
             {"run_id": str(event.run_id)},
+        )
+    if isinstance(event, BudgetWarning):
+        return _ssenline(
+            "chat.budget_warning",
+            sequence,
+            {
+                "session_id": str(event.session_id),
+                "ratio": float(event.ratio),
+            },
         )
     return None
 

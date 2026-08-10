@@ -3,8 +3,59 @@
 import { type DefaultError, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { confirmLearningProposal, confirmMagicLink, createComparison, createSearchProfile, createSession, decideChatRun, downloadImportQuality, emitProductEvent, expandLearningProposal, getChatSession, getComparisonShortlist, getCurrentSession, getExplanation, getImportQuality, getImportRun, getListingDetail, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, getSearchProfile, listChatSessionMessages, listChatSessions, listDecisionItems, listExplanations, listLearningProposals, listMatches, listSearchProfiles, listUpdateProposals, logoutCurrentSession, type Options, receiveResendEvent, recordFeedback, rejectLearningProposal, requestMagicLink, resumeChatSession, sendChatMessage, setComparisonShortlist, setSearchProfileStatus, submitImportBatch, undoLearningProposal, updateSearchProfile } from '../sdk.gen';
-import type { ConfirmLearningProposalData, ConfirmLearningProposalError, ConfirmLearningProposalResponse, ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, CreateComparisonData, CreateComparisonError, CreateComparisonResponse, CreateSearchProfileData, CreateSearchProfileResponse, CreateSessionData, CreateSessionError, DecideChatRunData, DecideChatRunError, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, EmitProductEventData, EmitProductEventResponse, ExpandLearningProposalData, ExpandLearningProposalError, ExpandLearningProposalResponse, GetChatSessionData, GetChatSessionError, GetComparisonShortlistData, GetComparisonShortlistError, GetComparisonShortlistResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetExplanationData, GetExplanationError, GetExplanationResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetListingDetailData, GetListingDetailError, GetListingDetailResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, GetSearchProfileData, GetSearchProfileError, GetSearchProfileResponse, ListChatSessionMessagesData, ListChatSessionMessagesError, ListChatSessionsData, ListChatSessionsError, ListDecisionItemsData, ListDecisionItemsError, ListDecisionItemsResponse, ListExplanationsData, ListExplanationsError, ListExplanationsResponse, ListLearningProposalsData, ListLearningProposalsError, ListLearningProposalsResponse, ListMatchesData, ListMatchesError, ListMatchesResponse, ListSearchProfilesData, ListSearchProfilesError, ListSearchProfilesResponse, ListUpdateProposalsData, ListUpdateProposalsError, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RecordFeedbackData, RecordFeedbackError, RecordFeedbackResponse, RejectLearningProposalData, RejectLearningProposalError, RejectLearningProposalResponse, RequestMagicLinkData, RequestMagicLinkError, ResumeChatSessionData, ResumeChatSessionError, SendChatMessageData, SendChatMessageError, SetComparisonShortlistData, SetComparisonShortlistError, SetComparisonShortlistResponse, SetSearchProfileStatusData, SetSearchProfileStatusError, SetSearchProfileStatusResponse, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse, UndoLearningProposalData, UndoLearningProposalError, UndoLearningProposalResponse, UpdateSearchProfileData, UpdateSearchProfileResponse } from '../types.gen';
+import { agentOpsOverview, confirmLearningProposal, confirmMagicLink, createComparison, createSearchProfile, createSession, decideChatRun, downloadImportQuality, emitProductEvent, expandLearningProposal, getChatSession, getComparisonShortlist, getCurrentSession, getExplanation, getImportQuality, getImportRun, getListingDetail, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, getSearchProfile, listChatSessionMessages, listChatSessions, listDecisionItems, listExplanations, listLearningProposals, listMatches, listSearchProfiles, listUpdateProposals, logoutCurrentSession, type Options, receiveResendEvent, recordFeedback, rejectLearningProposal, requestMagicLink, resumeChatSession, sendChatMessage, setComparisonShortlist, setSearchProfileStatus, submitImportBatch, undoLearningProposal, updateSearchProfile } from '../sdk.gen';
+import type { AgentOpsOverviewData, ConfirmLearningProposalData, ConfirmLearningProposalError, ConfirmLearningProposalResponse, ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, CreateComparisonData, CreateComparisonError, CreateComparisonResponse, CreateSearchProfileData, CreateSearchProfileResponse, CreateSessionData, CreateSessionError, DecideChatRunData, DecideChatRunError, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, EmitProductEventData, EmitProductEventResponse, ExpandLearningProposalData, ExpandLearningProposalError, ExpandLearningProposalResponse, GetChatSessionData, GetChatSessionError, GetComparisonShortlistData, GetComparisonShortlistError, GetComparisonShortlistResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetExplanationData, GetExplanationError, GetExplanationResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetListingDetailData, GetListingDetailError, GetListingDetailResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, GetSearchProfileData, GetSearchProfileError, GetSearchProfileResponse, ListChatSessionMessagesData, ListChatSessionMessagesError, ListChatSessionsData, ListChatSessionsError, ListDecisionItemsData, ListDecisionItemsError, ListDecisionItemsResponse, ListExplanationsData, ListExplanationsError, ListExplanationsResponse, ListLearningProposalsData, ListLearningProposalsError, ListLearningProposalsResponse, ListMatchesData, ListMatchesError, ListMatchesResponse, ListSearchProfilesData, ListSearchProfilesError, ListSearchProfilesResponse, ListUpdateProposalsData, ListUpdateProposalsError, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RecordFeedbackData, RecordFeedbackError, RecordFeedbackResponse, RejectLearningProposalData, RejectLearningProposalError, RejectLearningProposalResponse, RequestMagicLinkData, RequestMagicLinkError, ResumeChatSessionData, ResumeChatSessionError, SendChatMessageData, SendChatMessageError, SetComparisonShortlistData, SetComparisonShortlistError, SetComparisonShortlistResponse, SetSearchProfileStatusData, SetSearchProfileStatusError, SetSearchProfileStatusResponse, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse, UndoLearningProposalData, UndoLearningProposalError, UndoLearningProposalResponse, UpdateSearchProfileData, UpdateSearchProfileResponse } from '../types.gen';
+
+export type QueryKey<TOptions extends Options> = [
+    Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
+        _id: string;
+        _infinite?: boolean;
+        tags?: ReadonlyArray<string>;
+    }
+];
+
+const createQueryKey = <TOptions extends Options>(id: string, options?: TOptions, infinite?: boolean, tags?: ReadonlyArray<string>): [
+    QueryKey<TOptions>[0]
+] => {
+    const params: QueryKey<TOptions>[0] = { _id: id, baseUrl: options?.baseUrl || (options?.client ?? client).getConfig().baseUrl } as QueryKey<TOptions>[0];
+    if (infinite) {
+        params._infinite = infinite;
+    }
+    if (tags) {
+        params.tags = tags;
+    }
+    if (options?.body) {
+        params.body = options.body;
+    }
+    if (options?.headers) {
+        params.headers = options.headers;
+    }
+    if (options?.path) {
+        params.path = options.path;
+    }
+    if (options?.query) {
+        params.query = options.query;
+    }
+    return [params];
+};
+
+export const agentOpsOverviewQueryKey = (options?: Options<AgentOpsOverviewData>) => createQueryKey('agentOpsOverview', options);
+
+/**
+ * Agent Ops Overview
+ */
+export const agentOpsOverviewOptions = (options?: Options<AgentOpsOverviewData>) => queryOptions<unknown, DefaultError, unknown, ReturnType<typeof agentOpsOverviewQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await agentOpsOverview({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: agentOpsOverviewQueryKey(options)
+});
 
 /**
  * Logout
@@ -55,39 +106,6 @@ export const requestMagicLinkMutation = (options?: Partial<Options<RequestMagicL
         }
     };
     return mutationOptions;
-};
-
-export type QueryKey<TOptions extends Options> = [
-    Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
-        _id: string;
-        _infinite?: boolean;
-        tags?: ReadonlyArray<string>;
-    }
-];
-
-const createQueryKey = <TOptions extends Options>(id: string, options?: TOptions, infinite?: boolean, tags?: ReadonlyArray<string>): [
-    QueryKey<TOptions>[0]
-] => {
-    const params: QueryKey<TOptions>[0] = { _id: id, baseUrl: options?.baseUrl || (options?.client ?? client).getConfig().baseUrl } as QueryKey<TOptions>[0];
-    if (infinite) {
-        params._infinite = infinite;
-    }
-    if (tags) {
-        params.tags = tags;
-    }
-    if (options?.body) {
-        params.body = options.body;
-    }
-    if (options?.headers) {
-        params.headers = options.headers;
-    }
-    if (options?.path) {
-        params.path = options.path;
-    }
-    if (options?.query) {
-        params.query = options.query;
-    }
-    return [params];
 };
 
 export const getCurrentSessionQueryKey = (options?: Options<GetCurrentSessionData>) => createQueryKey('getCurrentSession', options);

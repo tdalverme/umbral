@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "conversations-golden.schema.json",
+  "title": "ConversationsGoldenDataset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "registry_version", "reviewed_by", "reviewed_at", "min_cases_per_family", "cases"],
+  "properties": {
+    "contract_version": { "const": "1" },
+    "registry_version": { "const": "conversations-golden-v1" },
+    "reviewed_by": { "type": "string", "minLength": 1 },
+    "reviewed_at": { "type": "string", "minLength": 1 },
+    "min_cases_per_family": { "const": 3 },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "family", "turns", "expectation", "tags"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^conversation-[0-9]{3}$" },
+        "family": {
+          "type": "string",
+          "enum": ["onboarding", "ambiguous_change", "explanation", "comparison", "feedback", "injection", "safe_refusal"]
+        },
+        "context": { "$ref": "#/$defs/context" },
+        "turns": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "expectation": { "$ref": "#/$defs/expectation" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["profile"],
+      "properties": {
+        "profile": {
+          "type": ["object", "null"],
+          "properties": {
+            "budget_max": { "type": "number" },
+            "budget_min": { "type": ["number", "null"] },
+            "zone": { "type": "string" }
+          }
+        }
+      }
+    },
+    "expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_calls", "grounding", "outcome"],
+      "properties": {
+        "tool_calls": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tool_call" }
+        },
+        "grounding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["require_refs", "min_refs", "declare_missing"],
+          "properties": {
+            "require_refs": { "type": "boolean" },
+            "min_refs": { "type": "integer", "minimum": 0 },
+            "declare_missing": { "type": "boolean" }
+          }
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["completed", "clarification", "safe_refusal", "failed"]
+        }
+      }
+    },
+    "tool_call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "args", "requires_confirmation", "order"],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["get_search_profile", "propose_search_profile_update", "apply_search_profile_update", "find_matches", "explain_match", "compare_listings", "record_feedback", "search_urban_context"]
+        },
+        "args": { "type": "object" },
+        "requires_confirmation": { "type": "boolean" },
+        "order": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

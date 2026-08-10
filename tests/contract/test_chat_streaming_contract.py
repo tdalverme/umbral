@@ -13,7 +13,7 @@ STREAM_CONTRACT = json.loads(
 )
 
 
-def test_streaming_contract_declares_seven_event_types() -> None:
+def test_streaming_contract_declares_all_event_types() -> None:
     assert STREAM_CONTRACT["registry_version"] == "chat-streaming-events-v1"
     assert STREAM_CONTRACT["contract_version"] == "1"
     assert STREAM_CONTRACT["transport"] == "text/event-stream"
@@ -26,7 +26,18 @@ def test_streaming_contract_declares_seven_event_types() -> None:
         "chat.run_completed",
         "chat.run_failed",
         "chat.run_interrupted",
+        "chat.budget_warning",
     }
+
+
+def test_budget_warning_payload_declares_session_and_ratio() -> None:
+    warning = next(
+        event
+        for event in STREAM_CONTRACT["events"]
+        if event["name"] == "chat.budget_warning"
+    )
+    assert "session_id" in warning["payload"]
+    assert "ratio" in warning["payload"]
 
 
 def test_streaming_contract_envelope() -> None:

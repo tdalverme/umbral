@@ -141,6 +141,9 @@ ACTION_RULES: dict[str, ActionRule] = {
     "ops.ingestion.quality.read": ActionRule(
         "ops.ingestion.quality.read", frozenset({"operator", "administrator"})
     ),
+    "ops.agent.read": ActionRule(
+        "ops.agent.read", frozenset({"operator", "administrator"}), True
+    ),
     "admin.identity.user.status.change": ActionRule(
         "admin.identity.user.status.change", frozenset({"administrator"})
     ),

@@ -79,6 +79,7 @@ class AgentGraphRun(IdentityAuditMixin, Base):
         JSONB, nullable=True
     )
     token_usage: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    release_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
 class AgentNodeRun(IdentityAuditMixin, Base):

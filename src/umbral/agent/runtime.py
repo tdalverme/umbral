@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from langgraph.types import Command
 
 from umbral.agent.events import (
+    BudgetWarning,
     InterruptWaiting,
     RunCompleted,
     RunFailed,
@@ -25,7 +26,13 @@ from umbral.agent.graph import (
     build_input_state,
 )
 from umbral.agent.state import STATE_SCHEMA_VERSION
-from umbral.application.agent.contracts import AgentRunNotFound, GraphRun
+from umbral.application.agent.budgets import BudgetGate
+from umbral.application.agent.contracts import (
+    AgentBudgetExhausted,
+    AgentRateLimitExceeded,
+    AgentRunNotFound,
+    GraphRun,
+)
 from umbral.application.agent.ports import GraphRunRepository, RunRecorder
 from umbral.application.chat.contracts import ChatExecutionInProgress
 from umbral.application.chat.ports import ConversationGateway
@@ -57,6 +64,8 @@ class ChatRuntime:
         clock: Clock | None = None,
         state_schema_version: int = STATE_SCHEMA_VERSION,
         topology_version: int = TOPOLOGY_VERSION,
+        release_id: str | None = None,
+        budget_gate: BudgetGate | None = None,
     ) -> None:
         self.graph = graph
         self.conversation = conversation
@@ -65,6 +74,8 @@ class ChatRuntime:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.state_schema_version = state_schema_version
         self.topology_version = topology_version
+        self.release_id = release_id
+        self.budget_gate = budget_gate
 
     def run_turn(
         self,
@@ -83,6 +94,22 @@ class ChatRuntime:
             user_id=user_id, session_id=session_id
         )
         started_at = self.clock()
+        self.graph.deps.sinks.emit = consumer or (lambda _event: None)
+        emit = self.graph.deps.sinks.emit
+        if self.budget_gate is not None:
+            verdict = self.budget_gate.check(user_id=user_id, session_id=session_id)
+            if verdict.level == "exhausted":
+                if verdict.kind == "concurrency":
+                    raise AgentRateLimitExceeded("concurrency")
+                raise AgentBudgetExhausted(str(verdict.kind or "budget"))
+            if verdict.level == "warning":
+                emit(
+                    BudgetWarning(
+                        run_id=None,
+                        session_id=session.session_id,
+                        ratio=verdict.ratio or 0.0,
+                    )
+                )
         existing = self.runs.active_for_session(session_id) if resume else None
         if resume and existing is None:
             raise AgentRunNotFound()
@@ -97,6 +124,7 @@ class ChatRuntime:
             attempt=attempt,
             correlation_id=correlation_id,
             started_at=started_at,
+            release_id=self.release_id,
         )
         if existing is None:
             claimed = self.runs.create(run)
@@ -108,7 +136,6 @@ class ChatRuntime:
         else:
             self.runs.mark(run_id, status="running", attempt=attempt)
 
-        self.graph.deps.sinks.emit = consumer or (lambda _event: None)
         emit = self.graph.deps.sinks.emit
         emit(
             RunStarted(

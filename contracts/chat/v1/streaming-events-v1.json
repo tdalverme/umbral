@@ -51,6 +51,11 @@
       "name": "chat.run_interrupted",
       "payload": {"run_id": "string"},
       "description": "Turn interrupted (a resume is expected)."
+    },
+    {
+      "name": "chat.budget_warning",
+      "payload": {"session_id": "string", "ratio": "number"},
+      "description": "The session is approaching its budget; the turn continues (FR-013)."
     }
   ],
   "description": "SSE wire contract of the chat streaming surface (R-07). The client dedupes by (run_id, id); reconnect resumes via POST /resume with the same run claim (0 parallel runs, 0 duplicated effects)."
