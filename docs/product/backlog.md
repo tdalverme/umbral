@@ -519,28 +519,28 @@ persistentes mediante tools, sin SQL libre ni ranking generativo.
 
 ## Epica H4.2 - Tools explicitas y permisos
 
-- [ ] **UM-H4-007 [P0] [AGENT] Definir contrato y politica comun de tools** —
+- [x] **UM-H4-007 [P0] [AGENT] Definir contrato y politica comun de tools** —
   Valida identidad, search scope, schema, timeout, idempotency, autorizacion y
   redaccion de outputs.
-- [ ] **UM-H4-008 [P0] [AGENT] Implementar get_search_profile** — Solo recupera
+- [x] **UM-H4-008 [P0] [AGENT] Implementar get_search_profile** — Solo recupera
   el perfil autorizado y devuelve snapshot/criterios necesarios.
-- [ ] **UM-H4-009 [P0] [AGENT] Implementar propose_search_profile_update** —
+- [x] **UM-H4-009 [P0] [AGENT] Implementar propose_search_profile_update** —
   Produce diff validado, impacto y necesidad de confirmacion; no persiste
   automaticamente cambios sensibles.
-- [ ] **UM-H4-010 [P0] [AGENT] Implementar apply_search_profile_update** —
+- [x] **UM-H4-010 [P0] [AGENT] Implementar apply_search_profile_update** —
   Requiere proposal id valido, confirmacion e idempotency key; versiona perfil
   y dispara recomputacion.
-- [ ] **UM-H4-011 [P0] [AGENT] Implementar find_matches** — Delega al motor y
+- [x] **UM-H4-011 [P0] [AGENT] Implementar find_matches** — Delega al motor y
   retorna recommendation items persistentes, nunca scores inventados.
-- [ ] **UM-H4-012 [P0] [AGENT] Implementar explain_match** — Recupera la
+- [x] **UM-H4-012 [P0] [AGENT] Implementar explain_match** — Recupera la
   explicacion/evidencia persistida y declara datos faltantes.
-- [ ] **UM-H4-013 [P0] [AGENT] Implementar compare_listings** — Valida que los
+- [x] **UM-H4-013 [P0] [AGENT] Implementar compare_listings** — Valida que los
   listings pertenezcan al contexto permitido y usa comparacion estructurada.
-- [ ] **UM-H4-014 [P0] [AGENT] Implementar record_feedback** — Registra evento
+- [x] **UM-H4-014 [P0] [AGENT] Implementar record_feedback** — Registra evento
   idempotente y devuelve propuesta de aprendizaje cuando corresponda.
-- [ ] **UM-H4-015 [P1] [AGENT] Implementar search_urban_context** — Solo consulta
+- [x] **UM-H4-015 [P1] [AGENT] Implementar search_urban_context** — Solo consulta
   signals versionadas y respeta precision geografica.
-- [ ] **UM-H4-016 [P0] [TRUST] Probar aislamiento y abuso de tools** — Cubre
+- [x] **UM-H4-016 [P0] [TRUST] Probar aislamiento y abuso de tools** — Cubre
   acceso cruzado, args manipulados, prompt injection, outputs excesivos y tools
   mutantes sin confirmacion.
 
@@ -960,6 +960,23 @@ El orden recomendado para generar artefactos Spec Kit es:
   composición del runtime para producción (con H4.3) y ADR de proveedor de
   modelo (H4.4). El siguiente incremento del hito es `agent-tools` (H4.2,
   UM-H4-007 a UM-H4-016).
+- [x] `agent-tools` — aceptado para cierre local con Docker; las 10 stories de
+  la épica H4.2 (UM-H4-007 a UM-H4-016) están marcadas arriba. La evidencia
+  consolidada está en
+  `docs/runbooks/evidence/agent-tools-acceptance.md`. El harness
+  `scripts/check-agent-tools.ps1` está registrado en `check.ps1` y pasa 93
+  tests (unit, contract, migración 0010, arquitectura e integración con
+  Postgres/testcontainers); la migración `0010_agent_tools` (tabla
+  `search_profile_update_proposals` con índice único parcial de idempotencia)
+  verificada up/down. Decisiones de clarificación (2026-08-09): propuestas
+  durables y auditables con ciclo de vida determinista; todo cambio de perfil
+  requiere confirmación (propose → confirm → apply); find_matches
+  estrictamente de solo lectura; obsolescencia por base_profile_version;
+  rechazo solo por obsolescencia/vencimiento (interactivo en H4.3); feedback
+  del chat solo like/dislike con razones. Diferidos a seguimiento: gate
+  completo desde checkout limpio en CI, ADR de proveedor de modelo y evals
+  del graph (H4.4). El siguiente incremento del hito es el comportamiento
+  conversacional y la UI (H4.3, UM-H4-017 a UM-H4-025).
 - [x] `silver-normalization` — aceptado para cierre local con Docker; las 10
   stories de la épica H2.2 (UM-H2-009 a UM-H2-018) están marcadas arriba. La
   evidencia consolidada está en
