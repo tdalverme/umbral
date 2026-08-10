@@ -54,6 +54,10 @@ class RuntimeDependencies:
     feedback: FeedbackService | None = None
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
     job_runtime: JobRuntime | None = None
+    chat: object | None = None
+    agent_runtime: object | None = None
+    proposals: object | None = None
+    graph_runs: object | None = None
 
 
 def build_runtime_dependencies(

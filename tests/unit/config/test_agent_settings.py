@@ -37,6 +37,15 @@ def test_agent_settings_have_safe_defaults() -> None:
     assert settings.agent_tools_timeout_seconds == 10.0
     assert settings.agent_tools_output_max_items == 20
     assert settings.agent_proposal_ttl_hours == 24
+    assert settings.agent_chat_state_schema_version == 3
+    assert settings.agent_chat_topology_version == 3
+    assert settings.agent_intent_schema_version == "intent-v3"
+    assert settings.agent_intent_prompt_version == "agent-intent-v1"
+    assert settings.agent_reply_prompt_version == "agent-reply-v2"
+    assert settings.agent_clarification_min_confidence == 0.6
+    assert settings.agent_clarification_max_rounds == 2
+    assert settings.agent_reply_max_refs == 10
+    assert settings.agent_reply_chunk_words == 8
 
 
 def test_agent_tools_overrides_are_accepted() -> None:
@@ -50,6 +59,15 @@ def test_agent_tools_overrides_are_accepted() -> None:
             "AGENT_TOOLS_TIMEOUT_SECONDS": "5",
             "AGENT_TOOLS_OUTPUT_MAX_ITEMS": "50",
             "AGENT_PROPOSAL_TTL_HOURS": "48",
+            "AGENT_CHAT_STATE_SCHEMA_VERSION": "3",
+            "AGENT_CHAT_TOPOLOGY_VERSION": "3",
+            "AGENT_INTENT_SCHEMA_VERSION": "intent-v4",
+            "AGENT_INTENT_PROMPT_VERSION": "agent-intent-v2",
+            "AGENT_REPLY_PROMPT_VERSION": "agent-reply-v3",
+            "AGENT_CLARIFICATION_MIN_CONFIDENCE": "0.8",
+            "AGENT_CLARIFICATION_MAX_ROUNDS": "3",
+            "AGENT_REPLY_MAX_REFS": "5",
+            "AGENT_REPLY_CHUNK_WORDS": "4",
         }
     )
     settings = Settings.from_environment(values)
@@ -60,6 +78,15 @@ def test_agent_tools_overrides_are_accepted() -> None:
     assert settings.agent_tools_timeout_seconds == 5.0
     assert settings.agent_tools_output_max_items == 50
     assert settings.agent_proposal_ttl_hours == 48
+    assert settings.agent_chat_state_schema_version == 3
+    assert settings.agent_chat_topology_version == 3
+    assert settings.agent_intent_schema_version == "intent-v4"
+    assert settings.agent_intent_prompt_version == "agent-intent-v2"
+    assert settings.agent_reply_prompt_version == "agent-reply-v3"
+    assert settings.agent_clarification_min_confidence == 0.8
+    assert settings.agent_clarification_max_rounds == 3
+    assert settings.agent_reply_max_refs == 5
+    assert settings.agent_reply_chunk_words == 4
 
 
 def test_agent_overrides_are_accepted() -> None:

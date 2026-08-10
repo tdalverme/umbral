@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, Index
+from sqlalchemy import ForeignKey, Index, text
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
@@ -51,6 +51,13 @@ class ChatMessage(IdentityAuditMixin, Base):
     __table_args__ = (
         Index("ix_chat_messages_session_created", "session_id", "created_at"),
         Index("ix_chat_messages_run", "graph_run_id"),
+        Index(
+            "uq_chat_messages_session_client",
+            "session_id",
+            "client_message_id",
+            unique=True,
+            postgresql_where=text("client_message_id IS NOT NULL"),
+        ),
     )
 
     session_id: Mapped[UUID] = mapped_column(
@@ -65,4 +72,7 @@ class ChatMessage(IdentityAuditMixin, Base):
         Uuid(as_uuid=True),
         ForeignKey("agent_graph_runs.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    client_message_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
     )

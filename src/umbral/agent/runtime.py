@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID, uuid4
 
+from langgraph.types import Command
+
 from umbral.agent.events import (
+    InterruptWaiting,
     RunCompleted,
     RunFailed,
     RunInterrupted,
@@ -37,6 +41,7 @@ class RunOutcome:
     status: str
     latency_ms: int | None = None
     error_code: str | None = None
+    interrupt: dict[str, Any] | None = None
 
 
 class ChatRuntime:
@@ -69,7 +74,10 @@ class ChatRuntime:
         text: str,
         correlation_id: UUID,
         resume: bool = False,
+        decision: Mapping[str, object] | None = None,
         consumer: Callable[[RuntimeEvent], None] | None = None,
+        client_message_id: UUID | None = None,
+        context: Mapping[str, object] | None = None,
     ) -> RunOutcome:
         session = self.conversation.assert_accepts_turn(
             user_id=user_id, session_id=session_id
@@ -112,21 +120,49 @@ class ChatRuntime:
         config = {"configurable": {"thread_id": str(run_id)}}
         try:
             if existing is None:
-                stream_input = build_input_state(
+                stream_input: object = build_input_state(
                     run_id=run_id,
                     session_id=session.session_id,
                     user_id=user_id,
                     correlation_id=correlation_id,
                     user_message_text=text,
                     schema_version=self.state_schema_version,
+                    search_profile_id=str(session.search_profile_id),
+                    client_message_id=(
+                        str(client_message_id) if client_message_id else None
+                    ),
+                    user_message_context=context,
                 )
+            elif decision is not None:
+                stream_input = Command(resume=dict(decision))
             else:
                 stream_input = None
-            for _chunk in self.graph.compiled.stream(
+            interrupt_payload: dict[str, Any] | None = None
+            for chunk in self.graph.compiled.stream(
                 stream_input, config, stream_mode="updates"
             ):
-                pass
+                interrupt = _interrupt_from_chunk(chunk)
+                if interrupt is not None:
+                    interrupt_payload = interrupt
+                    break
             values = self.graph.compiled.get_state(config).values
+            if interrupt_payload is not None:
+                finished = self.clock()
+                latency_ms = _elapsed_ms(run.started_at, finished)
+                self.runs.mark(
+                    run_id,
+                    status="interrupted",
+                    finished_at=finished,
+                    latency_ms=latency_ms,
+                    error_summary={"code": "agent.interrupt_proposal_decision"},
+                )
+                emit(InterruptWaiting(run_id=run_id, interrupt=interrupt_payload))
+                return RunOutcome(
+                    run_id=run_id,
+                    status="interrupted",
+                    latency_ms=latency_ms,
+                    interrupt=interrupt_payload,
+                )
             if values.get("schema_version") != self.state_schema_version:
                 finished = self.clock()
                 latency_ms = _elapsed_ms(run.started_at, finished)
@@ -203,6 +239,27 @@ class ChatRuntime:
                 latency_ms=latency_ms,
                 error_code="agent.interrupted",
             )
+
+
+def _interrupt_from_chunk(chunk: object) -> dict[str, Any] | None:
+    """Extract the interrupt payload from a stream chunk, if any.
+
+    With ``stream_mode="updates"`` an interrupt yields
+    ``{"__interrupt__": (Interrupt(value=...),)}``; the value is the payload
+    the graph node passed to ``interrupt(...)``.
+    """
+    if not isinstance(chunk, Mapping):
+        return None
+    raw = chunk.get("__interrupt__")
+    if not raw:
+        return None
+    value = None
+    if isinstance(raw, (list, tuple)) and len(raw) > 0:
+        item = raw[0]
+        value = getattr(item, "value", item)
+    if not isinstance(value, Mapping):
+        return None
+    return dict(value)
 
 
 def _elapsed_ms(started_at: datetime, finished_at: datetime) -> int:

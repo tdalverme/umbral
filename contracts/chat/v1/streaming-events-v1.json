@@ -1,0 +1,57 @@
+{
+  "registry_version": "chat-streaming-events-v1",
+  "contract_version": "1",
+  "transport": "text/event-stream",
+  "envelope": {
+    "event": "<type>",
+    "id": "<sequence>",
+    "data": "<json payload>"
+  },
+  "events": [
+    {
+      "name": "chat.run_started",
+      "payload": {"run_id": "string", "session_id": "string"},
+      "description": "Turn claimed and run created."
+    },
+    {
+      "name": "chat.reply_fragment",
+      "payload": {"run_id": "string", "delta": "string"},
+      "description": "Chunk of the assistant reply (deterministic word-boundary chunks, AGENT_REPLY_CHUNK_WORDS)."
+    },
+    {
+      "name": "chat.tool_activity",
+      "payload": {"run_id": "string", "tool": "string", "status": "string"},
+      "description": "Tool executed (status success/failure); no payload content."
+    },
+    {
+      "name": "chat.interrupt_waiting",
+      "payload": {
+        "run_id": "string",
+        "interrupt": {
+          "type": "proposal_decision",
+          "proposal_id": "string",
+          "diff": "object",
+          "impact": "object",
+          "expires_at": "string"
+        }
+      },
+      "description": "Human-in-the-loop: the run waits for an explicit decision on a proposal."
+    },
+    {
+      "name": "chat.run_completed",
+      "payload": {"run_id": "string", "message_id": "string"},
+      "description": "Turn finished and the assistant message was persisted."
+    },
+    {
+      "name": "chat.run_failed",
+      "payload": {"run_id": "string", "error_code": "string"},
+      "description": "Turn failed with a typed error code."
+    },
+    {
+      "name": "chat.run_interrupted",
+      "payload": {"run_id": "string"},
+      "description": "Turn interrupted (a resume is expected)."
+    }
+  ],
+  "description": "SSE wire contract of the chat streaming surface (R-07). The client dedupes by (run_id, id); reconnect resumes via POST /resume with the same run claim (0 parallel runs, 0 duplicated effects)."
+}

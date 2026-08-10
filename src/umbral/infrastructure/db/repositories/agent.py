@@ -233,6 +233,23 @@ class SqlAlchemyProposalRepository:
             )
             return _to_proposal(model) if model is not None else None
 
+    def list_for_profile(
+        self,
+        search_profile_id: UUID,
+        state: str,
+    ) -> tuple[Proposal, ...]:
+        with self.session_factory() as current:
+            models = current.scalars(
+                select(SearchProfileUpdateProposal)
+                .where(
+                    SearchProfileUpdateProposal.search_profile_id
+                    == search_profile_id,
+                    SearchProfileUpdateProposal.state == state,
+                )
+                .order_by(SearchProfileUpdateProposal.created_at.desc())
+            )
+            return tuple(_to_proposal(model) for model in models)
+
     def mark_approved(
         self,
         proposal_id: UUID,
@@ -259,6 +276,7 @@ class SqlAlchemyProposalRepository:
         proposal_id: UUID,
         rejection_reason: str,
         rejection_at: datetime,
+        rejection_note: str | None = None,
     ) -> Proposal | None:
         with self.session_factory() as current:
             model = current.get(SearchProfileUpdateProposal, proposal_id)
@@ -266,6 +284,24 @@ class SqlAlchemyProposalRepository:
                 return None
             model.state = "rejected"
             model.rejection_reason = rejection_reason
+            model.rejection_note = rejection_note
+            model.updated_at = rejection_at
+            current.commit()
+            return _to_proposal(model)
+
+    def mark_superseded(
+        self,
+        proposal_id: UUID,
+        superseded_by_proposal_id: UUID,
+        rejection_at: datetime,
+    ) -> Proposal | None:
+        with self.session_factory() as current:
+            model = current.get(SearchProfileUpdateProposal, proposal_id)
+            if model is None:
+                return None
+            model.state = "rejected"
+            model.rejection_reason = "edited"
+            model.superseded_by_proposal_id = superseded_by_proposal_id
             model.updated_at = rejection_at
             current.commit()
             return _to_proposal(model)
@@ -309,6 +345,8 @@ def _proposal_model(proposal: Proposal) -> SearchProfileUpdateProposal:
         rejection_reason=proposal.rejection_reason,
         applied_profile_version=proposal.applied_profile_version,
         applied_run_id=proposal.applied_run_id,
+        rejection_note=proposal.rejection_note,
+        superseded_by_proposal_id=proposal.superseded_by_proposal_id,
     )
 
 
@@ -327,4 +365,6 @@ def _to_proposal(model: SearchProfileUpdateProposal) -> Proposal:
         applied_profile_version=model.applied_profile_version,
         applied_run_id=model.applied_run_id,
         correlation_id=model.correlation_id,
+        rejection_note=model.rejection_note,
+        superseded_by_proposal_id=model.superseded_by_proposal_id,
     )

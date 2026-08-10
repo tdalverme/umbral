@@ -93,6 +93,12 @@ class ChatService:
         session = self.get_session(user_id=user_id, session_id=session_id)
         return self.messages.list_by_session(session.session_id)
 
+    def list_sessions(
+        self, *, user_id: UUID, search_profile_id: UUID
+    ) -> tuple[ChatSession, ...]:
+        """Sessions of a radar, newest first (the panel resumes the latest)."""
+        return self.sessions.list_by_profile(user_id, search_profile_id)
+
     def assert_accepts_turn(self, *, user_id: UUID, session_id: UUID) -> ChatSession:
         session = self.get_session(user_id=user_id, session_id=session_id)
         if session.status != "active":
@@ -107,10 +113,22 @@ class ChatService:
         text: str,
         correlation_id: UUID,
         now: datetime | None = None,
+        client_message_id: UUID | None = None,
+        context: Mapping[str, object] | None = None,
     ) -> ChatMessage:
         session = self.assert_accepts_turn(user_id=user_id, session_id=session_id)
         content: dict[str, object] = {"kind": "text", "text": text}
+        if context is not None:
+            content["context"] = dict(context)
         self._validate_content(content)
+        if client_message_id is not None:
+            replay = self.messages.find_by_client_message_id(
+                session.session_id, client_message_id
+            )
+            if replay is not None:
+                # Idempotent send (R-06): replay with the same key returns the
+                # recorded message; 0 duplicates and 0 new runs (FR-024).
+                return replay
         message = ChatMessage(
             message_id=uuid4(),
             session_id=session.session_id,
@@ -119,6 +137,7 @@ class ChatService:
             graph_run_id=None,
             created_at=now or self.clock(),
             correlation_id=correlation_id,
+            client_message_id=client_message_id,
         )
         self.messages.append(message)
         self._emit_server_event(

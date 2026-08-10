@@ -1563,6 +1563,224 @@ export type GetCurrentSessionResponses = {
 
 export type GetCurrentSessionResponse = GetCurrentSessionResponses[keyof GetCurrentSessionResponses];
 
+export type ListChatSessionsData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/chat/sessions';
+};
+
+export type ListChatSessionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListChatSessionsError = ListChatSessionsErrors[keyof ListChatSessionsErrors];
+
+export type ListChatSessionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type CreateSessionData = {
+    /**
+     * Body
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/chat/sessions';
+};
+
+export type CreateSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateSessionError = CreateSessionErrors[keyof CreateSessionErrors];
+
+export type CreateSessionResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type GetChatSessionData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/chat/sessions/{session_id}';
+};
+
+export type GetChatSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetChatSessionError = GetChatSessionErrors[keyof GetChatSessionErrors];
+
+export type GetChatSessionResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type ListChatSessionMessagesData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/chat/sessions/{session_id}/messages';
+};
+
+export type ListChatSessionMessagesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListChatSessionMessagesError = ListChatSessionMessagesErrors[keyof ListChatSessionMessagesErrors];
+
+export type ListChatSessionMessagesResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type SendChatMessageData = {
+    /**
+     * Body
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/chat/sessions/{session_id}/messages';
+};
+
+export type SendChatMessageErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SendChatMessageError = SendChatMessageErrors[keyof SendChatMessageErrors];
+
+export type SendChatMessageResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type ResumeChatSessionData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/chat/sessions/{session_id}/resume';
+};
+
+export type ResumeChatSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ResumeChatSessionError = ResumeChatSessionErrors[keyof ResumeChatSessionErrors];
+
+export type ResumeChatSessionResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type DecideChatRunData = {
+    /**
+     * Body
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/chat/sessions/{session_id}/runs/{run_id}/decision';
+};
+
+export type DecideChatRunErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DecideChatRunError = DecideChatRunErrors[keyof DecideChatRunErrors];
+
+export type DecideChatRunResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type SubmitImportBatchData = {
     body: BodySubmitImportBatch;
     headers?: {
@@ -2752,6 +2970,35 @@ export type SetSearchProfileStatusResponses = {
 };
 
 export type SetSearchProfileStatusResponse = SetSearchProfileStatusResponses[keyof SetSearchProfileStatusResponses];
+
+export type ListUpdateProposalsData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/update-proposals';
+};
+
+export type ListUpdateProposalsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListUpdateProposalsError = ListUpdateProposalsErrors[keyof ListUpdateProposalsErrors];
+
+export type ListUpdateProposalsResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
 
 export type GetRuntimeHealthData = {
     body?: never;

@@ -161,6 +161,16 @@
       "emitted_by": "client",
       "required_keys": ["search_profile_id", "item_count"]
     },
+    "chat.first_fragment.v1": {
+      "version": 1,
+      "emitted_by": "client",
+      "required_keys": ["search_profile_id", "latency_ms"]
+    },
+    "chat.stream_error.v1": {
+      "version": 1,
+      "emitted_by": "client",
+      "required_keys": ["search_profile_id", "error_code"]
+    },
     "chat.session_created.v1": {
       "version": 1,
       "emitted_by": "server",

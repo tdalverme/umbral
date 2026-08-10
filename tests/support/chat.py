@@ -31,6 +31,17 @@ class InMemoryChatSessionRepository:
             session for session in self.sessions.values() if session.user_id == user_id
         )
 
+    def list_by_profile(
+        self, user_id: UUID, search_profile_id: UUID
+    ) -> tuple[ChatSession, ...]:
+        sessions = [
+            session
+            for session in self.sessions.values()
+            if session.user_id == user_id
+            and session.search_profile_id == search_profile_id
+        ]
+        return tuple(reversed(sessions))
+
 
 class InMemoryChatMessageRepository:
     def __init__(self) -> None:
@@ -44,6 +55,17 @@ class InMemoryChatMessageRepository:
         return tuple(
             message for message in self.messages if message.session_id == session_id
         )
+
+    def find_by_client_message_id(
+        self, session_id: UUID, client_message_id: UUID
+    ) -> ChatMessage | None:
+        for message in self.messages:
+            if (
+                message.session_id == session_id
+                and message.client_message_id == client_message_id
+            ):
+                return message
+        return None
 
 
 class FixedProfileStatusReader:
@@ -89,6 +111,8 @@ class RecordingConversation:
         text: str,
         correlation_id: UUID,
         now: datetime | None = None,
+        client_message_id: UUID | None = None,
+        context: Mapping[str, object] | None = None,
     ) -> ChatMessage:
         message = ChatMessage(
             message_id=UUID(int=len(self.user_messages) + 1),
@@ -97,6 +121,7 @@ class RecordingConversation:
             content={"kind": "text", "text": text},
             created_at=now or _NOW,
             correlation_id=correlation_id,
+            client_message_id=client_message_id,
         )
         self.user_messages.append(message)
         return message

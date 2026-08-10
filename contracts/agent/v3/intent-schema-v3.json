@@ -1,0 +1,57 @@
+{
+  "registry_version": "agent-intent-schema-v3",
+  "contract_version": "3",
+  "schema_version": "intent-v3",
+  "intents": [
+    {
+      "name": "consulta",
+      "description": "Read-only questions about the profile, matches or explanations.",
+      "allowed_tools": [
+        "get_search_profile",
+        "find_matches",
+        "explain_match",
+        "search_urban_context"
+      ]
+    },
+    {
+      "name": "refinamiento",
+      "description": "Request to change search criteria; always goes through propose + HITL confirmation; never direct apply.",
+      "allowed_tools": ["propose_search_profile_update"]
+    },
+    {
+      "name": "comparacion",
+      "description": "Compare opportunities within the radar using the structured comparison; no generative winner.",
+      "allowed_tools": ["compare_listings"]
+    },
+    {
+      "name": "feedback",
+      "description": "Register like/dislike with optional reasons.",
+      "allowed_tools": ["record_feedback"]
+    },
+    {
+      "name": "fuera_de_alcance",
+      "description": "Out of scope (creation of a new search/radar from chat, unrelated topics, unsupported actions): grounded refusal + structured redirect.",
+      "allowed_tools": []
+    }
+  ],
+  "high_impact_keys": ["budget", "zona", "hard_filters", "radio"],
+  "output": {
+    "intent": "string",
+    "parameters": [
+      {
+        "key": "string",
+        "value": "string",
+        "confidence": "number"
+      }
+    ],
+    "high_impact_missing": ["string"],
+    "contradictions": [
+      {
+        "key": "string",
+        "current_value": "string",
+        "requested": "string"
+      }
+    ]
+  },
+  "description": "Structured output of the intent compiler (agent-intent-v1 prompt). The allowed_tools policy is enforced deterministically in run_tools (R-02): 0 SQL, 0 ranking, 0 mutations outside the compiled intent."
+}

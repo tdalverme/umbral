@@ -16,8 +16,18 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import interrupt
 
-from umbral.agent.events import ReplyFragment, RuntimeEvent
+from umbral.agent.events import ReplyFragment, RuntimeEvent, ToolActivity
+from umbral.agent.intent.clarification import (
+    ClarificationPlan,
+    render_question,
+)
+from umbral.agent.intent.clarification import (
+    decide as decide_clarification,
+)
+from umbral.agent.intent.compiler import IntentCompiler
+from umbral.agent.intent.policy import validate_tool_calls
 from umbral.agent.state import (
     STATE_SCHEMA_VERSION,
     AgentState,
@@ -26,13 +36,18 @@ from umbral.agent.state import (
 from umbral.agent.tools.executor import ToolExecutor
 from umbral.application.agent.contracts import ModelCall, ModelResult, NodeRun
 from umbral.application.agent.ports import ModelGateway, RunRecorder
+from umbral.application.agent.tools.contracts import Proposal
+from umbral.application.agent.tools.ports import ProposalDecisionGateway
 from umbral.application.chat.ports import ConversationGateway
 
 TOPOLOGY_VERSION = 1
 TOOLS_TOPOLOGY_VERSION = 2
+CHAT_TOPOLOGY_VERSION = 3
 
 _EFFECT_USER_MESSAGE = "user_message"
 _EFFECT_ASSISTANT_MESSAGE = "assistant_message"
+
+_PROPOSE_TOOL = "propose_search_profile_update"
 
 
 @dataclass(slots=True)
@@ -77,6 +92,27 @@ class AgentGraphV2:
 
     compiled: Any
     deps: GraphDepsV2
+
+
+@dataclass(slots=True)
+class GraphDepsV3(GraphDepsV2):
+    """Topology v3 dependencies: intent compiler, decision seam and policies."""
+
+    intent_compiler: IntentCompiler
+    decision_gateway: ProposalDecisionGateway
+    high_impact_keys: tuple[str, ...]
+    clarification_min_confidence: float
+    clarification_max_rounds: int
+    reply_chunk_words: int
+    reply_max_refs: int
+
+
+@dataclass(frozen=True, slots=True)
+class AgentGraphV3:
+    """The compiled topology v3 graph plus its per-run dependency holder."""
+
+    compiled: Any
+    deps: GraphDepsV3
 
 
 def build_topology_v1(
@@ -498,6 +534,734 @@ def build_topology_v2(
     return AgentGraphV2(compiled=compiled, deps=deps)
 
 
+def build_topology_v3(
+    *,
+    gateway: ModelGateway,
+    conversation: ConversationGateway,
+    recorder: RunRecorder,
+    saver: Any,
+    tool_executor: ToolExecutor,
+    intent_compiler: IntentCompiler,
+    decision_gateway: ProposalDecisionGateway,
+    clock: Callable[[], datetime],
+    model_version: str,
+    prompt_version: str,
+    schema_version: str,
+    reply_schema: Mapping[str, object],
+    max_calls_per_turn: int,
+    high_impact_keys: tuple[str, ...],
+    clarification_min_confidence: float,
+    clarification_max_rounds: int,
+    reply_chunk_words: int,
+    reply_max_refs: int,
+) -> AgentGraphV3:
+    """Build the topology v3 graph (UM-H4-017..UM-H4-020, R-01..R-05).
+
+    ``compile_intent`` classifies the message and applies the deterministic
+    intent-to-tools policy; ``clarify`` renders bounded deterministic
+    questions; ``require_confirmation`` interrupts for the HITL proposal
+    decision and ``resolve_decision`` resumes with approve/reject/edit.
+    """
+
+    deps = GraphDepsV3(
+        gateway=gateway,
+        conversation=conversation,
+        recorder=recorder,
+        sinks=GraphSinks(),
+        clock=clock,
+        model_version=model_version,
+        prompt_version=prompt_version,
+        schema_version=schema_version,
+        reply_schema=reply_schema,
+        tool_executor=tool_executor,
+        max_calls_per_turn=max_calls_per_turn,
+        intent_compiler=intent_compiler,
+        decision_gateway=decision_gateway,
+        high_impact_keys=high_impact_keys,
+        clarification_min_confidence=clarification_min_confidence,
+        clarification_max_rounds=clarification_max_rounds,
+        reply_chunk_words=reply_chunk_words,
+        reply_max_refs=reply_max_refs,
+    )
+
+    def _start(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        node_started = deps.clock()
+        effects = dict(_effects(context))
+        if _EFFECT_USER_MESSAGE not in effects:
+            client_message_id = context.get("client_message_id")
+            user_message_context = context.get("user_message_context")
+            conversation.append_user_message(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                text=str(context.get("user_message_text", "")),
+                correlation_id=_uuid(context, "correlation_id"),
+                now=deps.clock(),
+                client_message_id=(
+                    UUID(str(client_message_id)) if client_message_id else None
+                ),
+                context=(
+                    dict(user_message_context)
+                    if isinstance(user_message_context, Mapping)
+                    else None
+                ),
+            )
+            effects[_EFFECT_USER_MESSAGE] = _str(context, "run_id")
+        context["effects_applied"] = effects
+        _finish_node(
+            recorder=recorder,
+            node_name="start",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context}
+
+    def _compile_intent(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        node_started = deps.clock()
+        errors = list(state.get("errors") or [])
+        clarification = state.get("clarification")
+        clarification_ctx = (
+            clarification if isinstance(clarification, Mapping) else None
+        )
+        rounds_so_far = _as_int(
+            clarification_ctx.get("rounds") if clarification_ctx else None, 0
+        )
+        try:
+            compilation = deps.intent_compiler.compile(
+                message_text=str(context.get("user_message_text", "")),
+                clarification_context=clarification_ctx,
+            )
+        except Exception as exc:  # noqa: BLE001 - sanitized below
+            code = getattr(exc, "code", "agent.intent_compilation_failed")
+            errors.append({"code": str(code)})
+            _finish_node(
+                recorder=recorder,
+                node_name="compile_intent",
+                graph_run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="failed",
+                error_summary={"code": str(code)},
+            )
+            return {"context": context, "errors": errors}
+        intent_data: dict[str, object] = {
+            "intent": compilation.intent,
+            "parameters": [
+                {"key": p.key, "value": p.value, "confidence": p.confidence}
+                for p in compilation.parameters
+            ],
+            "high_impact_missing": list(compilation.high_impact_missing),
+            "contradictions": [
+                {
+                    "key": c.key,
+                    "current_value": c.current_value,
+                    "requested": c.requested,
+                }
+                for c in compilation.contradictions
+            ],
+            "allowed_tools": list(compilation.allowed_tools),
+        }
+        context["clarification_rounds"] = rounds_so_far
+        _finish_node(
+            recorder=recorder,
+            node_name="compile_intent",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context, "intent": intent_data, "errors": errors}
+
+    def _clarification_plan(state: AgentState) -> ClarificationPlan | None:
+        intent_data = state.get("intent")
+        if not isinstance(intent_data, Mapping):
+            return None
+        if intent_data.get("intent") == "fuera_de_alcance":
+            return None
+        rounds_so_far = _as_int(_context(state).get("clarification_rounds"), 0)
+        return decide_clarification(
+            intent=str(intent_data.get("intent", "")),
+            parameters=[dict(item) for item in intent_data.get("parameters", [])],
+            high_impact_missing=[
+                str(item) for item in intent_data.get("high_impact_missing", [])
+            ],
+            contradictions=[
+                dict(item) for item in intent_data.get("contradictions", [])
+            ],
+            high_impact_keys=deps.high_impact_keys,
+            min_confidence=deps.clarification_min_confidence,
+            rounds=rounds_so_far,
+            max_rounds=deps.clarification_max_rounds,
+        )
+
+    def _route_from_compile(state: AgentState) -> str:
+        if state.get("errors"):
+            return "persist_reply"
+        if _clarification_plan(state) is not None:
+            return "clarify"
+        return "generate_reply"
+
+    def _clarify(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        plan = _clarification_plan(state)
+        if plan is None:
+            return {"context": context}
+        question = render_question(plan)
+        state["clarification"] = {
+            "pending_params": list(plan.pending_params),
+            "rounds": plan.rounds + 1,
+        }
+        context["generated_reply"] = {"text": question, "refs": []}
+        _finish_node(
+            recorder=recorder,
+            node_name="clarify",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=deps.clock(),
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context, "clarification": state["clarification"]}
+
+    def _generate_reply(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        run_id = _uuid(context, "run_id")
+        node_started = deps.clock()
+        errors = list(state.get("errors") or [])
+        messages: list[Mapping[str, object]] = [_user_message(context)]
+        intent_data = state.get("intent")
+        if isinstance(intent_data, Mapping):
+            messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "Intencion compilada: "
+                        + str(intent_data.get("intent", ""))
+                        + ". Responde solo sobre este radar y con las tools "
+                        "permitidas de esa intencion."
+                    ),
+                }
+            )
+        results_context = context.get("tool_results_context")
+        if results_context:
+            messages.append({"role": "tool", "content": results_context})
+        try:
+            result = deps.gateway.generate_structured(
+                messages=tuple(messages),
+                schema=deps.reply_schema,
+                schema_version=deps.schema_version,
+                prompt_version=deps.prompt_version,
+                model_version=deps.model_version,
+            )
+        except Exception as exc:  # noqa: BLE001 - unknown provider failure
+            _finish_node(
+                recorder=recorder,
+                node_name="generate_reply",
+                graph_run_id=run_id,
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="interrupted",
+                error_summary={
+                    "code": "agent.provider_exception",
+                    "kind": type(exc).__name__,
+                },
+            )
+            raise
+        deps.recorder.record_model_call(
+            ModelCall(
+                call_id=uuid4(),
+                graph_run_id=run_id,
+                model_version=result.model_version,
+                prompt_version=deps.prompt_version,
+                schema_version=deps.schema_version,
+                status=result.status,
+                correlation_id=_uuid(context, "correlation_id"),
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                total_tokens=result.total_tokens,
+                latency_ms=result.latency_ms,
+                error_code=result.error_code,
+            )
+        )
+        raw_usage = context.get("token_usage")
+        usage: Mapping[str, object] = (
+            raw_usage if isinstance(raw_usage, Mapping) else {}
+        )
+        tool_calls: list[dict[str, object]] = []
+        if result.status == "success" and result.content is not None:
+            text = str(result.content.get("reply_text", ""))
+            refs = result.content.get("refs")
+            ref_list = [dict(item) for item in refs] if isinstance(refs, list) else []
+            calls = result.content.get("tool_calls")
+            if isinstance(calls, list):
+                tool_calls = [
+                    dict(item) for item in calls if isinstance(item, Mapping)
+                ]
+            _emit_reply_chunks(
+                run_id=run_id,
+                text=text,
+                words=deps.reply_chunk_words,
+                emit=deps.sinks.emit,
+            )
+            context["generated_reply"] = {"text": text, "refs": ref_list}
+            context["token_usage"] = _accumulate_usage(usage, result)
+        else:
+            errors.append({"code": result.error_code or "agent.generation_failed"})
+        _finish_node(
+            recorder=recorder,
+            node_name="generate_reply",
+            graph_run_id=run_id,
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="failed" if errors else "completed",
+            error_summary=errors[-1] if errors else None,
+        )
+        return {"context": context, "errors": errors, "tool_calls": tool_calls}
+
+    def _route_from_generate(state: AgentState) -> str:
+        calls = state.get("tool_calls") or []
+        if not calls:
+            return "persist_reply"
+        count = _as_int(_context(state).get("tool_loop_count"), 0)
+        if count >= max_calls_per_turn:
+            return "persist_reply"
+        return "run_tools"
+
+    def _run_tools(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        run_id = _uuid(context, "run_id")
+        calls = state.get("tool_calls") or []
+        count = _as_int(context.get("tool_loop_count"), 0)
+        budget = max_calls_per_turn - count
+        if budget <= 0 or not calls:
+            context["tool_loop_exhausted"] = True
+            return {"context": context, "tool_calls": []}
+        intent_data = state.get("intent")
+        allowed_tools = (
+            tuple(str(item) for item in intent_data.get("allowed_tools", []))
+            if isinstance(intent_data, Mapping)
+            else ()
+        )
+        runnable = calls[:budget]
+        results: list[dict[str, object]] = []
+        for call in runnable:
+            name = str(call.get("tool", ""))
+            raw_args = call.get("args")
+            args = dict(raw_args) if isinstance(raw_args, Mapping) else {}
+            violations = validate_tool_calls(
+                allowed_tools=allowed_tools,
+                tool_calls=[{"tool": name, "args": args}],
+            )
+            if violations:
+                results.append(
+                    {
+                        "tool": name,
+                        "status": "error",
+                        "result": None,
+                        "error_code": violations[0].code,
+                    }
+                )
+                continue
+            outcome = deps.tool_executor.execute(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                run_id=run_id,
+                correlation_id=_uuid(context, "correlation_id"),
+                name=name,
+                args=args,
+            )
+            deps.sinks.emit(
+                ToolActivity(run_id=run_id, tool=name, status=outcome.status)
+            )
+            results.append(
+                {
+                    "tool": name,
+                    "status": outcome.status,
+                    "result": dict(outcome.result) if outcome.result else None,
+                    "error_code": outcome.error_code,
+                }
+            )
+        context["tool_loop_count"] = count + len(runnable)
+        context["tool_results_context"] = results
+        if any(
+            item.get("tool") == _PROPOSE_TOOL
+            and item.get("status") == "ok"
+            and isinstance(item.get("result"), Mapping)
+            for item in results
+        ):
+            context["proposal_created"] = True
+        existing = list(state.get("tool_results") or [])
+        return {
+            "context": context,
+            "tool_calls": [],
+            "tool_results": existing + results,
+        }
+
+    def _route_from_tools(state: AgentState) -> str:
+        context = _context(state)
+        if context.get("proposal_created"):
+            return "require_confirmation"
+        if context.get("tool_loop_exhausted"):
+            return "persist_reply"
+        return "generate_reply"
+
+    def _require_confirmation(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        pending = state.get("pending_action")
+        if pending is None:
+            proposal_id, diff, impact, expires_at = _waiting_proposal(state)
+            state["pending_action"] = {
+                "kind": "proposal",
+                "proposal_id": proposal_id,
+            }
+            payload: dict[str, object] = {
+                "type": "proposal_decision",
+                "proposal_id": proposal_id,
+                "diff": diff,
+                "impact": impact,
+                "expires_at": expires_at,
+            }
+        else:
+            pending_data = pending if isinstance(pending, Mapping) else {}
+            proposal_id = str(pending_data.get("proposal_id", ""))
+            proposal = deps.decision_gateway.get(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                search_profile_id=_uuid(context, "search_profile_id"),
+                proposal_id=UUID(proposal_id),
+            )
+            payload = _payload_from_proposal(proposal)
+        decision = interrupt(payload)
+        context["decision"] = decision
+        context["resume_decision"] = False
+        _finish_node(
+            recorder=recorder,
+            node_name="require_confirmation",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=deps.clock(),
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context, "pending_action": state["pending_action"]}
+
+    def _resolve_decision(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        decision = context.get("decision")
+        if not isinstance(decision, Mapping):
+            context["generated_reply"] = {
+                "text": "No recibí una decisión válida para esa propuesta.",
+                "refs": [],
+            }
+            return {"context": context}
+        kind = decision.get("kind")
+        pending = state.get("pending_action")
+        proposal_id = (
+            str(pending.get("proposal_id", "")) if isinstance(pending, Mapping) else ""
+        )
+        if kind == "edit":
+            change = decision.get("change")
+            if not isinstance(change, Mapping):
+                change = {}
+            derived = deps.decision_gateway.derive(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                search_profile_id=_uuid(context, "search_profile_id"),
+                proposal_id=UUID(proposal_id),
+                change=dict(change),
+                correlation_id=_uuid(context, "correlation_id"),
+            )
+            state["pending_action"] = {
+                "kind": "proposal",
+                "proposal_id": str(derived.proposal_id),
+            }
+            context["resume_decision"] = True
+            return {"context": context, "pending_action": state["pending_action"]}
+        if kind == "approve":
+            idempotency_key = str(decision.get("idempotency_key", ""))
+            outcome = deps.tool_executor.execute(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                name="apply_search_profile_update",
+                args={
+                    "proposal_id": proposal_id,
+                    "confirmation": True,
+                    "idempotency_key": idempotency_key,
+                },
+                confirmation=True,
+            )
+            deps.sinks.emit(
+                ToolActivity(
+                    run_id=_uuid(context, "run_id"),
+                    tool="apply_search_profile_update",
+                    status=outcome.status,
+                )
+            )
+            if outcome.status == "error":
+                context["generated_reply"] = {
+                    "text": "No pude aplicar el cambio. "
+                    + _friendly_error(outcome.error_code),
+                    "refs": [],
+                }
+            else:
+                context["generated_reply"] = {
+                    "text": "Listo, apliqué el cambio a tu radar.",
+                    "refs": [],
+                }
+            return {"context": context}
+        if kind == "reject":
+            deps.decision_gateway.reject(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                search_profile_id=_uuid(context, "search_profile_id"),
+                proposal_id=UUID(proposal_id),
+                note=str(decision.get("reason") or ""),
+                correlation_id=_uuid(context, "correlation_id"),
+            )
+            context["generated_reply"] = {
+                "text": "Listo, descarté el cambio propuesto.",
+                "refs": [],
+            }
+            return {"context": context}
+        context["generated_reply"] = {
+            "text": "No recibí una decisión válida para esa propuesta.",
+            "refs": [],
+        }
+        return {"context": context}
+
+    def _route_from_decision(state: AgentState) -> str:
+        context = _context(state)
+        if context.get("resume_decision"):
+            return "require_confirmation"
+        return "generate_reply"
+
+    def _persist_reply(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        effects = dict(_effects(context))
+        if _EFFECT_ASSISTANT_MESSAGE in effects:
+            return {"context": context}
+        reply = context.get("generated_reply")
+        if not isinstance(reply, Mapping):
+            return {"context": context}
+        node_started = deps.clock()
+        raw_refs = reply.get("refs", [])
+        ref_list = [
+            {"entity": str(item["entity"]), "id": str(item["id"])}
+            for item in raw_refs
+            if isinstance(item, Mapping)
+        ]
+        valid_refs, dropped = _validated_refs(state, ref_list, deps.reply_max_refs)
+        text = str(reply.get("text", ""))
+        if dropped and not text.rstrip().endswith((")", ".")):
+            text = text.rstrip() + " (No pude verificar una de las referencias.)"
+        message = deps.conversation.persist_assistant_message(
+            user_id=_uuid(context, "user_id"),
+            session_id=_uuid(context, "session_id"),
+            text=text,
+            refs=tuple(valid_refs),
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            now=deps.clock(),
+        )
+        effects[_EFFECT_ASSISTANT_MESSAGE] = _str(context, "run_id")
+        context["effects_applied"] = effects
+        context["assistant_message_id"] = str(message.message_id)
+        _finish_node(
+            recorder=recorder,
+            node_name="persist_reply",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context}
+
+    builder = StateGraph(AgentState)
+    builder.add_node("start", _start)
+    builder.add_node("compile_intent", _compile_intent)
+    builder.add_node("clarify", _clarify)
+    builder.add_node("generate_reply", _generate_reply)
+    builder.add_node("run_tools", _run_tools)
+    builder.add_node("require_confirmation", _require_confirmation)
+    builder.add_node("resolve_decision", _resolve_decision)
+    builder.add_node("persist_reply", _persist_reply)
+    builder.add_edge(START, "start")
+    builder.add_edge("start", "compile_intent")
+    builder.add_conditional_edges(
+        "compile_intent",
+        _route_from_compile,
+        {
+            "clarify": "clarify",
+            "generate_reply": "generate_reply",
+            "persist_reply": "persist_reply",
+        },
+    )
+    builder.add_edge("clarify", "persist_reply")
+    builder.add_conditional_edges(
+        "generate_reply",
+        _route_from_generate,
+        {"run_tools": "run_tools", "persist_reply": "persist_reply"},
+    )
+    builder.add_conditional_edges(
+        "run_tools",
+        _route_from_tools,
+        {
+            "generate_reply": "generate_reply",
+            "require_confirmation": "require_confirmation",
+            "persist_reply": "persist_reply",
+        },
+    )
+    builder.add_edge("require_confirmation", "resolve_decision")
+    builder.add_conditional_edges(
+        "resolve_decision",
+        _route_from_decision,
+        {
+            "require_confirmation": "require_confirmation",
+            "generate_reply": "generate_reply",
+        },
+    )
+    builder.add_edge("persist_reply", END)
+    compiled = builder.compile(checkpointer=saver)
+    return AgentGraphV3(compiled=compiled, deps=deps)
+
+
+def _waiting_proposal(
+    state: AgentState,
+) -> tuple[str, Mapping[str, object], Mapping[str, object], str]:
+    """Return (proposal_id, diff, impact, expires_at) of the proposal created
+    by the propose tool in the current turn."""
+    for item in state.get("tool_results") or []:
+        if item.get("tool") == _PROPOSE_TOOL and item.get("status") == "ok":
+            result = item.get("result")
+            if isinstance(result, Mapping):
+                return (
+                    str(result.get("proposal_id", "")),
+                    _mapping_or_empty(result.get("diff")),
+                    _mapping_or_empty(result.get("impact")),
+                    str(result.get("expires_at", "")),
+                )
+    return ("", {}, {}, "")
+
+
+def _payload_from_proposal(proposal: Proposal) -> dict[str, object]:
+    return {
+        "type": "proposal_decision",
+        "proposal_id": str(proposal.proposal_id),
+        "diff": dict(proposal.diff),
+        "impact": dict(proposal.impact),
+        "expires_at": proposal.expires_at.isoformat(),
+    }
+
+
+def _mapping_or_empty(value: object) -> Mapping[str, object]:
+    return value if isinstance(value, Mapping) else {}
+
+
+_REF_ENTITY_TYPES = frozenset({"listing", "criterion", "evidence_ref", "proposal"})
+
+
+def _validated_refs(
+    state: AgentState,
+    refs: list[dict[str, str]],
+    max_refs: int,
+) -> tuple[list[dict[str, str]], int]:
+    """Return (valid refs, dropped count): refs must appear in the turn's tool
+    results and fit the cap; 0 invented or foreign refs persist (R-14)."""
+    allowed = _tool_result_refs(state)
+    valid: list[dict[str, str]] = []
+    dropped = 0
+    for ref in refs:
+        entity = ref.get("entity")
+        ref_id = ref.get("id")
+        if entity not in _REF_ENTITY_TYPES or ref_id not in allowed.get(entity, set()):
+            dropped += 1
+            continue
+        valid.append({"entity": entity, "id": ref_id})
+    if len(valid) > max_refs:
+        dropped += len(valid) - max_refs
+        valid = valid[:max_refs]
+    return valid, dropped
+
+
+def _tool_result_refs(state: AgentState) -> dict[str, set[str]]:
+    """Collect the valid product refs of the turn from the redacted tool
+    results; the only refs a grounded reply may cite (FR-017)."""
+    allowed: dict[str, set[str]] = {
+        "listing": set(),
+        "criterion": set(),
+        "evidence_ref": set(),
+        "proposal": set(),
+    }
+    for item in state.get("tool_results") or []:
+        if not isinstance(item, Mapping) or item.get("status") != "ok":
+            continue
+        result = item.get("result")
+        if not isinstance(result, Mapping):
+            continue
+        tool = item.get("tool")
+        if tool == "find_matches":
+            for raw in result.get("items", []):
+                if isinstance(raw, Mapping) and raw.get("listing_id"):
+                    allowed["listing"].add(str(raw["listing_id"]))
+        elif tool == "explain_match":
+            listing_id = result.get("listing_id")
+            if listing_id:
+                allowed["listing"].add(str(listing_id))
+            for ref in result.get("evidence_refs", []):
+                if isinstance(ref, Mapping) and ref.get("id"):
+                    allowed["evidence_ref"].add(str(ref["id"]))
+        elif tool == "compare_listings":
+            for raw in result.get("cells", []):
+                if isinstance(raw, Mapping) and raw.get("listing_id"):
+                    allowed["listing"].add(str(raw["listing_id"]))
+        elif tool == _PROPOSE_TOOL:
+            proposal_id = result.get("proposal_id")
+            if proposal_id:
+                allowed["proposal"].add(str(proposal_id))
+    return allowed
+
+
+def _emit_reply_chunks(
+    *,
+    run_id: UUID,
+    text: str,
+    words: int,
+    emit: Callable[[RuntimeEvent], None],
+) -> None:
+    """Emit the reply as deterministic word-boundary fragments (R-07)."""
+    parts = text.split(" ")
+    chunks: list[str] = []
+    current: list[str] = []
+    for part in parts:
+        current.append(part)
+        if len(current) >= max(1, words):
+            chunks.append(" ".join(current))
+            current = []
+    if current:
+        chunks.append(" ".join(current))
+    for chunk in chunks:
+        emit(ReplyFragment(run_id=run_id, delta=chunk))
+
+
+def _friendly_error(error_code: str | None) -> str:
+    return {
+        "proposal.stale": "la propuesta quedó desactualizada; proponé de nuevo.",
+        "proposal.expired": "la propuesta venció; proponé de nuevo.",
+        "proposal.not_pending": "la propuesta ya fue usada o rechazada.",
+    }.get(error_code or "", "hubo un problema y no se aplicó ningún cambio.")
+
+
 def build_input_state(
     *,
     run_id: UUID,
@@ -506,6 +1270,9 @@ def build_input_state(
     correlation_id: UUID,
     user_message_text: str,
     schema_version: int = STATE_SCHEMA_VERSION,
+    search_profile_id: str | None = None,
+    client_message_id: str | None = None,
+    user_message_context: Mapping[str, object] | None = None,
 ) -> AgentState:
     return build_initial_state(
         schema_version=schema_version,
@@ -514,6 +1281,9 @@ def build_input_state(
         user_id=str(user_id),
         correlation_id=str(correlation_id),
         user_message_text=user_message_text,
+        search_profile_id=search_profile_id,
+        client_message_id=client_message_id,
+        user_message_context=user_message_context,
     )
 
 

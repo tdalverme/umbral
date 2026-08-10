@@ -22,3 +22,18 @@ export async function forwardJson(response: Response): Promise<Response> {
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
+
+/** Forwards an SSE response without buffering (R-12). */
+export async function forwardStream(response: Response): Promise<Response> {
+  if (!response.ok || response.body === null) {
+    return forwardJson(response);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-store",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}

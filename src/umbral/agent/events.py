@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import UUID
 
 
@@ -17,6 +18,21 @@ class RunStarted:
 class ReplyFragment:
     run_id: UUID
     delta: str
+
+
+@dataclass(frozen=True, slots=True)
+class ToolActivity:
+    run_id: UUID
+    tool: str
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
+class InterruptWaiting:
+    """HITL: the run paused for an explicit decision on a durable proposal."""
+
+    run_id: UUID
+    interrupt: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,4 +52,12 @@ class RunInterrupted:
     run_id: UUID
 
 
-RuntimeEvent = RunStarted | ReplyFragment | RunCompleted | RunFailed | RunInterrupted
+RuntimeEvent = (
+    RunStarted
+    | ReplyFragment
+    | ToolActivity
+    | InterruptWaiting
+    | RunCompleted
+    | RunFailed
+    | RunInterrupted
+)

@@ -295,6 +295,33 @@ class Settings(BaseSettings):
     agent_proposal_ttl_hours: int = Field(
         default=24, validation_alias="AGENT_PROPOSAL_TTL_HOURS"
     )
+    agent_chat_state_schema_version: int = Field(
+        default=3, validation_alias="AGENT_CHAT_STATE_SCHEMA_VERSION"
+    )
+    agent_chat_topology_version: int = Field(
+        default=3, validation_alias="AGENT_CHAT_TOPOLOGY_VERSION"
+    )
+    agent_intent_schema_version: str = Field(
+        default="intent-v3", validation_alias="AGENT_INTENT_SCHEMA_VERSION"
+    )
+    agent_intent_prompt_version: str = Field(
+        default="agent-intent-v1", validation_alias="AGENT_INTENT_PROMPT_VERSION"
+    )
+    agent_reply_prompt_version: str = Field(
+        default="agent-reply-v2", validation_alias="AGENT_REPLY_PROMPT_VERSION"
+    )
+    agent_clarification_min_confidence: float = Field(
+        default=0.6, validation_alias="AGENT_CLARIFICATION_MIN_CONFIDENCE"
+    )
+    agent_clarification_max_rounds: int = Field(
+        default=2, validation_alias="AGENT_CLARIFICATION_MAX_ROUNDS"
+    )
+    agent_reply_max_refs: int = Field(
+        default=10, validation_alias="AGENT_REPLY_MAX_REFS"
+    )
+    agent_reply_chunk_words: int = Field(
+        default=8, validation_alias="AGENT_REPLY_CHUNK_WORDS"
+    )
 
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
@@ -386,6 +413,15 @@ class Settings(BaseSettings):
             "AGENT_TOOLS_TIMEOUT_SECONDS",
             "AGENT_TOOLS_OUTPUT_MAX_ITEMS",
             "AGENT_PROPOSAL_TTL_HOURS",
+            "AGENT_CHAT_STATE_SCHEMA_VERSION",
+            "AGENT_CHAT_TOPOLOGY_VERSION",
+            "AGENT_INTENT_SCHEMA_VERSION",
+            "AGENT_INTENT_PROMPT_VERSION",
+            "AGENT_REPLY_PROMPT_VERSION",
+            "AGENT_CLARIFICATION_MIN_CONFIDENCE",
+            "AGENT_CLARIFICATION_MAX_ROUNDS",
+            "AGENT_REPLY_MAX_REFS",
+            "AGENT_REPLY_CHUNK_WORDS",
         }
     )
 

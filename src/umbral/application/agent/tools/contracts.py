@@ -9,7 +9,7 @@ from typing import Literal
 from uuid import UUID
 
 ProposalState = Literal["pending", "approved", "rejected"]
-ProposalRejectionReason = Literal["obsolete", "expired"]
+ProposalRejectionReason = Literal["obsolete", "expired", "user", "edited"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,7 +22,7 @@ class ProposalChange:
 
 @dataclass(frozen=True, slots=True)
 class Proposal:
-    """Durable, auditable proposal with deterministic lifecycle (FR-008)."""
+    """Durable, auditable proposal with interactive lifecycle (FR-008, R-05)."""
 
     proposal_id: UUID
     session_id: UUID
@@ -37,6 +37,25 @@ class Proposal:
     applied_profile_version: int | None = None
     applied_run_id: UUID | None = None
     correlation_id: UUID | None = None
+    rejection_note: str | None = None
+    superseded_by_proposal_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalListing:
+    """A proposal row as the structured UI needs it (FR-033, R-09)."""
+
+    proposal_id: UUID
+    session_id: UUID
+    search_profile_id: UUID
+    state: ProposalState
+    diff: Mapping[str, object]
+    impact: Mapping[str, object]
+    expires_at: datetime
+    rejection_reason: ProposalRejectionReason | None = None
+    rejection_note: str | None = None
+    superseded_by_proposal_id: UUID | None = None
+    waiting_run_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

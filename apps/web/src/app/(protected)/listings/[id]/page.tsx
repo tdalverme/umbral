@@ -166,6 +166,17 @@ export default function ListingDetailPage(): React.ReactElement {
         </div>
       )}
 
+      {profileId && (
+        <div className="mb-4">
+          <Link
+            href={`/radar/${profileId}?chat_context=listing:${listingId}`}
+            className="text-sm font-medium underline-offset-4 hover:underline"
+          >
+            Preguntar sobre este listing en el chat
+          </Link>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader>

@@ -32,6 +32,17 @@ class ProposalRepository(Protocol):
         self, search_profile_id: UUID, session_id: UUID
     ) -> Proposal | None: ...
 
+    def list_for_profile(
+        self,
+        search_profile_id: UUID,
+        state: str,
+    ) -> tuple[Proposal, ...]:
+        """List proposals of a radar in a given state (R-09).
+
+        Ownership is guaranteed by the caller: the radar belongs to the
+        authenticated user (product.search_profile.read scope).
+        """
+
     def mark_approved(
         self,
         proposal_id: UUID,
@@ -46,13 +57,28 @@ class ProposalRepository(Protocol):
         proposal_id: UUID,
         rejection_reason: str,
         rejection_at: datetime,
+        rejection_note: str | None = None,
     ) -> Proposal | None: ...
+
+    def mark_superseded(
+        self,
+        proposal_id: UUID,
+        superseded_by_proposal_id: UUID,
+        rejection_at: datetime,
+    ) -> Proposal | None:
+        """Mark the original as rejected('edited') and link its successor."""
 
     def expire_pending(self, expired_before: datetime) -> int:
         """Mark every pending proposal past the window as rejected('expired').
 
         Deterministic maintenance path (R-11); idempotent.
         """
+
+
+class WaitingRunReader(Protocol):
+    """Finds the non-terminal run of a session (the waiting HITL run)."""
+
+    def active_for_session(self, session_id: UUID) -> object | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +88,45 @@ class SessionScope:
     session_id: UUID
     search_profile_id: UUID
     status: str
+
+
+class ProposalDecisionGateway(Protocol):
+    """HITL decision seam consumed by the graph (R-04/R-05).
+
+    The graph never touches repositories directly: it fetches proposal
+    payloads, applies interactive rejection and derives edited proposals.
+    """
+
+    def get(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        search_profile_id: UUID,
+        proposal_id: UUID,
+    ) -> Proposal: ...
+
+    def reject(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        search_profile_id: UUID,
+        proposal_id: UUID,
+        note: str,
+        correlation_id: UUID,
+    ) -> Proposal: ...
+
+    def derive(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        search_profile_id: UUID,
+        proposal_id: UUID,
+        change: Mapping[str, object],
+        correlation_id: UUID,
+    ) -> Proposal: ...
 
 
 class SessionScopeReader(Protocol):

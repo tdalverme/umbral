@@ -23,6 +23,8 @@ from umbral.api.errors import (
 from umbral.api.middleware.correlation import CorrelationMiddleware
 from umbral.api.routers.auth import configure_auth_routes
 from umbral.api.routers.auth import router as auth_router
+from umbral.api.routers.chat import configure_chat_routes
+from umbral.api.routers.chat import router as chat_router
 from umbral.api.routers.comparisons import configure_comparisons_routes
 from umbral.api.routers.comparisons import router as comparisons_router
 from umbral.api.routers.email_webhooks import router as email_webhook_router
@@ -268,6 +270,7 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     configure_comparisons_routes(dependencies)
     configure_feedback_routes(dependencies)
     configure_learning_routes(dependencies)
+    configure_chat_routes(dependencies)
     app.add_middleware(CorrelationMiddleware)
     app.add_exception_handler(ApplicationError, application_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -285,6 +288,7 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     app.include_router(comparisons_router)
     app.include_router(feedback_router)
     app.include_router(learning_router)
+    app.include_router(chat_router)
 
     def custom_openapi() -> dict[str, Any]:
         return _openapi_for_app(app)

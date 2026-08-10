@@ -188,6 +188,14 @@ export default function ComparePage(): React.ReactElement {
           <p className="mt-3 text-xs text-muted-foreground">
             La comparación muestra datos disponibles y faltantes; no declara un ganador.
           </p>
+          <p className="mt-2">
+            <Link
+              href={`/radar/${profileId}?chat_context=comparison:${selected.join(",")}`}
+              className="text-sm font-medium underline-offset-4 hover:underline"
+            >
+              Preguntar sobre esta comparación en el chat
+            </Link>
+          </p>
         </section>
       )}
     </main>

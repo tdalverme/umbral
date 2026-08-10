@@ -18,11 +18,19 @@ class ChatSessionRepository(Protocol):
 
     def list_by_user(self, user_id: UUID) -> tuple[ChatSession, ...]: ...
 
+    def list_by_profile(
+        self, user_id: UUID, search_profile_id: UUID
+    ) -> tuple[ChatSession, ...]: ...
+
 
 class ChatMessageRepository(Protocol):
     def append(self, message: ChatMessage) -> ChatMessage: ...
 
     def list_by_session(self, session_id: UUID) -> tuple[ChatMessage, ...]: ...
+
+    def find_by_client_message_id(
+        self, session_id: UUID, client_message_id: UUID
+    ) -> ChatMessage | None: ...
 
 
 class SearchProfileStatusReader(Protocol):
@@ -48,6 +56,8 @@ class ConversationGateway(Protocol):
         text: str,
         correlation_id: UUID,
         now: datetime | None = None,
+        client_message_id: UUID | None = None,
+        context: Mapping[str, object] | None = None,
     ) -> ChatMessage: ...
 
     def persist_assistant_message(

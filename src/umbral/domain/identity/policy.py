@@ -107,6 +107,25 @@ ACTION_RULES: dict[str, ActionRule] = {
     "product.events.emit": ActionRule(
         "product.events.emit", frozenset({"user", "operator", "administrator"})
     ),
+    "product.chat.session.create": ActionRule(
+        "product.chat.session.create",
+        frozenset({"user", "operator", "administrator"}),
+    ),
+    "product.chat.session.read": ActionRule(
+        "product.chat.session.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.chat.message.write": ActionRule(
+        "product.chat.message.write",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.chat.decision.write": ActionRule(
+        "product.chat.decision.write",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
     "ops.identity.conflict.review": ActionRule(
         "ops.identity.conflict.review", frozenset({"operator", "administrator"})
     ),

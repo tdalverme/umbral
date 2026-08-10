@@ -66,6 +66,20 @@ class SqlAlchemyChatSessionRepository:
             )
             return tuple(_to_session(model) for model in models)
 
+    def list_by_profile(
+        self, user_id: UUID, search_profile_id: UUID
+    ) -> tuple[ChatSession, ...]:
+        with self.session_factory() as current:
+            models = current.scalars(
+                select(ChatSessionModel)
+                .where(
+                    ChatSessionModel.user_id == user_id,
+                    ChatSessionModel.search_profile_id == search_profile_id,
+                )
+                .order_by(ChatSessionModel.created_at.desc())
+            )
+            return tuple(_to_session(model) for model in models)
+
 
 class SqlAlchemyChatMessageRepository:
     def __init__(self, session_factory: SessionFactory) -> None:
@@ -87,6 +101,7 @@ class SqlAlchemyChatMessageRepository:
                     content=dict(message.content),
                     state=message.state,
                     graph_run_id=message.graph_run_id,
+                    client_message_id=message.client_message_id,
                 )
             )
             current.commit()
@@ -100,6 +115,18 @@ class SqlAlchemyChatMessageRepository:
                 .order_by(ChatMessageModel.created_at, ChatMessageModel.id)
             )
             return tuple(_to_message(model) for model in models)
+
+    def find_by_client_message_id(
+        self, session_id: UUID, client_message_id: UUID
+    ) -> ChatMessage | None:
+        with self.session_factory() as current:
+            model = current.scalar(
+                select(ChatMessageModel).where(
+                    ChatMessageModel.session_id == session_id,
+                    ChatMessageModel.client_message_id == client_message_id,
+                )
+            )
+            return _to_message(model) if model is not None else None
 
 
 class SqlAlchemySearchProfileStatusReader:
@@ -139,4 +166,5 @@ def _to_message(model: ChatMessageModel) -> ChatMessage:
         graph_run_id=model.graph_run_id,
         created_at=model.created_at,
         correlation_id=model.correlation_id,
+        client_message_id=model.client_message_id,
     )

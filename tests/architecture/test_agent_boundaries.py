@@ -96,6 +96,28 @@ def test_agent_tools_layer_consumes_only_application_and_domain_ports() -> None:
     assert violations == []
 
 
+def test_agent_intent_layer_consumes_only_application_ports() -> None:
+    # The intent compilation/policy/clarification layer is deterministic over
+    # application ports and the machine-checkable contract; 0 infrastructure.
+    violations = _collect_violations(_SRC / "agent" / "intent", _AGENT_FORBIDDEN)
+    assert violations == []
+
+
+def test_chat_router_does_not_import_infrastructure() -> None:
+    # The chat HTTP surface is a thin translation layer (R-08): it consumes
+    # agent/application seams and fastapi/starlette, never infrastructure.
+    router = _SRC / "api" / "routers" / "chat.py"
+    tree = ast.parse(router.read_text(encoding="utf-8"))
+    violations = [
+        module
+        for module in _imported_modules(tree)
+        if module == "umbral.infrastructure"
+        or module.startswith("umbral.infrastructure.")
+        or module.startswith("umbral.workers")
+    ]
+    assert violations == []
+
+
 def test_workers_do_not_import_the_agent_runtime() -> None:
     violations = _collect_violations(_SRC / "workers", ("umbral.agent",))
     assert violations == []

@@ -22,12 +22,17 @@ from umbral.application.agent.tools.contracts import (
     ProposalExpired,
     ProposalIdempotencyMismatch,
     ProposalInvalidChange,
+    ProposalListing,
     ProposalNotConfirmed,
     ProposalNotFound,
     ProposalNotPending,
     ProposalStale,
 )
-from umbral.application.agent.tools.ports import EventWriter, ProposalRepository
+from umbral.application.agent.tools.ports import (
+    EventWriter,
+    ProposalRepository,
+    WaitingRunReader,
+)
 from umbral.application.events.contracts import ProductEvent
 from umbral.application.events.registry import EventsRegistrySpec, event_version
 from umbral.application.radar.contracts import SearchProfile
@@ -79,6 +84,7 @@ class SearchProfileUpdateProposals:
         events_registry: EventsRegistrySpec,
         ttl_hours: int = 24,
         clock: Clock | None = None,
+        waiting_runs: WaitingRunReader | None = None,
     ) -> None:
         self.repository = repository
         self.radar = radar
@@ -86,6 +92,7 @@ class SearchProfileUpdateProposals:
         self.events_registry = events_registry
         self.ttl_hours = ttl_hours
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self.waiting_runs = waiting_runs
 
     def propose(
         self,
@@ -210,6 +217,121 @@ class SearchProfileUpdateProposals:
         proposal_id: UUID,
     ) -> Proposal:
         return self._get_scoped(user_id, session_id, search_profile_id, proposal_id)
+
+    def reject(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        search_profile_id: UUID,
+        proposal_id: UUID,
+        note: str,
+        correlation_id: UUID,
+    ) -> Proposal:
+        """Interactive rejection: pending → rejected('user') with the user's
+        bounded note; 0 effects on the profile (FR-013, R-05)."""
+        proposal = self._get_scoped(user_id, session_id, search_profile_id, proposal_id)
+        if proposal.state != "pending":
+            raise ProposalNotPending()
+        self.repository.mark_rejected(
+            proposal_id,
+            "user",
+            self.clock(),
+            rejection_note=(note[:200] if note else None),
+        )
+        return self._get_scoped(user_id, session_id, search_profile_id, proposal_id)
+
+    def derive(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        search_profile_id: UUID,
+        proposal_id: UUID,
+        change: Mapping[str, object],
+        correlation_id: UUID,
+    ) -> Proposal:
+        """Edit as a NEW derived proposal (clarification Q2, FR-014, R-05).
+
+        The original is marked ``rejected('edited')`` with
+        ``superseded_by_proposal_id`` pointing to the derived pending
+        proposal; the original diff is never mutated (0 reescrituras).
+        """
+        original = self._get_scoped(user_id, session_id, search_profile_id, proposal_id)
+        if original.state != "pending":
+            raise ProposalNotPending()
+        unknown = set(change) - _ALLOWED_CHANGE_KEYS
+        if unknown:
+            raise ProposalInvalidChange()
+        profile = self.radar.validate_change(
+            owner_id=user_id, profile_id=search_profile_id, changes=change
+        )
+        diff = {key: value for key, value in change.items()}
+        derived = Proposal(
+            proposal_id=uuid4(),
+            session_id=session_id,
+            search_profile_id=search_profile_id,
+            base_profile_version=original.base_profile_version,
+            diff=diff,
+            impact={
+                "fields_changed": sorted(diff),
+                "will_recompute": profile.status == "active",
+            },
+            state="pending",
+            expires_at=self.clock() + timedelta(hours=self.ttl_hours),
+            correlation_id=correlation_id,
+        )
+        self.repository.insert(derived)
+        self.repository.mark_superseded(
+            proposal_id, derived.proposal_id, self.clock()
+        )
+        self._emit_server_event(
+            event_type="search_profile.update_proposed.v1",
+            actor_id=user_id,
+            correlation_id=correlation_id,
+            payload={
+                "proposal_id": str(derived.proposal_id),
+                "search_profile_id": str(search_profile_id),
+                "base_profile_version": derived.base_profile_version,
+            },
+        )
+        return derived
+
+    def list(
+        self,
+        *,
+        user_id: UUID,
+        search_profile_id: UUID,
+        state: str,
+    ) -> tuple[ProposalListing, ...]:
+        """Scoped proposal list with the waiting HITL run per proposal (R-09)."""
+        proposals = self.repository.list_for_profile(search_profile_id, state)
+        listings: list[ProposalListing] = []
+        for proposal in proposals:
+            waiting_run_id = None
+            if (
+                proposal.state == "pending"
+                and self.waiting_runs is not None
+            ):
+                run = self.waiting_runs.active_for_session(proposal.session_id)
+                if run is not None:
+                    waiting_run_id = getattr(run, "run_id", None)
+            listings.append(
+                ProposalListing(
+                    proposal_id=proposal.proposal_id,
+                    session_id=proposal.session_id,
+                    search_profile_id=proposal.search_profile_id,
+                    state=proposal.state,
+                    diff=proposal.diff,
+                    impact=proposal.impact,
+                    expires_at=proposal.expires_at,
+                    rejection_reason=proposal.rejection_reason,
+                    rejection_note=proposal.rejection_note,
+                    superseded_by_proposal_id=proposal.superseded_by_proposal_id,
+                    waiting_run_id=waiting_run_id,
+                )
+            )
+        return tuple(listings)
 
     def _get_scoped(
         self,

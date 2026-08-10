@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmLearningProposalData, ConfirmLearningProposalErrors, ConfirmLearningProposalResponses, ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, CreateComparisonData, CreateComparisonErrors, CreateComparisonResponses, CreateSearchProfileData, CreateSearchProfileErrors, CreateSearchProfileResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, EmitProductEventData, EmitProductEventErrors, EmitProductEventResponses, ExpandLearningProposalData, ExpandLearningProposalErrors, ExpandLearningProposalResponses, GetComparisonShortlistData, GetComparisonShortlistErrors, GetComparisonShortlistResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetExplanationData, GetExplanationErrors, GetExplanationResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetListingDetailData, GetListingDetailErrors, GetListingDetailResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, GetSearchProfileData, GetSearchProfileErrors, GetSearchProfileResponses, ListDecisionItemsData, ListDecisionItemsErrors, ListDecisionItemsResponses, ListExplanationsData, ListExplanationsErrors, ListExplanationsResponses, ListLearningProposalsData, ListLearningProposalsErrors, ListLearningProposalsResponses, ListMatchesData, ListMatchesErrors, ListMatchesResponses, ListSearchProfilesData, ListSearchProfilesErrors, ListSearchProfilesResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RecordFeedbackData, RecordFeedbackErrors, RecordFeedbackResponses, RejectLearningProposalData, RejectLearningProposalErrors, RejectLearningProposalResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, SetComparisonShortlistData, SetComparisonShortlistErrors, SetComparisonShortlistResponses, SetSearchProfileStatusData, SetSearchProfileStatusErrors, SetSearchProfileStatusResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses, UndoLearningProposalData, UndoLearningProposalErrors, UndoLearningProposalResponses, UpdateSearchProfileData, UpdateSearchProfileErrors, UpdateSearchProfileResponses } from './types.gen';
+import type { ConfirmLearningProposalData, ConfirmLearningProposalErrors, ConfirmLearningProposalResponses, ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, CreateComparisonData, CreateComparisonErrors, CreateComparisonResponses, CreateSearchProfileData, CreateSearchProfileErrors, CreateSearchProfileResponses, CreateSessionData, CreateSessionErrors, CreateSessionResponses, DecideChatRunData, DecideChatRunErrors, DecideChatRunResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, EmitProductEventData, EmitProductEventErrors, EmitProductEventResponses, ExpandLearningProposalData, ExpandLearningProposalErrors, ExpandLearningProposalResponses, GetChatSessionData, GetChatSessionErrors, GetChatSessionResponses, GetComparisonShortlistData, GetComparisonShortlistErrors, GetComparisonShortlistResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetExplanationData, GetExplanationErrors, GetExplanationResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetListingDetailData, GetListingDetailErrors, GetListingDetailResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, GetSearchProfileData, GetSearchProfileErrors, GetSearchProfileResponses, ListChatSessionMessagesData, ListChatSessionMessagesErrors, ListChatSessionMessagesResponses, ListChatSessionsData, ListChatSessionsErrors, ListChatSessionsResponses, ListDecisionItemsData, ListDecisionItemsErrors, ListDecisionItemsResponses, ListExplanationsData, ListExplanationsErrors, ListExplanationsResponses, ListLearningProposalsData, ListLearningProposalsErrors, ListLearningProposalsResponses, ListMatchesData, ListMatchesErrors, ListMatchesResponses, ListSearchProfilesData, ListSearchProfilesErrors, ListSearchProfilesResponses, ListUpdateProposalsData, ListUpdateProposalsErrors, ListUpdateProposalsResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RecordFeedbackData, RecordFeedbackErrors, RecordFeedbackResponses, RejectLearningProposalData, RejectLearningProposalErrors, RejectLearningProposalResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, ResumeChatSessionData, ResumeChatSessionErrors, ResumeChatSessionResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetComparisonShortlistData, SetComparisonShortlistErrors, SetComparisonShortlistResponses, SetSearchProfileStatusData, SetSearchProfileStatusErrors, SetSearchProfileStatusResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses, UndoLearningProposalData, UndoLearningProposalErrors, UndoLearningProposalResponses, UpdateSearchProfileData, UpdateSearchProfileErrors, UpdateSearchProfileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -60,6 +60,81 @@ export const getCurrentSession = <ThrowOnError extends boolean = false>(options?
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/auth/session',
     ...options
+});
+
+/**
+ * List Sessions
+ */
+export const listChatSessions = <ThrowOnError extends boolean = false>(options?: Options<ListChatSessionsData, ThrowOnError>): RequestResult<ListChatSessionsResponses, ListChatSessionsErrors, ThrowOnError> => (options?.client ?? client).get<ListChatSessionsResponses, ListChatSessionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/chat/sessions',
+    ...options
+});
+
+/**
+ * Create Session
+ */
+export const createSession = <ThrowOnError extends boolean = false>(options: Options<CreateSessionData, ThrowOnError>): RequestResult<CreateSessionResponses, CreateSessionErrors, ThrowOnError> => (options.client ?? client).post<CreateSessionResponses, CreateSessionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/chat/sessions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Session
+ */
+export const getChatSession = <ThrowOnError extends boolean = false>(options?: Options<GetChatSessionData, ThrowOnError>): RequestResult<GetChatSessionResponses, GetChatSessionErrors, ThrowOnError> => (options?.client ?? client).get<GetChatSessionResponses, GetChatSessionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/chat/sessions/{session_id}',
+    ...options
+});
+
+/**
+ * List Messages
+ */
+export const listChatSessionMessages = <ThrowOnError extends boolean = false>(options?: Options<ListChatSessionMessagesData, ThrowOnError>): RequestResult<ListChatSessionMessagesResponses, ListChatSessionMessagesErrors, ThrowOnError> => (options?.client ?? client).get<ListChatSessionMessagesResponses, ListChatSessionMessagesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/chat/sessions/{session_id}/messages',
+    ...options
+});
+
+/**
+ * Send Message
+ */
+export const sendChatMessage = <ThrowOnError extends boolean = false>(options: Options<SendChatMessageData, ThrowOnError>): RequestResult<SendChatMessageResponses, SendChatMessageErrors, ThrowOnError> => (options.client ?? client).post<SendChatMessageResponses, SendChatMessageErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/chat/sessions/{session_id}/messages',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Resume Session
+ */
+export const resumeChatSession = <ThrowOnError extends boolean = false>(options?: Options<ResumeChatSessionData, ThrowOnError>): RequestResult<ResumeChatSessionResponses, ResumeChatSessionErrors, ThrowOnError> => (options?.client ?? client).post<ResumeChatSessionResponses, ResumeChatSessionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/chat/sessions/{session_id}/resume',
+    ...options
+});
+
+/**
+ * Decide Run
+ */
+export const decideChatRun = <ThrowOnError extends boolean = false>(options: Options<DecideChatRunData, ThrowOnError>): RequestResult<DecideChatRunResponses, DecideChatRunErrors, ThrowOnError> => (options.client ?? client).post<DecideChatRunResponses, DecideChatRunErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/chat/sessions/{session_id}/runs/{run_id}/decision',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -331,6 +406,15 @@ export const setSearchProfileStatus = <ThrowOnError extends boolean = false>(opt
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * List Update Proposals
+ */
+export const listUpdateProposals = <ThrowOnError extends boolean = false>(options?: Options<ListUpdateProposalsData, ThrowOnError>): RequestResult<ListUpdateProposalsResponses, ListUpdateProposalsErrors, ThrowOnError> => (options?.client ?? client).get<ListUpdateProposalsResponses, ListUpdateProposalsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search-profiles/{search_profile_id}/update-proposals',
+    ...options
 });
 
 /**

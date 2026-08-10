@@ -8,9 +8,11 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { ChatPanel } from "@/components/chat/chat-panel";
 import { RadarMap, matchPoints } from "@/components/radar/map";
 import { FeedbackActions } from "@/components/radar/feedback-actions";
 import { ProposalBanner } from "@/components/radar/proposal-banner";
+import { UpdateProposalBanner } from "@/components/radar/update-proposal-banner";
 import { radarApi, type Explanation, type FeedbackEventType, type MatchItem, type SearchProfile } from "@/lib/radar/client";
 import { emitExplanationViewed, emitImpression } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
@@ -276,6 +278,7 @@ export default function RadarViewPage(): React.ReactElement {
       )}
 
       <ProposalBanner profileId={profileId} onDecision={() => setReloadKey((current) => current + 1)} />
+      <UpdateProposalBanner profileId={profileId} onDecision={() => setReloadKey((current) => current + 1)} />
 
       {!generating && runState === "failed" && (
         <Alert role="alert">
@@ -369,6 +372,10 @@ export default function RadarViewPage(): React.ReactElement {
           </Button>
         </div>
       )}
+
+      <section className="mt-6" aria-label="Chat con Umbral">
+        <ChatPanel profileId={profileId} />
+      </section>
     </main>
   );
 }

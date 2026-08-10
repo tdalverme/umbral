@@ -1,0 +1,46 @@
+{
+  "registry_version": "agent-graph-topology-v3",
+  "contract_version": "3",
+  "topology_version": 3,
+  "entry": "start",
+  "nodes": [
+    {"name": "start", "kind": "node"},
+    {"name": "compile_intent", "kind": "node"},
+    {"name": "clarify", "kind": "node"},
+    {"name": "generate_reply", "kind": "node"},
+    {"name": "run_tools", "kind": "node"},
+    {"name": "require_confirmation", "kind": "node"},
+    {"name": "resolve_decision", "kind": "node"},
+    {"name": "persist_reply", "kind": "node"}
+  ],
+  "edges": [
+    {"from": "start", "to": "compile_intent"},
+    {"from": "compile_intent", "to": "clarify", "condition": "clarification_needed"},
+    {"from": "clarify", "to": "persist_reply"},
+    {"from": "compile_intent", "to": "generate_reply", "condition": "no_clarification"},
+    {"from": "generate_reply", "to": "run_tools", "condition": "tool_calls"},
+    {"from": "run_tools", "to": "generate_reply", "condition": "loop"},
+    {"from": "run_tools", "to": "require_confirmation", "condition": "proposal_created"},
+    {"from": "generate_reply", "to": "persist_reply", "condition": "no_tool_calls"},
+    {"from": "require_confirmation", "to": "end", "condition": "interrupt"},
+    {"from": "resolve_decision", "to": "generate_reply", "condition": "continue"},
+    {"from": "generate_reply", "to": "persist_reply", "condition": "no_tool_calls"},
+    {"from": "persist_reply", "to": "end"}
+  ],
+  "tools": [
+    "get_search_profile",
+    "propose_search_profile_update",
+    "apply_search_profile_update",
+    "find_matches",
+    "explain_match",
+    "compare_listings",
+    "record_feedback",
+    "search_urban_context"
+  ],
+  "interrupts": [
+    {
+      "name": "proposal_decision",
+      "description": "Human-in-the-loop: the run waits for an explicit approve/edit/reject decision on a durable proposal; resumed via Command(resume=decision) (R-04)."
+    }
+  ]
+}

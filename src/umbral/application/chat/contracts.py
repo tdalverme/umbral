@@ -39,6 +39,7 @@ class ChatMessage:
     graph_run_id: UUID | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now())
     correlation_id: UUID = field(default_factory=lambda: UUID(int=0))
+    client_message_id: UUID | None = None
 
 
 class ChatError(Exception):
@@ -103,6 +104,9 @@ def validate_message_content(
             errors.append("chat.content_missing_text")
         elif len(text) > max_text_length:
             errors.append("chat.message_too_long")
+        context = content.get("context")
+        if context is not None and not _valid_context(context):
+            errors.append("chat.content_bad_context")
     elif kind == _REPLY_KIND:
         text = content.get("text")
         if not isinstance(text, str):
@@ -123,3 +127,17 @@ def validate_message_content(
     else:
         errors.append("chat.content_kind")
     return tuple(errors)
+
+
+def _valid_context(value: object) -> bool:
+    """A bounded evidence scope: {entity, id} with entity in the allowed set."""
+    if not isinstance(value, Mapping):
+        return False
+    entity = value.get("entity")
+    ref_id = value.get("id")
+    return (
+        isinstance(entity, str)
+        and entity in {"listing", "comparison"}
+        and isinstance(ref_id, str)
+        and bool(ref_id)
+    )
