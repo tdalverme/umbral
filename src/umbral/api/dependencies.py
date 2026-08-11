@@ -26,12 +26,28 @@ from umbral.application.runtime.version import (
 )
 from umbral.application.scoring.service import ScoringService
 from umbral.infrastructure.config.settings import Settings
+from umbral.infrastructure.db.repositories.radar import SqlAlchemyEventRepository
 from umbral.infrastructure.db.session import SessionProvider
+from umbral.infrastructure.notifications.composition import (
+    NotificationServices,
+    build_notification_services,
+)
 from umbral.infrastructure.runtime.composition import (
     RuntimeCompositionFactories,
     compose_runtime,
 )
 from umbral.infrastructure.runtime.heartbeat import RuntimeHeartbeatWriter
+
+
+def _build_notifications(settings: Settings) -> NotificationServices | None:
+    if not settings.notifications_enabled:
+        return None
+    session_provider = SessionProvider(settings.database_url)
+    return build_notification_services(
+        settings=settings,
+        session_provider=session_provider,
+        events_out=SqlAlchemyEventRepository(session_provider.session_factory),
+    )
 
 _LOCAL_RELEASE_MANIFEST = "<local>"
 
@@ -59,6 +75,7 @@ class RuntimeDependencies:
     proposals: object | None = None
     graph_runs: object | None = None
     ops_overview: object | None = None
+    notifications: object | None = None
 
 
 def build_runtime_dependencies(
@@ -96,6 +113,7 @@ def build_runtime_dependencies(
         feedback=composition.feedback,
         heartbeat_writer=heartbeat_writer,
         job_runtime=composition.job_runtime,
+        notifications=_build_notifications(settings),
     )
 
 

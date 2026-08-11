@@ -8,6 +8,11 @@ from umbral.infrastructure.db.models.agent import (
 )
 from umbral.infrastructure.db.models.agent_evals import AgentEvalCaseResult, AgentEvalSuite
 from umbral.infrastructure.db.models.chat import ChatMessage, ChatSession
+from umbral.infrastructure.db.models.notifications import (
+    NotificationDecisionModel,
+    NotificationInboxItemModel,
+    NotificationPreferencesModel,
+)
 from umbral.infrastructure.db.models.criteria import (
     Concept,
     ConceptVersion,
@@ -122,4 +127,7 @@ __all__ = [
     "LearningPolicy",
     "LearningPolicyVersion",
     "LearningProposal",
+    "NotificationPreferencesModel",
+    "NotificationDecisionModel",
+    "NotificationInboxItemModel",
 ]

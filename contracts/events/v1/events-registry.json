@@ -205,6 +205,42 @@
       "version": 1,
       "emitted_by": "server",
       "required_keys": ["session_id", "limit_kind"]
+    },
+    "notification.decision_created.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": [
+        "decision_id",
+        "search_profile_id",
+        "trigger",
+        "reason_code",
+        "decision_state"
+      ]
+    },
+    "notification.delivered.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["decision_id", "channel", "provider_message_id"]
+    },
+    "notification.delivery_failed.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["decision_id", "channel", "error_code"]
+    },
+    "notification.viewed.v1": {
+      "version": 1,
+      "emitted_by": "client",
+      "required_keys": ["decision_id"]
+    },
+    "notification.acted.v1": {
+      "version": 1,
+      "emitted_by": "client",
+      "required_keys": ["decision_id", "action"]
+    },
+    "notification.unsubscribed.v1": {
+      "version": 1,
+      "emitted_by": "server",
+      "required_keys": ["search_profile_id"]
     }
   },
   "forbidden_keys": [

@@ -61,6 +61,12 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                 proposal_expire=getattr(
                     active_dependencies, "proposal_expire", None
                 ),
+                notifications_plan=getattr(
+                    active_dependencies, "notifications_plan", None
+                ),
+                notifications_digest=getattr(
+                    active_dependencies, "notifications_digest", None
+                ),
             )
             print(json.dumps(summary, sort_keys=True, separators=(",", ":")))
             return 0
@@ -77,6 +83,12 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                     ),
                     proposal_expire=getattr(
                         active_dependencies, "proposal_expire", None
+                    ),
+                    notifications_plan=getattr(
+                        active_dependencies, "notifications_plan", None
+                    ),
+                    notifications_digest=getattr(
+                        active_dependencies, "notifications_digest", None
                     ),
                 )
                 time.sleep(HEARTBEAT_INTERVAL_SECONDS)

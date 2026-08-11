@@ -156,6 +156,14 @@ try {
         Invoke-ChildCheck -Name "Agent Evals" -Path (Join-Path $PSScriptRoot "check-evals.ps1")
     }
 
+    $notificationsSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\notifications"),
+        (Join-Path $repoRoot "tests\contract\test_notifications_policy.py")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($notificationsSurface) {
+        Invoke-ChildCheck -Name "Alertas Proactivas" -Path (Join-Path $PSScriptRoot "check-alerts.ps1")
+    }
+
     $storageSurface = @(
         (Join-Path $repoRoot "src\umbral\application\objects"),
         (Join-Path $repoRoot "tests\contract\test_object_store.py")

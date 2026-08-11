@@ -144,6 +144,26 @@ ACTION_RULES: dict[str, ActionRule] = {
     "ops.agent.read": ActionRule(
         "ops.agent.read", frozenset({"operator", "administrator"}), True
     ),
+    "product.notifications.preferences.read": ActionRule(
+        "product.notifications.preferences.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.notifications.preferences.write": ActionRule(
+        "product.notifications.preferences.write",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.notifications.inbox.read": ActionRule(
+        "product.notifications.inbox.read",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
+    "product.notifications.inbox.write": ActionRule(
+        "product.notifications.inbox.write",
+        frozenset({"user", "operator", "administrator"}),
+        True,
+    ),
     "admin.identity.user.status.change": ActionRule(
         "admin.identity.user.status.change", frozenset({"administrator"})
     ),

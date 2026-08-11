@@ -67,3 +67,25 @@ El flow falla con exit code != 0 si cualquier caso no cumple las cinco senales
 deterministas; el resumen por caso se imprime en el JSON de salida. La eleccion
 del modelo concreto es un parametro de release (graph-releases-v1) evaluable y
 revertible.
+
+## Notificaciones proactivas (H5)
+
+Configuracion de alertas:
+
+| Variable | Default | Significado |
+| --- | --- | --- |
+| `NOTIFICATIONS_ENABLED` | `true` | master switch de duties/delivery |
+| `NOTIFICATIONS_POLICY_VERSION` | `notification-policy-v1` | politica versionada |
+| `NOTIFICATIONS_PLANNER_DATASET_VERSION` | `planner-golden-v1` | dataset golden del planner |
+| `NOTIFICATIONS_EMAIL_FROM` | `Umbral <alertas@umbral.local>` | sender de alertas (Resend) |
+| `NOTIFICATIONS_PLAN_JOB_TYPE` | `notifications.plan` | duty de planificacion |
+| `NOTIFICATIONS_DIGEST_JOB_TYPE` | `notifications.digest` | duty de digest |
+| `NOTIFICATIONS_DELIVER_JOB_TYPE` | `notifications.deliver` | job RQ de entrega |
+| `NOTIFICATIONS_UNSUBSCRIBE_TTL_HOURS` | `24` | TTL del token de baja |
+| `NOTIFICATIONS_DEFAULT_TIMEZONE` | `America/Argentina/Buenos_Aires` | timezone default |
+
+El scheduler local (`python -m umbral.workers scheduler`) corre los duties
+`notifications.plan` y `notifications.digest` en cada pasada; el worker RQ
+ejecuta `notifications.deliver`. Con `EMAIL_PROVIDER=recording` (local) los
+emails quedan en memoria y se verifican por eventos. Harness:
+`scripts/check-alerts.ps1` (registrado en `check.ps1`).

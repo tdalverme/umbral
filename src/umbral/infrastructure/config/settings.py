@@ -367,6 +367,40 @@ class Settings(BaseSettings):
     agent_budget_warning_ratio: float = Field(
         default=0.8, validation_alias="AGENT_BUDGET_WARNING_RATIO"
     )
+    notifications_enabled: bool = Field(
+        default=True, validation_alias="NOTIFICATIONS_ENABLED"
+    )
+    notifications_policy_version: str = Field(
+        default="notification-policy-v1",
+        validation_alias="NOTIFICATIONS_POLICY_VERSION",
+    )
+    notifications_planner_dataset_version: str = Field(
+        default="planner-golden-v1",
+        validation_alias="NOTIFICATIONS_PLANNER_DATASET_VERSION",
+    )
+    notifications_email_from: str = Field(
+        default="Umbral <alertas@umbral.local>",
+        validation_alias="NOTIFICATIONS_EMAIL_FROM",
+    )
+    notifications_plan_job_type: str = Field(
+        default="notifications.plan",
+        validation_alias="NOTIFICATIONS_PLAN_JOB_TYPE",
+    )
+    notifications_digest_job_type: str = Field(
+        default="notifications.digest",
+        validation_alias="NOTIFICATIONS_DIGEST_JOB_TYPE",
+    )
+    notifications_deliver_job_type: str = Field(
+        default="notifications.deliver",
+        validation_alias="NOTIFICATIONS_DELIVER_JOB_TYPE",
+    )
+    notifications_unsubscribe_ttl_hours: int = Field(
+        default=24, validation_alias="NOTIFICATIONS_UNSUBSCRIBE_TTL_HOURS"
+    )
+    notifications_default_timezone: str = Field(
+        default="America/Argentina/Buenos_Aires",
+        validation_alias="NOTIFICATIONS_DEFAULT_TIMEZONE",
+    )
 
     _known_fields: ClassVar[frozenset[str]] = frozenset(
         {
@@ -481,6 +515,15 @@ class Settings(BaseSettings):
             "AGENT_BUDGET_USER_COST_CAP_USD",
             "AGENT_BUDGET_USER_CONCURRENCY_CAP",
             "AGENT_BUDGET_WARNING_RATIO",
+            "NOTIFICATIONS_ENABLED",
+            "NOTIFICATIONS_POLICY_VERSION",
+            "NOTIFICATIONS_PLANNER_DATASET_VERSION",
+            "NOTIFICATIONS_EMAIL_FROM",
+            "NOTIFICATIONS_PLAN_JOB_TYPE",
+            "NOTIFICATIONS_DIGEST_JOB_TYPE",
+            "NOTIFICATIONS_DELIVER_JOB_TYPE",
+            "NOTIFICATIONS_UNSUBSCRIBE_TTL_HOURS",
+            "NOTIFICATIONS_DEFAULT_TIMEZONE",
         }
     )
 

@@ -33,10 +33,14 @@ from umbral.infrastructure.agent.purge import (
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.criteria.composition import build_criteria_service
 from umbral.infrastructure.db.repositories.identity import SqlAlchemyIdentityStore
+from umbral.infrastructure.db.repositories.radar import SqlAlchemyEventRepository
 from umbral.infrastructure.db.session import SessionProvider
 from umbral.infrastructure.identity.registry import build_identity_registry
 from umbral.infrastructure.ingestion.composition import build_ingestion_service
 from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
+from umbral.infrastructure.notifications.composition import (
+    build_notification_services,
+)
 from umbral.infrastructure.object_store.factory import build_object_store
 from umbral.infrastructure.observability.runtime import initialize_observability
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
@@ -46,6 +50,11 @@ from umbral.infrastructure.scoring.composition import build_scoring_service
 from umbral.infrastructure.silver.composition import build_normalize_service
 from umbral.workers.criteria import build_criteria_registry
 from umbral.workers.imports import build_ingestion_registry
+from umbral.workers.notifications import (
+    build_digest_duty,
+    build_notifications_registry,
+    build_plan_duty,
+)
 from umbral.workers.radar import build_radar_registry
 from umbral.workers.registry import JobRegistry
 from umbral.workers.registry import build_identity_registry as build_job_registry
@@ -66,6 +75,8 @@ class ProcessDependencies:
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
     agent_checkpoint_purge: Callable[[datetime], int] | None = None
     proposal_expire: Callable[[datetime], int] | None = None
+    notifications_plan: Callable[[datetime], int] | None = None
+    notifications_digest: Callable[[datetime], int] | None = None
 
     @property
     def handlers(self) -> dict[str, object]:
@@ -143,6 +154,16 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         build_ingestion_registry(ingestion, normalize_publish).as_mapping().values()
     ):
         registry.register(handler)
+    events_out = SqlAlchemyEventRepository(session_provider.session_factory)
+    notifications = build_notification_services(
+        settings=active_settings,
+        session_provider=session_provider,
+        events_out=events_out,
+    )
+    for handler in build_notifications_registry(
+        notifications.delivery
+    ).as_mapping().values():
+        registry.register(handler)
     redis_connection = Redis.from_url(active_settings.redis_url)
     queue = RQJobQueue.from_connection(redis_connection)
     runtime = SqlAlchemyJobRuntime(
@@ -173,6 +194,8 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         heartbeat_writer=heartbeat_writer,
         agent_checkpoint_purge=_build_agent_purge(active_settings),
         proposal_expire=_build_proposal_expire(active_settings),
+        notifications_plan=build_plan_duty(notifications.planner),
+        notifications_digest=build_digest_duty(notifications.planner),
     )
 
 
@@ -262,6 +285,7 @@ def _load_settings() -> Settings:
                 "FEEDBACK_",
                 "EMBEDDINGS_",
                 "URBAN_",
+                "NOTIFICATIONS_",
             )
         )
     }

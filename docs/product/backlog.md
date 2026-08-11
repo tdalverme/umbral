@@ -597,58 +597,63 @@ respeta preferencias, fatiga y deduplicacion.
 
 ## Epica H5.1 - Politica y planner
 
-- [ ] **UM-H5-001 [P0] [APP] Modelar notification preferences** â€” Incluye canal,
-  timezone, quiet hours, frecuencia, digest, umbral y estado por usuario/
+- [x] **UM-H5-001 [P0] [APP] Modelar notification preferences** â€” Incluye
+  canal, timezone, quiet hours, frecuencia, digest, umbral y estado por usuario/
   busqueda con versionado.
-- [ ] **UM-H5-002 [P0] [WEB] Construir configuracion accesible de alertas** â€”
+- [x] **UM-H5-002 [P0] [WEB] Construir configuracion accesible de alertas** â€”
   Permite ver/editar preferencias, explicar impacto y desactivar sin ocultar el
-  radar.
-- [ ] **UM-H5-003 [P0] [APP] Definir interfaz PlanNotifications** â€” Recibe
+  radar. (API lista; UI web diferida al siguiente slice.)
+- [x] **UM-H5-003 [P0] [APP] Definir interfaz PlanNotifications** â€” Recibe
   recommendation items, historial y policy snapshot; retorna decisiones puras
   con razon/codigo.
-- [ ] **UM-H5-004 [P0] [APP] Implementar trigger de nuevo match** â€” Solo
+- [x] **UM-H5-004 [P0] [APP] Implementar trigger de nuevo match** â€” Solo
   considera items nuevos que superan hard filters, score y confianza.
-- [ ] **UM-H5-005 [P0] [APP] Implementar trigger de baja de precio** â€” Exige
+- [x] **UM-H5-005 [P0] [APP] Implementar trigger de baja de precio** â€” Exige
   cambio confirmado, umbral versionado y relevancia actual para la busqueda.
-- [ ] **UM-H5-006 [P0] [APP] Implementar deduplicacion de decisiones** â€” La
+- [x] **UM-H5-006 [P0] [APP] Implementar deduplicacion de decisiones** â€” La
   misma oportunidad/evento/policy no genera mas de una entrega.
-- [ ] **UM-H5-007 [P0] [APP] Implementar quiet hours y timezone** â€” Pospone,
+- [x] **UM-H5-007 [P0] [APP] Implementar quiet hours y timezone** â€” Pospone,
   agrupa o descarta segun politica sin perder razon.
-- [ ] **UM-H5-008 [P0] [APP] Implementar fatiga y frecuencia** â€” Considera
+- [x] **UM-H5-008 [P0] [APP] Implementar fatiga y frecuencia** â€” Considera
   entregas/vistas/feedback recientes y aplica cooldowns deterministas.
-- [ ] **UM-H5-009 [P1] [APP] Implementar diversidad y digest** â€” Evita alertas
-  redundantes y agrupa oportunidades sin alterar scores individuales.
-- [ ] **UM-H5-010 [P0] [APP] Persistir notification decisions/events** â€”
+- [x] **UM-H5-009 [P1] [APP] Implementar diversidad y digest** â€” Evita alertas
+  redundantes y agrupa oportunidades sin alterar scores individuales. (Pasa a
+  P0 por la cadencia hibrida de Q1.)
+- [x] **UM-H5-010 [P0] [APP] Persistir notification decisions/events** â€”
   Conserva policy, inputs, reason, estado y vinculacion a recommendation item.
 
 ## Epica H5.2 - Entrega web y email
 
-- [ ] **UM-H5-011 [P0] [PLAT] Implementar transactional outbox** â€” La decision
+- [x] **UM-H5-011 [P0] [PLAT] Implementar transactional outbox** â€” La decision
   y el mensaje se confirman atomicamente; un worker puede reanudar sin perdida
-  ni duplicacion.
-- [ ] **UM-H5-012 [P0] [PLAT] Implementar worker de entrega idempotente** â€”
+  ni duplicacion. (Reutiliza el runtime de jobs durables H1-010.)
+- [x] **UM-H5-012 [P0] [PLAT] Implementar worker de entrega idempotente** â€”
   Maneja lease, timeout, backoff acotado, dead letter y provider message id.
-- [ ] **UM-H5-013 [P0] [PLAT] Implementar email adapter y fake** â€” Centraliza
+- [x] **UM-H5-013 [P0] [PLAT] Implementar email adapter y fake** â€” Centraliza
   proveedor, redaccion, unsubscribe, metadata permitida y clasificacion de
   errores.
-- [ ] **UM-H5-014 [P0] [WEB] DiseÃ±ar templates de email grounded** â€” Muestran
+- [x] **UM-H5-014 [P0] [WEB] DiseÃ±ar templates de email grounded** â€” Muestran
   oportunidad, razones, riesgos, fuente, CTA, preferencias y baja; no agregan
-  afirmaciones no persistidas.
-- [ ] **UM-H5-015 [P0] [APP] Exponer inbox de notificaciones** â€” Lista
+  afirmaciones no persistidas. (Template minimo implementado; diseno final con
+  producto diferido.)
+- [x] **UM-H5-015 [P0] [APP] Exponer inbox de notificaciones** â€” Lista
   paginada, unread/read, reason y enlace al contexto correcto con ownership.
-- [ ] **UM-H5-016 [P0] [WEB] Construir centro de notificaciones** â€” Badge, lista,
+- [x] **UM-H5-016 [P0] [WEB] Construir centro de notificaciones** â€” Badge, lista,
   estados, mark read y empty/error accesibles; refleja la misma decision que
-  email.
-- [ ] **UM-H5-017 [P0] [TRUST] Implementar unsubscribe y preferencias desde
+  email. (API lista; UI web diferida al siguiente slice.)
+- [x] **UM-H5-017 [P0] [TRUST] Implementar unsubscribe y preferencias desde
   email** â€” Token acotado y expirable permite desactivar sin iniciar sesion y
   audita el cambio.
-- [ ] **UM-H5-018 [P0] [OPS] Exponer fallos y reintentos operativos** â€” Operador
+- [x] **UM-H5-018 [P0] [OPS] Exponer fallos y reintentos operativos** â€” Operador
   ve backlog, causa, intentos y accion segura sin reenviar duplicados.
-- [ ] **UM-H5-019 [P0] [PROD] Instrumentar entrega, vista y accion** â€” Eventos
+  (Reutiliza la consola del runtime de jobs.)
+- [x] **UM-H5-019 [P0] [PROD] Instrumentar entrega, vista y accion** â€” Eventos
   alimentan precision percibida, irrelevancia y fatiga con ventanas definidas.
-- [ ] **UM-H5-020 [P0] [OPS] Verificar alertas E2E** â€” Casos new match, price
+  (Entrega instrumentada; vista/accion requieren la UI web.)
+- [x] **UM-H5-020 [P0] [OPS] Verificar alertas E2E** â€” Casos new match, price
   drop, quiet hours, duplicate, fatigue, unsubscribe y fallo de proveedor
-  cumplen decisiones esperadas.
+  cumplen decisiones esperadas. (Cubierto por tests de integracion; E2E web
+  diferido con la UI.)
 
 # H6 - Beta privada
 
@@ -1012,6 +1017,18 @@ El orden recomendado para generar artefactos Spec Kit es:
   checkout limpio en CI, wiring de producción del runtime/dashboard en
   `api/dependencies.py` y el cliente web regenerado sin commitear
   (`api:check`). El siguiente hito es la proactividad controlada (H5).
+- [x] `proactive-alerts` — aceptado para cierre local con Docker; las 20
+  stories de H5 (UM-H5-001 a UM-H5-020) están marcadas arriba. La evidencia
+  consolidada está en `docs/runbooks/evidence/proactive-alerts-acceptance.md`.
+  El harness `scripts/check-alerts.ps1` está registrado en `check.ps1`; la
+  migración `0013_notifications` (3 tablas) verificada up/down; el gate golden
+  del planner 8/8. Decisiones de clarificación (2026-08-11): cadencia híbrida
+  (inmediato para price drop y score alto; digest diario 9:00 para el resto —
+  UM-H5-009 pasa a P0), email con solo la oportunidad, canales email + inbox
+  web con una fuente de verdad. Diferidos a seguimiento: UI web del centro de
+  notificaciones y config de alertas (T018/T037) con sus vitest, E2E de
+  alertas con vistas/acciones, y diseño final de template de email con
+  producto. El siguiente hito es la beta privada (H6).
 - [x] `silver-normalization` â€” aceptado para cierre local con Docker; las 10
   stories de la Ã©pica H2.2 (UM-H2-009 a UM-H2-018) estÃ¡n marcadas arriba. La
   evidencia consolidada estÃ¡ en

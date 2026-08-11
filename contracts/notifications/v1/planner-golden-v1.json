@@ -1,0 +1,345 @@
+{
+  "contract_version": "1",
+  "registry_version": "planner-golden-v1",
+  "reviewed_by": "product",
+  "reviewed_at": "2026-08-11",
+  "min_cases_per_family": 1,
+  "cases": [
+    {
+      "id": "notif-001",
+      "family": "new_match_immediate",
+      "item": {
+        "recommendation_item_id": "10000000-0000-0000-0000-000000000001",
+        "search_profile_id": "20000000-0000-0000-0000-000000000001",
+        "trigger": "new_match",
+        "score": 0.85,
+        "published_at": "2026-08-11T15:00:00Z"
+      },
+      "history": [],
+      "preferences": {
+        "email_enabled": true,
+        "inbox_enabled": true,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00",
+        "digest_enabled": true,
+        "digest_local_hour": 9,
+        "score_threshold": 0.6,
+        "state": "active"
+      },
+      "policy": {
+        "immediate_score_threshold": 0.75,
+        "fatigue_cooldown_hours": 6,
+        "fatigue_window_hours": 24,
+        "digest_default_local_hour": 9,
+        "digest_max_items": 10,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00"
+      },
+      "now": "2026-08-11T15:00:00Z",
+      "expected": {
+        "trigger": "new_match",
+        "reason_code": "new_match",
+        "decision_state": "pending_delivery",
+        "duplicate_of_id": null
+      }
+    },
+    {
+      "id": "notif-002",
+      "family": "new_match_digest",
+      "item": {
+        "recommendation_item_id": "10000000-0000-0000-0000-000000000002",
+        "search_profile_id": "20000000-0000-0000-0000-000000000002",
+        "trigger": "new_match",
+        "score": 0.5,
+        "published_at": "2026-08-11T15:00:00Z"
+      },
+      "history": [],
+      "preferences": {
+        "email_enabled": true,
+        "inbox_enabled": true,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00",
+        "digest_enabled": true,
+        "digest_local_hour": 9,
+        "score_threshold": 0.6,
+        "state": "active"
+      },
+      "policy": {
+        "immediate_score_threshold": 0.75,
+        "fatigue_cooldown_hours": 6,
+        "fatigue_window_hours": 24,
+        "digest_default_local_hour": 9,
+        "digest_max_items": 10,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00"
+      },
+      "now": "2026-08-11T15:00:00Z",
+      "expected": {
+        "trigger": "new_match",
+        "reason_code": "digest",
+        "decision_state": "pending_digest",
+        "duplicate_of_id": null
+      }
+    },
+    {
+      "id": "notif-003",
+      "family": "price_drop",
+      "item": {
+        "recommendation_item_id": "10000000-0000-0000-0000-000000000003",
+        "search_profile_id": "20000000-0000-0000-0000-000000000003",
+        "trigger": "price_drop",
+        "score": 0.6,
+        "price_before": 1000.0,
+        "price_after": 850.0,
+        "published_at": "2026-08-11T15:00:00Z"
+      },
+      "history": [],
+      "preferences": {
+        "email_enabled": true,
+        "inbox_enabled": true,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00",
+        "digest_enabled": true,
+        "digest_local_hour": 9,
+        "score_threshold": 0.6,
+        "state": "active"
+      },
+      "policy": {
+        "immediate_score_threshold": 0.75,
+        "fatigue_cooldown_hours": 6,
+        "fatigue_window_hours": 24,
+        "digest_default_local_hour": 9,
+        "digest_max_items": 10,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00"
+      },
+      "now": "2026-08-11T15:00:00Z",
+      "expected": {
+        "trigger": "price_drop",
+        "reason_code": "price_drop",
+        "decision_state": "pending_delivery",
+        "duplicate_of_id": null
+      }
+    },
+    {
+      "id": "notif-004",
+      "family": "duplicate",
+      "item": {
+        "recommendation_item_id": "10000000-0000-0000-0000-000000000004",
+        "search_profile_id": "20000000-0000-0000-0000-000000000004",
+        "trigger": "new_match",
+        "score": 0.9,
+        "published_at": "2026-08-11T15:00:00Z"
+      },
+      "history": [
+        {
+          "decision_id": "30000000-0000-0000-0000-000000000004",
+          "recommendation_item_id": "10000000-0000-0000-0000-000000000004",
+          "trigger": "new_match",
+          "decision_state": "pending_delivery",
+          "delivered_at": null,
+          "viewed_at": null
+        }
+      ],
+      "preferences": {
+        "email_enabled": true,
+        "inbox_enabled": true,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00",
+        "digest_enabled": true,
+        "digest_local_hour": 9,
+        "score_threshold": 0.6,
+        "state": "active"
+      },
+      "policy": {
+        "immediate_score_threshold": 0.75,
+        "fatigue_cooldown_hours": 6,
+        "fatigue_window_hours": 24,
+        "digest_default_local_hour": 9,
+        "digest_max_items": 10,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00"
+      },
+      "now": "2026-08-11T15:00:00Z",
+      "expected": {
+        "trigger": "new_match",
+        "reason_code": "duplicate",
+        "decision_state": "duplicated",
+        "duplicate_of_id": "30000000-0000-0000-0000-000000000004"
+      }
+    },
+    {
+      "id": "notif-005",
+      "family": "quiet_hours",
+      "item": {
+        "recommendation_item_id": "10000000-0000-0000-0000-000000000005",
+        "search_profile_id": "20000000-0000-0000-0000-000000000005",
+        "trigger": "new_match",
+        "score": 0.9,
+        "published_at": "2026-08-11T01:00:00Z"
+      },
+      "history": [],
+      "preferences": {
+        "email_enabled": true,
+        "inbox_enabled": true,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00",
+        "digest_enabled": true,
+        "digest_local_hour": 9,
+        "score_threshold": 0.6,
+        "state": "active"
+      },
+      "policy": {
+        "immediate_score_threshold": 0.75,
+        "fatigue_cooldown_hours": 6,
+        "fatigue_window_hours": 24,
+        "digest_default_local_hour": 9,
+        "digest_max_items": 10,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00"
+      },
+      "now": "2026-08-11T01:00:00Z",
+      "expected": {
+        "trigger": "new_match",
+        "reason_code": "quiet_hours",
+        "decision_state": "postponed",
+        "duplicate_of_id": null
+      }
+    },
+    {
+      "id": "notif-006",
+      "family": "fatigue",
+      "item": {
+        "recommendation_item_id": "10000000-0000-0000-0000-000000000006",
+        "search_profile_id": "20000000-0000-0000-0000-000000000006",
+        "trigger": "new_match",
+        "score": 0.9,
+        "published_at": "2026-08-11T15:00:00Z"
+      },
+      "history": [
+        {
+          "decision_id": "30000000-0000-0000-0000-000000000006",
+          "recommendation_item_id": "40000000-0000-0000-0000-000000000006",
+          "trigger": "new_match",
+          "decision_state": "delivered",
+          "delivered_at": "2026-08-11T13:00:00Z",
+          "viewed_at": null
+        }
+      ],
+      "preferences": {
+        "email_enabled": true,
+        "inbox_enabled": true,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00",
+        "digest_enabled": true,
+        "digest_local_hour": 9,
+        "score_threshold": 0.6,
+        "state": "active"
+      },
+      "policy": {
+        "immediate_score_threshold": 0.75,
+        "fatigue_cooldown_hours": 6,
+        "fatigue_window_hours": 24,
+        "digest_default_local_hour": 9,
+        "digest_max_items": 10,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00"
+      },
+      "now": "2026-08-11T15:00:00Z",
+      "expected": {
+        "trigger": "new_match",
+        "reason_code": "fatigue",
+        "decision_state": "postponed",
+        "duplicate_of_id": null
+      }
+    },
+    {
+      "id": "notif-007",
+      "family": "preferences_disabled",
+      "item": {
+        "recommendation_item_id": "10000000-0000-0000-0000-000000000007",
+        "search_profile_id": "20000000-0000-0000-0000-000000000007",
+        "trigger": "price_drop",
+        "score": 0.9,
+        "price_before": 1000.0,
+        "price_after": 800.0,
+        "published_at": "2026-08-11T15:00:00Z"
+      },
+      "history": [],
+      "preferences": {
+        "email_enabled": true,
+        "inbox_enabled": true,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00",
+        "digest_enabled": true,
+        "digest_local_hour": 9,
+        "score_threshold": 0.6,
+        "state": "disabled"
+      },
+      "policy": {
+        "immediate_score_threshold": 0.75,
+        "fatigue_cooldown_hours": 6,
+        "fatigue_window_hours": 24,
+        "digest_default_local_hour": 9,
+        "digest_max_items": 10,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00"
+      },
+      "now": "2026-08-11T15:00:00Z",
+      "expected": {
+        "trigger": "price_drop",
+        "reason_code": "preferences_disabled",
+        "decision_state": "discarded",
+        "duplicate_of_id": null
+      }
+    },
+    {
+      "id": "notif-008",
+      "family": "no_channels",
+      "item": {
+        "recommendation_item_id": "10000000-0000-0000-0000-000000000008",
+        "search_profile_id": "20000000-0000-0000-0000-000000000008",
+        "trigger": "price_drop",
+        "score": 0.9,
+        "price_before": 1000.0,
+        "price_after": 800.0,
+        "published_at": "2026-08-11T15:00:00Z"
+      },
+      "history": [],
+      "preferences": {
+        "email_enabled": false,
+        "inbox_enabled": false,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00",
+        "digest_enabled": true,
+        "digest_local_hour": 9,
+        "score_threshold": 0.6,
+        "state": "active"
+      },
+      "policy": {
+        "immediate_score_threshold": 0.75,
+        "fatigue_cooldown_hours": 6,
+        "fatigue_window_hours": 24,
+        "digest_default_local_hour": 9,
+        "digest_max_items": 10,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00"
+      },
+      "now": "2026-08-11T15:00:00Z",
+      "expected": {
+        "trigger": "price_drop",
+        "reason_code": "no_channels",
+        "decision_state": "discarded",
+        "duplicate_of_id": null
+      }
+    }
+  ]
+}

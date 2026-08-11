@@ -1,0 +1,13 @@
+{
+  "contract_version": "1",
+  "registry_version": "notification-policy-v1",
+  "reviewed_by": "product",
+  "reviewed_at": "2026-08-11",
+  "immediate_score_threshold": 0.75,
+  "fatigue_cooldown_hours": 6,
+  "fatigue_window_hours": 24,
+  "digest_default_local_hour": 9,
+  "digest_max_items": 10,
+  "quiet_hours_start": "22:00",
+  "quiet_hours_end": "08:00"
+}
