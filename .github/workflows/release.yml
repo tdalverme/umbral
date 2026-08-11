@@ -70,21 +70,21 @@ jobs:
         id: revision
         run: |
           revision="$(python3 - <<'EOF'
-import re
-from pathlib import Path
+          import re
+          from pathlib import Path
 
-heads = set()
-for path in Path("alembic/versions").glob("*.py"):
-    text = path.read_text(encoding="utf-8")
-    revision = re.search(r'^revision\s*=\s*["\']([^"\']+)["\']', text, re.M)
-    down = re.search(r'^down_revision\s*=\s*["\']([^"\']+)["\']', text, re.M)
-    if revision:
-        heads.add(revision.group(1))
-    if down:
-        heads.discard(down.group(1))
-print(" ".join(sorted(heads)))
-EOF
-)"
+          heads = set()
+          for path in Path("alembic/versions").glob("*.py"):
+              text = path.read_text(encoding="utf-8")
+              revision = re.search(r'^revision\s*=\s*["\']([^"\']+)["\']', text, re.M)
+              down = re.search(r'^down_revision\s*=\s*["\']([^"\']+)["\']', text, re.M)
+              if revision:
+                  heads.add(revision.group(1))
+              if down:
+                  heads.discard(down.group(1))
+          print(" ".join(sorted(heads)))
+          EOF
+          )"
           if [ -z "$revision" ] || [ "$revision" != "${revision% *}" ]; then
             echo "::error::Expected exactly one Alembic head revision, got: ${revision}" >&2
             exit 1
