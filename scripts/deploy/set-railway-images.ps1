@@ -146,6 +146,24 @@ $previewBaseUrl = [string][Environment]::GetEnvironmentVariable("UMBRAL_PREVIEW_
 Require-Condition (-not [string]::IsNullOrWhiteSpace($previewBaseUrl)) "Missing UMBRAL_PREVIEW_BASE_URL environment value for Railway service variables."
 $providerVars["IDENTITY_CAPTURE_ORIGIN"] = "https://" + $previewBaseUrl.Trim()
 
+# Runtime services also need the agent and notifications configuration so the
+# chat and alert surfaces boot with the chosen provider, model and policy.
+# Only non-secret defaults are required here; AGENT_MANAGED_API_KEY is
+# optional at promote time and the smoke validates the real chat wiring.
+$agentVars = [ordered]@{}
+foreach ($key in @("AGENT_MODEL_PROVIDER", "AGENT_MODEL_NAME", "AGENT_MODEL_TIMEOUT_SECONDS", "AGENT_MODEL_MAX_RETRIES", "AGENT_MANAGED_ENDPOINT", "AGENT_GRAPH_RELEASE_ID")) {
+    $value = [string][Environment]::GetEnvironmentVariable($key)
+    if (-not [string]::IsNullOrWhiteSpace($value)) { $agentVars[$key] = $value }
+}
+$managedKey = [string][Environment]::GetEnvironmentVariable("AGENT_MANAGED_API_KEY")
+if (-not [string]::IsNullOrWhiteSpace($managedKey)) { $agentVars["AGENT_MANAGED_API_KEY"] = $managedKey }
+
+$notificationVars = [ordered]@{}
+foreach ($key in @("NOTIFICATIONS_ENABLED", "NOTIFICATIONS_POLICY_VERSION", "NOTIFICATIONS_PLANNER_DATASET_VERSION", "NOTIFICATIONS_EMAIL_FROM", "NOTIFICATIONS_UNSUBSCRIBE_TTL_HOURS", "NOTIFICATIONS_DEFAULT_TIMEZONE")) {
+    $value = [string][Environment]::GetEnvironmentVariable($key)
+    if (-not [string]::IsNullOrWhiteSpace($value)) { $notificationVars[$key] = $value }
+}
+
 # Compare every app service against its target spec so only the services that
 # actually diverge are patched. This keeps the promote idempotent (no-op when
 # everything is already pinned) while still producing fresh deployments for the
@@ -166,7 +184,9 @@ function Test-ServiceAtTarget {
         [Parameter(Mandatory = $true)] $ObjectStoreVars,
         [Parameter(Mandatory = $true)] $ProviderVars,
         [Parameter(Mandatory = $true)] $ServiceDeployOverrides,
-        [Parameter(Mandatory = $true)] $ServiceExtraVars
+        [Parameter(Mandatory = $true)] $ServiceExtraVars,
+        [Parameter(Mandatory = $true)] $AgentVars,
+        [Parameter(Mandatory = $true)] $NotificationVars
     )
     if ($null -eq $SvcConfig) { return $false }
     $artifact = $Manifest.artifacts.($ServiceArtifacts[$Service])
@@ -186,6 +206,12 @@ function Test-ServiceAtTarget {
         foreach ($key in $ProviderVars.Keys) {
             if ([string]$SvcConfig.variables.$key.value -ne [string]$ProviderVars[$key]) { return $false }
         }
+        foreach ($key in $AgentVars.Keys) {
+            if ([string]$SvcConfig.variables.$key.value -ne [string]$AgentVars[$key]) { return $false }
+        }
+        foreach ($key in $NotificationVars.Keys) {
+            if ([string]$SvcConfig.variables.$key.value -ne [string]$NotificationVars[$key]) { return $false }
+        }
     }
     if ($ServiceDeployOverrides.ContainsKey($Service)) {
         if ($null -eq $SvcConfig.deploy -or $null -eq $SvcConfig.deploy.sleepApplication -or [bool]$SvcConfig.deploy.sleepApplication -ne [bool]$ServiceDeployOverrides[$Service].sleepApplication) { return $false }
@@ -204,7 +230,7 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ($null -ne $currentConfig) {
         $svcConfig = $currentConfig.services.($serviceIdByName[$service])
     }
-    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars)
+    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars)
 }
 
 $servicesToPatch = @($serviceArtifacts.Keys | Where-Object { $serviceNeedsPatch[$_] })
@@ -242,6 +268,12 @@ foreach ($service in $servicesToPatch) {
     if ($service -ne "web") {
         foreach ($key in $ProviderVars.Keys) {
             $serviceVariables[$key] = [ordered]@{ value = $ProviderVars[$key] }
+        }
+        foreach ($key in $AgentVars.Keys) {
+            $serviceVariables[$key] = [ordered]@{ value = $AgentVars[$key] }
+        }
+        foreach ($key in $NotificationVars.Keys) {
+            $serviceVariables[$key] = [ordered]@{ value = $NotificationVars[$key] }
         }
     }
     if ($serviceExtraVars.ContainsKey($service)) {

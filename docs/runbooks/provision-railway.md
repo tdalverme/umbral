@@ -95,10 +95,45 @@ correo. El manifiesto de release se entrega a las imágenes como JSON inline
    - `manifest`: nombre del artifact (`release-manifest-<sha>`);
    - `release_run_id`: run ID de la corrida release;
    - `environment`: `preview`.
-6. Orden del promote: verify-access → validate-railway-config → backup →
-   migrate (Alembic) → check-dependencies → set-railway-images (fija imagen y
-   las `UMBRAL_RELEASE_*` por servicio) → wait-railway-services →
-   preload de invitación → smoke de 15 escenarios. El smoke cierra SC-001.
+ 6. Orden del promote: verify-access → validate-railway-config → backup →
+    migrate (Alembic) → check-dependencies → set-railway-images (fija imagen y
+    las `UMBRAL_RELEASE_*` por servicio) → wait-railway-services →
+    preload de invitación → smoke de 15 escenarios. El smoke cierra SC-001.
+
+## Servicio adicional: modelo gestionado (wrapper)
+
+El chat en produccion consume el endpoint gestionado propio (ADR 0001):
+`src/umbral/infrastructure/agent/model_gateway/server.py`. Se provisiona como
+un servicio Railway `pserv` adicional (nombre `model`) desde la imagen runtime:
+
+- Imagen: `ghcr.io/tdalverme/umbral/runtime:<sha>` (publica, igual que web/runtime).
+- Start command: `python -m uvicorn umbral.infrastructure.agent.model_gateway.server:app --host 0.0.0.0 --port 8010`
+- Variables: `PORT=8010`, `MODEL_GATEWAY_OPENAI_API_KEY=<OpenAI key>`,
+  `MODEL_GATEWAY_SHARED_KEY=<misma que AGENT_MANAGED_API_KEY>`, y el healthcheck
+  apuntando a `/openapi.json`.
+- `AGENT_MANAGED_ENDPOINT` en api/worker/scheduler apunta a
+  `http://model.<railway-internal-domain>:8010/v1/structured` (o al dominio
+  publico del servicio si el acceso interno no aplica).
+
+## Secrets de Actions adicionales (ademas de los 19 del Paso 2)
+
+El promote tambien lee estos secrets para cablear el chat real, las alertas y
+el wrapper (el smoke valida el chat con el modelo real):
+
+- `AGENT_MODEL_PROVIDER` (`managed`), `AGENT_MODEL_NAME` (`gpt-4.1-mini`),
+  `AGENT_MODEL_TIMEOUT_SECONDS` (30), `AGENT_MODEL_MAX_RETRIES` (2),
+  `AGENT_MANAGED_ENDPOINT` (URL del servicio `model`),
+  `AGENT_MANAGED_API_KEY` (misma que `MODEL_GATEWAY_SHARED_KEY`),
+  `AGENT_GRAPH_RELEASE_ID` (`graph-release-002`).
+- `NOTIFICATIONS_ENABLED` (true), `NOTIFICATIONS_POLICY_VERSION`
+  (`notification-policy-v1`), `NOTIFICATIONS_PLANNER_DATASET_VERSION`
+  (`planner-golden-v1`), `NOTIFICATIONS_EMAIL_FROM`, `NOTIFICATIONS_UNSUBSCRIBE_TTL_HOURS`,
+  `NOTIFICATIONS_DEFAULT_TIMEZONE` (`America/Argentina/Buenos_Aires`).
+- `MODEL_GATEWAY_OPENAI_API_KEY` y `MODEL_GATEWAY_SHARED_KEY` se cargan en el
+  servicio `model` (provision manual; no via promote).
+- `UMBRAL_SMOKE_INVITEE` debe ser un correo real y controlado: el smoke del
+  chat requiere el magic-link real y ahora tambien entrega una notificacion
+  de prueba si el radar tiene matches publicados.
 
 ## Verificación y compensación
 
