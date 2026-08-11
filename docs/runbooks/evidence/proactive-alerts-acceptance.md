@@ -70,3 +70,26 @@ Cerrados los deferidos web de H5:
 ## Costo de modelo
 
 0 gasto de provider en este incremento (planner deterministico, 0 LLM).
+
+## Wiring de produccion del agente (deferido H4.4, 2026-08-11)
+
+Cerrado el deferido de H4.4 "wiring de produccion del runtime/dashboard en
+`api/dependencies.py`":
+
+- Nuevo modulo `infrastructure/agent/production.py`: compone el stack v3 de
+  produccion — `ChatService` con repos reales, `RunRecorderService`,
+  `SearchProfileUpdateProposals` (que implementa el `ProposalDecisionGateway`
+  del graph HITL), `ToolExecutor` sobre los servicios reales (radar, scoring,
+  feedback, criteria), `IntentCompiler`, checkpointer Postgres y el gateway
+  de modelo (managed por `AGENT_MODEL_PROVIDER=managed`, fake local).
+- `build_runtime_dependencies` ahora puebla `chat`, `agent_runtime`,
+  `proposals` y `graph_runs` en `RuntimeDependencies`, lo que habilita el
+  router de chat en el API de produccion (antes levantaba RuntimeError "not
+  configured").
+- Degradacion honesta: si Postgres no esta disponible localmente, el stack no
+  se construye (el chat queda sin configurar, consistente con la readiness
+  degradada); en preview/produccion cualquier fallo propaga.
+- Verificado: con Postgres arriba los 4 objetos quedan cableados; el app
+  importa con y sin DB; suite completa 850 passed sin regresiones.
+- Tambien se creo el manifiesto local `.data/release-manifest.local.json`
+  (faltaba para el arranque local del API y del test de readiness).

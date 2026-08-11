@@ -49,6 +49,41 @@ def _build_notifications(settings: Settings) -> NotificationServices | None:
         events_out=SqlAlchemyEventRepository(session_provider.session_factory),
     )
 
+
+def _build_agent_stack(
+    settings: Settings, composition: object
+) -> dict[str, object]:
+    """Compose the production agent stack when the chat surface is present.
+
+    A Postgres outage keeps the API importable (chat stays unconfigured,
+    consistent with degraded readiness); other failures propagate.
+    """
+    if getattr(settings, "agent_model_provider", None) is None:
+        return {}
+    session_provider = SessionProvider(settings.database_url)
+    from umbral.infrastructure.agent.production import build_production_agent_stack
+
+    try:
+        stack = build_production_agent_stack(
+            settings=settings,
+            session_factory=session_provider.session_factory,
+            database_url=settings.database_url,
+            radar=getattr(composition, "radar", None),
+            scoring=getattr(composition, "scoring", None),
+            feedback=getattr(composition, "feedback", None),
+            criteria=getattr(composition, "criteria", None),
+        )
+    except Exception:  # noqa: BLE001 - Postgres down locally degrades the chat
+        if getattr(settings, "environment", "local") != "local":
+            raise
+        return {}
+    return {
+        "chat": stack.chat,
+        "agent_runtime": stack.runtime,
+        "proposals": stack.proposals,
+        "graph_runs": stack.graph_runs,
+    }
+
 _LOCAL_RELEASE_MANIFEST = "<local>"
 
 
@@ -114,6 +149,7 @@ def build_runtime_dependencies(
         heartbeat_writer=heartbeat_writer,
         job_runtime=composition.job_runtime,
         notifications=_build_notifications(settings),
+        **_build_agent_stack(settings, composition),
     )
 
 
