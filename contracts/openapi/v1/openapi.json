@@ -914,6 +914,20 @@
         "title": "Health",
         "type": "object"
       },
+      "InboxMarkReadBody": {
+        "additionalProperties": false,
+        "properties": {
+          "read": {
+            "title": "Read",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "read"
+        ],
+        "title": "InboxMarkReadBody",
+        "type": "object"
+      },
       "KnownChangeModel": {
         "additionalProperties": false,
         "properties": {
@@ -1325,6 +1339,62 @@
           "items"
         ],
         "title": "MatchesResponse",
+        "type": "object"
+      },
+      "PreferencesBody": {
+        "additionalProperties": false,
+        "properties": {
+          "digest_enabled": {
+            "default": true,
+            "title": "Digest Enabled",
+            "type": "boolean"
+          },
+          "digest_local_hour": {
+            "default": 9,
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Digest Local Hour",
+            "type": "integer"
+          },
+          "email_enabled": {
+            "default": true,
+            "title": "Email Enabled",
+            "type": "boolean"
+          },
+          "inbox_enabled": {
+            "default": true,
+            "title": "Inbox Enabled",
+            "type": "boolean"
+          },
+          "quiet_hours_end": {
+            "default": "08:00",
+            "title": "Quiet Hours End",
+            "type": "string"
+          },
+          "quiet_hours_start": {
+            "default": "22:00",
+            "title": "Quiet Hours Start",
+            "type": "string"
+          },
+          "score_threshold": {
+            "default": 0.6,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score Threshold",
+            "type": "number"
+          },
+          "state": {
+            "default": "active",
+            "title": "State",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "America/Argentina/Buenos_Aires",
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "title": "PreferencesBody",
         "type": "object"
       },
       "Problem": {
@@ -2173,6 +2243,22 @@
           "status"
         ],
         "title": "StatusRequest",
+        "type": "object"
+      },
+      "UnsubscribeBody": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "UnsubscribeBody",
         "type": "object"
       },
       "UpdateSearchProfileRequest": {
@@ -3307,6 +3393,189 @@
         "summary": "Get Listing Detail",
         "tags": [
           "Listings"
+        ]
+      }
+    },
+    "/api/v1/notifications/inbox": {
+      "get": {
+        "operationId": "get_inbox_api_v1_notifications_inbox_get",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Inbox",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/inbox/{decision_id}": {
+      "patch": {
+        "operationId": "patch_inbox_api_v1_notifications_inbox__decision_id__patch",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxMarkReadBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Inbox",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/preferences": {
+      "get": {
+        "operationId": "get_preferences_api_v1_notifications_preferences_get",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Preferences",
+        "tags": [
+          "Notifications"
+        ]
+      },
+      "put": {
+        "operationId": "put_preferences_api_v1_notifications_preferences_put",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Preferences",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/unsubscribe": {
+      "post": {
+        "operationId": "unsubscribe_api_v1_notifications_unsubscribe_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnsubscribeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unsubscribe",
+        "tags": [
+          "Notifications"
         ]
       }
     },

@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AgentOpsOverviewData, AgentOpsOverviewErrors, AgentOpsOverviewResponses, ConfirmLearningProposalData, ConfirmLearningProposalErrors, ConfirmLearningProposalResponses, ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, CreateComparisonData, CreateComparisonErrors, CreateComparisonResponses, CreateSearchProfileData, CreateSearchProfileErrors, CreateSearchProfileResponses, CreateSessionData, CreateSessionErrors, CreateSessionResponses, DecideChatRunData, DecideChatRunErrors, DecideChatRunResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, EmitProductEventData, EmitProductEventErrors, EmitProductEventResponses, ExpandLearningProposalData, ExpandLearningProposalErrors, ExpandLearningProposalResponses, GetChatSessionData, GetChatSessionErrors, GetChatSessionResponses, GetComparisonShortlistData, GetComparisonShortlistErrors, GetComparisonShortlistResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetExplanationData, GetExplanationErrors, GetExplanationResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetListingDetailData, GetListingDetailErrors, GetListingDetailResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, GetSearchProfileData, GetSearchProfileErrors, GetSearchProfileResponses, ListChatSessionMessagesData, ListChatSessionMessagesErrors, ListChatSessionMessagesResponses, ListChatSessionsData, ListChatSessionsErrors, ListChatSessionsResponses, ListDecisionItemsData, ListDecisionItemsErrors, ListDecisionItemsResponses, ListExplanationsData, ListExplanationsErrors, ListExplanationsResponses, ListLearningProposalsData, ListLearningProposalsErrors, ListLearningProposalsResponses, ListMatchesData, ListMatchesErrors, ListMatchesResponses, ListSearchProfilesData, ListSearchProfilesErrors, ListSearchProfilesResponses, ListUpdateProposalsData, ListUpdateProposalsErrors, ListUpdateProposalsResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RecordFeedbackData, RecordFeedbackErrors, RecordFeedbackResponses, RejectLearningProposalData, RejectLearningProposalErrors, RejectLearningProposalResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, ResumeChatSessionData, ResumeChatSessionErrors, ResumeChatSessionResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetComparisonShortlistData, SetComparisonShortlistErrors, SetComparisonShortlistResponses, SetSearchProfileStatusData, SetSearchProfileStatusErrors, SetSearchProfileStatusResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses, UndoLearningProposalData, UndoLearningProposalErrors, UndoLearningProposalResponses, UpdateSearchProfileData, UpdateSearchProfileErrors, UpdateSearchProfileResponses } from './types.gen';
+import type { AgentOpsOverviewData, AgentOpsOverviewErrors, AgentOpsOverviewResponses, ConfirmLearningProposalData, ConfirmLearningProposalErrors, ConfirmLearningProposalResponses, ConfirmMagicLinkData, ConfirmMagicLinkErrors, ConfirmMagicLinkResponses, CreateComparisonData, CreateComparisonErrors, CreateComparisonResponses, CreateSearchProfileData, CreateSearchProfileErrors, CreateSearchProfileResponses, CreateSessionData, CreateSessionErrors, CreateSessionResponses, DecideChatRunData, DecideChatRunErrors, DecideChatRunResponses, DownloadImportQualityData, DownloadImportQualityErrors, DownloadImportQualityResponses, EmitProductEventData, EmitProductEventErrors, EmitProductEventResponses, ExpandLearningProposalData, ExpandLearningProposalErrors, ExpandLearningProposalResponses, GetChatSessionData, GetChatSessionErrors, GetChatSessionResponses, GetComparisonShortlistData, GetComparisonShortlistErrors, GetComparisonShortlistResponses, GetCurrentSessionData, GetCurrentSessionErrors, GetCurrentSessionResponses, GetExplanationData, GetExplanationErrors, GetExplanationResponses, GetImportQualityData, GetImportQualityErrors, GetImportQualityResponses, GetImportRunData, GetImportRunErrors, GetImportRunResponses, GetInboxApiV1NotificationsInboxGetData, GetInboxApiV1NotificationsInboxGetErrors, GetInboxApiV1NotificationsInboxGetResponses, GetListingDetailData, GetListingDetailErrors, GetListingDetailResponses, GetPreferencesApiV1NotificationsPreferencesGetData, GetPreferencesApiV1NotificationsPreferencesGetResponses, GetQuarantineRecordData, GetQuarantineRecordErrors, GetQuarantineRecordResponses, GetRuntimeHealthData, GetRuntimeHealthResponses, GetRuntimeReadinessData, GetRuntimeReadinessErrors, GetRuntimeReadinessResponses, GetRuntimeVersionData, GetRuntimeVersionErrors, GetRuntimeVersionResponses, GetSearchProfileData, GetSearchProfileErrors, GetSearchProfileResponses, ListChatSessionMessagesData, ListChatSessionMessagesErrors, ListChatSessionMessagesResponses, ListChatSessionsData, ListChatSessionsErrors, ListChatSessionsResponses, ListDecisionItemsData, ListDecisionItemsErrors, ListDecisionItemsResponses, ListExplanationsData, ListExplanationsErrors, ListExplanationsResponses, ListLearningProposalsData, ListLearningProposalsErrors, ListLearningProposalsResponses, ListMatchesData, ListMatchesErrors, ListMatchesResponses, ListSearchProfilesData, ListSearchProfilesErrors, ListSearchProfilesResponses, ListUpdateProposalsData, ListUpdateProposalsErrors, ListUpdateProposalsResponses, LogoutCurrentSessionData, LogoutCurrentSessionErrors, LogoutCurrentSessionResponses, PatchInboxApiV1NotificationsInboxDecisionIdPatchData, PatchInboxApiV1NotificationsInboxDecisionIdPatchErrors, PatchInboxApiV1NotificationsInboxDecisionIdPatchResponses, PutPreferencesApiV1NotificationsPreferencesPutData, PutPreferencesApiV1NotificationsPreferencesPutErrors, PutPreferencesApiV1NotificationsPreferencesPutResponses, ReceiveResendEventData, ReceiveResendEventErrors, ReceiveResendEventResponses, RecordFeedbackData, RecordFeedbackErrors, RecordFeedbackResponses, RejectLearningProposalData, RejectLearningProposalErrors, RejectLearningProposalResponses, RequestMagicLinkData, RequestMagicLinkErrors, RequestMagicLinkResponses, ResumeChatSessionData, ResumeChatSessionErrors, ResumeChatSessionResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetComparisonShortlistData, SetComparisonShortlistErrors, SetComparisonShortlistResponses, SetSearchProfileStatusData, SetSearchProfileStatusErrors, SetSearchProfileStatusResponses, SubmitImportBatchData, SubmitImportBatchErrors, SubmitImportBatchResponses, UndoLearningProposalData, UndoLearningProposalErrors, UndoLearningProposalResponses, UnsubscribeApiV1NotificationsUnsubscribePostData, UnsubscribeApiV1NotificationsUnsubscribePostErrors, UnsubscribeApiV1NotificationsUnsubscribePostResponses, UpdateSearchProfileData, UpdateSearchProfileErrors, UpdateSearchProfileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -212,6 +212,63 @@ export const getListingDetail = <ThrowOnError extends boolean = false>(options?:
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/listings/{listing_id}',
     ...options
+});
+
+/**
+ * Get Inbox
+ */
+export const getInboxApiV1NotificationsInboxGet = <ThrowOnError extends boolean = false>(options?: Options<GetInboxApiV1NotificationsInboxGetData, ThrowOnError>): RequestResult<GetInboxApiV1NotificationsInboxGetResponses, GetInboxApiV1NotificationsInboxGetErrors, ThrowOnError> => (options?.client ?? client).get<GetInboxApiV1NotificationsInboxGetResponses, GetInboxApiV1NotificationsInboxGetErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/notifications/inbox',
+    ...options
+});
+
+/**
+ * Patch Inbox
+ */
+export const patchInboxApiV1NotificationsInboxDecisionIdPatch = <ThrowOnError extends boolean = false>(options: Options<PatchInboxApiV1NotificationsInboxDecisionIdPatchData, ThrowOnError>): RequestResult<PatchInboxApiV1NotificationsInboxDecisionIdPatchResponses, PatchInboxApiV1NotificationsInboxDecisionIdPatchErrors, ThrowOnError> => (options.client ?? client).patch<PatchInboxApiV1NotificationsInboxDecisionIdPatchResponses, PatchInboxApiV1NotificationsInboxDecisionIdPatchErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/notifications/inbox/{decision_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Preferences
+ */
+export const getPreferencesApiV1NotificationsPreferencesGet = <ThrowOnError extends boolean = false>(options?: Options<GetPreferencesApiV1NotificationsPreferencesGetData, ThrowOnError>): RequestResult<GetPreferencesApiV1NotificationsPreferencesGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetPreferencesApiV1NotificationsPreferencesGetResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/notifications/preferences',
+    ...options
+});
+
+/**
+ * Put Preferences
+ */
+export const putPreferencesApiV1NotificationsPreferencesPut = <ThrowOnError extends boolean = false>(options: Options<PutPreferencesApiV1NotificationsPreferencesPutData, ThrowOnError>): RequestResult<PutPreferencesApiV1NotificationsPreferencesPutResponses, PutPreferencesApiV1NotificationsPreferencesPutErrors, ThrowOnError> => (options.client ?? client).put<PutPreferencesApiV1NotificationsPreferencesPutResponses, PutPreferencesApiV1NotificationsPreferencesPutErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/notifications/preferences',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Unsubscribe
+ */
+export const unsubscribeApiV1NotificationsUnsubscribePost = <ThrowOnError extends boolean = false>(options: Options<UnsubscribeApiV1NotificationsUnsubscribePostData, ThrowOnError>): RequestResult<UnsubscribeApiV1NotificationsUnsubscribePostResponses, UnsubscribeApiV1NotificationsUnsubscribePostErrors, ThrowOnError> => (options.client ?? client).post<UnsubscribeApiV1NotificationsUnsubscribePostResponses, UnsubscribeApiV1NotificationsUnsubscribePostErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/notifications/unsubscribe',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

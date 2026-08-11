@@ -49,6 +49,24 @@ Fecha: 2026-08-11 · Incremento: `013-proactive-alerts` (UM-H5-001 a UM-H5-020)
   queda como siguiente slice. El E2E de alertas completo (T047) depende de
   la UI para las vistas/acciones.
 
+## Ampliacion: UI web de notificaciones (2026-08-11)
+
+Cerrados los deferidos web de H5:
+
+- BFF catch-all `apps/web/src/app/api/notifications/[...path]/route.ts`
+  (mismo patron que las rutas radar: cookie de sesion + BFF token).
+- Cliente tipado `apps/web/src/lib/notifications/client.ts`
+  (`notificationsApi`: preferencias, inbox, mark read, baja).
+- Vista `apps/web/src/components/notifications/notifications-view.tsx`
+  (centro de notificaciones + config de alertas con toggles y desactivacion)
+  y pagina `apps/web/src/app/(protected)/notifications/page.tsx`.
+- Vitest del componente (3 tests) verde; build Next y lint sin errores
+  (1 warning pre-existente en la pagina de radar).
+- OpenAPI re-exportado (contratos incluyen las rutas `/api/v1/notifications/*`)
+  y cliente generado regenerado y commiteado (`api:check` limpio).
+- E2E web de alertas con vistas/acciones y diseno final de template de email
+  siguen diferidos (dependen del flujo completo en un entorno desplegado).
+
 ## Costo de modelo
 
 0 gasto de provider en este incremento (planner deterministico, 0 LLM).

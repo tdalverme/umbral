@@ -3,8 +3,8 @@
 import { type DefaultError, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { agentOpsOverview, confirmLearningProposal, confirmMagicLink, createComparison, createSearchProfile, createSession, decideChatRun, downloadImportQuality, emitProductEvent, expandLearningProposal, getChatSession, getComparisonShortlist, getCurrentSession, getExplanation, getImportQuality, getImportRun, getListingDetail, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, getSearchProfile, listChatSessionMessages, listChatSessions, listDecisionItems, listExplanations, listLearningProposals, listMatches, listSearchProfiles, listUpdateProposals, logoutCurrentSession, type Options, receiveResendEvent, recordFeedback, rejectLearningProposal, requestMagicLink, resumeChatSession, sendChatMessage, setComparisonShortlist, setSearchProfileStatus, submitImportBatch, undoLearningProposal, updateSearchProfile } from '../sdk.gen';
-import type { AgentOpsOverviewData, ConfirmLearningProposalData, ConfirmLearningProposalError, ConfirmLearningProposalResponse, ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, CreateComparisonData, CreateComparisonError, CreateComparisonResponse, CreateSearchProfileData, CreateSearchProfileResponse, CreateSessionData, CreateSessionError, DecideChatRunData, DecideChatRunError, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, EmitProductEventData, EmitProductEventResponse, ExpandLearningProposalData, ExpandLearningProposalError, ExpandLearningProposalResponse, GetChatSessionData, GetChatSessionError, GetComparisonShortlistData, GetComparisonShortlistError, GetComparisonShortlistResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetExplanationData, GetExplanationError, GetExplanationResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetListingDetailData, GetListingDetailError, GetListingDetailResponse, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, GetSearchProfileData, GetSearchProfileError, GetSearchProfileResponse, ListChatSessionMessagesData, ListChatSessionMessagesError, ListChatSessionsData, ListChatSessionsError, ListDecisionItemsData, ListDecisionItemsError, ListDecisionItemsResponse, ListExplanationsData, ListExplanationsError, ListExplanationsResponse, ListLearningProposalsData, ListLearningProposalsError, ListLearningProposalsResponse, ListMatchesData, ListMatchesError, ListMatchesResponse, ListSearchProfilesData, ListSearchProfilesError, ListSearchProfilesResponse, ListUpdateProposalsData, ListUpdateProposalsError, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RecordFeedbackData, RecordFeedbackError, RecordFeedbackResponse, RejectLearningProposalData, RejectLearningProposalError, RejectLearningProposalResponse, RequestMagicLinkData, RequestMagicLinkError, ResumeChatSessionData, ResumeChatSessionError, SendChatMessageData, SendChatMessageError, SetComparisonShortlistData, SetComparisonShortlistError, SetComparisonShortlistResponse, SetSearchProfileStatusData, SetSearchProfileStatusError, SetSearchProfileStatusResponse, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse, UndoLearningProposalData, UndoLearningProposalError, UndoLearningProposalResponse, UpdateSearchProfileData, UpdateSearchProfileResponse } from '../types.gen';
+import { agentOpsOverview, confirmLearningProposal, confirmMagicLink, createComparison, createSearchProfile, createSession, decideChatRun, downloadImportQuality, emitProductEvent, expandLearningProposal, getChatSession, getComparisonShortlist, getCurrentSession, getExplanation, getImportQuality, getImportRun, getInboxApiV1NotificationsInboxGet, getListingDetail, getPreferencesApiV1NotificationsPreferencesGet, getQuarantineRecord, getRuntimeHealth, getRuntimeReadiness, getRuntimeVersion, getSearchProfile, listChatSessionMessages, listChatSessions, listDecisionItems, listExplanations, listLearningProposals, listMatches, listSearchProfiles, listUpdateProposals, logoutCurrentSession, type Options, patchInboxApiV1NotificationsInboxDecisionIdPatch, putPreferencesApiV1NotificationsPreferencesPut, receiveResendEvent, recordFeedback, rejectLearningProposal, requestMagicLink, resumeChatSession, sendChatMessage, setComparisonShortlist, setSearchProfileStatus, submitImportBatch, undoLearningProposal, unsubscribeApiV1NotificationsUnsubscribePost, updateSearchProfile } from '../sdk.gen';
+import type { AgentOpsOverviewData, ConfirmLearningProposalData, ConfirmLearningProposalError, ConfirmLearningProposalResponse, ConfirmMagicLinkData, ConfirmMagicLinkError, ConfirmMagicLinkResponse, CreateComparisonData, CreateComparisonError, CreateComparisonResponse, CreateSearchProfileData, CreateSearchProfileResponse, CreateSessionData, CreateSessionError, DecideChatRunData, DecideChatRunError, DownloadImportQualityData, DownloadImportQualityError, DownloadImportQualityResponse, EmitProductEventData, EmitProductEventResponse, ExpandLearningProposalData, ExpandLearningProposalError, ExpandLearningProposalResponse, GetChatSessionData, GetChatSessionError, GetComparisonShortlistData, GetComparisonShortlistError, GetComparisonShortlistResponse, GetCurrentSessionData, GetCurrentSessionError, GetCurrentSessionResponse, GetExplanationData, GetExplanationError, GetExplanationResponse, GetImportQualityData, GetImportQualityError, GetImportQualityResponse, GetImportRunData, GetImportRunError, GetImportRunResponse, GetInboxApiV1NotificationsInboxGetData, GetInboxApiV1NotificationsInboxGetError, GetListingDetailData, GetListingDetailError, GetListingDetailResponse, GetPreferencesApiV1NotificationsPreferencesGetData, GetQuarantineRecordData, GetQuarantineRecordError, GetQuarantineRecordResponse, GetRuntimeHealthData, GetRuntimeHealthResponse, GetRuntimeReadinessData, GetRuntimeReadinessError, GetRuntimeReadinessResponse, GetRuntimeVersionData, GetRuntimeVersionError, GetRuntimeVersionResponse, GetSearchProfileData, GetSearchProfileError, GetSearchProfileResponse, ListChatSessionMessagesData, ListChatSessionMessagesError, ListChatSessionsData, ListChatSessionsError, ListDecisionItemsData, ListDecisionItemsError, ListDecisionItemsResponse, ListExplanationsData, ListExplanationsError, ListExplanationsResponse, ListLearningProposalsData, ListLearningProposalsError, ListLearningProposalsResponse, ListMatchesData, ListMatchesError, ListMatchesResponse, ListSearchProfilesData, ListSearchProfilesError, ListSearchProfilesResponse, ListUpdateProposalsData, ListUpdateProposalsError, LogoutCurrentSessionData, LogoutCurrentSessionError, LogoutCurrentSessionResponse, PatchInboxApiV1NotificationsInboxDecisionIdPatchData, PatchInboxApiV1NotificationsInboxDecisionIdPatchError, PutPreferencesApiV1NotificationsPreferencesPutData, PutPreferencesApiV1NotificationsPreferencesPutError, ReceiveResendEventData, ReceiveResendEventError, ReceiveResendEventResponse, RecordFeedbackData, RecordFeedbackError, RecordFeedbackResponse, RejectLearningProposalData, RejectLearningProposalError, RejectLearningProposalResponse, RequestMagicLinkData, RequestMagicLinkError, ResumeChatSessionData, ResumeChatSessionError, SendChatMessageData, SendChatMessageError, SetComparisonShortlistData, SetComparisonShortlistError, SetComparisonShortlistResponse, SetSearchProfileStatusData, SetSearchProfileStatusError, SetSearchProfileStatusResponse, SubmitImportBatchData, SubmitImportBatchError, SubmitImportBatchResponse, UndoLearningProposalData, UndoLearningProposalError, UndoLearningProposalResponse, UnsubscribeApiV1NotificationsUnsubscribePostData, UnsubscribeApiV1NotificationsUnsubscribePostError, UnsubscribeApiV1NotificationsUnsubscribePostResponse, UpdateSearchProfileData, UpdateSearchProfileResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -371,6 +371,93 @@ export const getListingDetailOptions = (options?: Options<GetListingDetailData>)
     },
     queryKey: getListingDetailQueryKey(options)
 });
+
+export const getInboxApiV1NotificationsInboxGetQueryKey = (options?: Options<GetInboxApiV1NotificationsInboxGetData>) => createQueryKey('getInboxApiV1NotificationsInboxGet', options);
+
+/**
+ * Get Inbox
+ */
+export const getInboxApiV1NotificationsInboxGetOptions = (options?: Options<GetInboxApiV1NotificationsInboxGetData>) => queryOptions<unknown, GetInboxApiV1NotificationsInboxGetError, unknown, ReturnType<typeof getInboxApiV1NotificationsInboxGetQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getInboxApiV1NotificationsInboxGet({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getInboxApiV1NotificationsInboxGetQueryKey(options)
+});
+
+/**
+ * Patch Inbox
+ */
+export const patchInboxApiV1NotificationsInboxDecisionIdPatchMutation = (options?: Partial<Options<PatchInboxApiV1NotificationsInboxDecisionIdPatchData>>): UseMutationOptions<unknown, PatchInboxApiV1NotificationsInboxDecisionIdPatchError, Options<PatchInboxApiV1NotificationsInboxDecisionIdPatchData>> => {
+    const mutationOptions: UseMutationOptions<unknown, PatchInboxApiV1NotificationsInboxDecisionIdPatchError, Options<PatchInboxApiV1NotificationsInboxDecisionIdPatchData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await patchInboxApiV1NotificationsInboxDecisionIdPatch({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const getPreferencesApiV1NotificationsPreferencesGetQueryKey = (options?: Options<GetPreferencesApiV1NotificationsPreferencesGetData>) => createQueryKey('getPreferencesApiV1NotificationsPreferencesGet', options);
+
+/**
+ * Get Preferences
+ */
+export const getPreferencesApiV1NotificationsPreferencesGetOptions = (options?: Options<GetPreferencesApiV1NotificationsPreferencesGetData>) => queryOptions<unknown, DefaultError, unknown, ReturnType<typeof getPreferencesApiV1NotificationsPreferencesGetQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPreferencesApiV1NotificationsPreferencesGet({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPreferencesApiV1NotificationsPreferencesGetQueryKey(options)
+});
+
+/**
+ * Put Preferences
+ */
+export const putPreferencesApiV1NotificationsPreferencesPutMutation = (options?: Partial<Options<PutPreferencesApiV1NotificationsPreferencesPutData>>): UseMutationOptions<unknown, PutPreferencesApiV1NotificationsPreferencesPutError, Options<PutPreferencesApiV1NotificationsPreferencesPutData>> => {
+    const mutationOptions: UseMutationOptions<unknown, PutPreferencesApiV1NotificationsPreferencesPutError, Options<PutPreferencesApiV1NotificationsPreferencesPutData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await putPreferencesApiV1NotificationsPreferencesPut({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Unsubscribe
+ */
+export const unsubscribeApiV1NotificationsUnsubscribePostMutation = (options?: Partial<Options<UnsubscribeApiV1NotificationsUnsubscribePostData>>): UseMutationOptions<UnsubscribeApiV1NotificationsUnsubscribePostResponse, UnsubscribeApiV1NotificationsUnsubscribePostError, Options<UnsubscribeApiV1NotificationsUnsubscribePostData>> => {
+    const mutationOptions: UseMutationOptions<UnsubscribeApiV1NotificationsUnsubscribePostResponse, UnsubscribeApiV1NotificationsUnsubscribePostError, Options<UnsubscribeApiV1NotificationsUnsubscribePostData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await unsubscribeApiV1NotificationsUnsubscribePost({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
 
 /**
  * Emit Product Event

@@ -496,6 +496,16 @@ export type Health = {
 };
 
 /**
+ * InboxMarkReadBody
+ */
+export type InboxMarkReadBody = {
+    /**
+     * Read
+     */
+    read: boolean;
+};
+
+/**
  * KnownChangeModel
  */
 export type KnownChangeModel = {
@@ -710,6 +720,48 @@ export type MatchesResponse = {
      * Search Profile Id
      */
     search_profile_id: string;
+};
+
+/**
+ * PreferencesBody
+ */
+export type PreferencesBody = {
+    /**
+     * Digest Enabled
+     */
+    digest_enabled?: boolean;
+    /**
+     * Digest Local Hour
+     */
+    digest_local_hour?: number;
+    /**
+     * Email Enabled
+     */
+    email_enabled?: boolean;
+    /**
+     * Inbox Enabled
+     */
+    inbox_enabled?: boolean;
+    /**
+     * Quiet Hours End
+     */
+    quiet_hours_end?: string;
+    /**
+     * Quiet Hours Start
+     */
+    quiet_hours_start?: string;
+    /**
+     * Score Threshold
+     */
+    score_threshold?: number;
+    /**
+     * State
+     */
+    state?: string;
+    /**
+     * Timezone
+     */
+    timezone?: string;
 };
 
 /**
@@ -1236,6 +1288,16 @@ export type StatusRequest = {
      * Status
      */
     status: 'active' | 'paused' | 'archived';
+};
+
+/**
+ * UnsubscribeBody
+ */
+export type UnsubscribeBody = {
+    /**
+     * Token
+     */
+    token: string;
 };
 
 /**
@@ -2104,6 +2166,144 @@ export type GetListingDetailResponses = {
 };
 
 export type GetListingDetailResponse = GetListingDetailResponses[keyof GetListingDetailResponses];
+
+export type GetInboxApiV1NotificationsInboxGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/inbox';
+};
+
+export type GetInboxApiV1NotificationsInboxGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetInboxApiV1NotificationsInboxGetError = GetInboxApiV1NotificationsInboxGetErrors[keyof GetInboxApiV1NotificationsInboxGetErrors];
+
+export type GetInboxApiV1NotificationsInboxGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type PatchInboxApiV1NotificationsInboxDecisionIdPatchData = {
+    body: InboxMarkReadBody;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/inbox/{decision_id}';
+};
+
+export type PatchInboxApiV1NotificationsInboxDecisionIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchInboxApiV1NotificationsInboxDecisionIdPatchError = PatchInboxApiV1NotificationsInboxDecisionIdPatchErrors[keyof PatchInboxApiV1NotificationsInboxDecisionIdPatchErrors];
+
+export type PatchInboxApiV1NotificationsInboxDecisionIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type GetPreferencesApiV1NotificationsPreferencesGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/preferences';
+};
+
+export type GetPreferencesApiV1NotificationsPreferencesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type PutPreferencesApiV1NotificationsPreferencesPutData = {
+    body: PreferencesBody;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/preferences';
+};
+
+export type PutPreferencesApiV1NotificationsPreferencesPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutPreferencesApiV1NotificationsPreferencesPutError = PutPreferencesApiV1NotificationsPreferencesPutErrors[keyof PutPreferencesApiV1NotificationsPreferencesPutErrors];
+
+export type PutPreferencesApiV1NotificationsPreferencesPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type UnsubscribeApiV1NotificationsUnsubscribePostData = {
+    body: UnsubscribeBody;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/unsubscribe';
+};
+
+export type UnsubscribeApiV1NotificationsUnsubscribePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UnsubscribeApiV1NotificationsUnsubscribePostError = UnsubscribeApiV1NotificationsUnsubscribePostErrors[keyof UnsubscribeApiV1NotificationsUnsubscribePostErrors];
+
+export type UnsubscribeApiV1NotificationsUnsubscribePostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type UnsubscribeApiV1NotificationsUnsubscribePostResponse = UnsubscribeApiV1NotificationsUnsubscribePostResponses[keyof UnsubscribeApiV1NotificationsUnsubscribePostResponses];
 
 export type EmitProductEventData = {
     body: ProductEventRequest;
