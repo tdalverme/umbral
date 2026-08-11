@@ -14,7 +14,10 @@ def main() -> None:
         with connection.cursor() as cursor:
             cursor.execute("select version_num from alembic_version")
             revision = cursor.fetchone()[0]
-            cursor.execute("select extname from pg_extension where extname in ('postgis', 'vector')")
+            cursor.execute(
+                "select extname from pg_extension "
+                "where extname in ('postgis', 'vector')"
+            )
             extensions = sorted(row[0] for row in cursor.fetchall())
     print(json.dumps({"revision": revision, "extensions": extensions}))
 

@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4
+from typing import cast
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -62,7 +63,7 @@ def notification_seed(notification_backend):
     from tests.integration.radar.conftest import seed_silver_listings, seed_user
 
     user = seed_user(factory)
-    profile = seed_profile(factory, user)
+    profile = seed_profile(factory, cast(UUID, user))
     seed_silver_listings(factory, count=1)
     with factory() as session:
         listing_id = session.execute(

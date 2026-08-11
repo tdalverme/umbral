@@ -6,13 +6,11 @@ from umbral.infrastructure.db.models.agent import (
     AgentModelCall,
     AgentNodeRun,
 )
-from umbral.infrastructure.db.models.agent_evals import AgentEvalCaseResult, AgentEvalSuite
-from umbral.infrastructure.db.models.chat import ChatMessage, ChatSession
-from umbral.infrastructure.db.models.notifications import (
-    NotificationDecisionModel,
-    NotificationInboxItemModel,
-    NotificationPreferencesModel,
+from umbral.infrastructure.db.models.agent_evals import (
+    AgentEvalCaseResult,
+    AgentEvalSuite,
 )
+from umbral.infrastructure.db.models.chat import ChatMessage, ChatSession
 from umbral.infrastructure.db.models.criteria import (
     Concept,
     ConceptVersion,
@@ -51,6 +49,11 @@ from umbral.infrastructure.db.models.jobs import (
     JobExecution,
     JobOutboxMessage,
     JobSchedule,
+)
+from umbral.infrastructure.db.models.notifications import (
+    NotificationDecisionModel,
+    NotificationInboxItemModel,
+    NotificationPreferencesModel,
 )
 from umbral.infrastructure.db.models.objects import StoredObject, StoredObjectVersion
 from umbral.infrastructure.db.models.radar import (
