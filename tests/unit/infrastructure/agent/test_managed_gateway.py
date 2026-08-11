@@ -7,6 +7,14 @@ import httpx
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
 
 _REPLY_SCHEMA = {"reply_text": {"kind": "string"}, "refs": {"kind": "list"}}
+_INTENT_SCHEMA = {
+    "intent": "string",
+    "parameters": [{"key": "string", "value": "string", "confidence": "number"}],
+    "high_impact_missing": ["string"],
+    "contradictions": [
+        {"key": "string", "current_value": "string", "requested": "string"}
+    ],
+}
 _OK_BODY = {
     "content": {"reply_text": "hola", "refs": []},
     "usage": {"input_tokens": 3, "output_tokens": 5, "total_tokens": 8},
@@ -44,6 +52,57 @@ def test_success_returns_validated_content_and_usage() -> None:
     assert result.content == {"reply_text": "hola", "refs": []}
     assert result.total_tokens == 8
     assert result.error_code is None
+
+
+def test_intent_shaped_output_is_accepted() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "content": {
+                    "intent": "consulta",
+                    "parameters": [],
+                    "high_impact_missing": [],
+                    "contradictions": [],
+                },
+                "usage": {"input_tokens": 3, "output_tokens": 5, "total_tokens": 8},
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    gateway = _gateway(transport)
+    result = gateway.generate_structured(
+        messages=({"role": "user", "content": "hola"},),
+        schema=_INTENT_SCHEMA,
+        schema_version="intent-v3",
+        prompt_version="agent-intent-v1",
+        model_version="m1",
+    )
+    assert result.status == "success"
+    expected = {
+        "intent": "consulta",
+        "parameters": [],
+        "high_impact_missing": [],
+        "contradictions": [],
+    }
+    assert result.content == expected
+    assert result.error_code is None
+
+
+def test_intent_shaped_empty_content_is_rejected() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"content": {}, "usage": {}})
+
+    gateway = _gateway(httpx.MockTransport(handler), max_retries=1)
+    result = gateway.generate_structured(
+        messages=({"role": "user", "content": "hola"},),
+        schema=_INTENT_SCHEMA,
+        schema_version="intent-v3",
+        prompt_version="agent-intent-v1",
+        model_version="m1",
+    )
+    assert result.status == "invalid_output"
+    assert result.error_code == "agent.invalid_output"
 
 
 def test_invalid_output_is_rejected_after_bounded_retries() -> None:

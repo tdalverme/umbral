@@ -1,0 +1,63 @@
+{
+  "contract_version": "1",
+  "registry_version": "conversation-context-v1",
+  "contexts": [
+    {
+      "case_id": "conversation-007",
+      "entity": "listing",
+      "id": "10000000-0000-0000-0000-000000000007"
+    },
+    {
+      "case_id": "conversation-008",
+      "entity": "listing",
+      "id": "10000000-0000-0000-0000-000000000008"
+    },
+    {
+      "case_id": "conversation-009",
+      "entity": "listing",
+      "id": "10000000-0000-0000-0000-000000000009"
+    },
+    {
+      "case_id": "conversation-010",
+      "entity": "comparison",
+      "id": "20000000-0000-0000-0000-000000000010",
+      "listing_ids": [
+        "10000000-0000-0000-0000-000000000010",
+        "10000000-0000-0000-0000-000000000011"
+      ]
+    },
+    {
+      "case_id": "conversation-011",
+      "entity": "comparison",
+      "id": "20000000-0000-0000-0000-000000000011",
+      "listing_ids": [
+        "10000000-0000-0000-0000-000000000012",
+        "10000000-0000-0000-0000-000000000013"
+      ]
+    },
+    {
+      "case_id": "conversation-012",
+      "entity": "comparison",
+      "id": "20000000-0000-0000-0000-000000000012",
+      "listing_ids": [
+        "10000000-0000-0000-0000-000000000014",
+        "10000000-0000-0000-0000-000000000015"
+      ]
+    },
+    {
+      "case_id": "conversation-013",
+      "entity": "listing",
+      "id": "10000000-0000-0000-0000-000000000013"
+    },
+    {
+      "case_id": "conversation-014",
+      "entity": "listing",
+      "id": "10000000-0000-0000-0000-000000000014"
+    },
+    {
+      "case_id": "conversation-015",
+      "entity": "listing",
+      "id": "10000000-0000-0000-0000-000000000015"
+    }
+  ]
+}

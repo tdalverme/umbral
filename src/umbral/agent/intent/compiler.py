@@ -14,6 +14,71 @@ from umbral.agent.intent.contracts import (
 )
 from umbral.application.agent.ports import ModelGateway
 
+_INTENT_EXAMPLES: Mapping[str, tuple[str, ...]] = {
+    "consulta": (
+        "que criterios tengo?",
+        "por que me recomendaste este depto?",
+        "mostrame los matches de mi radar",
+        "quiero empezar a buscar un depto en Palermo",
+        "quiero ver deptos en Palermo",
+        "empecemos: mostrame opciones",
+    ),
+    "refinamiento": (
+        "aumenta el presupuesto",
+        "baja el presupuesto a la mitad",
+        "quiero vivir en una zona linda",
+        "cambia el radio de busqueda",
+        "no me vuelvas a mostrar cosas de ese barrio",
+    ),
+    "comparacion": (
+        "compara estos dos deptos que guarde",
+        "cual es mejor, el de Cabrera o el de Gorriti?",
+        "compara los dos que tengo en la lista",
+    ),
+    "feedback": (
+        "este depto no me gusta",
+        "me encanto este depto",
+        "guarda este, me interesa",
+    ),
+    "fuera_de_alcance": (
+        "contame un chiste de programacion",
+        "borra mi cuenta y todos mis datos",
+        "crea un radar nuevo desde cero",
+        "hace vos el ranking y decime cual es el mejor de todos",
+        "quien gano el mundial?",
+    ),
+}
+
+_CANONICAL_KEYS: Mapping[str, str] = {
+    "budget": "budget",
+    "presupuesto": "budget",
+    "precio": "budget",
+    "plata": "budget",
+    "dinero": "budget",
+    "zona": "zona",
+    "barrio": "zona",
+    "ubicacion": "zona",
+    "lugar": "zona",
+    "hard_filters": "hard_filters",
+    "hardfilters": "hard_filters",
+    "filtros": "hard_filters",
+    "filtros_duros": "hard_filters",
+    "radio": "radio",
+    "radio_de_busqueda": "radio",
+    "ambientes": "ambientes",
+    "habitaciones": "ambientes",
+    "cuartos": "ambientes",
+    "rooms": "ambientes",
+    "superficie": "superficie",
+    "metros": "superficie",
+    "metros_cuadrados": "superficie",
+    "m2": "superficie",
+}
+
+
+def _canonical_key(key: str) -> str:
+    return _CANONICAL_KEYS.get(key.strip().lower(), key.strip().lower())
+
 
 class IntentCompiler:
     """Classifies a message into exactly one intent and extracts parameters.
@@ -61,9 +126,47 @@ class IntentCompiler:
                     ),
                 }
             )
+        prompt_schema = dict(self.contract.output_schema)
+        prompt_schema["_intents"] = [
+            {
+                "name": declaration.name,
+                "description": declaration.description,
+                "examples": _INTENT_EXAMPLES.get(declaration.name, []),
+            }
+            for declaration in self.contract.intents
+        ]
+        prompt_schema["parameters"] = {
+            "kind": "list",
+            "item": {
+                "key": "string",
+                "value": "string",
+                "confidence": "number",
+            },
+            "description": (
+                "Parametros del mensaje con claves canonicas "
+                "(budget, zona, ambientes, superficie, hard_filters, radio u "
+                "otra relevante del dominio), value en texto plano y "
+                "confidence entre 0 y 1. Ejemplos de extraccion: "
+                "'Subi el presupuesto a 900' -> [budget=900, confianza alta]; "
+                "'Quiero 2 ambientes en Palermo' -> [ambientes=2, zona=Palermo]."
+            ),
+        }
+        prompt_schema["high_impact_missing"] = {
+            "kind": "list",
+            "item": "string",
+            "description": (
+                "Solo claves canonicas de alto impacto "
+                "(budget, zona, hard_filters, radio) que falten y sean "
+                "necesarias para el cambio pedido; vacio en consultas de "
+                "solo lectura. Nunca claves inventadas. Para refinamiento: "
+                "'Aumenta el presupuesto' (sin valor nuevo) -> [budget]; "
+                "'Quiero vivir en una zona linda' (zona vaga) -> [zona]; "
+                "'Subi el presupuesto a 900' (valor concreto) -> []."
+            ),
+        }
         result = self.gateway.generate_structured(
             messages=tuple(messages),
-            schema=self.contract.output_schema,
+            schema=prompt_schema,
             schema_version=self.contract.schema_version,
             prompt_version=self.prompt_version,
             model_version=self.model_version,
@@ -79,7 +182,7 @@ class IntentCompiler:
         raw_contradictions = raw.get("contradictions")
         parameters = tuple(
             IntentParameter(
-                key=_string(item, "key"),
+                key=_canonical_key(_string(item, "key")),
                 value=_string(item, "value"),
                 confidence=_number(item.get("confidence"), 0.0),
             )
@@ -87,7 +190,7 @@ class IntentCompiler:
             if isinstance(item, Mapping) and "key" in item and "value" in item
         )
         missing = tuple(
-            str(item)
+            _canonical_key(item)
             for item in (raw_missing if isinstance(raw_missing, list) else [])
             if isinstance(item, str)
         )

@@ -17,9 +17,31 @@
       "justification": "Release inicial del graph v3 (H4.3): fija las versiones de prompts, modelo y schemas sobre las que se corren los evals de linea base.",
       "affected_case_ids": [],
       "activation": {
-        "status": "active",
+        "status": "reverted",
         "approved_by": null,
         "approval_evidence": null,
+        "reverted_reason": "superseded by graph-release-002 (modelo real gpt-4.1-mini, ADR 0001)"
+      },
+      "date": "2026-08-10"
+    },
+    {
+      "id": "graph-release-002",
+      "components": {
+        "prompt_versions": ["agent-intent-v1", "agent-reply-v2"],
+        "model_version": "gpt-4.1-mini",
+        "state_schema_version": "chat-state-v3",
+        "topology_version": "chat-topology-v3",
+        "intent_schema_version": "intent-schema-v3",
+        "price_table_version": "price-table-v1",
+        "touches_prompts_or_model": true
+      },
+      "owner": "team-agent",
+      "justification": "Primera release con el modelo real del endpoint gestionado (ADR 0001): OpenAI gpt-4.1-mini via el wrapper del managed model gateway. La eleccion concreta es parametro de release evaluable y revertible; la evidencia del run de evals reales se registra en approval_evidence.",
+      "affected_case_ids": [],
+      "activation": {
+        "status": "active",
+        "approved_by": "operator",
+        "approval_evidence": "ADR 0001 (endpoint gestionado propio) + decision 2026-08-10 de usar gpt-4.1-mini; resumen del run real en docs/runbooks/evidence/agent-model-release-002.md",
         "reverted_reason": null
       },
       "date": "2026-08-10"

@@ -32,6 +32,7 @@ from umbral.application.agent.tools.ports import ProposalDecisionGateway
 from umbral.application.agent_evals.contracts import (
     CaseTrace,
     GoldenConversationCase,
+    GraphRelease,
     ModelCallCostRecord,
     RecordedToolCall,
 )
@@ -66,8 +67,16 @@ _tick = count()
 
 _REPLY_SCHEMA: Mapping[str, object] = {
     "reply_text": {"kind": "string", "min_length": 1, "max_length": 2000},
-    "refs": {"kind": "list"},
-    "tool_calls": {"kind": "list", "max_items": 5},
+    "refs": {
+        "kind": "list",
+        "item": {"entity": "string", "id": "string"},
+        "max_items": 10,
+    },
+    "tool_calls": {
+        "kind": "list",
+        "item": {"tool": "string", "args": "object"},
+        "max_items": 5,
+    },
 }
 
 _INTENT_TOOL_BY_FAMILY: Mapping[str, str] = {
@@ -148,7 +157,21 @@ def default_tool_implementations() -> Mapping[str, ToolImplementation]:
     def get_search_profile(
         ctx: ToolRunContext, args: Mapping[str, object]
     ) -> Mapping[str, object]:
-        return {"profile_id": str(ctx.search_profile_id), "criteria": []}
+        return {
+            "profile_id": str(ctx.search_profile_id),
+            "state": "active",
+            "snapshot": {
+                "operation": "rental",
+                "zones": ["Palermo"],
+                "budget_max": 900000,
+                "min_rooms": 2,
+            },
+            "criteria": [
+                {"key": "budget_max", "value": 900000},
+                {"key": "zona", "value": "Palermo"},
+                {"key": "min_rooms", "value": 2},
+            ],
+        }
 
     def find_matches(
         ctx: ToolRunContext, args: Mapping[str, object]
@@ -187,7 +210,12 @@ def default_tool_implementations() -> Mapping[str, ToolImplementation]:
     def propose_search_profile_update(
         ctx: ToolRunContext, args: Mapping[str, object]
     ) -> Mapping[str, object]:
-        raise AssertionError("eval cases never propose")
+        return {
+            "proposal_id": str(_uuid.uuid4()),
+            "state": "pending",
+            "diff": {"change": dict(args)},
+            "impact": {"recompute": True},
+        }
 
     def apply_search_profile_update(
         ctx: ToolRunContext, args: Mapping[str, object]
@@ -274,6 +302,7 @@ class PostgresEvalCaseExecutor:
         seed_profile: Callable[[SessionFactory, UUID], object],
         tool_implementations: Mapping[str, ToolImplementation] | None = None,
         gateway_factory: Callable[[GoldenConversationCase], object] | None = None,
+        contexts: Mapping[str, Mapping[str, object]] | None = None,
     ) -> None:
         self.factory = factory
         self.url = url
@@ -283,9 +312,14 @@ class PostgresEvalCaseExecutor:
         self.gateway_factory = gateway_factory or _scripted_gateway
         self.seed_user = seed_user
         self.seed_profile = seed_profile
+        self.contexts = contexts or {}
 
-    def execute(self, *, case: GoldenConversationCase, release: object) -> CaseTrace:
-        stack = self._build_stack(case)
+    def execute(
+        self, *, case: GoldenConversationCase, release: GraphRelease
+    ) -> CaseTrace:
+        stack = self._build_stack(
+            case, model_version=release.components.model_version
+        )
         user_id = self.seed_user(self.factory)
         profile = self.seed_profile(self.factory, user_id)
         session = stack.chat.create_session(
@@ -293,9 +327,17 @@ class PostgresEvalCaseExecutor:
             search_profile_id=cast("UUID", getattr(profile, "profile_id")),
             correlation_id=uuid4(),
         )
-        return _run_case(stack=stack, case=case, user_id=user_id, session=session)
+        return _run_case(
+            stack=stack,
+            case=case,
+            user_id=user_id,
+            session=session,
+            user_context=self.contexts.get(case.id),
+        )
 
-    def _build_stack(self, case: GoldenConversationCase) -> EvalStack:
+    def _build_stack(
+        self, case: GoldenConversationCase, *, model_version: str
+    ) -> EvalStack:
         chat = ChatService(
             sessions=SqlAlchemyChatSessionRepository(self.factory),
             messages=SqlAlchemyChatMessageRepository(self.factory),
@@ -316,7 +358,7 @@ class PostgresEvalCaseExecutor:
             gateway=cast("ModelGateway", gateway),
             contract=load_intent_contract(),
             prompt_version="agent-intent-v1",
-            model_version="provider-x-model-y",
+            model_version=model_version,
         )
         executor = ToolExecutor(
             registry=ToolRegistry(load_tool_contract),
@@ -335,7 +377,7 @@ class PostgresEvalCaseExecutor:
             intent_compiler=intent_compiler,
             decision_gateway=cast(ProposalDecisionGateway, _NoOpDecisionGateway()),
             clock=_advancing_clock,
-            model_version="provider-x-model-y",
+            model_version=model_version,
             prompt_version="agent-reply-v2",
             schema_version="reply-v3",
             reply_schema=_REPLY_SCHEMA,
@@ -364,6 +406,7 @@ def _run_case(
     case: GoldenConversationCase,
     user_id: UUID,
     session: ChatSession,
+    user_context: Mapping[str, object] | None = None,
 ) -> CaseTrace:
     final_intent: str | None = None
     clarification_pending = False
@@ -376,6 +419,7 @@ def _run_case(
             session_id=session.session_id,
             text=turn,
             correlation_id=uuid4(),
+            context=user_context,
         )
         run_id = outcome.run_id
         run_status = outcome.status
@@ -452,4 +496,30 @@ def _run_case(
         model_calls=tuple(model_calls),
         latency_ms=latency,
         refs=tuple(refs),
+        allowed_ref_ids=_allowed_ref_ids(user_context, session.search_profile_id),
     )
+
+
+def _allowed_ref_ids(
+    user_context: Mapping[str, object] | None,
+    profile_id: UUID,
+) -> frozenset[tuple[str, str]]:
+    """Ids the reply may legitimately cite: declared context objects plus the
+    deterministic ids the eval tool stubs return for this profile."""
+    import uuid as _uuid
+
+    allowed: set[tuple[str, str]] = set()
+    if isinstance(user_context, Mapping):
+        entity = str(user_context.get("entity", ""))
+        context_id = user_context.get("id")
+        if entity == "listing" and isinstance(context_id, str):
+            allowed.add(("listing", context_id))
+        listing_ids = user_context.get("listing_ids")
+        if isinstance(listing_ids, list):
+            for listing_id in listing_ids:
+                if isinstance(listing_id, str):
+                    allowed.add(("listing", listing_id))
+    stub_listing = str(_uuid.uuid5(_uuid.NAMESPACE_OID, f"{profile_id}"))
+    allowed.add(("listing", stub_listing))
+    allowed.add(("evidence_ref", str(_uuid.uuid5(_uuid.NAMESPACE_OID, "evidence-1"))))
+    return frozenset(allowed)

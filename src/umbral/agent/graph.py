@@ -9,6 +9,7 @@ through the ``context.effects_applied`` ledger so a resume never repeats them
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -734,23 +735,139 @@ def build_topology_v3(
         run_id = _uuid(context, "run_id")
         node_started = deps.clock()
         errors = list(state.get("errors") or [])
-        messages: list[Mapping[str, object]] = [_user_message(context)]
+        messages: list[Mapping[str, object]] = []
+        context_lines: list[str] = []
+        user_context = context.get("user_message_context")
+        if isinstance(user_context, Mapping):
+            entity = str(user_context.get("entity", ""))
+            if entity == "listing":
+                context_lines.append(
+                    f"El usuario esta viendo el listing {user_context.get('id')}."
+                )
+            elif entity == "comparison":
+                listing_ids = user_context.get("listing_ids")
+                if isinstance(listing_ids, list) and listing_ids:
+                    context_lines.append(
+                        "El usuario esta comparando los listings "
+                        + ", ".join(str(item) for item in listing_ids)
+                        + "."
+                    )
+                else:
+                    context_lines.append(
+                        f"El usuario tiene una comparacion abierta "
+                        f"({user_context.get('id')})."
+                    )
         intent_data = state.get("intent")
+        tool_specs: list[dict[str, object]] = []
         if isinstance(intent_data, Mapping):
+            allowed = intent_data.get("allowed_tools")
+            tool_lines: list[str] = []
+            if isinstance(allowed, list):
+                for raw_name in allowed:
+                    name = str(raw_name)
+                    try:
+                        spec = deps.tool_executor.registry.get(name)
+                    except Exception:  # noqa: BLE001 - unknown tool stays listed by name
+                        tool_lines.append(f"- {name}: (contrato no disponible)")
+                        continue
+                    args = spec.input_schema or {}
+                    tool_specs.append(
+                        {
+                            "name": spec.name,
+                            "description": spec.description,
+                            "input_schema": dict(args),
+                        }
+                    )
+                    args_text = (
+                        ", ".join(
+                            f"{key}: {_kind_label(item)}"
+                            for key, item in sorted(args.items())
+                        )
+                        or "ninguno"
+                    )
+                    tool_lines.append(
+                        f"- {name}: {spec.description} (argumentos: {args_text})"
+                    )
             messages.append(
                 {
                     "role": "system",
                     "content": (
                         "Intencion compilada: "
                         + str(intent_data.get("intent", ""))
-                        + ". Responde solo sobre este radar y con las tools "
-                        "permitidas de esa intencion."
+                        + ".\n"
+                        + ("\n".join(context_lines) + "\n" if context_lines else "")
+                        + "Responde solo sobre este radar usando "
+                        "exclusivamente estas tools permitidas:\n"
+                        + "\n".join(tool_lines)
+                        + "\nUsa las tools cuando la respuesta requiera datos "
+                        "del radar; no respondas sobre datos que puedas "
+                        "consultar sin haberlos consultado. Si la consulta "
+                        "pide oportunidades o matches disponibles, ejecuta "
+                        "find_matches antes de responder; si pide la "
+                        "explicacion de un listing, ejecuta explain_match; "
+                        "si pide comparar listings, ejecuta compare_listings. "
+                        "Las tools de lectura se ejecutan directamente sin "
+                        "pedir permiso; no preguntes si quieres mostrar "
+                        "opciones: muestralas. "
+                        "El campo refs del JSON debe citar los ids exactos de "
+                        "listings o criterios devueltos por las tools; nunca "
+                        "inventes ids ni hechos."
                     ),
                 }
             )
+        messages.append(_user_message(context))
         results_context = context.get("tool_results_context")
         if results_context:
-            messages.append({"role": "tool", "content": results_context})
+            results_list = (
+                list(results_context)
+                if isinstance(results_context, list)
+                else []
+            )
+            assistant_calls: list[dict[str, object]] = []
+            for index, item in enumerate(results_list):
+                if not isinstance(item, Mapping):
+                    continue
+                raw_args = item.get("args")
+                args = dict(raw_args) if isinstance(raw_args, Mapping) else {}
+                assistant_calls.append(
+                    {
+                        "id": f"umbral_call_{index}",
+                        "type": "function",
+                        "function": {
+                            "name": str(item.get("tool", "")),
+                            "arguments": json.dumps(args, ensure_ascii=False),
+                        },
+                    }
+                )
+            if assistant_calls:
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "tool_calls": assistant_calls,
+                    }
+                )
+                for index, item in enumerate(results_list):
+                    if not isinstance(item, Mapping):
+                        continue
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": f"umbral_call_{index}",
+                            "content": json.dumps(
+                                item, ensure_ascii=False, default=str
+                            ),
+                        }
+                    )
+            else:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "Resultados de las tools ejecutadas:\n"
+                        + json.dumps(
+                            results_context, ensure_ascii=False, default=str
+                        ),
+                    }
+                )
         try:
             result = deps.gateway.generate_structured(
                 messages=tuple(messages),
@@ -758,6 +875,7 @@ def build_topology_v3(
                 schema_version=deps.schema_version,
                 prompt_version=deps.prompt_version,
                 model_version=deps.model_version,
+                tools=tuple(tool_specs) if tool_specs else None,
             )
         except Exception as exc:  # noqa: BLE001 - unknown provider failure
             _finish_node(
@@ -804,13 +922,14 @@ def build_topology_v3(
                 tool_calls = [
                     dict(item) for item in calls if isinstance(item, Mapping)
                 ]
-            _emit_reply_chunks(
-                run_id=run_id,
-                text=text,
-                words=deps.reply_chunk_words,
-                emit=deps.sinks.emit,
-            )
-            context["generated_reply"] = {"text": text, "refs": ref_list}
+            if text:
+                _emit_reply_chunks(
+                    run_id=run_id,
+                    text=text,
+                    words=deps.reply_chunk_words,
+                    emit=deps.sinks.emit,
+                )
+                context["generated_reply"] = {"text": text, "refs": ref_list}
             context["token_usage"] = _accumulate_usage(usage, result)
         else:
             errors.append({"code": result.error_code or "agent.generation_failed"})
@@ -864,6 +983,7 @@ def build_topology_v3(
                 results.append(
                     {
                         "tool": name,
+                        "args": args,
                         "status": "error",
                         "result": None,
                         "error_code": violations[0].code,
@@ -884,6 +1004,7 @@ def build_topology_v3(
             results.append(
                 {
                     "tool": name,
+                    "args": args,
                     "status": outcome.status,
                     "result": dict(outcome.result) if outcome.result else None,
                     "error_code": outcome.error_code,
@@ -1166,6 +1287,20 @@ def _payload_from_proposal(proposal: Proposal) -> dict[str, object]:
 
 def _mapping_or_empty(value: object) -> Mapping[str, object]:
     return value if isinstance(value, Mapping) else {}
+
+
+def _kind_label(value: object) -> str:
+    """Render a tool arg kind (plain or enriched v2 entry) for the prompt."""
+    if isinstance(value, Mapping):
+        kind = value.get("kind")
+        if not isinstance(kind, str):
+            return "?"
+        label = kind
+        enum = value.get("enum")
+        if isinstance(enum, list) and enum:
+            label += " (" + ", ".join(str(item) for item in enum) + ")"
+        return label
+    return str(value)
 
 
 _REF_ENTITY_TYPES = frozenset({"listing", "criterion", "evidence_ref", "proposal"})

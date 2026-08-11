@@ -1,9 +1,9 @@
-# mypy: disable-error-code="no-untyped-def,no-untyped-call"
+﻿# mypy: disable-error-code="no-untyped-def,no-untyped-call"
 """Bounded tool loop over the real checkpointer (R-14, T045)."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from uuid import uuid4
 
 from tests.integration.agent.conftest import seed_profile, seed_user
@@ -45,6 +45,7 @@ class _ScriptedGateway:
         schema_version: str,
         prompt_version: str,
         model_version: str,
+        tools: Sequence[Mapping[str, object]] | None = None,
     ) -> ModelResult:
         self.calls.append({"schema_version": schema_version})
         reply = self._replies[min(len(self.calls) - 1, len(self._replies) - 1)]

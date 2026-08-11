@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from umbral.application.agent.contracts import ModelResult
@@ -47,8 +47,9 @@ class ManagedModelGateway:
         schema_version: str,
         prompt_version: str,
         model_version: str,
+        tools: Sequence[Mapping[str, object]] | None = None,
     ) -> ModelResult:
-        payload = {
+        payload: dict[str, object] = {
             "model": self.model,
             "model_version": model_version,
             "prompt_version": prompt_version,
@@ -56,6 +57,8 @@ class ManagedModelGateway:
             "schema": dict(schema),
             "messages": [dict(item) for item in messages],
         }
+        if tools:
+            payload["tools"] = [dict(item) for item in tools]
         for attempt in range(self.max_retries + 1):
             status, body, latency_ms = self._request(payload)
             if status == _STATUS_TIMEOUT:
@@ -88,7 +91,7 @@ class ManagedModelGateway:
                     latency_ms=latency_ms,
                     error_code="provider.http_error",
                 )
-            content = _validated_content(body)
+            content = _validated_content(body, dict(schema))
             if content is not None:
                 raw_usage = body.get("usage", {})
                 usage = raw_usage if isinstance(raw_usage, Mapping) else {}
@@ -156,21 +159,42 @@ class ManagedModelGateway:
         return _STATUS_SUCCESS, body, _elapsed_ms(started)
 
 
-def _validated_content(body: Mapping[str, object]) -> Mapping[str, object] | None:
+def _validated_content(
+    body: Mapping[str, object], schema: Mapping[str, object]
+) -> Mapping[str, object] | None:
     content = body.get("content")
     if not isinstance(content, Mapping):
         return None
-    text = content.get("reply_text")
-    refs = content.get("refs")
-    if not isinstance(text, str) or not (1 <= len(text) <= 2000):
-        return None
-    if not isinstance(refs, list):
-        return None
-    for ref in refs:
-        if not isinstance(ref, Mapping):
+    if "reply_text" in schema:
+        text = content.get("reply_text")
+        refs = content.get("refs")
+        calls = content.get("tool_calls")
+        if not isinstance(text, str) or not (1 <= len(text) <= 2000):
+            has_tools = isinstance(calls, list) and bool(calls)
+            if not (text == "" and has_tools):
+                return None
+        if not isinstance(refs, list):
             return None
-        if not isinstance(ref.get("entity"), str) or not isinstance(ref.get("id"), str):
+        for ref in refs:
+            if not isinstance(ref, Mapping):
+                return None
+            if not isinstance(ref.get("entity"), str) or not isinstance(
+                ref.get("id"), str
+            ):
+                return None
+        if calls is not None and not isinstance(calls, list):
             return None
+        for call in calls if isinstance(calls, list) else []:
+            if not isinstance(call, Mapping):
+                return None
+            if not isinstance(call.get("tool"), str):
+                return None
+        return dict(content)
+    # Non-reply structured output (e.g. intent): the caller validates the shape
+    # against its own contract; here only structural sanity is checked so
+    # malformed provider output still fails with invalid_output and retries.
+    if not content:
+        return None
     return dict(content)
 
 

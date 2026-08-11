@@ -46,6 +46,25 @@ def test_tool_contract_flags_are_correct() -> None:
     assert tools["search_urban_context"].mutating is False
 
 
+def test_tool_contract_v2_enriches_record_feedback_args() -> None:
+    tools = {tool.name: tool for tool in load_tool_contract()}
+    decision = tools["record_feedback"].input_schema["decision"]
+    assert isinstance(decision, dict)
+    assert decision["kind"] == "string"
+    assert decision["enum"] == ["like", "dislike"]
+    assert "idempotency_key" in tools["record_feedback"].input_schema
+
+
+def test_tool_contract_v1_still_parses() -> None:
+    v1 = json.loads(
+        (ROOT / "contracts" / "agent" / "tools" / "tool-contract-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    tools = parse_tool_contract(v1)
+    assert {tool.name for tool in tools} == EXPECTED_TOOLS
+
+
 def test_tool_contract_redaction_reuses_events_forbidden_keys() -> None:
     forbidden = set(EVENTS_REGISTRY["forbidden_keys"])
     for tool in load_tool_contract():

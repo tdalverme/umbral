@@ -43,8 +43,12 @@ def decide(
     max_rounds: int,
 ) -> ClarificationPlan | None:
     """Return a clarification plan when high-impact parameters are ambiguous,
-    missing or contradictory; None otherwise. 0 guessing (FR-006/FR-007)."""
-    if intent == "fuera_de_alcance":
+    missing or contradictory; None otherwise. 0 guessing (FR-006/FR-007).
+
+    Clarifications only interrupt change requests (refinamiento): read-only
+    intents never trigger them, and only canonical high-impact keys count.
+    """
+    if intent != "refinamiento":
         return None
     keys = frozenset(high_impact_keys)
     pending: list[str] = []
@@ -64,7 +68,7 @@ def decide(
             if key not in pending:
                 pending.append(key)
     for key in high_impact_missing:
-        if isinstance(key, str) and key not in pending:
+        if isinstance(key, str) and key in keys and key not in pending:
             pending.append(key)
     if not pending:
         return None

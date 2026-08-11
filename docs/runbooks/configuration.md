@@ -34,3 +34,36 @@ No se copian a preview ni producci\u00f3n.
 En preview, `UMBRAL_RELEASE_ID`, `UMBRAL_RELEASE_DIGEST` y
 `UMBRAL_RELEASE_MANIFEST` (JSON inline) los escribe el pipeline en cada promote;
 ver `provision-railway.md`.
+
+## Endpoint gestionado de modelo (ADR 0001)
+
+El `ManagedModelGateway` cliente (`AGENT_MODEL_PROVIDER=managed`) consume un
+endpoint propio separado del producto: `src/umbral/infrastructure/agent/
+model_gateway/server.py`. Se ejecuta como servicio independiente:
+
+```powershell
+$env:MODEL_GATEWAY_OPENAI_API_KEY = 'sk-...'   # API key del proveedor (OpenAI)
+$env:MODEL_GATEWAY_SHARED_KEY = '...'           # opcional; si se fija, la API debe
+                                                # enviarla como AGENT_MANAGED_API_KEY
+uvicorn umbral.infrastructure.agent.model_gateway.server:app --port 8010
+```
+
+Contrato: `POST /v1/structured` recibe `{model, model_version, prompt_version,
+schema_version, schema, messages}` y responde `{content, usage}`; llama al
+provider con output JSON estructurado y corrige una vez respuestas no JSON.
+
+Variables del agente en Umbral: `AGENT_MODEL_PROVIDER=managed`,
+`AGENT_MANAGED_ENDPOINT=http://127.0.0.1:8010/v1/structured`,
+`AGENT_MANAGED_API_KEY`, `AGENT_MODEL_NAME=gpt-4.1-mini`.
+
+Evals con el proveedor real (opt-in, fuera de CI, requiere Postgres migrado):
+
+```powershell
+.\scripts\run-real-evals.ps1 -CaseLimit 1 -CostCapUsd 1   # smoke
+.\scripts\run-real-evals.ps1 -CostCapUsd 2                # dataset completo
+```
+
+El flow falla con exit code != 0 si cualquier caso no cumple las cinco senales
+deterministas; el resumen por caso se imprime en el JSON de salida. La eleccion
+del modelo concreto es un parametro de release (graph-releases-v1) evaluable y
+revertible.

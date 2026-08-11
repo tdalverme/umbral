@@ -83,6 +83,34 @@ def test_out_of_scope_never_clarifies() -> None:
     assert plan is None
 
 
+def test_read_only_intent_never_clarifies() -> None:
+    plan = decide(
+        intent="consulta",
+        parameters=[],
+        high_impact_missing=["budget", "zona"],
+        contradictions=[],
+        high_impact_keys=_KEYS,
+        min_confidence=_MIN,
+        rounds=0,
+        max_rounds=_MAX,
+    )
+    assert plan is None
+
+
+def test_non_canonical_missing_key_never_clarifies() -> None:
+    plan = decide(
+        intent="refinamiento",
+        parameters=[],
+        high_impact_missing=["presupuesto", "cantidad_habitaciones"],
+        contradictions=[],
+        high_impact_keys=_KEYS,
+        min_confidence=_MIN,
+        rounds=0,
+        max_rounds=_MAX,
+    )
+    assert plan is None
+
+
 def test_rounds_exhausted_renders_refusal() -> None:
     plan = decide(
         intent="refinamiento",

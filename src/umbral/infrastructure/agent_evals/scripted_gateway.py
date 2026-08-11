@@ -48,6 +48,7 @@ class ScriptedModelGateway:
         schema_version: str,
         prompt_version: str,
         model_version: str,
+        tools: Sequence[Mapping[str, object]] | None = None,
     ) -> ModelResult:
         self.calls.append(
             {
@@ -107,13 +108,24 @@ def _refs_from_tool_results(
 ) -> list[dict[str, str]]:
     refs: list[dict[str, str]] = []
     for message in messages:
-        if message.get("role") != "tool":
+        content: str | None = None
+        if message.get("role") == "tool" and isinstance(message.get("content"), str):
+            content = str(message["content"])
+        elif message.get("role") == "user" and isinstance(
+            message.get("content"), str
+        ):
+            if not str(message["content"]).startswith("Resultados de las tools"):
+                continue
+            _, separator, payload = str(message["content"]).partition("\n")
+            if not separator:
+                continue
+            content = payload
+        else:
             continue
-        results = message.get("content")
-        if not isinstance(results, list):
+        if content is None:
             continue
-        for item in results:
-            if not isinstance(item, Mapping) or item.get("status") != "ok":
+        for item in _parse_results(content):
+            if not isinstance(item, Mapping):
                 continue
             result = item.get("result")
             if not isinstance(result, Mapping):
@@ -135,3 +147,17 @@ def _refs_from_tool_results(
                     if isinstance(raw, Mapping) and raw.get("listing_id"):
                         refs.append({"entity": "listing", "id": str(raw["listing_id"])})
     return refs
+
+
+def _parse_results(content: str) -> list[object]:
+    import json
+
+    try:
+        parsed = json.loads(content)
+    except ValueError:
+        return []
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        return [parsed]
+    return []

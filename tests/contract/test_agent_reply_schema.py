@@ -28,19 +28,27 @@ def test_reply_contract_declares_fields_and_versions() -> None:
 
 def test_valid_reply_content_is_accepted() -> None:
     body = {"content": {"reply_text": "ok", "refs": [{"entity": "listing", "id": "x"}]}}
-    content = _validated_content(body)
+    content = _validated_content(body, {"reply_text": {}, "refs": {}})
     assert content is not None
     assert content["reply_text"] == "ok"
 
 
 def test_invalid_reply_content_is_rejected() -> None:
-    assert _validated_content({"content": {}}) is None
-    assert _validated_content({"content": {"reply_text": "", "refs": []}}) is None
-    assert _validated_content({"content": {"reply_text": "x", "refs": "nope"}}) is None
+    reply_schema = {"reply_text": {}, "refs": {}}
+    assert _validated_content({"content": {}}, reply_schema) is None
+    assert (
+        _validated_content({"content": {"reply_text": "", "refs": []}}, reply_schema)
+        is None
+    )
+    assert (
+        _validated_content({"content": {"reply_text": "x", "refs": "nope"}}, reply_schema)
+        is None
+    )
     assert (
         _validated_content(
-            {"content": {"reply_text": "x", "refs": [{"entity": 1, "id": "a"}]}}
+            {"content": {"reply_text": "x", "refs": [{"entity": 1, "id": "a"}]}},
+            reply_schema,
         )
         is None
     )
-    assert _validated_content({}) is None
+    assert _validated_content({}, reply_schema) is None

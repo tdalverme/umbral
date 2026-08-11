@@ -105,15 +105,20 @@ class ToolTimeout(ToolError):
 
 
 def parse_tool_contract(data: Mapping[str, object]) -> list[ToolSpec]:
-    """Parse and validate the machine-checkable tool contract v1.
+    """Parse and validate the machine-checkable tool contract.
 
-    Raises ``ToolContractInvalid`` for structural violations; unknown tools
-    are rejected at runtime by the registry, never silently accepted.
+    Accepts v1 (plain ``{field: kind}`` input schemas) and v2 (enriched
+    ``{field: {kind, description?, enum?}}``). Raises ``ToolContractInvalid``
+    for structural violations; unknown tools are rejected at runtime by the
+    registry, never silently accepted.
     """
 
-    if data.get("registry_version") != "agent-tool-contract-v1":
+    if data.get("registry_version") not in {
+        "agent-tool-contract-v1",
+        "agent-tool-contract-v2",
+    }:
         raise ToolContractInvalid("registry_version")
-    if data.get("contract_version") != "1":
+    if data.get("contract_version") not in {"1", "2"}:
         raise ToolContractInvalid("contract_version")
     raw_tools = data.get("tools")
     if not isinstance(raw_tools, list):

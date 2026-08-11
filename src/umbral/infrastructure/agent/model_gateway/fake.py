@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from umbral.application.agent.contracts import ModelResult
 
@@ -41,6 +41,7 @@ class FakeModelGateway:
         schema_version: str,
         prompt_version: str,
         model_version: str,
+        tools: Sequence[Mapping[str, object]] | None = None,
     ) -> ModelResult:
         self.calls.append(
             {

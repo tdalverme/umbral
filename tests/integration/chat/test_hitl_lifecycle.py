@@ -1,9 +1,9 @@
-# mypy: disable-error-code="no-untyped-def,no-untyped-call"
+﻿# mypy: disable-error-code="no-untyped-def,no-untyped-call"
 """HITL lifecycle through the real graph v3 + runtime (FR-011..FR-016, T024)."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -125,6 +125,7 @@ class _ScriptedGateway:
         schema_version: str,
         prompt_version: str,
         model_version: str,
+        tools: Sequence[Mapping[str, object]] | None = None,
     ) -> ModelResult:
         self.calls.append({"prompt_version": prompt_version})
         if prompt_version == "agent-intent-v1":

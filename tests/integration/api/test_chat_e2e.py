@@ -89,7 +89,14 @@ class _ScriptedGateway:
         self.reply_index = 0
 
     def generate_structured(
-        self, *, messages, schema, schema_version, prompt_version, model_version
+        self,
+        *,
+        messages,
+        schema,
+        schema_version,
+        prompt_version,
+        model_version,
+        tools=None,
     ):
         if prompt_version == "agent-intent-v1":
             content: Mapping[str, object] = {

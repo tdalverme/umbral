@@ -12,7 +12,7 @@ _TOOL_CONTRACT_PATH = (
     / "contracts"
     / "agent"
     / "tools"
-    / "tool-contract-v1.json"
+    / "tool-contract-v2.json"
 )
 
 

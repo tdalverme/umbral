@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -15,6 +14,7 @@ from tests.integration.chat.conftest import seed_profile
 from tests.integration.radar.conftest import seed_user
 from tests.support.containers import ServiceConnection
 
+from umbral.application.agent_evals.context import load_conversation_contexts
 from umbral.application.agent_evals.golden import load_golden_dataset
 from umbral.application.agent_evals.price import load_price_table
 from umbral.application.agent_evals.releases import load_releases
@@ -52,11 +52,24 @@ def eval_context(eval_backend):
         known_case_ids={case.id for case in dataset.cases},
     )
     price_table = load_price_table(CONTRACTS / "price-table-v1.json")
+    contexts = load_conversation_contexts(
+        CONTRACTS / "conversation-context-v1.json",
+        known_case_ids={case.id for case in dataset.cases},
+    )
+    context_map = {
+        case_id: {
+            "entity": context.entity,
+            "id": context.id,
+            "listing_ids": list(context.listing_ids),
+        }
+        for case_id, context in contexts.items()
+    }
     executor = PostgresEvalCaseExecutor(
         factory=factory,
         url=url,
         seed_user=seed_user,
         seed_profile=seed_profile,
+        contexts=context_map,
     )
     return dataclass_holder(factory, url, dataset, releases, price_table, executor)
 

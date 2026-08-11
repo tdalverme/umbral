@@ -247,6 +247,7 @@ class CaseTrace:
     model_calls: tuple[ModelCallCostRecord, ...]
     latency_ms: int
     refs: tuple[Mapping[str, object], ...]
+    allowed_ref_ids: frozenset[tuple[str, str]] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)

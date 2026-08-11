@@ -39,10 +39,10 @@ class ToolRegistry:
 
     def validate_args(self, spec: ToolSpec, args: Mapping[str, object]) -> None:
         expected = spec.input_schema
-        for field, kind in expected.items():
+        for field, raw_kind in expected.items():
             if field not in args:
                 raise ToolArgsInvalid(f"{spec.name}:{field}")
-            _validate_kind(field, kind, args[field])
+            _validate_kind(field, _kind_of(raw_kind), args[field])
         unknown = set(args) - set(expected)
         if unknown:
             raise ToolArgsInvalid(f"{spec.name}:{sorted(unknown)[0]}")
@@ -59,6 +59,16 @@ class ToolRegistry:
             raise ToolContractInvalid("tool.output_limits.forbidden_keys")
         forbidden_set = set(forbidden)
         return _redact_mapping(output, max_items, forbidden_set)
+
+
+def _kind_of(value: object) -> object:
+    """Extract the kind string from a plain or enriched input schema entry."""
+    if isinstance(value, Mapping):
+        kind = value.get("kind")
+        if isinstance(kind, str):
+            return kind
+        return None
+    return value
 
 
 def _validate_kind(field: str, kind: object, value: object) -> None:

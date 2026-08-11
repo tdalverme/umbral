@@ -7,6 +7,11 @@
       "model_version": "provider-x-model-y",
       "price_input_per_1k": 0.0005,
       "price_output_per_1k": 0.0015
+    },
+    {
+      "model_version": "gpt-4.1-mini",
+      "price_input_per_1k": 0.0004,
+      "price_output_per_1k": 0.0016
     }
   ]
 }

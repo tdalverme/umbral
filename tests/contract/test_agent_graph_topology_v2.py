@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
@@ -87,6 +87,7 @@ class _ScriptedGateway:
         schema_version: str,
         prompt_version: str,
         model_version: str,
+        tools: Sequence[Mapping[str, object]] | None = None,
     ) -> ModelResult:
         self.calls.append({"schema_version": schema_version})
         reply = self._replies[min(len(self.calls) - 1, len(self._replies) - 1)]

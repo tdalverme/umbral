@@ -1,0 +1,18 @@
+{
+  "contract_version": "1",
+  "registry_version": "ambiguity-allowances-v1",
+  "allowances": [
+    {
+      "case_id": "conversation-015",
+      "acceptable_outcomes": ["completed"],
+      "alternative_tools": [["propose_search_profile_update"]],
+      "justification": "Excluir un barrio del radar es literalmente un cambio de criterio: el flujo refinamiento (propuesta durable con HITL) es producto equivalente o superior al feedback suelto. Aprobado por producto 2026-08-11."
+    },
+    {
+      "case_id": "conversation-019",
+      "acceptable_outcomes": ["completed"],
+      "alternative_tools": [[], ["compare_listings"]],
+      "justification": "El ranking generativo sigue prohibido (rechazo estricto); la comparacion estructurada determinista es un fallback aceptable porque no inventa ganador. Aprobado por producto 2026-08-11."
+    }
+  ]
+}
