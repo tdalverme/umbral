@@ -10,13 +10,8 @@ from umbral.application.notifications.contracts import NotificationPreferences
 from umbral.application.notifications.delivery_service import (
     NotificationDeliveryService,
 )
-from umbral.application.notifications.inbox_service import InboxService
 from umbral.infrastructure.notifications.email_adapter import (
     RecordingNotificationEmailAdapter,
-)
-from umbral.infrastructure.notifications.repositories import (
-    SqlAlchemyInboxRepository,
-    SqlAlchemyUserEmailReader,
 )
 
 _NOW = datetime(2026, 8, 11, 15, 0, tzinfo=timezone.utc)
@@ -30,7 +25,9 @@ class _EventWriter:
         self.events.append({"event_type": getattr(event, "event_type")})
 
 
-def test_preferences_upsert_bumps_version(notification_repos, notification_seed) -> None:
+def test_preferences_upsert_bumps_version(
+    notification_repos, notification_seed
+) -> None:
     prefs_repo = notification_repos["preferences"]
     user_id = notification_seed["user_id"]
     search_id = notification_seed["search_profile_id"]
