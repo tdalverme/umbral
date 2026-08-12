@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from uuid import uuid4
 
@@ -10,6 +11,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse, Response
 
 from umbral.domain.errors import ApplicationError, InternalRuntimeError
+
+logger = logging.getLogger("umbral.api")
 
 _PROBLEM_BASE_URL = "https://umbral.invalid/problems/"
 
@@ -78,6 +81,16 @@ async def http_error_handler(
 
 
 async def unhandled_error_handler(request: Request, _error: Exception) -> Response:
-    """Hide unexpected exception messages from clients."""
+    """Hide unexpected exception messages from clients but keep the traceback.
 
+    The client only sees the sanitized problem payload; operators get the full
+    traceback in the service logs (observability, constitution V).
+    """
+
+    logger.exception(
+        "unhandled error on %s %s",
+        request.method,
+        request.url.path,
+        exc_info=(type(_error), _error, _error.__traceback__),
+    )
     return problem_response(request, InternalRuntimeError())

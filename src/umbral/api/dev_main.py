@@ -17,7 +17,12 @@ The worker and scheduler run with the standard local settings:
 
 from __future__ import annotations
 
-from umbral.api.dependencies import RuntimeDependencies, _load_release
+from umbral.api.dependencies import (
+    RuntimeDependencies,
+    _build_agent_stack,
+    _build_notifications,
+    _load_release,
+)
 from umbral.api.main import create_app
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.session import SessionProvider
@@ -57,6 +62,10 @@ def _dev_settings() -> Settings:
             "IDENTITY_FINGERPRINT_KEY": "local-dev-fingerprint-key",
             "SESSION_COOKIE_NAME": "umbral_local_session",
             "SESSION_SECURE": "false",
+            "AGENT_MODEL_PROVIDER": "managed",
+            "AGENT_MANAGED_ENDPOINT": "http://127.0.0.1:8010/v1/structured",
+            "AGENT_MANAGED_API_KEY": "umbral-local-gateway",
+            "AGENT_MODEL_NAME": "gpt-4.1-mini",
         }
     )
 
@@ -81,8 +90,12 @@ def _dependencies() -> RuntimeDependencies:
         administration=composition.administration,
         ingestion=composition.ingestion,
         radar=composition.radar,
+        scoring=composition.scoring,
+        feedback=composition.feedback,
         heartbeat_writer=heartbeat_writer,
         job_runtime=composition.job_runtime,
+        notifications=_build_notifications(settings),
+        **_build_agent_stack(settings, composition),
     )
 
 

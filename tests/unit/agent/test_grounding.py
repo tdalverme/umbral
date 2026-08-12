@@ -12,7 +12,9 @@ _STATE: dict[str, Any] = {
         {
             "tool": "find_matches",
             "status": "ok",
-            "result": {"items": [{"listing_id": "11111111-1111-1111-1111-111111111111"}]},
+            "result": {
+                "items": [{"listing_id": "11111111-1111-1111-1111-111111111111"}]
+            },
         },
         {
             "tool": "explain_match",

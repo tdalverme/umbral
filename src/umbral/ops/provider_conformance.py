@@ -133,7 +133,9 @@ def run_preview_dependency_conformance(
     )
     checks.append(
         _supabase_reachability_check(
-            clients.http, config.get("IDENTITY_ISSUER", ""), config.get("SUPABASE_SECRET_KEY", "")
+            clients.http,
+            config.get("IDENTITY_ISSUER", ""),
+            config.get("SUPABASE_SECRET_KEY", ""),
         )
     )
     checks.append(_resend_check(clients.http, config.get("RESEND_API_KEY", "")))

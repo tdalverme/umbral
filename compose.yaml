@@ -3,7 +3,7 @@ services:
     image: ghcr.io/pglayers/pglayers-full:17
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-umbral}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-umbral_local_only}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local}
       POSTGRES_DB: ${POSTGRES_DB:-umbral}
     ports:
       - "5432:5432"

@@ -26,6 +26,7 @@ ACTOR_KIND = ENUM(
     "system",
     "service",
     "operator",
+    "user",
     name="actor_kind",
     create_type=True,
 )
