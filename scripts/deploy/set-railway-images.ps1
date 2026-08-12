@@ -138,11 +138,13 @@ foreach ($key in @("OBJECT_STORE_BUCKET", "OBJECT_STORE_ENDPOINT_URL", "OBJECT_S
 # point at the public web origin, so the capture origin is derived from the
 # promote runner's preview base URL instead of a stale static value.
 $providerVars = [ordered]@{}
-foreach ($key in @("RESEND_API_KEY", "RESEND_FROM_EMAIL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "IDENTITY_ISSUER", "EMAIL_WEBHOOK_SECRET", "UMBRAL_BFF_TOKEN")) {
+foreach ($key in @("RESEND_API_KEY", "RESEND_FROM_EMAIL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "IDENTITY_ISSUER", "EMAIL_WEBHOOK_SECRET")) {
     $value = [Environment]::GetEnvironmentVariable($key)
     Require-Condition (-not [string]::IsNullOrWhiteSpace([string]$value)) "Missing ${key} environment value for Railway service variables."
     $providerVars[$key] = [string]$value
 }
+$bffToken = [string][Environment]::GetEnvironmentVariable("UMBRAL_BFF_TOKEN")
+if (-not [string]::IsNullOrWhiteSpace($bffToken)) { $providerVars["UMBRAL_BFF_TOKEN"] = $bffToken }
 $previewBaseUrl = [string][Environment]::GetEnvironmentVariable("UMBRAL_PREVIEW_BASE_URL")
 Require-Condition (-not [string]::IsNullOrWhiteSpace($previewBaseUrl)) "Missing UMBRAL_PREVIEW_BASE_URL environment value for Railway service variables."
 $providerVars["IDENTITY_CAPTURE_ORIGIN"] = "https://" + $previewBaseUrl.Trim()
@@ -228,7 +230,7 @@ function Test-ServiceAtTarget {
         }
     } elseif ($Service -eq "web") {
         if ([string]$SvcConfig.variables.IDENTITY_CAPTURE_ORIGIN.value -ne [string]$ProviderVars["IDENTITY_CAPTURE_ORIGIN"]) { return $false }
-        if ([string]$SvcConfig.variables.UMBRAL_BFF_TOKEN.value -ne [string]$ProviderVars["UMBRAL_BFF_TOKEN"]) { return $false }
+        if ($ProviderVars.ContainsKey("UMBRAL_BFF_TOKEN") -and [string]$SvcConfig.variables.UMBRAL_BFF_TOKEN.value -ne [string]$ProviderVars["UMBRAL_BFF_TOKEN"]) { return $false }
     }
     if ($Service -eq "model") {
         foreach ($key in $ModelVars.Keys) {
@@ -301,7 +303,9 @@ foreach ($service in $servicesToPatch) {
         # The web serves the auth capture redirects and signs the capture
         # cookie with the BFF token; both must come from the promote runner.
         $serviceVariables["IDENTITY_CAPTURE_ORIGIN"] = [ordered]@{ value = $ProviderVars["IDENTITY_CAPTURE_ORIGIN"] }
-        $serviceVariables["UMBRAL_BFF_TOKEN"] = [ordered]@{ value = $ProviderVars["UMBRAL_BFF_TOKEN"] }
+        if ($ProviderVars.ContainsKey("UMBRAL_BFF_TOKEN")) {
+            $serviceVariables["UMBRAL_BFF_TOKEN"] = [ordered]@{ value = $ProviderVars["UMBRAL_BFF_TOKEN"] }
+        }
     }
     if ($service -eq "model") {
         foreach ($key in $ModelVars.Keys) {
