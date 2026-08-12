@@ -183,6 +183,18 @@ class SqlAlchemyDecisionRepository:
             "reason_code": row.reason_code,
         }
 
+    def find_by_item_trigger(
+        self, *, recommendation_item_id: UUID, trigger: str
+    ) -> UUID | None:
+        with self._session() as session:
+            return session.execute(
+                select(NotificationDecisionModel.id).where(
+                    NotificationDecisionModel.recommendation_item_id
+                    == recommendation_item_id,
+                    NotificationDecisionModel.trigger == trigger,
+                )
+            ).scalar_one_or_none()
+
     def list_recent(
         self, *, user_id: UUID, search_profile_id: UUID, since: datetime
     ) -> Sequence[Mapping[str, object]]:

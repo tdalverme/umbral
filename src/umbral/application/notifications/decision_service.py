@@ -47,21 +47,33 @@ class DecisionService:
         now: datetime,
         correlation_id: UUID,
     ) -> UUID:
-        decision_id = self._decisions.insert(
-            user_id=user_id,
-            search_profile_id=search_profile_id,
-            recommendation_item_id=decision.recommendation_item_id,
-            trigger=decision.trigger,
-            reason_code=decision.reason_code,
-            decision_state=decision.decision_state,
-            policy_version=self._policy_version,
-            preferences_version=1,
-            price_before=None,
-            price_after=None,
-            duplicate_of_id=decision.duplicate_of_id,
-            now=now,
-            correlation_id=correlation_id,
-        )
+        try:
+            decision_id = self._decisions.insert(
+                user_id=user_id,
+                search_profile_id=search_profile_id,
+                recommendation_item_id=decision.recommendation_item_id,
+                trigger=decision.trigger,
+                reason_code=decision.reason_code,
+                decision_state=decision.decision_state,
+                policy_version=self._policy_version,
+                preferences_version=1,
+                price_before=None,
+                price_after=None,
+                duplicate_of_id=decision.duplicate_of_id,
+                now=now,
+                correlation_id=correlation_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - unique race handled below
+            from sqlalchemy.exc import IntegrityError
+
+            if isinstance(exc, IntegrityError):
+                existing = self._decisions.find_by_item_trigger(
+                    recommendation_item_id=decision.recommendation_item_id,
+                    trigger=decision.trigger,
+                )
+                if existing is not None:
+                    return existing
+            raise
         self._emit_decision_created(
             decision_id=decision_id,
             search_profile_id=search_profile_id,

@@ -93,11 +93,31 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                 )
                 time.sleep(HEARTBEAT_INTERVAL_SECONDS)
         return 2
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - reported sanitized below
         print(f"{args.command} failed", file=sys.stderr)
+        print(_sanitized_exception(exc), file=sys.stderr)
         return 1
     finally:
         shutdown_observability()
+
+
+def _sanitized_exception(exc: Exception) -> str:
+    """Report the failure kind and message with credentials stripped.
+
+    Connection errors often embed URLs with passwords (SQLAlchemy/psycopg);
+    this removes ``scheme://user:pass@host`` before printing.
+    """
+    import re as _re
+    import traceback as _traceback
+
+    message = str(exc)
+    redacted = _re.sub(
+        r"([a-z][a-z0-9+.-]*://)[^/@\s]+@", r"\1***@", message
+    )
+    lines = [f"kind={type(exc).__name__} message={redacted}"]
+    for frame in _traceback.extract_tb(exc.__traceback__)[-6:]:
+        lines.append(f"  at {frame.filename}:{frame.lineno} in {frame.name}")
+    return "\n".join(lines)
 
 
 def _heartbeat(dependencies: Any, surface: str) -> None:

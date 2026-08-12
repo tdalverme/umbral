@@ -9,7 +9,7 @@ decisions into delivery.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from umbral.application.notifications.contracts import (
@@ -26,6 +26,10 @@ from umbral.application.notifications.ports import (
 from umbral.application.notifications.preferences_service import PreferencesService
 
 _TRIGGER_NEW_MATCH = "new_match"
+
+# Window for prior decisions considered by dedupe/fatigue. A decision made
+# weeks ago must still block a re-notification of the same item+trigger.
+_HISTORY_WINDOW_DAYS = 90
 
 
 class PlannerService:
@@ -122,7 +126,7 @@ class PlannerService:
         history = self._decisions.list_recent(
             user_id=user_id,
             search_profile_id=search_profile_id,
-            since=now,
+            since=now - timedelta(days=_HISTORY_WINDOW_DAYS),
         )
         history_decisions = tuple(
             HistoryDecision(

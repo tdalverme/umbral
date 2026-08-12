@@ -53,6 +53,10 @@ class DecisionRepository(Protocol):
 
     def get(self, decision_id: UUID) -> Mapping[str, object] | None: ...
 
+    def find_by_item_trigger(
+        self, *, recommendation_item_id: UUID, trigger: str
+    ) -> UUID | None: ...
+
     def list_recent(
         self, *, user_id: UUID, search_profile_id: UUID, since: datetime
     ) -> Sequence[Mapping[str, object]]: ...
