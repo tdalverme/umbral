@@ -18,6 +18,19 @@ export async function confirmCapture(): Promise<never> {
       token_hash: capture.tokenHash,
     }),
   });
+  const setCookie = response.headers.get("set-cookie");
+  if (setCookie) {
+    const pair = setCookie.split(";")[0] ?? "";
+    const eq = pair.indexOf("=");
+    if (eq > 0) {
+      store.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim(), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      });
+    }
+  }
   store.delete(CAPTURE_COOKIE);
   if (!response.ok) redirect(`/login?error=${response.status === 410 ? "expired" : "denied"}`);
   redirect("/");
