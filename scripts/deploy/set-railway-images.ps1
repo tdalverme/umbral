@@ -226,6 +226,8 @@ function Test-ServiceAtTarget {
         foreach ($key in $NotificationVars.Keys) {
             if ([string]$SvcConfig.variables.$key.value -ne [string]$NotificationVars[$key]) { return $false }
         }
+    } elseif ($Service -eq "web") {
+        if ([string]$SvcConfig.variables.IDENTITY_CAPTURE_ORIGIN.value -ne [string]$ProviderVars["IDENTITY_CAPTURE_ORIGIN"]) { return $false }
     }
     if ($Service -eq "model") {
         foreach ($key in $ModelVars.Keys) {
@@ -294,6 +296,10 @@ foreach ($service in $servicesToPatch) {
         foreach ($key in $NotificationVars.Keys) {
             $serviceVariables[$key] = [ordered]@{ value = $NotificationVars[$key] }
         }
+    } else {
+        # The web serves the auth capture redirects; the public origin must
+        # come from the promote runner, not the request host behind proxies.
+        $serviceVariables["IDENTITY_CAPTURE_ORIGIN"] = [ordered]@{ value = $ProviderVars["IDENTITY_CAPTURE_ORIGIN"] }
     }
     if ($service -eq "model") {
         foreach ($key in $ModelVars.Keys) {
