@@ -9,6 +9,8 @@ export async function forwardRadarRequest(
   const headers = new Headers(init.headers);
   const cookie = incoming?.headers.get("cookie");
   if (cookie) headers.set("Cookie", cookie);
+  const contentType = incoming?.headers.get("content-type");
+  if (contentType && !headers.has("Content-Type")) headers.set("Content-Type", contentType);
   headers.set("X-Umbral-BFF-Token", process.env.UMBRAL_BFF_TOKEN || "local-bff-token");
   if (!headers.has("X-Correlation-ID")) headers.set("X-Correlation-ID", crypto.randomUUID());
   return fetch(`${apiBaseUrl()}${path}`, { ...init, headers, cache: "no-store" });
