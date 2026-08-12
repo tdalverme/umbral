@@ -149,7 +149,7 @@ def _principal(request: Request) -> CurrentPrincipal:
         raise IdentityError("auth.session_required", status=401, recovery="sign_in")
     principal = _deps().access_control.authorize(
         token,
-        action="product.explanation.read",
+        action="auth.session.read",
         resource_owner_id=None,
         now=datetime.now(timezone.utc),
         correlation_id=_correlation(request),

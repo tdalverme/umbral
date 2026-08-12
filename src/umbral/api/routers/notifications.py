@@ -105,10 +105,18 @@ def _principal(request: Request, action: str) -> CurrentPrincipal:
     token = request.cookies.get(_deps().settings.session_cookie_name)
     if not token:
         raise IdentityError("auth.session_required", status=401, recovery="sign_in")
-    return _deps().access_control.authorize(
+    access = _deps().access_control
+    principal = access.authorize(
+        token,
+        action="auth.session.read",
+        resource_owner_id=None,
+        now=datetime.now(timezone.utc),
+        correlation_id=_correlation(request),
+    )
+    return access.authorize(
         token,
         action=action,
-        resource_owner_id=None,
+        resource_owner_id=principal.user_id,
         now=datetime.now(timezone.utc),
         correlation_id=_correlation(request),
     )
