@@ -13,7 +13,10 @@ export async function confirmCapture(): Promise<never> {
   const response = await forwardIdentityRequest("/api/v1/auth/magic-link-confirmations", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(capture),
+    body: JSON.stringify({
+      attempt_id: capture.attemptId,
+      token_hash: capture.tokenHash,
+    }),
   });
   store.delete(CAPTURE_COOKIE);
   if (!response.ok) redirect(`/login?error=${response.status === 410 ? "expired" : "denied"}`);
