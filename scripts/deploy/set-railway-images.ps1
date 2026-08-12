@@ -138,7 +138,7 @@ foreach ($key in @("OBJECT_STORE_BUCKET", "OBJECT_STORE_ENDPOINT_URL", "OBJECT_S
 # point at the public web origin, so the capture origin is derived from the
 # promote runner's preview base URL instead of a stale static value.
 $providerVars = [ordered]@{}
-foreach ($key in @("RESEND_API_KEY", "RESEND_FROM_EMAIL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "IDENTITY_ISSUER", "EMAIL_WEBHOOK_SECRET")) {
+foreach ($key in @("RESEND_API_KEY", "RESEND_FROM_EMAIL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "IDENTITY_ISSUER", "EMAIL_WEBHOOK_SECRET", "UMBRAL_BFF_TOKEN")) {
     $value = [Environment]::GetEnvironmentVariable($key)
     Require-Condition (-not [string]::IsNullOrWhiteSpace([string]$value)) "Missing ${key} environment value for Railway service variables."
     $providerVars[$key] = [string]$value
@@ -228,6 +228,7 @@ function Test-ServiceAtTarget {
         }
     } elseif ($Service -eq "web") {
         if ([string]$SvcConfig.variables.IDENTITY_CAPTURE_ORIGIN.value -ne [string]$ProviderVars["IDENTITY_CAPTURE_ORIGIN"]) { return $false }
+        if ([string]$SvcConfig.variables.UMBRAL_BFF_TOKEN.value -ne [string]$ProviderVars["UMBRAL_BFF_TOKEN"]) { return $false }
     }
     if ($Service -eq "model") {
         foreach ($key in $ModelVars.Keys) {
@@ -297,9 +298,10 @@ foreach ($service in $servicesToPatch) {
             $serviceVariables[$key] = [ordered]@{ value = $NotificationVars[$key] }
         }
     } else {
-        # The web serves the auth capture redirects; the public origin must
-        # come from the promote runner, not the request host behind proxies.
+        # The web serves the auth capture redirects and signs the capture
+        # cookie with the BFF token; both must come from the promote runner.
         $serviceVariables["IDENTITY_CAPTURE_ORIGIN"] = [ordered]@{ value = $ProviderVars["IDENTITY_CAPTURE_ORIGIN"] }
+        $serviceVariables["UMBRAL_BFF_TOKEN"] = [ordered]@{ value = $ProviderVars["UMBRAL_BFF_TOKEN"] }
     }
     if ($service -eq "model") {
         foreach ($key in $ModelVars.Keys) {
