@@ -49,7 +49,11 @@ def test_compile_classifies_refinamiento_with_parameters() -> None:
     assert compilation.parameters[0].key == "budget"
     assert compilation.parameters[0].value == "900"
     assert compilation.parameters[0].confidence == 0.95
-    assert compilation.allowed_tools == ("propose_search_profile_update",)
+    assert compilation.allowed_tools == (
+        "propose_search_profile_update",
+        "propose_search_preference_update",
+        "propose_search_preference_removal",
+    )
 
 
 def test_compile_out_of_scope_allows_no_tools() -> None:

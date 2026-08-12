@@ -1,13 +1,12 @@
-﻿# mypy: disable-error-code="no-untyped-def,no-untyped-call"
+# mypy: disable-error-code="no-untyped-def,no-untyped-call"
 """HITL lifecycle through the real graph v3 + runtime (FR-011..FR-016, T024)."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
-from typing import Any
-from uuid import UUID, uuid4
+from datetime import datetime, timezone
+from uuid import UUID
 
 from langgraph.checkpoint.memory import MemorySaver
 from tests.support.agent import InMemoryGraphRunRepository, RecordingRunRecorder
@@ -27,6 +26,9 @@ from umbral.application.agent.tools.ports import SessionScope
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
 from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
+from umbral.infrastructure.agent.tools.preferences_loader import (
+    load_preference_vocabulary,
+)
 from umbral.infrastructure.radar.contract_loader import load_events_registry
 
 USER_ID = UUID(int=1)
@@ -112,6 +114,22 @@ class _ScopeReader:
         return self.scope
 
 
+class _NoopPreferenceGateway:
+    """Tests without preference HITL never reach the preference gateway."""
+
+    def get_proposal(self, **kwargs: object) -> object:
+        raise AssertionError("preference gateway must not be called here")
+
+    def confirm_proposal(self, **kwargs: object) -> object:
+        raise AssertionError("preference gateway must not be called here")
+
+    def confirm_preference_removal(self, **kwargs: object) -> object:
+        raise AssertionError("preference gateway must not be called here")
+
+    def reject_proposal(self, **kwargs: object) -> object:
+        raise AssertionError("preference gateway must not be called here")
+
+
 class _ScriptedGateway:
     def __init__(self, reply_sequence: list[Mapping[str, object]]) -> None:
         self._sequence = reply_sequence
@@ -187,6 +205,7 @@ def _build() -> tuple[ChatRuntime, _Repo, _ScriptedGateway]:
                 feedback=FakeFeedback(),
                 criteria=FakeCriteria(),
                 proposals=proposals,
+                vocabulary=load_preference_vocabulary(),
             )
         ),
         recorder=recorder,
@@ -226,6 +245,7 @@ def _build() -> tuple[ChatRuntime, _Repo, _ScriptedGateway]:
         tool_executor=executor,
         intent_compiler=compiler,
         decision_gateway=proposals,
+        preference_gateway=_NoopPreferenceGateway(),
         clock=lambda: NOW,
         model_version="local-fake",
         prompt_version="agent-reply-v2",
@@ -256,7 +276,7 @@ def test_propose_interrupts_and_approve_resumes_same_run() -> None:
     first = runtime.run_turn(
         user_id=USER_ID,
         session_id=SESSION_ID,
-        text="subÃ­ el presupuesto a 900",
+        text="subí el presupuesto a 900",
         correlation_id=UUID(int=40),
         consumer=events.append,
     )
@@ -287,7 +307,7 @@ def test_propose_and_interactive_reject_marks_user() -> None:
     first = runtime.run_turn(
         user_id=USER_ID,
         session_id=SESSION_ID,
-        text="subÃ­ el presupuesto a 900",
+        text="subí el presupuesto a 900",
         correlation_id=UUID(int=40),
     )
     assert first.interrupt is not None
@@ -312,7 +332,7 @@ def test_edit_derives_new_proposal_and_waits_again() -> None:
     first = runtime.run_turn(
         user_id=USER_ID,
         session_id=SESSION_ID,
-        text="subÃ­ el presupuesto a 900",
+        text="subí el presupuesto a 900",
         correlation_id=UUID(int=40),
     )
     assert first.interrupt is not None

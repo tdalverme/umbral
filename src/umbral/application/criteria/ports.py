@@ -41,6 +41,19 @@ class FactRepository(Protocol):
 
     def active_for_profile(self, profile_id: UUID) -> tuple[PreferenceFact, ...]: ...
 
+    def supersede_active(
+        self,
+        profile_id: UUID,
+        concept_key: str,
+        *,
+        superseded_by: UUID | None,
+        correlation_id: UUID,
+        actor_kind: str,
+        actor_id: str | None,
+    ) -> int:
+        """Mark the active fact of (profile, concept) as superseded without a
+        replacement (preference removal); returns the count superseded."""
+
 
 class CompilationRepository(Protocol):
     def insert(self, compilation: Compilation) -> None: ...

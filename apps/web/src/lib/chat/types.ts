@@ -20,6 +20,7 @@ export interface ChatRef {
 
 export interface ProposalDecision {
   type: "proposal_decision";
+  kind?: "profile" | "preference";
   proposal_id: string;
   diff: Record<string, unknown>;
   impact: Record<string, unknown>;

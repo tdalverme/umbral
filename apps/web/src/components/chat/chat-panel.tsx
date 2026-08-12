@@ -22,6 +22,7 @@ export function ChatPanel({ profileId }: ChatPanelProps): React.ReactElement {
   const chat = useChatStream(profileId);
   const searchParams = useSearchParams();
   const contextRef = useRef<string | null>(null);
+  const lastListingRef = useRef<string | null>(null);
   const { session, messages, send } = chat;
 
   useEffect(() => {
@@ -35,12 +36,41 @@ export function ChatPanel({ profileId }: ChatPanelProps): React.ReactElement {
     if (context.startsWith("listing:")) {
       contextRef.current = null;
       const listingId = context.slice("listing:".length);
+      lastListingRef.current = listingId;
       void send(`Contame sobre el listing ${listingId} en mi radar.`, {
         entity: "listing",
         id: listingId,
       });
     }
   }, [session, messages.length, send]);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      lastListingRef.current = null;
+      return;
+    }
+    const listingRefs = messages.flatMap((message) => {
+      const content = message.content as {
+        kind: string;
+        refs?: { entity: string; id: string }[];
+      };
+      return Array.isArray(content?.refs)
+        ? content.refs.filter((ref) => ref.entity === "listing")
+        : [];
+    });
+    if (listingRefs.length > 0) {
+      lastListingRef.current = listingRefs[listingRefs.length - 1].id;
+    }
+  }, [messages]);
+
+  const handleSend = (text: string): void => {
+    void chat.send(
+      text,
+      lastListingRef.current
+        ? { entity: "listing", id: lastListingRef.current }
+        : undefined,
+    );
+  };
 
   return (
     <Card data-testid="chat-panel">
@@ -70,7 +100,7 @@ export function ChatPanel({ profileId }: ChatPanelProps): React.ReactElement {
             busy={chat.status === "running" || chat.status === "resuming"}
           />
         </div>
-        <Composer status={chat.status} onSend={(text) => void chat.send(text)} />
+        <Composer status={chat.status} onSend={handleSend} />
       </CardContent>
     </Card>
   );

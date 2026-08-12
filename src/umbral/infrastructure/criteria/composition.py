@@ -65,14 +65,16 @@ def build_criteria_service(
     embeddings_enabled: bool = False,
     embedding_model_version_key: str | None = None,
     urban_context_enabled: bool = False,
+    extractor: StructuredExtractor | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> CriteriaService:
-    extractor = build_extractor(
-        extraction_provider,
-        endpoint=extraction_endpoint or "",
-        api_key=extraction_api_key or "",
-        model=extraction_model or "",
-    )
+    if extractor is None:
+        extractor = build_extractor(
+            extraction_provider,
+            endpoint=extraction_endpoint or "",
+            api_key=extraction_api_key or "",
+            model=extraction_model or "",
+        )
     return CriteriaService(
         concepts=SqlAlchemyConceptRepository(session_factory),
         facts=SqlAlchemyFactRepository(session_factory),

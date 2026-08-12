@@ -20,7 +20,24 @@ const FIELD_LABELS: Record<string, string> = {
   surface_min: "Superficie mín.",
   surface_max: "Superficie máx.",
   name: "Nombre",
+  concept_key: "Preferencia",
+  polarity: "Sentido",
+  concept_value: "Valor",
 };
+
+const VALUE_LABELS: Record<string, string> = {
+  positive: "Me gusta",
+  negative: "No me gusta",
+  luminosidad: "Luminosidad",
+  balcon: "Balcón",
+  estado_general: "Estado general",
+  tipo_cocina: "Tipo de cocina",
+};
+
+function renderValue(key: string, value: unknown): string {
+  const text = String(value ?? "");
+  return VALUE_LABELS[text] ?? text;
+}
 
 /** Renders a pending profile change with approve/edit/reject controls (FR-032). */
 export function ProposalCard({ decision, onDecision, busy }: ProposalCardProps): React.ReactElement {
@@ -45,17 +62,26 @@ export function ProposalCard({ decision, onDecision, busy }: ProposalCardProps):
     setChangeText("");
   }
 
+  const isPreference = decision.kind === "preference";
   const diff = decision.diff as Record<string, unknown>;
+  const isRemoval = diff.operation === "remove";
   const fields = Object.entries(diff).filter(([key]) => key in FIELD_LABELS);
 
   return (
     <Card data-testid="proposal-card" className="mt-2 border-border/60 p-3">
-      <p className="text-xs font-medium">Cambio propuesto en tu radar</p>
+      <p className="text-xs font-medium">
+        {isPreference
+          ? isRemoval
+            ? "Quitar preferencia de tu radar"
+            : "Preferencia propuesta en tu radar"
+          : "Cambio propuesto en tu radar"}
+      </p>
       {fields.length > 0 ? (
         <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
           {fields.map(([key, value]) => (
             <li key={key}>
-              {FIELD_LABELS[key]}: <strong className="text-foreground">{String(value)}</strong>
+              {FIELD_LABELS[key]}:{" "}
+              <strong className="text-foreground">{renderValue(key, value)}</strong>
             </li>
           ))}
         </ul>
@@ -69,13 +95,15 @@ export function ProposalCard({ decision, onDecision, busy }: ProposalCardProps):
         <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80" disabled={busy} onClick={reject}>
           Rechazar
         </Button>
-        <Button
-          className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80"
-          disabled={busy}
-          onClick={() => setEditing((current) => !current)}
-        >
-          Editar
-        </Button>
+        {!isPreference && (
+          <Button
+            className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80"
+            disabled={busy}
+            onClick={() => setEditing((current) => !current)}
+          >
+            Editar
+          </Button>
+        )}
       </div>
       {editing && (
         <div className="mt-2 flex items-end gap-2">

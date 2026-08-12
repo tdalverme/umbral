@@ -82,6 +82,7 @@ _REPLY_SCHEMA: Mapping[str, object] = {
 _INTENT_TOOL_BY_FAMILY: Mapping[str, str] = {
     "onboarding": "consulta",
     "ambiguous_change": "refinamiento",
+    "preferences": "refinamiento",
     "explanation": "consulta",
     "comparison": "comparacion",
     "feedback": "feedback",
@@ -196,6 +197,21 @@ def default_tool_implementations() -> Mapping[str, ToolImplementation]:
             ],
         }
 
+    def get_listing_detail(
+        ctx: ToolRunContext, args: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        listing_id = _uuid.uuid5(_uuid.NAMESPACE_OID, f"{ctx.search_profile_id}")
+        return {
+            "listing_id": str(listing_id),
+            "neighborhood": "Palermo",
+            "total_cost": 900000,
+            "price_value": 900000,
+            "price_currency": "ARS",
+            "surface_m2": 55,
+            "rooms": 2,
+            "property_type": "departamento",
+        }
+
     def compare_listings(
         ctx: ToolRunContext, args: Mapping[str, object]
     ) -> Mapping[str, object]:
@@ -217,6 +233,17 @@ def default_tool_implementations() -> Mapping[str, ToolImplementation]:
             "impact": {"recompute": True},
         }
 
+    def propose_search_preference_update(
+        ctx: ToolRunContext, args: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        return {
+            "proposal_id": str(_uuid.uuid4()),
+            "state": "pending",
+            "diff": {"concept_key": "luminosidad", "polarity": "positive"},
+            "impact": {"concept_key": "luminosidad", "polarity": "positive"},
+            "expires_at": "2026-08-11T12:00:00+00:00",
+        }
+
     def apply_search_profile_update(
         ctx: ToolRunContext, args: Mapping[str, object]
     ) -> Mapping[str, object]:
@@ -231,9 +258,11 @@ def default_tool_implementations() -> Mapping[str, ToolImplementation]:
         "get_search_profile": get_search_profile,
         "find_matches": find_matches,
         "explain_match": explain_match,
+        "get_listing_detail": get_listing_detail,
         "compare_listings": compare_listings,
         "record_feedback": record_feedback,
         "propose_search_profile_update": propose_search_profile_update,
+        "propose_search_preference_update": propose_search_preference_update,
         "apply_search_profile_update": apply_search_profile_update,
         "search_urban_context": search_urban_context,
     }
@@ -275,6 +304,54 @@ class _NoOpDecisionGateway:
         correlation_id: UUID,
     ) -> Proposal:
         raise AssertionError("eval cases never require a proposal decision")
+
+
+class _NoOpPreferenceGateway:
+    """Eval cases never reach a HITL preference decision."""
+
+    def get_proposal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        proposal_id: UUID,
+    ) -> object:
+        raise AssertionError("eval cases never require a preference decision")
+
+    def confirm_proposal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        proposal_id: UUID,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> object:
+        raise AssertionError("eval cases never require a preference decision")
+
+    def confirm_preference_removal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        proposal_id: UUID,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> object:
+        raise AssertionError("eval cases never require a preference decision")
+
+    def reject_proposal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        proposal_id: UUID,
+        correlation_id: UUID,
+        actor_id: str | None = None,
+    ) -> object:
+        raise AssertionError("eval cases never require a preference decision")
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,6 +453,7 @@ class PostgresEvalCaseExecutor:
             tool_executor=executor,
             intent_compiler=intent_compiler,
             decision_gateway=cast(ProposalDecisionGateway, _NoOpDecisionGateway()),
+            preference_gateway=_NoOpPreferenceGateway(),
             clock=_advancing_clock,
             model_version=model_version,
             prompt_version="agent-reply-v2",

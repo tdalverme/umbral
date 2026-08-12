@@ -10,11 +10,22 @@ from uuid import UUID
 from umbral.agent.tools.contracts import ToolError, ToolRunContext
 from umbral.agent.tools.executor import ToolImplementation
 from umbral.application.agent.tools.contracts import ProposalError
+from umbral.application.agent.tools.preferences import (
+    PreferenceIntent,
+    PreferenceVocabularyError,
+    PreferenceVocabularySpec,
+)
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
-from umbral.application.criteria.contracts import Compilation
-from umbral.application.feedback.contracts import FeedbackRecord
+from umbral.application.criteria.contracts import Compilation, PreferenceFact
+from umbral.application.feedback.contracts import (
+    FeedbackRecord,
+    FeedbackValidationError,
+    LearningProposal,
+    PreferenceImpact,
+)
 from umbral.application.radar.contracts import (
     ListingDetail,
+    ListingNotAccessible,
     MatchPage,
     RecommendationRun,
     RunNotFound,
@@ -93,6 +104,34 @@ class FeedbackPort(Protocol):
         actor_id: str | None = None,
     ) -> FeedbackRecord: ...
 
+    def propose_preference(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        concept_key: str,
+        polarity: str,
+        value: str | None,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[LearningProposal, PreferenceImpact]: ...
+
+    def active_preferences(
+        self, *, owner_id: UUID, profile_id: UUID
+    ) -> tuple[PreferenceFact, ...]: ...
+
+    def propose_preference_removal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        concept_key: str,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[LearningProposal, PreferenceImpact]: ...
+
 
 class CriteriaPort(Protocol):
     def latest_compilation(
@@ -113,15 +152,20 @@ class ToolServices:
     feedback: FeedbackPort
     criteria: CriteriaPort
     proposals: SearchProfileUpdateProposals
+    vocabulary: PreferenceVocabularySpec
 
 
 def build_tool_implementations(services: ToolServices) -> dict[str, ToolImplementation]:
     return {
         "get_search_profile": _get_search_profile(services),
         "propose_search_profile_update": _propose(services),
+        "propose_search_preference_update": _propose_preference(services),
+        "propose_search_preference_removal": _propose_preference_removal(services),
         "apply_search_profile_update": _apply(services),
         "find_matches": _find_matches(services),
         "explain_match": _explain_match(services),
+        "get_listing_detail": _get_listing_detail(services),
+        "list_search_preferences": _list_preferences(services),
         "compare_listings": _compare_listings(services),
         "record_feedback": _record_feedback(services),
         "search_urban_context": _search_urban_context(services),
@@ -193,6 +237,123 @@ def _propose(services: ToolServices) -> ToolImplementation:
             "impact": proposal.impact,
             "state": proposal.state,
             "expires_at": proposal.expires_at.isoformat(),
+        }
+
+    return run
+
+
+def _propose_preference(services: ToolServices) -> ToolImplementation:
+    def run(
+        context: ToolRunContext, args: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        phrase = args.get("preference")
+        if not isinstance(phrase, str) or not phrase.strip():
+            raise ToolError(code="tool.args_invalid")
+        try:
+            intent: PreferenceIntent = services.vocabulary.resolve(phrase)
+        except PreferenceVocabularyError as error:
+            raise ToolError(code=error.code) from error
+        if intent.requires_value and intent.value is None:
+            raise ToolError(code="preference.value_required")
+        try:
+            proposal, impact = services.feedback.propose_preference(
+                owner_id=context.user_id,
+                profile_id=context.search_profile_id,
+                concept_key=intent.concept_key,
+                polarity=intent.polarity,
+                value=intent.value,
+                correlation_id=context.correlation_id,
+                actor_kind="user",
+                actor_id=str(context.user_id),
+            )
+        except FeedbackValidationError as error:
+            code = error.error_codes[0] if error.error_codes else "preference.error"
+            raise ToolError(code=code) from error
+        diff: dict[str, object] = {
+            "concept_key": proposal.change.concept_key,
+            "polarity": proposal.change.polarity,
+        }
+        if proposal.change.value is not None:
+            diff["concept_value"] = proposal.change.value
+        return {
+            "proposal_id": str(proposal.proposal_id),
+            "diff": diff,
+            "impact": {
+                "concept_key": proposal.change.concept_key,
+                "polarity": proposal.change.polarity,
+                "will_recompute": True,
+                "contradicts": bool(impact.contradicts),
+                "current_fact": dict(impact.current) if impact.current else None,
+            },
+            "state": proposal.state,
+            "expires_at": proposal.expires_at.isoformat(),
+        }
+
+    return run
+
+
+def _propose_preference_removal(services: ToolServices) -> ToolImplementation:
+    def run(
+        context: ToolRunContext, args: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        phrase = args.get("preference")
+        if not isinstance(phrase, str) or not phrase.strip():
+            raise ToolError(code="tool.args_invalid")
+        try:
+            intent: PreferenceIntent = services.vocabulary.resolve(phrase)
+        except PreferenceVocabularyError as error:
+            raise ToolError(code=error.code) from error
+        try:
+            proposal, impact = services.feedback.propose_preference_removal(
+                owner_id=context.user_id,
+                profile_id=context.search_profile_id,
+                concept_key=intent.concept_key,
+                correlation_id=context.correlation_id,
+                actor_kind="user",
+                actor_id=str(context.user_id),
+            )
+        except FeedbackValidationError as error:
+            code = error.error_codes[0] if error.error_codes else "preference.error"
+            raise ToolError(code=code) from error
+        diff: dict[str, object] = {
+            "concept_key": proposal.change.concept_key,
+            "polarity": proposal.change.polarity,
+            "operation": "remove",
+        }
+        return {
+            "proposal_id": str(proposal.proposal_id),
+            "diff": diff,
+            "impact": {
+                "concept_key": proposal.change.concept_key,
+                "polarity": proposal.change.polarity,
+                "will_recompute": True,
+                "operation": "remove",
+                "current_fact": dict(impact.current) if impact.current else None,
+            },
+            "state": proposal.state,
+            "expires_at": proposal.expires_at.isoformat(),
+        }
+
+    return run
+
+
+def _list_preferences(services: ToolServices) -> ToolImplementation:
+    def run(
+        context: ToolRunContext, _args: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        facts = services.feedback.active_preferences(
+            owner_id=context.user_id, profile_id=context.search_profile_id
+        )
+        return {
+            "preferences": [
+                {
+                    "concept_key": fact.concept_key,
+                    "polarity": fact.polarity,
+                    "fact_source": fact.fact_source,
+                    "created_at": fact.created_at.isoformat(),
+                }
+                for fact in facts
+            ]
         }
 
     return run
@@ -298,6 +459,33 @@ def _explain_match(services: ToolServices) -> ToolImplementation:
     return run
 
 
+def _get_listing_detail(services: ToolServices) -> ToolImplementation:
+    def run(
+        context: ToolRunContext, args: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        listing_id = UUID(str(args["listing_id"]))
+        detail = _accessible_detail(services, context, listing_id)
+        return {
+            "listing_id": str(detail.listing_id),
+            "source_id": detail.source_id,
+            "neighborhood": detail.neighborhood,
+            "geo_precision": detail.geo_precision,
+            "total_cost": detail.total_cost,
+            "price_value": detail.price_value,
+            "price_currency": detail.price_currency,
+            "expenses_value": detail.expenses_value,
+            "surface_m2": detail.surface_m2,
+            "rooms": detail.rooms,
+            "bedrooms": detail.bedrooms,
+            "floor": detail.floor,
+            "property_type": detail.property_type,
+            "amenities": list(detail.amenities),
+            "known_changes": [dict(item) for item in detail.known_changes],
+        }
+
+    return run
+
+
 def _compare_listings(services: ToolServices) -> ToolImplementation:
     def run(
         context: ToolRunContext, args: Mapping[str, object]
@@ -328,9 +516,7 @@ def _record_feedback(services: ToolServices) -> ToolImplementation:
         decision = str(args["decision"])
         if decision not in {"like", "dislike"}:
             raise ToolError(code="tool.args_invalid")
-        services.radar.get_listing_detail(
-            owner_id=context.user_id, listing_id=listing_id
-        )
+        _accessible_detail(services, context, listing_id)
         run_obj = services.radar.latest_run_of(
             services.radar.get_profile(
                 owner_id=context.user_id, profile_id=context.search_profile_id
@@ -349,7 +535,7 @@ def _record_feedback(services: ToolServices) -> ToolImplementation:
             run_id=run_obj.run_id if run_obj is not None else None,
             event_type=decision,
             reason_keys=reason_keys,
-            idempotency_key=str(args["idempotency_key"]),
+            idempotency_key=str(args.get("idempotency_key", "")),
             correlation_id=context.correlation_id,
             actor_kind="user",
             actor_id=str(context.user_id),
@@ -393,6 +579,17 @@ def _search_urban_context(services: ToolServices) -> ToolImplementation:
 
 def _tool_error(error: ProposalError) -> ToolError:
     return ToolError(code=error.code)
+
+
+def _accessible_detail(
+    services: ToolServices, context: ToolRunContext, listing_id: UUID
+) -> ListingDetail:
+    try:
+        return services.radar.get_listing_detail(
+            owner_id=context.user_id, listing_id=listing_id
+        )
+    except ListingNotAccessible as exc:
+        raise ToolError(code="tool.listing_not_accessible") from exc
 
 
 def _bounded_int(value: object, default: int) -> int:

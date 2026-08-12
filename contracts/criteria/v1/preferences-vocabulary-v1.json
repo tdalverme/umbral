@@ -1,0 +1,80 @@
+{
+  "registry_version": "preferences-vocabulary-v1",
+  "schema_version": "preferences-v1",
+  "description": "Vocabulario canonico de preferencias suaves del chat: alias naturales mapeados deterministicamente a conceptos del catalogo con polaridad y value opcional. El LLM nunca elige concept_key ni polarity; solo expresa la intencion en lenguaje natural.",
+  "entries": [
+    {
+      "aliases": ["luminoso", "luminosa", "con luz", "iluminado", "iluminada", "bien iluminado", "claro"],
+      "concept_key": "luminosidad",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["oscuro", "oscura", "poca luz", "triste", "sin luz", "poco luminoso"],
+      "concept_key": "luminosidad",
+      "polarity": "negative",
+      "value": null
+    },
+    {
+      "aliases": ["con balcon", "balcon", "balcones"],
+      "concept_key": "balcon",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["bien cuidado", "en buen estado", "buen estado", "renovado", "nuevo", "bien mantenido"],
+      "concept_key": "estado_general",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["mal estado", "en mal estado", "viejo", "deteriorado", "abandonado"],
+      "concept_key": "estado_general",
+      "polarity": "negative",
+      "value": null
+    },
+    {
+      "aliases": ["cocina separada", "cocina cerrada"],
+      "concept_key": "tipo_cocina",
+      "polarity": "positive",
+      "value": "separada"
+    },
+    {
+      "aliases": ["cocina integrada", "cocina abierta", "cocina a la americana"],
+      "concept_key": "tipo_cocina",
+      "polarity": "positive",
+      "value": "integrada"
+    },
+    {
+      "aliases": ["luminosidad"],
+      "concept_key": "luminosidad",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["el balcon"],
+      "concept_key": "balcon",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["estado general", "el estado"],
+      "concept_key": "estado_general",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["tipo de cocina", "la cocina"],
+      "concept_key": "tipo_cocina",
+      "polarity": "positive",
+      "value": null,
+      "requires_value": true
+    }
+  ],
+  "unsupported_notes": {
+    "ambientes": "Se atiende por el perfil duro (ambientes) via el refinamiento clasico del chat.",
+    "piso": "Se atiende por el perfil duro (piso) o queda pendiente de concepto con value numerico.",
+    "radio": "No existe en el perfil ni en el catalogo.",
+    "transporte": "Pendiente de Fase 3 (concepto desde urban signals)."
+  }
+}

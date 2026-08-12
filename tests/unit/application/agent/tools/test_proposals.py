@@ -16,11 +16,12 @@ from umbral.application.agent.tools.contracts import (
     ProposalNotFound,
     ProposalNotPending,
     ProposalStale,
+    ProposalUnsupportedChange,
 )
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.events.contracts import ProductEvent
 from umbral.application.events.registry import parse_events_registry
-from umbral.application.radar.contracts import SearchProfile
+from umbral.application.radar.contracts import RadarValidationError, SearchProfile
 
 USER_ID = UUID(int=1)
 SESSION_ID = UUID(int=2)
@@ -222,6 +223,127 @@ def test_propose_rejects_unknown_change_fields() -> None:
             session_id=SESSION_ID,
             search_profile_id=PROFILE_ID,
             change={"budget_max": 200000, "status": "paused"},
+            correlation_id=CORRELATION_ID,
+        )
+
+
+def test_propose_translates_canonical_zone_to_profile_zones() -> None:
+    service, _, _, _ = _make_service()
+    proposal = service.propose(
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zona": "Palermo"},
+        correlation_id=CORRELATION_ID,
+    )
+    assert proposal.diff == {"zones": ("palermo",)}
+
+
+def test_propose_normalizes_zone_names_accents_and_case() -> None:
+    service, _, _, _ = _make_service()
+    proposal = service.propose(
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zona": ["Nuñez", "VILLA CRESPO", "San Nicolás"]},
+        correlation_id=CORRELATION_ID,
+    )
+    assert proposal.diff == {
+        "zones": ("nunez", "villa_crespo", "san_nicolas")
+    }
+
+
+def test_propose_translates_budget_ambientes_superficie() -> None:
+    service, _, _, _ = _make_service()
+    proposal = service.propose(
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={
+            "presupuesto": "900000",
+            "ambientes": 3,
+            "superficie": "55",
+        },
+        correlation_id=CORRELATION_ID,
+    )
+    assert proposal.diff == {
+        "budget_max": 900000.0,
+        "min_rooms": 3,
+        "surface_min": 55.0,
+    }
+
+
+def test_propose_mixes_canonical_and_profile_keys() -> None:
+    service, _, _, _ = _make_service()
+    proposal = service.propose(
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zona": "Belgrano", "budget_max": 200000},
+        correlation_id=CORRELATION_ID,
+    )
+    assert proposal.diff == {"zones": ("belgrano",), "budget_max": 200000.0}
+
+
+def test_propose_rejects_unsupported_criteria_with_actionable_code() -> None:
+    service, _, _, _ = _make_service()
+    with pytest.raises(ProposalUnsupportedChange) as excinfo:
+        service.propose(
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+            search_profile_id=PROFILE_ID,
+            change={"zona": "Palermo", "radio": 1},
+            correlation_id=CORRELATION_ID,
+        )
+    assert excinfo.value.key == "radio"
+    with pytest.raises(ProposalUnsupportedChange) as excinfo:
+        service.propose(
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+            search_profile_id=PROFILE_ID,
+            change={"hard_filters": {"min_floor": 5}},
+            correlation_id=CORRELATION_ID,
+        )
+    assert excinfo.value.key == "hard_filters"
+
+
+def test_propose_rejects_non_numeric_budget_value() -> None:
+    service, _, _, _ = _make_service()
+    with pytest.raises(ProposalInvalidChange):
+        service.propose(
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+            search_profile_id=PROFILE_ID,
+            change={"presupuesto": "alto"},
+            correlation_id=CORRELATION_ID,
+        )
+
+
+def test_propose_rejects_non_string_zone_value() -> None:
+    service, _, _, _ = _make_service()
+    with pytest.raises(ProposalInvalidChange):
+        service.propose(
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+            search_profile_id=PROFILE_ID,
+            change={"zona": 5},
+            correlation_id=CORRELATION_ID,
+        )
+
+
+def test_propose_maps_radar_validation_errors_to_invalid_change() -> None:
+    service, _, radar, _ = _make_service()
+
+    def boom(*, owner_id, profile_id, changes):
+        raise RadarValidationError(("radar.zone_unknown",))
+
+    radar.validate_change = boom  # type: ignore[method-assign]
+    with pytest.raises(ProposalInvalidChange):
+        service.propose(
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+            search_profile_id=PROFILE_ID,
+            change={"zones": ("tigre",)},
             correlation_id=CORRELATION_ID,
         )
 

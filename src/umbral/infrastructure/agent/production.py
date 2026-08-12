@@ -31,6 +31,9 @@ from umbral.infrastructure.agent.composition import chat_scope_reader
 from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
 from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
+from umbral.infrastructure.agent.tools.preferences_loader import (
+    load_preference_vocabulary,
+)
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.repositories.agent import (
     SqlAlchemyGraphRunRepository,
@@ -146,6 +149,7 @@ def build_production_agent_stack(
                 feedback=feedback,  # type: ignore[arg-type]
                 criteria=criteria,  # type: ignore[arg-type]
                 proposals=proposals,
+                vocabulary=load_preference_vocabulary(),
             )
         ),
         recorder=recorder,
@@ -164,6 +168,7 @@ def build_production_agent_stack(
         tool_executor=executor,
         intent_compiler=intent_compiler,
         decision_gateway=proposals,
+        preference_gateway=feedback,  # type: ignore[arg-type]
         clock=clock,
         model_version=settings.agent_model_name,
         prompt_version=settings.agent_reply_prompt_version,

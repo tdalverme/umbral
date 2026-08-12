@@ -42,7 +42,9 @@ class ToolRegistry:
         for field, raw_kind in expected.items():
             if field not in args:
                 raise ToolArgsInvalid(f"{spec.name}:{field}")
-            _validate_kind(field, _kind_of(raw_kind), args[field])
+            kind = _kind_of(raw_kind)
+            _validate_kind(field, kind, args[field])
+            _validate_enum(field, raw_kind, args[field])
         unknown = set(args) - set(expected)
         if unknown:
             raise ToolArgsInvalid(f"{spec.name}:{sorted(unknown)[0]}")
@@ -104,6 +106,20 @@ def _is_uuid(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _validate_enum(field: str, raw_kind: object, value: object) -> None:
+    enum = raw_kind.get("enum") if isinstance(raw_kind, Mapping) else None
+    if not isinstance(enum, list) or not enum:
+        return
+    if value is None:
+        return
+    if isinstance(value, list):
+        if not all(item in enum for item in value):
+            raise ToolArgsInvalid(f"{field}:enum")
+        return
+    if value not in enum:
+        raise ToolArgsInvalid(f"{field}:enum")
 
 
 def _redact(

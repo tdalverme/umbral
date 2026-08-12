@@ -3,17 +3,16 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import MemorySaver
 from tests.integration.chat.test_hitl_lifecycle import (
+    _NoopPreferenceGateway,
     _Repo,
     _ScopeReader,
-    _SessionConversation,
     _ScriptedGateway,
 )
 from tests.support.agent import InMemoryGraphRunRepository, RecordingRunRecorder
@@ -34,12 +33,14 @@ from umbral.agent.tools.registry import ToolRegistry
 from umbral.agent.tools.tools import ToolServices, build_tool_implementations
 from umbral.api.main import app
 from umbral.api.routers import chat as chat_router
-from umbral.application.agent.tools.contracts import Proposal
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.chat.service import ChatService
 from umbral.application.identity.contracts import CurrentPrincipal
 from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
 from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
+from umbral.infrastructure.agent.tools.preferences_loader import (
+    load_preference_vocabulary,
+)
 from umbral.infrastructure.radar.contract_loader import load_events_registry
 
 USER_ID = UUID(int=1)
@@ -99,6 +100,7 @@ def _build_stack() -> tuple[TestClient, _Repo, ChatService]:
                 feedback=FakeFeedback(),
                 criteria=FakeCriteria(),
                 proposals=proposals,
+                vocabulary=load_preference_vocabulary(),
             )
         ),
         recorder=recorder,
@@ -134,6 +136,7 @@ def _build_stack() -> tuple[TestClient, _Repo, ChatService]:
         tool_executor=executor,
         intent_compiler=compiler,
         decision_gateway=proposals,
+        preference_gateway=_NoopPreferenceGateway(),
         clock=lambda: NOW,
         model_version="local-fake",
         prompt_version="agent-reply-v2",

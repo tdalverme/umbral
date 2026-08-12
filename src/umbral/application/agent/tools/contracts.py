@@ -114,3 +114,13 @@ class ProposalInvalidChange(ProposalError):
     """The requested change failed profile/policy validation."""
 
     code = "proposal.invalid_change"
+
+
+class ProposalUnsupportedChange(ProposalError):
+    """A requested criterion has no supporting profile field (e.g. radio)."""
+
+    code = "proposal.unsupported_key"
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+        super().__init__(f"unsupported change key: {key}")

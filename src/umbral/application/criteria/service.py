@@ -343,6 +343,36 @@ class CriteriaService:
         self.facts.record_change(fact, superseded_by=fact.fact_id)
         return fact
 
+    def remove_preference_fact(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        concept_key: str,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> int:
+        """Supersede the active fact of (profile, concept) without replacement.
+
+        Append-only removal with traceability (constitution V): the fact keeps
+        its row in ``superseded`` state; returns the number superseded.
+        """
+        if self.profiles.owner_of(profile_id) != owner_id:
+            raise CriteriaNotFound(f"search profile not accessible: {profile_id}")
+        if self.concepts.get(concept_key) is None:
+            raise CriteriaValidationError(
+                (f"criteria.concept_not_found:{concept_key}",)
+            )
+        return self.facts.supersede_active(
+            profile_id,
+            concept_key,
+            superseded_by=None,
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+
     def compile_profile(
         self,
         *,

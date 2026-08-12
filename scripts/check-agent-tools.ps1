@@ -10,6 +10,7 @@ $testPaths = @(
     "tests\unit\infrastructure\agent\tools",
     "tests\unit\config\test_agent_settings.py",
     "tests\contract\test_agent_tools_contract.py",
+    "tests\contract\test_preferences_vocabulary.py",
     "tests\contract\test_agent_state_schema_v2.py",
     "tests\contract\test_agent_graph_topology_v2.py",
     "tests\contract\test_agent_reply_schema_v2.py",

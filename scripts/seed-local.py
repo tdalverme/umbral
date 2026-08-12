@@ -112,13 +112,89 @@ def main() -> None:
         )
 
     _seed_silver(factory)
+    _seed_soft(factory)
 
     print()
-    print("Sesión local creada. Cookie para pegar en el navegador (devtools -> Application -> Cookies):")
+    print("Sesi��n local creada. Cookie para pegar en el navegador (devtools -> Application -> Cookies):")
     print()
     print(f"  umbral_local_session={token}")
     print()
     print("Usuario: demo@example.invalid (rol user, sin magic link)")
+
+
+_SOFT_QUALITATIVE_DEFAULTS = {
+    "luminosidad": {
+        "value": "media",
+        "evidence": "descripcion de demo con buena luz",
+        "confidence": 0.8,
+    },
+    "estado_general": {
+        "value": "bueno",
+        "evidence": "descripcion de demo en buen estado",
+        "confidence": 0.8,
+    },
+}
+
+
+def _build_local_criteria(factory):
+    """Criteria service for the seed: managed provider when configured,
+    otherwise the deterministic fake with qualitative defaults."""
+    from umbral.infrastructure.criteria.composition import build_criteria_service
+    from umbral.infrastructure.criteria.extractors.fake import FakeStructuredExtractor
+
+    provider = "fake"
+    managed_api_key = None
+    managed_model = None
+    try:
+        from umbral.infrastructure.config.settings import Settings
+
+        settings = Settings()
+        provider = settings.extraction_provider
+        managed_api_key = settings.extraction_managed_api_key
+        managed_model = settings.extraction_managed_model
+    except Exception:  # noqa: BLE001 - seed falls back to fake
+        pass
+    if provider == "managed" and managed_api_key:
+        return build_criteria_service(
+            session_factory=factory,
+            job_runtime=None,
+            extraction_provider="managed",
+            extraction_endpoint=None,
+            extraction_api_key=managed_api_key,
+            extraction_model=managed_model,
+            qualitative_max_attempts=2,
+            batch_size=250,
+        )
+    return build_criteria_service(
+        session_factory=factory,
+        job_runtime=None,
+        extraction_provider="fake",
+        extractor=FakeStructuredExtractor(dict(_SOFT_QUALITATIVE_DEFAULTS)),
+    )
+
+
+def _seed_soft(factory, criteria=None) -> None:
+    """Seed concepts + extraction versions and publish observations (idempotent).
+
+    The extraction runs inline (no job runtime): rules always publish; the
+    qualitative concepts publish when the extractor responds and stay ``failed``
+    with code otherwise, never breaking the seed.
+    """
+    from umbral.application.criteria.contracts import RecomputeScope
+
+    criteria = criteria or _build_local_criteria(factory)
+    correlation_id = uuid4()
+    registered = criteria.seed_registry(correlation_id)
+    summary = criteria.process_extraction(
+        RecomputeScope("full", None),
+        job_execution_id=uuid4(),
+        correlation_id=correlation_id,
+    )
+    print(
+        "Seed Criteria: "
+        f"{registered} conceptos registrados (0 si ya existian); "
+        f"extraccion -> {dict(summary)}"
+    )
 
 
 def _seed_silver(factory) -> None:

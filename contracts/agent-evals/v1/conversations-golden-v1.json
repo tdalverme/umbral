@@ -663,6 +663,103 @@
         "rejects"
       ],
       "notes": "Accion no soportada en el chat: fuera de alcance, dirige a la UI estructurada."
+    },
+    {
+      "id": "conversation-022",
+      "family": "preferences",
+      "context": {
+        "profile": {
+          "budget_max": 900000,
+          "zone": "palermo"
+        }
+      },
+      "turns": [
+        "Quiero un depto luminoso"
+      ],
+      "expectation": {
+        "tool_calls": [
+          {
+            "tool": "propose_search_preference_update",
+            "args": {
+              "preference": "luminoso"
+            },
+            "requires_confirmation": false,
+            "order": 1
+          }
+        ],
+        "grounding": {
+          "require_refs": false,
+          "min_refs": 0,
+          "declare_missing": false
+        },
+        "outcome": "completed"
+      },
+      "tags": [
+        "preferences"
+      ],
+      "notes": "Preferencia natural -> propuesta durable pendiente (HITL); la confirmacion se ejercita en los graph tests, no se auto-aplica."
+    },
+    {
+      "id": "conversation-023",
+      "family": "preferences",
+      "context": {
+        "profile": {
+          "budget_max": 900000,
+          "zone": "palermo"
+        }
+      },
+      "turns": [
+        "Prefiero con balcón"
+      ],
+      "expectation": {
+        "tool_calls": [
+          {
+            "tool": "propose_search_preference_update",
+            "args": {
+              "preference": "con balcón"
+            },
+            "requires_confirmation": false,
+            "order": 1
+          }
+        ],
+        "grounding": {
+          "require_refs": false,
+          "min_refs": 0,
+          "declare_missing": false
+        },
+        "outcome": "completed"
+      },
+      "tags": [
+        "preferences"
+      ],
+      "notes": "Alias compuesto ('con balcon') -> concepto balcon, polaridad positive."
+    },
+    {
+      "id": "conversation-024",
+      "family": "preferences",
+      "context": {
+        "profile": {
+          "budget_max": 900000,
+          "zone": "palermo"
+        }
+      },
+      "turns": [
+        "Quiero algo cerca del subte"
+      ],
+      "expectation": {
+        "tool_calls": [],
+        "grounding": {
+          "require_refs": false,
+          "min_refs": 0,
+          "declare_missing": false
+        },
+        "outcome": "completed"
+      },
+      "tags": [
+        "preferences",
+        "rejects"
+      ],
+      "notes": "Preferencia sin traduccion canonica: rechazo accionable con el vocabulario soportado (0 invencion)."
     }
   ]
 }

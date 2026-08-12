@@ -30,10 +30,14 @@ def test_intent_contract_declares_five_intents_with_policy() -> None:
         "get_search_profile",
         "find_matches",
         "explain_match",
+        "get_listing_detail",
+        "list_search_preferences",
         "search_urban_context",
     )
     assert contract.allowed_tools_for("refinamiento") == (
         "propose_search_profile_update",
+        "propose_search_preference_update",
+        "propose_search_preference_removal",
     )
     assert contract.allowed_tools_for("fuera_de_alcance") == ()
     assert contract.known_intents() == names

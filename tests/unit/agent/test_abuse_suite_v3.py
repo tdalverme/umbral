@@ -17,11 +17,15 @@ from tests.integration.chat.test_hitl_lifecycle import (
     SESSION_ID,
     USER_ID,
     _build,
+    _NoopPreferenceGateway,
     _Repo,
 )
 
 from umbral.agent.intent.policy import validate_tool_calls
 from umbral.application.chat.contracts import ChatSessionNotFound
+from umbral.infrastructure.agent.tools.preferences_loader import (
+    load_preference_vocabulary,
+)
 
 
 def test_intent_policy_rejects_out_of_policy_tool() -> None:
@@ -120,6 +124,7 @@ def test_clarification_bypass_never_proposes() -> None:
                 feedback=FakeFeedback(),
                 criteria=FakeCriteria(),
                 proposals=proposals,
+                vocabulary=load_preference_vocabulary(),
             )
         ),
         recorder=recorder,
@@ -151,6 +156,7 @@ def test_clarification_bypass_never_proposes() -> None:
         tool_executor=executor,
         intent_compiler=compiler,
         decision_gateway=proposals,
+        preference_gateway=_NoopPreferenceGateway(),
         clock=lambda: NOW,
         model_version="local-fake",
         prompt_version="agent-reply-v2",

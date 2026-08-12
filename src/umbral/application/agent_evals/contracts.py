@@ -45,6 +45,7 @@ KNOWN_FAMILIES: frozenset[str] = frozenset(
         "feedback",
         "injection",
         "safe_refusal",
+        "preferences",
     }
 )
 KNOWN_OUTCOMES: frozenset[str] = frozenset(
@@ -60,6 +61,10 @@ KNOWN_TOOLS: frozenset[str] = frozenset(
         "compare_listings",
         "record_feedback",
         "search_urban_context",
+        "propose_search_preference_update",
+        "propose_search_preference_removal",
+        "list_search_preferences",
+        "get_listing_detail",
     }
 )
 

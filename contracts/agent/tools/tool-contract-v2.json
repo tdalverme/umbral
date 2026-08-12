@@ -3,6 +3,22 @@
   "contract_version": "2",
   "tools": [
     {
+      "name": "propose_search_preference_removal",
+      "description": "Propone quitar una preferencia suave vigente del radar (p.ej. 'saca la preferencia de luminosidad'); crea una propuesta durable pendiente de confirmacion y no modifica nada hasta confirmar.",
+      "mutating": true,
+      "requires_confirmation": false,
+      "idempotent": true,
+      "timeout_seconds": 10,
+      "input_schema": {
+        "preference": {
+          "kind": "string",
+          "description": "Frase natural de la preferencia a quitar, p.ej. 'luminosidad', 'con balcon', 'la cocina'. El sistema la traduce deterministicamente al concepto; si no hay una preferencia vigente, falla con preference.not_active."
+        }
+      },
+      "output_schema": {"proposal_id": "uuid", "diff": "object", "impact": "object", "state": "string", "expires_at": "datetime"},
+      "output_limits": {"max_items": 1, "forbidden_keys": ["value", "free_feedback"]}
+    },
+    {
       "name": "get_search_profile",
       "description": "Lee el perfil autorizado de la sesion: snapshot vigente, criterios ejecutables y estado del radar.",
       "mutating": false,
@@ -14,6 +30,17 @@
       "output_limits": {"max_items": 1, "forbidden_keys": ["geometry", "value", "free_feedback"]}
     },
     {
+      "name": "list_search_preferences",
+      "description": "Lista las preferencias suaves vigentes del radar: concepto, sentido, fuente y fecha; solo lectura.",
+      "mutating": false,
+      "requires_confirmation": false,
+      "idempotent": false,
+      "timeout_seconds": 10,
+      "input_schema": {},
+      "output_schema": {"preferences": "array"},
+      "output_limits": {"max_items": 20, "forbidden_keys": ["geometry", "value", "free_feedback"]}
+    },
+    {
       "name": "propose_search_profile_update",
       "description": "Produce un diff validado con impacto y crea una propuesta durable pendiente; no modifica el perfil.",
       "mutating": true,
@@ -23,7 +50,23 @@
       "input_schema": {
         "change": {
           "kind": "object",
-          "description": "Cambio de criterios pedido por el usuario (presupuesto, zona, ambientes, superficie, hard_filters, radio); solo campos presentes."
+          "description": "Cambio de criterios pedido por el usuario usando claves canonicas; solo campos presentes. Claves validas: zona (string o lista, p.ej. 'Palermo' o ['Nuñez', 'Villa Crespo']), presupuesto o budget (numero, p.ej. 900000), ambientes (numero entero), superficie (numero en m2). No existen radio ni hard_filters en el radar: esos criterios se rechazan."
+        }
+      },
+      "output_schema": {"proposal_id": "uuid", "diff": "object", "impact": "object", "state": "string", "expires_at": "datetime"},
+      "output_limits": {"max_items": 1, "forbidden_keys": ["value", "free_feedback"]}
+    },
+    {
+      "name": "propose_search_preference_update",
+      "description": "Propone una preferencia suave del radar (luminosidad, balcon, estado general, tipo de cocina) a partir de la frase natural del usuario; crea una propuesta durable pendiente de confirmacion y no modifica nada hasta confirmar.",
+      "mutating": true,
+      "requires_confirmation": false,
+      "idempotent": true,
+      "timeout_seconds": 10,
+      "input_schema": {
+        "preference": {
+          "kind": "string",
+          "description": "Frase natural de la preferencia tal como la dijo el usuario, p.ej. 'luminoso', 'con balcon', 'cocina separada'. El sistema la traduce deterministicamente al concepto del catalogo; si no hay traduccion, la tool falla con preference.unknown_concept y debes ofrecer el vocabulario soportado."
         }
       },
       "output_schema": {"proposal_id": "uuid", "diff": "object", "impact": "object", "state": "string", "expires_at": "datetime"},
@@ -90,6 +133,38 @@
       "output_limits": {"max_items": 20, "forbidden_keys": ["geometry", "value", "fragment"]}
     },
     {
+      "name": "get_listing_detail",
+      "description": "Recupera el detalle persistido de un listing del radar de la sesion: precio, expensas, superficie, ambientes, barrio y cambios conocidos.",
+      "mutating": false,
+      "requires_confirmation": false,
+      "idempotent": false,
+      "timeout_seconds": 10,
+      "input_schema": {
+        "listing_id": {
+          "kind": "uuid",
+          "description": "Id del listing que el usuario esta viendo o pregunta."
+        }
+      },
+      "output_schema": {
+        "listing_id": "uuid",
+        "source_id": "string",
+        "neighborhood": "string|null",
+        "geo_precision": "string",
+        "total_cost": "number",
+        "price_value": "number",
+        "price_currency": "string",
+        "expenses_value": "number|null",
+        "surface_m2": "number|null",
+        "rooms": "integer|null",
+        "bedrooms": "integer|null",
+        "floor": "integer|null",
+        "property_type": "string",
+        "amenities": "array",
+        "known_changes": "array"
+      },
+      "output_limits": {"max_items": 20, "forbidden_keys": ["geometry", "value", "free_feedback"]}
+    },
+    {
       "name": "compare_listings",
       "description": "Compara listings del radar de la sesion con la comparacion estructurada persistida; sin ganador generativo.",
       "mutating": false,
@@ -124,8 +199,8 @@
         },
         "reason_keys": {
           "kind": "array",
-          "enum": ["precio", "ubicacion", "ambientes", "superficie", "piso", "balcon", "condicion", "otro"],
-          "description": "Razones rapidas del like/dislike; vacio si el usuario no dio razones."
+          "enum": ["price_too_high", "price_fits", "expensas_high", "location_no", "location_yes", "rooms_wrong", "surface_wrong", "building_state", "lighting_bad", "balcony_wanted", "access_ok", "other"],
+          "description": "Razones validas del radar; vacio si el usuario no dio razones. Mapea lo que dice el usuario: 'cocina chica' o superficie -> surface_wrong, 'poca luz' -> lighting_bad, 'no me sirve la ubicacion' -> location_no, 'otra razon' -> other."
         },
         "idempotency_key": {
           "kind": "string",

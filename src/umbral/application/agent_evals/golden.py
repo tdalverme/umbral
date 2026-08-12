@@ -31,6 +31,7 @@ _KNOWN_TAGS: frozenset[str] = frozenset(
         "interrupts",
         "injection",
         "rejects",
+        "preferences",
     }
 )
 

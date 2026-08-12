@@ -20,6 +20,8 @@ from umbral.application.feedback.contracts import (
     FeedbackEvent,
     FeedbackEventType,
     FeedbackRecord,
+    LearningProposal,
+    ProposalChange,
 )
 from umbral.application.radar.contracts import (
     ListingDetail,
@@ -37,6 +39,9 @@ from umbral.application.scoring.contracts import (
     ExplanationRisk,
 )
 from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
+from umbral.infrastructure.agent.tools.preferences_loader import (
+    load_preference_vocabulary,
+)
 
 USER_ID = UUID(int=1)
 SESSION_ID = UUID(int=2)
@@ -202,6 +207,7 @@ class FakeScoring:
 class FakeFeedback:
     def __init__(self) -> None:
         self.calls: list[Mapping[str, object]] = []
+        self.preference_calls: list[Mapping[str, object]] = []
 
     def record_feedback(
         self,
@@ -246,6 +252,119 @@ class FakeFeedback:
             learning_proposal_id=(
                 UUID(int=90) if event_type == "like" else None
             ),
+        )
+
+    def propose_preference(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        concept_key: str,
+        polarity: str,
+        value: str | None,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[object, object]:
+        self.preference_calls.append(
+            {
+                "profile_id": str(profile_id),
+                "concept_key": concept_key,
+                "polarity": polarity,
+                "value": value,
+                "correlation_id": str(correlation_id),
+            }
+        )
+        change = ProposalChange(
+            kind="preference_fact",
+            concept_key=concept_key,
+            polarity=polarity,
+            suggested_weight=0.5,
+            suggested_confidence=0.7,
+            value=value,
+        )
+        proposal = LearningProposal(
+            proposal_id=UUID(int=95),
+            profile_id=profile_id,
+            concept_id=UUID(int=96),
+            concept_key=concept_key,
+            policy_version_id=UUID(int=97),
+            policy_version="1",
+            change=change,
+            prior_fact=None,
+            evidence_refs=({"kind": "chat", "correlation_id": str(correlation_id)},),
+            state="pending",
+            expires_at=NOW,
+            superseded_by=None,
+            applied_profile_version_id=None,
+            applied_run_id=None,
+            created_at=NOW,
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        from umbral.application.feedback.contracts import PreferenceImpact
+
+        return proposal, PreferenceImpact(contradicts=False, current=None)
+
+    def active_preferences(
+        self, *, owner_id: UUID, profile_id: UUID
+    ) -> tuple[object, ...]:
+        return ()
+
+    def propose_preference_removal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        concept_key: str,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[object, object]:
+        self.preference_calls.append(
+            {
+                "profile_id": str(profile_id),
+                "concept_key": concept_key,
+                "operation": "remove",
+                "correlation_id": str(correlation_id),
+            }
+        )
+        change = ProposalChange(
+            kind="preference_fact",
+            concept_key=concept_key,
+            polarity="positive",
+            suggested_weight=0.5,
+            suggested_confidence=0.7,
+            value=None,
+        )
+        proposal = LearningProposal(
+            proposal_id=UUID(int=98),
+            profile_id=profile_id,
+            concept_id=UUID(int=96),
+            concept_key=concept_key,
+            policy_version_id=UUID(int=97),
+            policy_version="1",
+            change=change,
+            prior_fact={"polarity": "positive", "fact_source": "chat"},
+            evidence_refs=(
+                {"kind": "chat", "operation": "remove", "correlation_id": str(correlation_id)},
+            ),
+            state="pending",
+            expires_at=NOW,
+            superseded_by=None,
+            applied_profile_version_id=None,
+            applied_run_id=None,
+            created_at=NOW,
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        from umbral.application.feedback.contracts import PreferenceImpact
+
+        return proposal, PreferenceImpact(
+            contradicts=False,
+            current={"concept_key": concept_key, "polarity": "positive"},
         )
 
 
@@ -338,6 +457,7 @@ def build_executor(
                 feedback=active_services.feedback,
                 criteria=active_services.criteria,
                 proposals=active_services.proposals,  # type: ignore[arg-type]
+                vocabulary=load_preference_vocabulary(),
             )
         ),
         recorder=RecordingRunRecorder(),

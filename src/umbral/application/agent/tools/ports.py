@@ -129,6 +129,54 @@ class ProposalDecisionGateway(Protocol):
     ) -> Proposal: ...
 
 
+class PreferenceDecisionGateway(Protocol):
+    """HITL decision seam for preference proposals (014-soft-preferences-chat).
+
+    Implemented by the feedback service over durable learning proposals: the
+    graph only fetches payloads, confirms (fact + recompute) and rejects.
+    """
+
+    def get_proposal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        proposal_id: UUID,
+    ) -> object: ...
+
+    def confirm_proposal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        proposal_id: UUID,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> object: ...
+
+    def confirm_preference_removal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        proposal_id: UUID,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> object: ...
+
+    def reject_proposal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        proposal_id: UUID,
+        correlation_id: UUID,
+        actor_id: str | None = None,
+    ) -> object: ...
+
+
 class SessionScopeReader(Protocol):
     """Resolves a session's scope for an authenticated user (FR-002)."""
 

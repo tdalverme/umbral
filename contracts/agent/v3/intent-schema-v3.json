@@ -10,13 +10,19 @@
         "get_search_profile",
         "find_matches",
         "explain_match",
+        "get_listing_detail",
+        "list_search_preferences",
         "search_urban_context"
       ]
     },
     {
       "name": "refinamiento",
       "description": "Request to change search criteria; always goes through propose + HITL confirmation; never direct apply.",
-      "allowed_tools": ["propose_search_profile_update"]
+      "allowed_tools": [
+        "propose_search_profile_update",
+        "propose_search_preference_update",
+        "propose_search_preference_removal"
+      ]
     },
     {
       "name": "comparacion",

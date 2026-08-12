@@ -194,6 +194,14 @@ class ConfirmationResult:
     run_id: UUID | None
 
 
+@dataclass(frozen=True, slots=True)
+class PreferenceImpact:
+    """Impact of a proposed preference: contradiction with the active fact."""
+
+    contradicts: bool
+    current: Mapping[str, object] | None
+
+
 class FeedbackError(Exception):
     """Base class for sanitized feedback failures."""
 

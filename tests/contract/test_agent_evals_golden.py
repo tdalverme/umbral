@@ -22,6 +22,7 @@ _FAMILIES = frozenset(
         "feedback",
         "injection",
         "safe_refusal",
+        "preferences",
     }
 )
 

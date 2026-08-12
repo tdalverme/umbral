@@ -13,7 +13,44 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from tests.integration.agent.conftest import (
+    seed_profile,
+    seed_user,
+)
+from tests.integration.agent.tools.conftest import build_scope_stack
 from tests.support.containers import ServiceConnection
+from tests.support.tools import FakeCriteria, FakeFeedback, FakeRadar, FakeScoring
+
+from umbral.agent.graph import build_topology_v3
+from umbral.agent.intent.compiler import IntentCompiler
+from umbral.agent.runtime import ChatRuntime
+from umbral.agent.state import CHAT_STATE_SCHEMA_VERSION
+from umbral.agent.tools.executor import ToolExecutor
+from umbral.agent.tools.registry import ToolRegistry
+from umbral.agent.tools.tools import ToolServices, build_tool_implementations
+from umbral.application.agent.contracts import ModelResult
+from umbral.application.agent.service import RunRecorderService
+from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
+from umbral.application.chat.service import ChatService
+from umbral.infrastructure.agent.checkpointer import create_postgres_saver
+from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
+from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
+from umbral.infrastructure.agent.tools.preferences_loader import (
+    load_preference_vocabulary,
+)
+from umbral.infrastructure.db.repositories.agent import (
+    SqlAlchemyGraphRunRepository,
+    SqlAlchemyModelCallRepository,
+    SqlAlchemyNodeRunRepository,
+    SqlAlchemyProposalRepository,
+)
+from umbral.infrastructure.db.repositories.chat import (
+    SqlAlchemyChatMessageRepository,
+    SqlAlchemyChatSessionRepository,
+    SqlAlchemySearchProfileStatusReader,
+)
+from umbral.infrastructure.db.repositories.radar import SqlAlchemyEventRepository
+from umbral.infrastructure.radar.contract_loader import load_events_registry
 
 SessionFactory = Callable[[], Session]
 
@@ -33,42 +70,6 @@ def chat_backend(request: pytest.FixtureRequest) -> tuple[SessionFactory, str]:
 
     request.addfinalizer(teardown)
     return factory, connection.url
-from tests.integration.agent.conftest import (
-    seed_profile,
-    seed_user,
-)
-from tests.integration.agent.tools.conftest import build_scope_stack
-from tests.support.tools import FakeCriteria, FakeFeedback, FakeRadar, FakeScoring
-
-from umbral.agent.graph import build_topology_v3
-from umbral.agent.intent.compiler import IntentCompiler
-from umbral.agent.runtime import ChatRuntime
-from umbral.agent.state import CHAT_STATE_SCHEMA_VERSION
-from umbral.agent.tools.executor import ToolExecutor
-from umbral.agent.tools.registry import ToolRegistry
-from umbral.agent.tools.tools import ToolServices, build_tool_implementations
-from umbral.application.agent.contracts import ModelResult
-from umbral.application.agent.service import RunRecorderService
-from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
-from umbral.application.chat.service import ChatService
-from umbral.infrastructure.agent.checkpointer import create_postgres_saver
-from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
-from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
-from umbral.infrastructure.db.repositories.agent import (
-    SqlAlchemyGraphRunRepository,
-    SqlAlchemyModelCallRepository,
-    SqlAlchemyNodeRunRepository,
-    SqlAlchemyProposalRepository,
-)
-from umbral.infrastructure.db.repositories.chat import (
-    SqlAlchemyChatMessageRepository,
-    SqlAlchemyChatSessionRepository,
-    SqlAlchemySearchProfileStatusReader,
-)
-from umbral.infrastructure.db.repositories.radar import SqlAlchemyEventRepository
-from umbral.infrastructure.radar.contract_loader import load_events_registry
-
-SessionFactory = Callable[[], Session]
 
 _NOW = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
 _tick = count()
@@ -82,6 +83,22 @@ _REPLY_SCHEMA = {
 
 def _clock() -> datetime:
     return _NOW + timedelta(seconds=next(_tick))
+
+
+class _NoopPreferenceGateway:
+    """E2E chat tests never reach the preference gateway."""
+
+    def get_proposal(self, **kwargs: object) -> object:
+        raise AssertionError("preference gateway must not be called here")
+
+    def confirm_proposal(self, **kwargs: object) -> object:
+        raise AssertionError("preference gateway must not be called here")
+
+    def confirm_preference_removal(self, **kwargs: object) -> object:
+        raise AssertionError("preference gateway must not be called here")
+
+    def reject_proposal(self, **kwargs: object) -> object:
+        raise AssertionError("preference gateway must not be called here")
 
 
 class _ScriptedGateway:
@@ -166,6 +183,7 @@ def _build_runtime(factory, url: str) -> ChatRuntime:
                 feedback=FakeFeedback(),
                 criteria=FakeCriteria(),
                 proposals=proposals,
+                vocabulary=load_preference_vocabulary(),
             )
         ),
         recorder=recorder,
@@ -187,6 +205,7 @@ def _build_runtime(factory, url: str) -> ChatRuntime:
         tool_executor=executor,
         intent_compiler=compiler,
         decision_gateway=proposals,
+        preference_gateway=_NoopPreferenceGateway(),
         clock=_clock,
         model_version="local-fake",
         prompt_version="agent-reply-v2",

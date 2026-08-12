@@ -33,6 +33,7 @@ from umbral.application.feedback.contracts import (
     LearningPolicyDoc,
     LearningPolicyVersion,
     LearningProposal,
+    PreferenceImpact,
     ProposalChange,
     ProposalNotConfirmed,
     ProposalNotFound,
@@ -329,6 +330,282 @@ class FeedbackService:
         if proposal.state == "pending":
             proposal = self._expire_if_overdue(proposal)
         return proposal
+
+    def propose_preference(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        concept_key: str,
+        polarity: str,
+        value: str | None,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[LearningProposal, PreferenceImpact]:
+        """Create a durable pending preference proposal (chat HITL, D-02).
+
+        The caller (tool) already resolved the canonical vocabulary; here the
+        concept is validated against the catalog, the policy defaults drive
+        weight/confidence, and a contradiction with the active fact is
+        reported (never auto-applied, constitution II).
+        """
+        profile = self._owned(owner_id, profile_id)
+        if not is_polarity(polarity) or polarity == "neutral":
+            raise FeedbackValidationError(("preference.invalid_polarity",))
+        resolved = self.concepts.get(concept_key)
+        if resolved is None:
+            raise FeedbackValidationError(("preference.unknown_concept",))
+        concept_id, concept_key = resolved
+        if self.proposals.pending_for_concept(profile.profile_id, concept_id) is not None:
+            raise FeedbackValidationError(("preference.already_pending",))
+        active = self._active_fact(profile.profile_id, concept_key)
+        current_fact: Mapping[str, object] | None = None
+        contradicts = False
+        if active is not None:
+            current_fact = {
+                "concept_key": active.concept_key,
+                "polarity": active.polarity,
+                "fact_source": active.fact_source,
+                "created_at": active.created_at.isoformat(),
+            }
+            contradicts = active.polarity != polarity
+        policy = self.latest_learning_document()
+        version = self.policies.latest_version(self.policy_seed_version)
+        if version is None:
+            raise FeedbackValidationError(("preference.policy_unavailable",))
+        proposal = LearningProposal(
+            proposal_id=uuid4(),
+            profile_id=profile.profile_id,
+            concept_id=concept_id,
+            concept_key=concept_key,
+            policy_version_id=version.version_id,
+            policy_version=version.contract_version,
+            change=ProposalChange(
+                kind="preference_fact",
+                concept_key=concept_key,
+                polarity=polarity,
+                suggested_weight=policy.default_suggested_weight,
+                suggested_confidence=policy.default_suggested_confidence,
+                value=value,
+            ),
+            prior_fact=(
+                {
+                    "value": active.value,
+                    "weight": active.weight,
+                    "polarity": active.polarity,
+                    "confidence": active.confidence,
+                    "fact_source": active.fact_source,
+                }
+                if active is not None
+                else None
+            ),
+            evidence_refs=(
+                {"kind": "chat", "correlation_id": str(correlation_id)},
+            ),
+            state="pending",
+            expires_at=self.clock() + timedelta(days=policy.proposal_expiration_days),
+            superseded_by=None,
+            applied_profile_version_id=None,
+            applied_run_id=None,
+            created_at=self.clock(),
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        self.proposals.insert(proposal)
+        self._emit_server_event(
+            event_type="learning.proposal_created.v1",
+            correlation_id=correlation_id,
+            actor_id=actor_id,
+            payload={
+                "proposal_id": str(proposal.proposal_id),
+                "search_profile_id": str(profile.profile_id),
+                "concept_key": concept_key,
+                "polarity": polarity,
+                "evidence_count": len(proposal.evidence_refs),
+                "policy_version": version.contract_version,
+                "source": "chat",
+            },
+        )
+        return proposal, PreferenceImpact(
+            contradicts=contradicts, current=current_fact
+        )
+
+    def active_preferences(
+        self, *, owner_id: UUID, profile_id: UUID
+    ) -> tuple[PreferenceFact, ...]:
+        """Active preference facts of a radar (US3, read-only)."""
+        self._owned(owner_id, profile_id)
+        return self.facts.active_for_profile(profile_id)
+
+    def propose_preference_removal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        concept_key: str,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[LearningProposal, PreferenceImpact]:
+        """Create a durable pending removal proposal for an active preference.
+
+        Requires an active fact; the proposal references the current fact and
+        the HITL confirm supersedes it without replacement (US3, D-08).
+        """
+        profile = self._owned(owner_id, profile_id)
+        resolved = self.concepts.get(concept_key)
+        if resolved is None:
+            raise FeedbackValidationError(("preference.unknown_concept",))
+        concept_id, concept_key = resolved
+        active = self._active_fact(profile.profile_id, concept_key)
+        if active is None:
+            raise FeedbackValidationError(("preference.not_active",))
+        if self.proposals.pending_for_concept(profile.profile_id, concept_id) is not None:
+            raise FeedbackValidationError(("preference.already_pending",))
+        policy = self.latest_learning_document()
+        version = self.policies.latest_version(self.policy_seed_version)
+        if version is None:
+            raise FeedbackValidationError(("preference.policy_unavailable",))
+        proposal = LearningProposal(
+            proposal_id=uuid4(),
+            profile_id=profile.profile_id,
+            concept_id=concept_id,
+            concept_key=concept_key,
+            policy_version_id=version.version_id,
+            policy_version=version.contract_version,
+            change=ProposalChange(
+                kind="preference_fact",
+                concept_key=concept_key,
+                polarity=active.polarity,
+                suggested_weight=policy.default_suggested_weight,
+                suggested_confidence=policy.default_suggested_confidence,
+                value=active.value,
+            ),
+            prior_fact={
+                "value": active.value,
+                "weight": active.weight,
+                "polarity": active.polarity,
+                "confidence": active.confidence,
+                "fact_source": active.fact_source,
+            },
+            evidence_refs=(
+                {"kind": "chat", "operation": "remove", "correlation_id": str(correlation_id)},
+            ),
+            state="pending",
+            expires_at=self.clock() + timedelta(days=policy.proposal_expiration_days),
+            superseded_by=None,
+            applied_profile_version_id=None,
+            applied_run_id=None,
+            created_at=self.clock(),
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        self.proposals.insert(proposal)
+        self._emit_server_event(
+            event_type="learning.proposal_created.v1",
+            correlation_id=correlation_id,
+            actor_id=actor_id,
+            payload={
+                "proposal_id": str(proposal.proposal_id),
+                "search_profile_id": str(profile.profile_id),
+                "concept_key": concept_key,
+                "polarity": active.polarity,
+                "evidence_count": len(proposal.evidence_refs),
+                "policy_version": version.contract_version,
+                "source": "chat",
+                "operation": "remove",
+            },
+        )
+        return proposal, PreferenceImpact(
+            contradicts=False,
+            current={
+                "concept_key": active.concept_key,
+                "polarity": active.polarity,
+                "fact_source": active.fact_source,
+            },
+        )
+
+    def confirm_preference_removal(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        proposal_id: UUID,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> ConfirmationResult:
+        """Confirm a removal proposal: supersede the fact, recompile, recompute.
+
+        Mirror of ``confirm_proposal`` without a replacement fact (US3, D-08).
+        """
+        self._owned(owner_id, profile_id)
+        proposal = self._owned_proposal(profile_id, proposal_id)
+        if proposal.state == "pending":
+            proposal = self._expire_if_overdue(proposal)
+        if proposal.state != "pending":
+            raise ProposalNotPending(f"proposal is {proposal.state}")
+        if self.radar is None or self.criteria is None:
+            raise FeedbackStateError("learning confirm is not available")
+        change = proposal.change
+        prior_fact = dict(proposal.prior_fact or {})
+        removed = self.criteria.remove_preference_fact(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            concept_key=change.concept_key,
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        if removed == 0:
+            raise FeedbackStateError("preference has no active fact to remove")
+        updated_profile, version = self.radar.bump_profile_version(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        self.criteria.compile_profile(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            profile_version_id=version.version_id,
+            edits=(),
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        run = self.radar.submit_run(profile=updated_profile, version=version)
+        confirmed = self.proposals.update(
+            _with_state(
+                proposal,
+                state="confirmed",
+                prior_fact=prior_fact,
+                applied_profile_version_id=version.version_id,
+                applied_run_id=run.run_id if run is not None else None,
+            )
+        )
+        self._emit_server_event(
+            event_type="learning.proposal_confirmed.v1",
+            correlation_id=correlation_id,
+            actor_id=actor_id,
+            payload={
+                "proposal_id": str(proposal.proposal_id),
+                "search_profile_id": str(profile_id),
+                "concept_key": change.concept_key,
+                "applied_profile_version": version.profile_version,
+                "run_id": str(run.run_id) if run is not None else "",
+                "operation": "remove",
+            },
+        )
+        return ConfirmationResult(
+            proposal=confirmed,
+            applied_profile_version=version.profile_version,
+            run_id=run.run_id if run is not None else None,
+        )
 
     def confirm_proposal(
         self,

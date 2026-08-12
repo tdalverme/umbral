@@ -208,6 +208,37 @@ class SqlAlchemyFactRepository:
             )
             return tuple(_to_domain_fact(model) for model in models)
 
+    def supersede_active(
+        self,
+        profile_id: UUID,
+        concept_key: str,
+        *,
+        superseded_by: UUID | None,
+        correlation_id: UUID,
+        actor_kind: str,
+        actor_id: str | None,
+    ) -> int:
+        with self.session_factory() as session:
+            now = datetime.now(timezone.utc)
+            result = session.execute(
+                update(PreferenceFactModel)
+                .where(
+                    PreferenceFactModel.profile_id == profile_id,
+                    PreferenceFactModel.concept_key == concept_key,
+                    PreferenceFactModel.state == "active",
+                )
+                .values(
+                    state="superseded",
+                    superseded_by=superseded_by,
+                    updated_at=now,
+                    actor_kind=actor_kind,
+                    actor_id=actor_id,
+                    correlation_id=correlation_id,
+                )
+            )
+            session.commit()
+            return int(cast(CursorResult[Any], result).rowcount or 0)
+
 
 class SqlAlchemyCompilationRepository:
     def __init__(self, session_factory: SessionFactory) -> None:

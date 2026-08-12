@@ -29,6 +29,10 @@ _INTENT_EXAMPLES: Mapping[str, tuple[str, ...]] = {
         "quiero vivir en una zona linda",
         "cambia el radio de busqueda",
         "no me vuelvas a mostrar cosas de ese barrio",
+        "quiero un depto luminoso",
+        "prefiero con balcon",
+        "quiero una cocina separada",
+        "no me gustan los deptos oscuros",
     ),
     "comparacion": (
         "compara estos dos deptos que guarde",
@@ -73,6 +77,8 @@ _CANONICAL_KEYS: Mapping[str, str] = {
     "metros": "superficie",
     "metros_cuadrados": "superficie",
     "m2": "superficie",
+    "preferencia": "preferencia",
+    "preferencias": "preferencia",
 }
 
 
@@ -144,11 +150,14 @@ class IntentCompiler:
             },
             "description": (
                 "Parametros del mensaje con claves canonicas "
-                "(budget, zona, ambientes, superficie, hard_filters, radio u "
-                "otra relevante del dominio), value en texto plano y "
-                "confidence entre 0 y 1. Ejemplos de extraccion: "
+                "(budget, zona, ambientes, superficie, hard_filters, radio, "
+                "preferencia u otra relevante del dominio), value en texto "
+                "plano y confidence entre 0 y 1. Ejemplos de extraccion: "
                 "'Subi el presupuesto a 900' -> [budget=900, confianza alta]; "
-                "'Quiero 2 ambientes en Palermo' -> [ambientes=2, zona=Palermo]."
+                "'Quiero 2 ambientes en Palermo' -> [ambientes=2, zona=Palermo]; "
+                "'Quiero un depto luminoso' -> [preferencia=luminoso, "
+                "confianza alta]; 'Prefiero con balcon' -> "
+                "[preferencia=con balcon, confianza alta]."
             ),
         }
         prompt_schema["high_impact_missing"] = {

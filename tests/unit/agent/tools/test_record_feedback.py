@@ -16,7 +16,7 @@ def test_record_feedback_like_returns_learning_proposal() -> None:
         {
             "listing_id": str(UUID(int=70)),
             "decision": "like",
-            "reason_keys": ["luminosidad"],
+            "reason_keys": ["balcony_wanted"],
             "idempotency_key": "k-1",
         },
     )
@@ -25,7 +25,7 @@ def test_record_feedback_like_returns_learning_proposal() -> None:
     assert payload(result)["noop"] is False
     assert payload(result)["learning_proposal_id"] is not None
     assert services.feedback.calls[0]["event_type"] == "like"
-    assert services.feedback.calls[0]["reason_keys"] == ("luminosidad",)
+    assert services.feedback.calls[0]["reason_keys"] == ("balcony_wanted",)
 
 
 def test_record_feedback_dislike_has_no_proposal() -> None:

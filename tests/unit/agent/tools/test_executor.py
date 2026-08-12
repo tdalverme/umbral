@@ -167,6 +167,41 @@ def test_idempotency_key_required_for_mutating_tools() -> None:
     assert result.error_code == ToolIdempotencyConflict.code
 
 
+def test_args_enum_violation_rejected_with_zero_effects() -> None:
+    executor, _ = _make_executor(
+        {"record_feedback": lambda _ctx, _args: {"noop": True}}
+    )
+    result = _call(
+        executor,
+        "record_feedback",
+        {
+            "listing_id": str(UUID(int=1)),
+            "decision": "like",
+            "reason_keys": ["inventada"],
+            "idempotency_key": "k-1",
+        },
+    )
+    assert result.status == "error"
+    assert result.error_code == ToolArgsInvalid.code
+
+
+def test_args_enum_accepts_published_values() -> None:
+    executor, _ = _make_executor(
+        {"record_feedback": lambda _ctx, _args: {"noop": True}}
+    )
+    result = _call(
+        executor,
+        "record_feedback",
+        {
+            "listing_id": str(UUID(int=1)),
+            "decision": "dislike",
+            "reason_keys": ["surface_wrong", "other"],
+            "idempotency_key": "k-1",
+        },
+    )
+    assert result.status == "ok"
+
+
 def test_successful_tool_is_redacted_and_recorded() -> None:
     def find_matches(_ctx, _args):
         return {

@@ -11,6 +11,7 @@ obsolescence (profile version moved past the proposal's base) or expiry
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
@@ -27,6 +28,7 @@ from umbral.application.agent.tools.contracts import (
     ProposalNotFound,
     ProposalNotPending,
     ProposalStale,
+    ProposalUnsupportedChange,
 )
 from umbral.application.agent.tools.ports import (
     EventWriter,
@@ -35,7 +37,11 @@ from umbral.application.agent.tools.ports import (
 )
 from umbral.application.events.contracts import ProductEvent
 from umbral.application.events.registry import EventsRegistrySpec, event_version
-from umbral.application.radar.contracts import SearchProfile
+from umbral.application.radar.contracts import (
+    RadarStateError,
+    RadarValidationError,
+    SearchProfile,
+)
 from umbral.domain.errors import ConcurrencyConflict
 
 _ALLOWED_CHANGE_KEYS = {
@@ -47,6 +53,26 @@ _ALLOWED_CHANGE_KEYS = {
     "surface_min",
     "surface_max",
 }
+
+# Canonical chat vocabulary mapped deterministically onto profile fields; the
+# LLM never picks profile field names (0 guessing, auditable translation).
+_CANONICAL_CHANGE_KEYS = {
+    "zona": "zones",
+    "budget": "budget_max",
+    "presupuesto": "budget_max",
+    "precio": "budget_max",
+    "ambientes": "min_rooms",
+    "habitaciones": "min_rooms",
+    "rooms": "min_rooms",
+    "superficie": "surface_min",
+    "metros": "surface_min",
+    "metros_cuadrados": "surface_min",
+    "m2": "surface_min",
+}
+
+# High-impact criteria without a supporting profile field: rejected with an
+# actionable code so the agent explains what it can actually change.
+_UNSUPPORTED_CHANGE_KEYS = frozenset({"radio", "hard_filters"})
 
 Clock = Callable[[], datetime]
 
@@ -103,13 +129,13 @@ class SearchProfileUpdateProposals:
         change: Mapping[str, object],
         correlation_id: UUID,
     ) -> Proposal:
-        unknown = set(change) - _ALLOWED_CHANGE_KEYS
-        if unknown:
-            raise ProposalInvalidChange()
-        profile = self.radar.validate_change(
-            owner_id=user_id, profile_id=search_profile_id, changes=change
+        profile_change = _normalize_change(change)
+        profile = self._validate(
+            user_id=user_id,
+            search_profile_id=search_profile_id,
+            change=profile_change,
         )
-        diff = {key: value for key, value in change.items()}
+        diff = {key: value for key, value in profile_change.items()}
         impact = {
             "fields_changed": sorted(diff),
             "will_recompute": profile.status == "active",
@@ -260,13 +286,13 @@ class SearchProfileUpdateProposals:
         original = self._get_scoped(user_id, session_id, search_profile_id, proposal_id)
         if original.state != "pending":
             raise ProposalNotPending()
-        unknown = set(change) - _ALLOWED_CHANGE_KEYS
-        if unknown:
-            raise ProposalInvalidChange()
-        profile = self.radar.validate_change(
-            owner_id=user_id, profile_id=search_profile_id, changes=change
+        profile_change = _normalize_change(change)
+        profile = self._validate(
+            user_id=user_id,
+            search_profile_id=search_profile_id,
+            change=profile_change,
         )
-        diff = {key: value for key, value in change.items()}
+        diff = {key: value for key, value in profile_change.items()}
         derived = Proposal(
             proposal_id=uuid4(),
             session_id=session_id,
@@ -345,6 +371,18 @@ class SearchProfileUpdateProposals:
             raise ProposalNotFound()
         return proposal
 
+    def _validate(
+        self, *, user_id: UUID, search_profile_id: UUID, change: Mapping[str, object]
+    ) -> SearchProfile:
+        try:
+            return self.radar.validate_change(
+                owner_id=user_id,
+                profile_id=search_profile_id,
+                changes=change,
+            )
+        except (RadarValidationError, RadarStateError) as exc:
+            raise ProposalInvalidChange() from exc
+
     def _emit_server_event(
         self,
         *,
@@ -365,3 +403,83 @@ class SearchProfileUpdateProposals:
                 payload=dict(payload),
             )
         )
+
+
+def _normalize_change(change: Mapping[str, object]) -> dict[str, object]:
+    """Map the canonical chat vocabulary onto profile fields (deterministic).
+
+    Canonical keys (zona, presupuesto, ambientes, superficie...) are translated
+    to profile fields with value normalization (zone codes without accents or
+    case); profile field names pass through untouched. Unsupported criteria
+    (radio, hard_filters) raise ``ProposalUnsupportedChange``; unknown keys
+    raise ``ProposalInvalidChange``.
+    """
+    unsupported = set(change) & _UNSUPPORTED_CHANGE_KEYS
+    if unsupported:
+        raise ProposalUnsupportedChange(sorted(unsupported)[0])
+    translated: dict[str, object] = {}
+    for key, value in change.items():
+        target = _CANONICAL_CHANGE_KEYS.get(key, key)
+        translated[target] = _normalize_value(target, value)
+    unknown = set(translated) - _ALLOWED_CHANGE_KEYS
+    if unknown:
+        raise ProposalInvalidChange()
+    return translated
+
+
+def _normalize_value(field: str, value: object) -> object:
+    if field == "zones":
+        return _normalize_zones(value)
+    if field == "min_rooms":
+        return _as_int(value)
+    if field in {"budget_max", "budget_min", "surface_min", "surface_max"}:
+        return _as_number(value)
+    return value
+
+
+def _normalize_zones(value: object) -> tuple[str, ...]:
+    raw = value if isinstance(value, list) else [value]
+    if not raw:
+        raise ProposalInvalidChange()
+    zones: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            raise ProposalInvalidChange()
+        code = _zone_code(item)
+        if not code:
+            raise ProposalInvalidChange()
+        zones.append(code)
+    return tuple(zones)
+
+
+def _zone_code(name: str) -> str:
+    code = name.strip().lower()
+    code = "".join(
+        char
+        for char in unicodedata.normalize("NFD", code)
+        if unicodedata.category(char) != "Mn"
+    )
+    return code.replace(" ", "_")
+
+
+def _as_int(value: object) -> int:
+    if isinstance(value, bool):
+        raise ProposalInvalidChange()
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    raise ProposalInvalidChange()
+
+
+def _as_number(value: object) -> float:
+    if isinstance(value, bool):
+        raise ProposalInvalidChange()
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            raise ProposalInvalidChange() from None
+    raise ProposalInvalidChange()

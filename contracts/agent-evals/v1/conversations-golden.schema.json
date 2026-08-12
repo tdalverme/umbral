@@ -26,7 +26,7 @@
         "id": { "type": "string", "pattern": "^conversation-[0-9]{3}$" },
         "family": {
           "type": "string",
-          "enum": ["onboarding", "ambiguous_change", "explanation", "comparison", "feedback", "injection", "safe_refusal"]
+          "enum": ["onboarding", "ambiguous_change", "explanation", "comparison", "feedback", "injection", "safe_refusal", "preferences"]
         },
         "context": { "$ref": "#/$defs/context" },
         "turns": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },

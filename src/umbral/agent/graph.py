@@ -38,7 +38,10 @@ from umbral.agent.tools.executor import ToolExecutor
 from umbral.application.agent.contracts import ModelCall, ModelResult, NodeRun
 from umbral.application.agent.ports import ModelGateway, RunRecorder
 from umbral.application.agent.tools.contracts import Proposal
-from umbral.application.agent.tools.ports import ProposalDecisionGateway
+from umbral.application.agent.tools.ports import (
+    PreferenceDecisionGateway,
+    ProposalDecisionGateway,
+)
 from umbral.application.chat.ports import ConversationGateway
 
 TOPOLOGY_VERSION = 1
@@ -49,6 +52,12 @@ _EFFECT_USER_MESSAGE = "user_message"
 _EFFECT_ASSISTANT_MESSAGE = "assistant_message"
 
 _PROPOSE_TOOL = "propose_search_profile_update"
+_PREFERENCE_PROPOSE_TOOL = "propose_search_preference_update"
+_PREFERENCE_REMOVAL_TOOL = "propose_search_preference_removal"
+_PROPOSE_TOOLS = frozenset(
+    {_PROPOSE_TOOL, _PREFERENCE_PROPOSE_TOOL, _PREFERENCE_REMOVAL_TOOL}
+)
+_PREFERENCE_TOOLS = frozenset({_PREFERENCE_PROPOSE_TOOL, _PREFERENCE_REMOVAL_TOOL})
 
 
 @dataclass(slots=True)
@@ -101,6 +110,7 @@ class GraphDepsV3(GraphDepsV2):
 
     intent_compiler: IntentCompiler
     decision_gateway: ProposalDecisionGateway
+    preference_gateway: PreferenceDecisionGateway
     high_impact_keys: tuple[str, ...]
     clarification_min_confidence: float
     clarification_max_rounds: int
@@ -544,6 +554,7 @@ def build_topology_v3(
     tool_executor: ToolExecutor,
     intent_compiler: IntentCompiler,
     decision_gateway: ProposalDecisionGateway,
+    preference_gateway: PreferenceDecisionGateway,
     clock: Callable[[], datetime],
     model_version: str,
     prompt_version: str,
@@ -578,6 +589,7 @@ def build_topology_v3(
         max_calls_per_turn=max_calls_per_turn,
         intent_compiler=intent_compiler,
         decision_gateway=decision_gateway,
+        preference_gateway=preference_gateway,
         high_impact_keys=high_impact_keys,
         clarification_min_confidence=clarification_min_confidence,
         clarification_max_rounds=clarification_max_rounds,
@@ -805,13 +817,55 @@ def build_topology_v3(
                         "pide oportunidades o matches disponibles, ejecuta "
                         "find_matches antes de responder; si pide la "
                         "explicacion de un listing, ejecuta explain_match; "
+                        "si pide datos del listing (precio, ambientes, "
+                        "barrio), ejecuta get_listing_detail; "
                         "si pide comparar listings, ejecuta compare_listings. "
                         "Las tools de lectura se ejecutan directamente sin "
                         "pedir permiso; no preguntes si quieres mostrar "
                         "opciones: muestralas. "
                         "El campo refs del JSON debe citar los ids exactos de "
                         "listings o criterios devueltos por las tools; nunca "
-                        "inventes ids ni hechos."
+                        "inventes ids ni hechos.\n"
+                        "Errores de tools: si una tool devuelve error, "
+                        "explica brevemente que paso y ofrece una alternativa "
+                        "real; nunca inventes datos ni repitas la pregunta. "
+                        "Codigos conocidos:\n"
+                        "- proposal.unsupported_key: el criterio pedido "
+                        "(radio, hard_filters) no existe en el radar; ofrece "
+                        "cambiar zona, presupuesto, ambientes o superficie.\n"
+                        "- proposal.invalid_change: el cambio no es valido "
+                        "(zona fuera de CABA o valor no numerico); propon "
+                        "valores validos.\n"
+                        "- preference.unknown_concept: esa preferencia "
+                        "todavia no la entiendo; ofrece luminosidad, balcon, "
+                        "buen estado o tipo de cocina.\n"
+                        "- preference.value_required: falta el valor de la "
+                        "preferencia (p.ej. cocina integrada o separada); "
+                        "pedilo antes de proponer.\n"
+                        "- preference.already_pending: ya hay una propuesta "
+                        "de preferencia esperando confirmacion para ese "
+                        "concepto; pedi que la confirme o la rechace.\n"
+                        "- preference.not_active: esa preferencia no esta "
+                        "vigente en el radar; ofrece listar las vigentes "
+                        "con list_search_preferences.\n"
+                        "- tool.no_run: todavia no hay un analisis del radar "
+                        "para explicar; ofrece ver los matches disponibles.\n"
+                        "- tool.listing_not_accessible: ese listing no esta "
+                        "en tu radar; pedi el ID correcto u ofrece los "
+                        "matches.\n"
+                        "- tool.args_invalid: falta un dato para la accion; "
+                        "pedi el dato que falta.\n"
+                        "Preferencias: cuando propongas una preferencia "
+                        "(propose_search_preference_update), ejecuta una sola "
+                        "propuesta por turno y usa la frase natural del "
+                        "usuario (p.ej. 'luminoso', 'con balcon'). Si el "
+                        "impacto devuelto marca contradicts, pregunta al "
+                        "usuario como dejar la preferencia antes de "
+                        "confirmar. Si el usuario pide quitar una "
+                        "preferencia (p.ej. 'saca la de luminosidad'), "
+                        "ejecuta list_search_preferences para ver las "
+                        "vigentes y luego propose_search_preference_removal "
+                        "con la frase del concepto."
                     ),
                 }
             )
@@ -974,7 +1028,9 @@ def build_topology_v3(
         for call in runnable:
             name = str(call.get("tool", ""))
             raw_args = call.get("args")
-            args = dict(raw_args) if isinstance(raw_args, Mapping) else {}
+            args: Mapping[str, object] = (
+                dict(raw_args) if isinstance(raw_args, Mapping) else {}
+            )
             violations = validate_tool_calls(
                 allowed_tools=allowed_tools,
                 tool_calls=[{"tool": name, "args": args}],
@@ -990,6 +1046,13 @@ def build_topology_v3(
                     }
                 )
                 continue
+            args = _with_idempotency_key(
+                executor=deps.tool_executor,
+                name=name,
+                args=args,
+                session_id=_uuid(context, "session_id"),
+                run_id=run_id,
+            )
             outcome = deps.tool_executor.execute(
                 user_id=_uuid(context, "user_id"),
                 session_id=_uuid(context, "session_id"),
@@ -1013,7 +1076,7 @@ def build_topology_v3(
         context["tool_loop_count"] = count + len(runnable)
         context["tool_results_context"] = results
         if any(
-            item.get("tool") == _PROPOSE_TOOL
+            item.get("tool") in _PROPOSE_TOOLS
             and item.get("status") == "ok"
             and isinstance(item.get("result"), Mapping)
             for item in results
@@ -1038,13 +1101,16 @@ def build_topology_v3(
         context = _context(state)
         pending = state.get("pending_action")
         if pending is None:
-            proposal_id, diff, impact, expires_at = _waiting_proposal(state)
+            kind, proposal_id, diff, impact, expires_at = _waiting_proposal(state)
+            operation = str(diff.get("operation", "propose"))
             state["pending_action"] = {
-                "kind": "proposal",
+                "kind": kind,
                 "proposal_id": proposal_id,
+                "operation": operation,
             }
             payload: dict[str, object] = {
                 "type": "proposal_decision",
+                "kind": kind,
                 "proposal_id": proposal_id,
                 "diff": diff,
                 "impact": impact,
@@ -1052,14 +1118,23 @@ def build_topology_v3(
             }
         else:
             pending_data = pending if isinstance(pending, Mapping) else {}
+            kind = str(pending_data.get("kind", "profile"))
             proposal_id = str(pending_data.get("proposal_id", ""))
-            proposal = deps.decision_gateway.get(
-                user_id=_uuid(context, "user_id"),
-                session_id=_uuid(context, "session_id"),
-                search_profile_id=_uuid(context, "search_profile_id"),
-                proposal_id=UUID(proposal_id),
-            )
-            payload = _payload_from_proposal(proposal)
+            if kind == "preference":
+                proposal = deps.preference_gateway.get_proposal(
+                    owner_id=_uuid(context, "user_id"),
+                    profile_id=_uuid(context, "search_profile_id"),
+                    proposal_id=UUID(proposal_id),
+                )
+                payload = _payload_from_preference_proposal(proposal)
+            else:
+                proposal = deps.decision_gateway.get(
+                    user_id=_uuid(context, "user_id"),
+                    session_id=_uuid(context, "session_id"),
+                    search_profile_id=_uuid(context, "search_profile_id"),
+                    proposal_id=UUID(proposal_id),
+                )
+                payload = _payload_from_proposal(proposal)
         decision = interrupt(payload)
         context["decision"] = decision
         context["resume_decision"] = False
@@ -1085,10 +1160,22 @@ def build_topology_v3(
             return {"context": context}
         kind = decision.get("kind")
         pending = state.get("pending_action")
+        pending_kind = (
+            str(pending.get("kind", "profile"))
+            if isinstance(pending, Mapping)
+            else "profile"
+        )
         proposal_id = (
             str(pending.get("proposal_id", "")) if isinstance(pending, Mapping) else ""
         )
         if kind == "edit":
+            if pending_kind == "preference":
+                context["generated_reply"] = {
+                    "text": "No puedo editar una preferencia aún; "
+                    "rechazala y proponé otra.",
+                    "refs": [],
+                }
+                return {"context": context}
             change = decision.get("change")
             if not isinstance(change, Mapping):
                 change = {}
@@ -1101,12 +1188,58 @@ def build_topology_v3(
                 correlation_id=_uuid(context, "correlation_id"),
             )
             state["pending_action"] = {
-                "kind": "proposal",
+                "kind": "profile",
                 "proposal_id": str(derived.proposal_id),
             }
             context["resume_decision"] = True
             return {"context": context, "pending_action": state["pending_action"]}
         if kind == "approve":
+            if pending_kind == "preference":
+                operation = (
+                    str(pending.get("operation", "propose"))
+                    if isinstance(pending, Mapping)
+                    else "propose"
+                )
+                try:
+                    if operation == "remove":
+                        deps.preference_gateway.confirm_preference_removal(
+                            owner_id=_uuid(context, "user_id"),
+                            profile_id=_uuid(context, "search_profile_id"),
+                            proposal_id=UUID(proposal_id),
+                            correlation_id=_uuid(context, "correlation_id"),
+                            actor_kind="user",
+                            actor_id=str(_uuid(context, "user_id")),
+                        )
+                    else:
+                        deps.preference_gateway.confirm_proposal(
+                            owner_id=_uuid(context, "user_id"),
+                            profile_id=_uuid(context, "search_profile_id"),
+                            proposal_id=UUID(proposal_id),
+                            correlation_id=_uuid(context, "correlation_id"),
+                            actor_kind="user",
+                            actor_id=str(_uuid(context, "user_id")),
+                        )
+                except Exception as exc:  # noqa: BLE001 - typed at the boundary
+                    context["generated_reply"] = {
+                        "text": "No pude aplicar la preferencia. "
+                        + _friendly_error(getattr(exc, "code", None)),
+                        "refs": [],
+                    }
+                    return {"context": context}
+                _record_preference_confirmation(
+                    context=context,
+                    proposal_id=proposal_id,
+                    operation=operation,
+                )
+                context["generated_reply"] = {
+                    "text": (
+                        "Listo, quité la preferencia de tu radar."
+                        if operation == "remove"
+                        else "Listo, apliqué la preferencia a tu radar."
+                    ),
+                    "refs": [],
+                }
+                return {"context": context}
             idempotency_key = str(decision.get("idempotency_key", ""))
             outcome = deps.tool_executor.execute(
                 user_id=_uuid(context, "user_id"),
@@ -1141,6 +1274,27 @@ def build_topology_v3(
                 }
             return {"context": context}
         if kind == "reject":
+            if pending_kind == "preference":
+                try:
+                    deps.preference_gateway.reject_proposal(
+                        owner_id=_uuid(context, "user_id"),
+                        profile_id=_uuid(context, "search_profile_id"),
+                        proposal_id=UUID(proposal_id),
+                        correlation_id=_uuid(context, "correlation_id"),
+                        actor_id=str(_uuid(context, "user_id")),
+                    )
+                except Exception:  # noqa: BLE001 - typed at the boundary
+                    context["generated_reply"] = {
+                        "text": "No pude descartar la preferencia; "
+                        "intentá de nuevo.",
+                        "refs": [],
+                    }
+                    return {"context": context}
+                context["generated_reply"] = {
+                    "text": "Listo, descarté la preferencia propuesta.",
+                    "refs": [],
+                }
+                return {"context": context}
             deps.decision_gateway.reject(
                 user_id=_uuid(context, "user_id"),
                 session_id=_uuid(context, "session_id"),
@@ -1259,25 +1413,34 @@ def build_topology_v3(
 
 def _waiting_proposal(
     state: AgentState,
-) -> tuple[str, Mapping[str, object], Mapping[str, object], str]:
-    """Return (proposal_id, diff, impact, expires_at) of the proposal created
-    by the propose tool in the current turn."""
+) -> tuple[
+    str, str, Mapping[str, object], Mapping[str, object], str
+]:
+    """Return (kind, proposal_id, diff, impact, expires_at) of the proposal
+    created by a propose tool in the current turn."""
     for item in state.get("tool_results") or []:
-        if item.get("tool") == _PROPOSE_TOOL and item.get("status") == "ok":
+        if item.get("tool") in _PROPOSE_TOOLS and item.get("status") == "ok":
             result = item.get("result")
             if isinstance(result, Mapping):
+                kind = (
+                    "preference"
+                    if item.get("tool") in _PREFERENCE_TOOLS
+                    else "profile"
+                )
                 return (
+                    kind,
                     str(result.get("proposal_id", "")),
                     _mapping_or_empty(result.get("diff")),
                     _mapping_or_empty(result.get("impact")),
                     str(result.get("expires_at", "")),
                 )
-    return ("", {}, {}, "")
+    return ("", "", {}, {}, "")
 
 
 def _payload_from_proposal(proposal: Proposal) -> dict[str, object]:
     return {
         "type": "proposal_decision",
+        "kind": "profile",
         "proposal_id": str(proposal.proposal_id),
         "diff": dict(proposal.diff),
         "impact": dict(proposal.impact),
@@ -1285,20 +1448,119 @@ def _payload_from_proposal(proposal: Proposal) -> dict[str, object]:
     }
 
 
+def _payload_from_preference_proposal(proposal: object) -> dict[str, object]:
+    change = getattr(proposal, "change")
+    concept_key = str(change.concept_key)
+    polarity = str(change.polarity)
+    diff: dict[str, object] = {
+        "concept_key": concept_key,
+        "polarity": polarity,
+    }
+    value = getattr(change, "value", None)
+    if value is not None:
+        diff["concept_value"] = value
+    return {
+        "type": "proposal_decision",
+        "kind": "preference",
+        "proposal_id": str(getattr(proposal, "proposal_id")),
+        "diff": diff,
+        "impact": {
+            "concept_key": concept_key,
+            "polarity": polarity,
+            "will_recompute": True,
+        },
+        "expires_at": getattr(proposal, "expires_at").isoformat(),
+    }
+
+
 def _mapping_or_empty(value: object) -> Mapping[str, object]:
     return value if isinstance(value, Mapping) else {}
 
 
+def _record_preference_confirmation(
+    *,
+    context: dict[str, object],
+    proposal_id: str,
+    operation: str,
+) -> None:
+    """Make the confirmed preference outcome visible to the reply model.
+
+    ``resolve_decision`` confirms through the preference gateway (not the tool
+    executor), so the generated reply would otherwise see no trace of the
+    result and keep asking for confirmation; this appends a synthetic tool
+    result that the next ``generate_reply`` round grounds on (R-14).
+    """
+    raw_results = context.get("tool_results_context")
+    results: list[dict[str, object]] = (
+        list(raw_results) if isinstance(raw_results, list) else []
+    )
+    results.append(
+        {
+            "tool": (
+                "remove_search_preference"
+                if operation == "remove"
+                else "confirm_search_preference"
+            ),
+            "args": {"proposal_id": proposal_id, "operation": operation},
+            "status": "ok",
+            "result": {"operation": operation, "applied": True},
+            "error_code": None,
+        }
+    )
+    context["tool_results_context"] = results
+
+
+def _with_idempotency_key(
+    *,
+    executor: ToolExecutor,
+    name: str,
+    args: Mapping[str, object],
+    session_id: UUID,
+    run_id: UUID,
+) -> Mapping[str, object]:
+    """Derive a server-side idempotency key when the model omitted it: replay
+    semantics are a platform concern, never a model guess (R-05)."""
+    current = args.get("idempotency_key")
+    if isinstance(current, str) and current.strip():
+        return args
+    try:
+        spec = executor.registry.get(name)
+    except Exception:  # noqa: BLE001 - unknown tool stays as-is
+        return args
+    if not (spec.mutating and "idempotency_key" in spec.input_schema):
+        return args
+    updated = dict(args)
+    listing_id = updated.get("listing_id")
+    decision = updated.get("decision")
+    if (
+        name == "record_feedback"
+        and isinstance(listing_id, str)
+        and isinstance(decision, str)
+    ):
+        updated["idempotency_key"] = f"chat:{session_id}:{listing_id}:{decision}"
+    else:
+        updated["idempotency_key"] = f"chat:{session_id}:{name}:{run_id}:{uuid4()}"
+    return updated
+
+
 def _kind_label(value: object) -> str:
-    """Render a tool arg kind (plain or enriched v2 entry) for the prompt."""
+    """Render a tool arg kind (plain or enriched v2 entry) for the prompt,
+    including the published description and enum so the model never guesses
+    the vocabulary."""
     if isinstance(value, Mapping):
         kind = value.get("kind")
         if not isinstance(kind, str):
             return "?"
         label = kind
+        parts: list[str] = []
+        description = value.get("description")
+        if isinstance(description, str) and description:
+            parts.append(description)
         enum = value.get("enum")
         if isinstance(enum, list) and enum:
-            label += " (" + ", ".join(str(item) for item in enum) + ")"
+            parts.append("valores: " + ", ".join(str(item) for item in enum))
+        if parts:
+            label += " — " + "; ".join(parts)
         return label
     return str(value)
 
@@ -1356,11 +1618,23 @@ def _tool_result_refs(state: AgentState) -> dict[str, set[str]]:
             for ref in result.get("evidence_refs", []):
                 if isinstance(ref, Mapping) and ref.get("id"):
                     allowed["evidence_ref"].add(str(ref["id"]))
+        elif tool == "get_listing_detail":
+            listing_id = result.get("listing_id")
+            if listing_id:
+                allowed["listing"].add(str(listing_id))
         elif tool == "compare_listings":
             for raw in result.get("cells", []):
                 if isinstance(raw, Mapping) and raw.get("listing_id"):
                     allowed["listing"].add(str(raw["listing_id"]))
         elif tool == _PROPOSE_TOOL:
+            proposal_id = result.get("proposal_id")
+            if proposal_id:
+                allowed["proposal"].add(str(proposal_id))
+        elif tool == _PREFERENCE_PROPOSE_TOOL:
+            proposal_id = result.get("proposal_id")
+            if proposal_id:
+                allowed["proposal"].add(str(proposal_id))
+        elif tool == _PREFERENCE_REMOVAL_TOOL:
             proposal_id = result.get("proposal_id")
             if proposal_id:
                 allowed["proposal"].add(str(proposal_id))
@@ -1394,6 +1668,8 @@ def _friendly_error(error_code: str | None) -> str:
         "proposal.stale": "la propuesta quedó desactualizada; proponé de nuevo.",
         "proposal.expired": "la propuesta venció; proponé de nuevo.",
         "proposal.not_pending": "la propuesta ya fue usada o rechazada.",
+        "feedback.not_found": "no encontré esa propuesta de preferencia.",
+        "feedback.not_accessible": "esa propuesta no pertenece a tu radar.",
     }.get(error_code or "", "hubo un problema y no se aplicó ningún cambio.")
 
 

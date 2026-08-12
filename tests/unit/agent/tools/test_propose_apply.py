@@ -17,6 +17,9 @@ from umbral.application.agent.tools.contracts import Proposal
 from umbral.application.agent.tools.ports import SessionScope
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.radar.contracts import SearchProfile
+from umbral.infrastructure.agent.tools.preferences_loader import (
+    load_preference_vocabulary,
+)
 
 USER_ID = UUID(int=1)
 SESSION_ID = UUID(int=2)
@@ -182,6 +185,7 @@ def _make_executor() -> tuple[ToolExecutor, _Repo, _Radar]:
         feedback=_Other(),  # type: ignore[arg-type]
         criteria=_Other(),  # type: ignore[arg-type]
         proposals=proposals,
+        vocabulary=load_preference_vocabulary(),
     )
     recorder = RecordingRunRecorder()
     executor = ToolExecutor(
@@ -221,6 +225,32 @@ def test_propose_tool_creates_pending_proposal() -> None:
     assert result.status == "ok"
     proposal_id = UUID(str(payload(result)["proposal_id"]))
     assert repo.proposals[proposal_id].state == "pending"
+
+
+def test_propose_tool_accepts_canonical_change_keys() -> None:
+    executor, repo, _ = _make_executor()
+    result = _call(
+        executor,
+        "propose_search_profile_update",
+        {"change": {"zona": "Palermo", "presupuesto": 200000}},
+    )
+    assert result.status == "ok"
+    proposal_id = UUID(str(payload(result)["proposal_id"]))
+    assert repo.proposals[proposal_id].diff == {
+        "zones": ("palermo",),
+        "budget_max": 200000.0,
+    }
+
+
+def test_propose_tool_rejects_unsupported_radio_with_clear_code() -> None:
+    executor, _, _ = _make_executor()
+    result = _call(
+        executor,
+        "propose_search_profile_update",
+        {"change": {"zona": "Palermo", "radio": 1}},
+    )
+    assert result.status == "error"
+    assert result.error_code == "proposal.unsupported_key"
 
 
 def test_apply_tool_requires_confirmation() -> None:

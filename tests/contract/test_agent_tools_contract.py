@@ -15,7 +15,7 @@ EVENTS_REGISTRY = json.loads(
     )
 )
 
-EXPECTED_TOOLS = {
+EXPECTED_TOOLS_V1 = {
     "get_search_profile",
     "propose_search_profile_update",
     "apply_search_profile_update",
@@ -26,10 +26,17 @@ EXPECTED_TOOLS = {
     "search_urban_context",
 }
 
+EXPECTED_TOOLS_V2 = EXPECTED_TOOLS_V1 | {
+    "get_listing_detail",
+    "propose_search_preference_update",
+    "propose_search_preference_removal",
+    "list_search_preferences",
+}
 
-def test_tool_contract_exposes_exactly_the_8_tools() -> None:
+
+def test_tool_contract_v2_exposes_the_12_published_tools() -> None:
     tools = load_tool_contract()
-    assert {tool.name for tool in tools} == EXPECTED_TOOLS
+    assert {tool.name for tool in tools} == EXPECTED_TOOLS_V2
 
 
 def test_tool_contract_flags_are_correct() -> None:
@@ -39,6 +46,15 @@ def test_tool_contract_flags_are_correct() -> None:
     assert tools["apply_search_profile_update"].idempotent is True
     assert tools["propose_search_profile_update"].mutating is True
     assert tools["propose_search_profile_update"].idempotent is True
+    assert tools["propose_search_preference_update"].mutating is True
+    assert tools["propose_search_preference_update"].idempotent is True
+    assert tools["propose_search_preference_update"].requires_confirmation is False
+    assert "preference" in tools["propose_search_preference_update"].input_schema
+    assert tools["propose_search_preference_removal"].mutating is True
+    assert tools["propose_search_preference_removal"].idempotent is True
+    assert "preference" in tools["propose_search_preference_removal"].input_schema
+    assert tools["list_search_preferences"].mutating is False
+    assert tools["list_search_preferences"].input_schema == {}
     assert tools["find_matches"].mutating is False
     assert tools["find_matches"].requires_confirmation is False
     assert tools["record_feedback"].mutating is True
@@ -62,7 +78,7 @@ def test_tool_contract_v1_still_parses() -> None:
         )
     )
     tools = parse_tool_contract(v1)
-    assert {tool.name for tool in tools} == EXPECTED_TOOLS
+    assert {tool.name for tool in tools} == EXPECTED_TOOLS_V1
 
 
 def test_tool_contract_redaction_reuses_events_forbidden_keys() -> None:

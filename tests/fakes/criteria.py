@@ -73,6 +73,31 @@ class FakeFactRepository:
             if fact.profile_id == profile_id and fact.state == "active"
         )
 
+    def supersede_active(
+        self,
+        profile_id: UUID,
+        concept_key: str,
+        *,
+        superseded_by: UUID | None,
+        correlation_id: UUID,
+        actor_kind: str,
+        actor_id: str | None,
+    ) -> int:
+        count = 0
+        for index, existing in enumerate(self.rows):
+            if (
+                existing.profile_id == profile_id
+                and existing.concept_key == concept_key
+                and existing.state == "active"
+            ):
+                self.rows[index] = replace(
+                    existing,
+                    state="superseded",
+                    superseded_by=superseded_by,
+                )
+                count += 1
+        return count
+
 
 @dataclass
 class FakeCompilationRepository:
