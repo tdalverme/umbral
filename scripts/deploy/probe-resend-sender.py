@@ -13,12 +13,15 @@ from umbral.workers.composition import build_process_dependencies
 
 # railway run merges the promote runner's environment with the service
 # variables; drop the runner-only release/smoke inputs that Settings would
-# reject as unknown, mirroring diagnose-preview-runtime.ps1.
+# reject as unknown, mirroring diagnose-preview-runtime.ps1. Also drop
+# empty values: the runner expands unset secrets to "", and Settings must
+# fall back to its defaults instead of failing to parse the empty string.
 for name in list(os.environ):
     if (
         name == "UMBRAL_MANIFEST_DATABASE_REVISION"
         or name == "UMBRAL_PREVIEW_BASE_URL"
         or name.startswith("UMBRAL_SMOKE_")
+        or os.environ[name] == ""
     ):
         del os.environ[name]
 
