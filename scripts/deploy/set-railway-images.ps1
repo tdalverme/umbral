@@ -230,7 +230,7 @@ function Test-ServiceAtTarget {
         }
     } elseif ($Service -eq "web") {
         if ([string]$SvcConfig.variables.IDENTITY_CAPTURE_ORIGIN.value -ne [string]$ProviderVars["IDENTITY_CAPTURE_ORIGIN"]) { return $false }
-        if ($ProviderVars.ContainsKey("UMBRAL_BFF_TOKEN") -and [string]$SvcConfig.variables.UMBRAL_BFF_TOKEN.value -ne [string]$ProviderVars["UMBRAL_BFF_TOKEN"]) { return $false }
+        if ($ProviderVars.Contains("UMBRAL_BFF_TOKEN") -and [string]$SvcConfig.variables.UMBRAL_BFF_TOKEN.value -ne [string]$ProviderVars["UMBRAL_BFF_TOKEN"]) { return $false }
     }
     if ($Service -eq "model") {
         foreach ($key in $ModelVars.Keys) {
@@ -303,7 +303,7 @@ foreach ($service in $servicesToPatch) {
         # The web serves the auth capture redirects and signs the capture
         # cookie with the BFF token; both must come from the promote runner.
         $serviceVariables["IDENTITY_CAPTURE_ORIGIN"] = [ordered]@{ value = $ProviderVars["IDENTITY_CAPTURE_ORIGIN"] }
-        if ($ProviderVars.ContainsKey("UMBRAL_BFF_TOKEN")) {
+        if ($ProviderVars.Contains("UMBRAL_BFF_TOKEN")) {
             $serviceVariables["UMBRAL_BFF_TOKEN"] = [ordered]@{ value = $ProviderVars["UMBRAL_BFF_TOKEN"] }
         }
     }
