@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import socket
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -13,6 +13,7 @@ from redis import Redis
 
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.ingestion.contracts import ImportRunSnapshot
+from umbral.application.ingestion.service import ImportRunService
 from umbral.application.runtime.version import (
     ReleaseManifest,
     load_release_manifest,
@@ -72,6 +73,7 @@ class ProcessDependencies:
     runtime: SqlAlchemyJobRuntime
     registry: JobRegistry
     worker_id: str
+    ingestion: ImportRunService = field(default=None)  # type: ignore[assignment]
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
     agent_checkpoint_purge: Callable[[datetime], int] | None = None
     proposal_expire: Callable[[datetime], int] | None = None
@@ -191,6 +193,7 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         runtime=runtime,
         registry=registry,
         worker_id=f"rq:{socket.gethostname()}:{os.getpid()}",
+        ingestion=ingestion,
         heartbeat_writer=heartbeat_writer,
         agent_checkpoint_purge=_build_agent_purge(active_settings),
         proposal_expire=_build_proposal_expire(active_settings),

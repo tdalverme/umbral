@@ -355,7 +355,7 @@ def test_worker_exception_exits_nonzero_without_exposing_dependency_value(
 
     assert main(["worker"], dependencies=dependencies) == 1
     captured = capsys.readouterr()
-    assert captured.err == "worker failed\n"
+    assert captured.err.startswith("worker failed\n")
     assert "canary-secret" not in captured.out + captured.err
 
 
@@ -374,5 +374,6 @@ def test_composition_failure_is_a_safe_nonzero_process_result(
 
     assert main([command]) == 1
     captured = capsys.readouterr()
-    assert captured.err == f"{command} failed\n"
+    assert captured.err.startswith(f"{command} failed\n")
+    assert "kind=RuntimeError" in captured.err
     assert "canary-secret" not in captured.out + captured.err
