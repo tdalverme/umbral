@@ -70,6 +70,7 @@ $serviceArtifacts = [ordered]@{
     api = "runtime"
     worker = "runtime"
     scheduler = "runtime"
+    model = "runtime"
 }
 
 # The api runtime binds uvicorn to port 8000; Railway probes the PORT variable
@@ -164,6 +165,18 @@ foreach ($key in @("NOTIFICATIONS_ENABLED", "NOTIFICATIONS_POLICY_VERSION", "NOT
     if (-not [string]::IsNullOrWhiteSpace($value)) { $notificationVars[$key] = $value }
 }
 
+# The managed model gateway service (ADR 0001) runs the same runtime image with
+# its own start command (provisioned once) and OpenAI credentials; the promote
+# pins its image and variables like any other service. The shared key must
+# match AGENT_MANAGED_API_KEY on the api service.
+$modelVars = [ordered]@{}
+foreach ($key in @("MODEL_GATEWAY_OPENAI_API_KEY", "MODEL_GATEWAY_SHARED_KEY")) {
+    $value = [string][Environment]::GetEnvironmentVariable($key)
+    Require-Condition (-not [string]::IsNullOrWhiteSpace([string]$value)) "Missing ${key} environment value for the model gateway service."
+    $modelVars[$key] = [string]$value
+}
+$modelVars["PORT"] = "8010"
+
 # Compare every app service against its target spec so only the services that
 # actually diverge are patched. This keeps the promote idempotent (no-op when
 # everything is already pinned) while still producing fresh deployments for the
@@ -186,7 +199,8 @@ function Test-ServiceAtTarget {
         [Parameter(Mandatory = $true)] $ServiceDeployOverrides,
         [Parameter(Mandatory = $true)] $ServiceExtraVars,
         [Parameter(Mandatory = $true)] $AgentVars,
-        [Parameter(Mandatory = $true)] $NotificationVars
+        [Parameter(Mandatory = $true)] $NotificationVars,
+        [Parameter(Mandatory = $true)] $ModelVars
     )
     if ($null -eq $SvcConfig) { return $false }
     $artifact = $Manifest.artifacts.($ServiceArtifacts[$Service])
@@ -213,6 +227,11 @@ function Test-ServiceAtTarget {
             if ([string]$SvcConfig.variables.$key.value -ne [string]$NotificationVars[$key]) { return $false }
         }
     }
+    if ($Service -eq "model") {
+        foreach ($key in $ModelVars.Keys) {
+            if ([string]$SvcConfig.variables.$key.value -ne [string]$ModelVars[$key]) { return $false }
+        }
+    }
     if ($ServiceDeployOverrides.ContainsKey($Service)) {
         if ($null -eq $SvcConfig.deploy -or $null -eq $SvcConfig.deploy.sleepApplication -or [bool]$SvcConfig.deploy.sleepApplication -ne [bool]$ServiceDeployOverrides[$Service].sleepApplication) { return $false }
     }
@@ -230,7 +249,7 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ($null -ne $currentConfig) {
         $svcConfig = $currentConfig.services.($serviceIdByName[$service])
     }
-    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars)
+    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars)
 }
 
 $servicesToPatch = @($serviceArtifacts.Keys | Where-Object { $serviceNeedsPatch[$_] })
@@ -274,6 +293,11 @@ foreach ($service in $servicesToPatch) {
         }
         foreach ($key in $NotificationVars.Keys) {
             $serviceVariables[$key] = [ordered]@{ value = $NotificationVars[$key] }
+        }
+    }
+    if ($service -eq "model") {
+        foreach ($key in $ModelVars.Keys) {
+            $serviceVariables[$key] = [ordered]@{ value = $ModelVars[$key] }
         }
     }
     if ($serviceExtraVars.ContainsKey($service)) {
