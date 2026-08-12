@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -705,7 +705,21 @@ class SqlAlchemyIdentityStore:
             )
 
     def purge_requests_before(self, cutoff: datetime) -> int:
-        result = self._write_session().execute(
+        session = self._write_session()
+        expiring = select(MagicLinkRequestRow.id).where(
+            MagicLinkRequestRow.purge_after <= cutoff
+        )
+        session.execute(
+            delete(MagicLinkAttemptRow).where(
+                MagicLinkAttemptRow.request_id.in_(expiring)
+            )
+        )
+        session.execute(
+            update(AccessAuditEventRow)
+            .where(AccessAuditEventRow.request_id.in_(expiring))
+            .values(request_id=None)
+        )
+        result = session.execute(
             delete(MagicLinkRequestRow).where(MagicLinkRequestRow.purge_after <= cutoff)
         )
         return int(getattr(result, "rowcount", 0) or 0)

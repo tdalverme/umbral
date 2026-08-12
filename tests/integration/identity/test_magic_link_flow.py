@@ -11,7 +11,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from tests.support.containers import ServiceConnection
 from tests.support.identity import access_with_recording_jobs, requested_attempt
@@ -30,11 +30,15 @@ from umbral.infrastructure.db.models.identity import (
 )
 from umbral.infrastructure.db.models.identity import IdentityInvitation
 from umbral.infrastructure.db.models.identity import (
+    MagicLinkAttempt as MagicLinkAttemptRow,
+)
+from umbral.infrastructure.db.models.identity import (
     MagicLinkRequest as MagicLinkRequestRow,
 )
 from umbral.infrastructure.db.repositories.identity import (
     InMemoryIdentityStore,
     PostgresIdentityRepository,
+    SqlAlchemyIdentityStore,
 )
 from umbral.infrastructure.email.recording import RecordingEmailAdapter
 from umbral.infrastructure.identity.fake import FakeIdentityProvider
@@ -361,6 +365,106 @@ def test_postgres_transaction_rolls_back_request_and_audit(
                 .where(AccessAuditEventRow.id == event_id)
             )
             == 0
+        )
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_purge_requests_before_clears_dependents_first(
+    postgres_container: ServiceConnection,
+) -> None:
+    """Regression: purge must remove attempts and detach audit rows before the
+    request, or the RESTRICT FK crashes the scheduler duty."""
+
+    session, engine = _migrated_session(postgres_container)
+    request_id = uuid4()
+    attempt_id = uuid4()
+    event_id = uuid4()
+    try:
+        with session.begin():
+            session.add(
+                MagicLinkRequestRow(
+                    id=request_id,
+                    email_fingerprint=b"e" * 32,
+                    origin_fingerprint=b"o" * 32,
+                    decision="eligible",
+                    requested_at=NOW,
+                    purge_after=NOW,
+                    correlation_id=uuid4(),
+                )
+            )
+            invitation = IdentityInvitation(
+                id=uuid4(),
+                normalized_email="person@example.com",
+                status="active",
+                created_at=NOW,
+                updated_at=NOW,
+                preload_source="test",
+                source="test",
+                correlation_id=uuid4(),
+            )
+            session.add(invitation)
+            session.flush()
+            session.add(
+                MagicLinkAttemptRow(
+                    id=attempt_id,
+                    request_id=request_id,
+                    subject_kind="invitation",
+                    invitation_id=invitation.id,
+                    product_user_id=None,
+                    state="pending",
+                    created_at=NOW,
+                    updated_at=NOW,
+                    source="test",
+                    correlation_id=uuid4(),
+                )
+            )
+            session.flush()
+            PostgresIdentityRepository(session).append_audit(
+                AccessAuditEvent(
+                    event_id,
+                    "magic_link.requested.v1",
+                    "accepted",
+                    "eligible",
+                    uuid4(),
+                    NOW,
+                    request_id=request_id,
+                )
+            )
+
+        store = SqlAlchemyIdentityStore(
+            sessionmaker(engine),
+            fingerprint_key=b"postgres-test-key",
+            environment="test",
+        )
+        with store.transaction():
+            purged = store.purge_requests_before(NOW)
+
+        assert purged == 1
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MagicLinkRequestRow)
+                .where(MagicLinkRequestRow.id == request_id)
+            )
+            == 0
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MagicLinkAttemptRow)
+                .where(MagicLinkAttemptRow.id == attempt_id)
+            )
+            == 0
+        )
+        assert (
+            session.scalar(
+                select(AccessAuditEventRow.request_id).where(
+                    AccessAuditEventRow.id == event_id
+                )
+            )
+            is None
         )
     finally:
         session.close()
