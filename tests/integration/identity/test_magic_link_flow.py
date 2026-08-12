@@ -35,6 +35,12 @@ from umbral.infrastructure.db.models.identity import (
 from umbral.infrastructure.db.models.identity import (
     MagicLinkRequest as MagicLinkRequestRow,
 )
+from umbral.infrastructure.db.models.identity import (
+    ProductSession as ProductSessionRow,
+)
+from umbral.infrastructure.db.models.identity import (
+    ProductUser as ProductUserRow,
+)
 from umbral.infrastructure.db.repositories.identity import (
     InMemoryIdentityStore,
     PostgresIdentityRepository,
@@ -375,12 +381,17 @@ def test_purge_requests_before_clears_dependents_first(
     postgres_container: ServiceConnection,
 ) -> None:
     """Regression: purge must remove attempts and detach audit rows before the
-    request, or the RESTRICT FK crashes the scheduler duty."""
+    request, or the RESTRICT FK crashes the scheduler duty. Requests whose
+    attempts still back a product session are preserved (a live login keeps
+    its evidence rows)."""
 
     session, engine = _migrated_session(postgres_container)
     request_id = uuid4()
     attempt_id = uuid4()
     event_id = uuid4()
+    kept_request_id = uuid4()
+    kept_attempt_id = uuid4()
+    kept_session_id = uuid4()
     try:
         with session.begin():
             session.add(
@@ -432,6 +443,59 @@ def test_purge_requests_before_clears_dependents_first(
                     request_id=request_id,
                 )
             )
+            user = ProductUserRow(
+                id=uuid4(),
+                normalized_email="person2@example.com",
+                status="active",
+                created_at=NOW,
+                updated_at=NOW,
+                status_changed_at=NOW,
+                status_change_source="test",
+                source="test",
+                correlation_id=uuid4(),
+            )
+            session.add(user)
+            session.flush()
+            session.add(
+                MagicLinkRequestRow(
+                    id=kept_request_id,
+                    email_fingerprint=b"f" * 32,
+                    origin_fingerprint=b"g" * 32,
+                    decision="eligible",
+                    requested_at=NOW,
+                    purge_after=NOW,
+                    correlation_id=uuid4(),
+                )
+            )
+            session.flush()
+            session.add(
+                MagicLinkAttemptRow(
+                    id=kept_attempt_id,
+                    request_id=kept_request_id,
+                    subject_kind="product_user",
+                    invitation_id=None,
+                    product_user_id=user.id,
+                    state="consumed",
+                    created_at=NOW,
+                    updated_at=NOW,
+                    source="test",
+                    correlation_id=uuid4(),
+                )
+            )
+            session.flush()
+            session.add(
+                ProductSessionRow(
+                    id=kept_session_id,
+                    product_user_id=user.id,
+                    magic_link_attempt_id=kept_attempt_id,
+                    token_digest=b"d" * 32,
+                    last_activity_at=NOW,
+                    created_at=NOW,
+                    updated_at=NOW,
+                    source="test",
+                    correlation_id=uuid4(),
+                )
+            )
 
         store = SqlAlchemyIdentityStore(
             sessionmaker(engine),
@@ -465,6 +529,30 @@ def test_purge_requests_before_clears_dependents_first(
                 )
             )
             is None
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MagicLinkRequestRow)
+                .where(MagicLinkRequestRow.id == kept_request_id)
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MagicLinkAttemptRow)
+                .where(MagicLinkAttemptRow.id == kept_attempt_id)
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ProductSessionRow)
+                .where(ProductSessionRow.id == kept_session_id)
+            )
+            == 1
         )
     finally:
         session.close()

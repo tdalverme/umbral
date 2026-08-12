@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import delete, exists, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -711,7 +711,15 @@ class SqlAlchemyIdentityStore:
         )
         session.execute(
             delete(MagicLinkAttemptRow).where(
-                MagicLinkAttemptRow.request_id.in_(expiring)
+                MagicLinkAttemptRow.request_id.in_(expiring),
+                ~exists(
+                    select(1)
+                    .select_from(ProductSessionRow)
+                    .where(
+                        ProductSessionRow.magic_link_attempt_id
+                        == MagicLinkAttemptRow.id
+                    )
+                ),
             )
         )
         session.execute(
@@ -720,7 +728,14 @@ class SqlAlchemyIdentityStore:
             .values(request_id=None)
         )
         result = session.execute(
-            delete(MagicLinkRequestRow).where(MagicLinkRequestRow.purge_after <= cutoff)
+            delete(MagicLinkRequestRow).where(
+                MagicLinkRequestRow.purge_after <= cutoff,
+                ~exists(
+                    select(1)
+                    .select_from(MagicLinkAttemptRow)
+                    .where(MagicLinkAttemptRow.request_id == MagicLinkRequestRow.id)
+                ),
+            )
         )
         return int(getattr(result, "rowcount", 0) or 0)
 
