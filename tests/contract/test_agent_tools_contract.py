@@ -30,11 +30,12 @@ EXPECTED_TOOLS_V2 = EXPECTED_TOOLS_V1 | {
     "get_listing_detail",
     "propose_search_preference_update",
     "propose_search_preference_removal",
+    "propose_learning_confirmation",
     "list_search_preferences",
 }
 
 
-def test_tool_contract_v2_exposes_the_12_published_tools() -> None:
+def test_tool_contract_v2_exposes_the_13_published_tools() -> None:
     tools = load_tool_contract()
     assert {tool.name for tool in tools} == EXPECTED_TOOLS_V2
 
@@ -53,6 +54,9 @@ def test_tool_contract_flags_are_correct() -> None:
     assert tools["propose_search_preference_removal"].mutating is True
     assert tools["propose_search_preference_removal"].idempotent is True
     assert "preference" in tools["propose_search_preference_removal"].input_schema
+    assert tools["propose_learning_confirmation"].mutating is True
+    assert tools["propose_learning_confirmation"].idempotent is True
+    assert "learning_proposal_id" in tools["propose_learning_confirmation"].input_schema
     assert tools["list_search_preferences"].mutating is False
     assert tools["list_search_preferences"].input_schema == {}
     assert tools["find_matches"].mutating is False

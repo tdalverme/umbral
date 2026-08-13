@@ -72,6 +72,10 @@ export function ChatPanel({ profileId }: ChatPanelProps): React.ReactElement {
     );
   };
 
+  const handleFeedback = (text: string): void => {
+    void chat.send(text);
+  };
+
   return (
     <Card data-testid="chat-panel">
       <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
@@ -98,6 +102,7 @@ export function ChatPanel({ profileId }: ChatPanelProps): React.ReactElement {
             pendingDecision={chat.pendingDecision}
             onDecision={(decision) => void chat.decide(decision)}
             busy={chat.status === "running" || chat.status === "resuming"}
+            onFeedback={handleFeedback}
           />
         </div>
         <Composer status={chat.status} onSend={handleSend} />

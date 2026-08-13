@@ -53,6 +53,7 @@ def test_compile_classifies_refinamiento_with_parameters() -> None:
         "propose_search_profile_update",
         "propose_search_preference_update",
         "propose_search_preference_removal",
+        "propose_learning_confirmation",
     )
 
 

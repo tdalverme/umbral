@@ -19,6 +19,22 @@
       "output_limits": {"max_items": 1, "forbidden_keys": ["value", "free_feedback"]}
     },
     {
+      "name": "propose_learning_confirmation",
+      "description": "Propone aplicar una preferencia aprendida por feedback (learning proposal pendiente, p.ej. 'no me gustan los deptos oscuros'); crea la decision HITL y no aplica nada hasta confirmar.",
+      "mutating": true,
+      "requires_confirmation": false,
+      "idempotent": true,
+      "timeout_seconds": 10,
+      "input_schema": {
+        "learning_proposal_id": {
+          "kind": "uuid",
+          "description": "Id de la learning proposal pendiente que devolvio record_feedback (learning_proposal_id)."
+        }
+      },
+      "output_schema": {"proposal_id": "uuid", "diff": "object", "impact": "object", "state": "string", "expires_at": "datetime"},
+      "output_limits": {"max_items": 1, "forbidden_keys": ["value", "free_feedback"]}
+    },
+    {
       "name": "get_search_profile",
       "description": "Lee el perfil autorizado de la sesion: snapshot vigente, criterios ejecutables y estado del radar.",
       "mutating": false,

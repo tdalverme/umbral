@@ -20,6 +20,16 @@ Validado de punta a punta contra Postgres/Redis locales (Docker Compose), API `d
 
 Bugs reales encontrados y corregidos durante la validación: `compose.yaml` con password rechazado por pglayers; `dev_main` sin el stack del agente (chat 500); enum `actor_kind` sin `"user"` (migración `0014_actor_kind_user`) que rompía chat/feedback también en producción; handler de errores sin logging.
 
+## Fase 2 — Loop de aprendizaje por feedback (extensión post-014)
+
+Validado en vivo: `dislike + razón` ("poca luz") → señales del concepto → con `min_signals` alcanzadas se crea la `learning_proposal` → el grafo dispara el **interrupt automático** (0 LLM en surfcear) → approve → `preference_fact` + recompute → el reply del modelo queda grounded ("ajusté la búsqueda para priorizar la luminosidad").
+
+- Tool `propose_learning_confirmation` (13 herramientas publicadas): surfcea una learning proposal pendiente por su id.
+- Normalización determinística de razones: labels naturales ("poca luz") → claves canónicas (`lighting_bad`) antes de la validación del contrato.
+- UI: el mini-card del chat tiene botones "Me gusta / No me gusta" con razones rápidas que envían el feedback al chat.
+- `min_signals: 3` en la política publicada (la demo local se ajustó a 2 para validar con 2 listings accesibles).
+- Hallazgo de calibración: el evaluador de `luminosidad` no discrimina observaciones baja/alta con polarity negative en el dataset demo — backlog de scoring.
+
 ## Prerrequisitos
 
 - Postgres local con migraciones al head (`alembic upgrade head`).

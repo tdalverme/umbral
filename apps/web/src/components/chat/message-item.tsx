@@ -11,16 +11,19 @@ interface MessageItemProps {
   pendingDecision: ProposalDecision | null;
   onDecision: (decision: Record<string, unknown>) => void;
   busy: boolean;
+  onFeedback?: (text: string) => void;
 }
 
 function RefList({
   refs,
   profileId,
   runId,
+  onFeedback,
 }: {
   refs: { entity: string; id: string }[];
   profileId: string;
   runId: string | null;
+  onFeedback?: (text: string) => void;
 }): React.ReactElement | null {
   const listings = refs.filter((ref) => ref.entity === "listing");
   const proposals = refs.filter((ref) => ref.entity === "proposal");
@@ -28,7 +31,13 @@ function RefList({
   return (
     <div className="mt-2 flex flex-col gap-2">
       {listings.map((ref) => (
-        <MiniCard key={`listing-${ref.id}`} listingId={ref.id} profileId={profileId} runId={runId} />
+        <MiniCard
+          key={`listing-${ref.id}`}
+          listingId={ref.id}
+          profileId={profileId}
+          runId={runId}
+          onFeedback={onFeedback}
+        />
       ))}
       {proposals.map((ref) => (
         <span key={`proposal-${ref.id}`} className="text-xs text-muted-foreground">
@@ -47,6 +56,7 @@ export function MessageItem({
   pendingDecision,
   onDecision,
   busy,
+  onFeedback,
 }: MessageItemProps): React.ReactElement {
   const isUser = message.role === "user";
   const text = String(message.content?.text ?? "");
@@ -62,7 +72,7 @@ export function MessageItem({
       >
         <p aria-live={isDraft ? "polite" : "off"}>{text}</p>
         {!isUser && refs.length > 0 && (
-          <RefList refs={refs} profileId={profileId} runId={runId} />
+          <RefList refs={refs} profileId={profileId} runId={runId} onFeedback={onFeedback} />
         )}
         {!isUser && pendingDecision && (
           <ProposalCard decision={pendingDecision} onDecision={onDecision} busy={busy} />

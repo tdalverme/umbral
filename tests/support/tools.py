@@ -312,6 +312,36 @@ class FakeFeedback:
     ) -> tuple[object, ...]:
         return ()
 
+    def get_proposal(
+        self, *, owner_id: UUID, profile_id: UUID, proposal_id: UUID
+    ) -> LearningProposal:
+        change = ProposalChange(
+            kind="preference_fact",
+            concept_key="luminosidad",
+            polarity="negative",
+            suggested_weight=0.5,
+            suggested_confidence=0.7,
+            value=None,
+        )
+        return LearningProposal(
+            proposal_id=proposal_id,
+            profile_id=profile_id,
+            concept_id=UUID(int=96),
+            concept_key="luminosidad",
+            policy_version_id=UUID(int=97),
+            policy_version="1",
+            change=change,
+            prior_fact=None,
+            evidence_refs=(),
+            state="pending",
+            expires_at=NOW,
+            superseded_by=None,
+            applied_profile_version_id=None,
+            applied_run_id=None,
+            created_at=NOW,
+            correlation_id=UUID(int=9),
+        )
+
     def propose_preference_removal(
         self,
         *,
@@ -348,7 +378,11 @@ class FakeFeedback:
             change=change,
             prior_fact={"polarity": "positive", "fact_source": "chat"},
             evidence_refs=(
-                {"kind": "chat", "operation": "remove", "correlation_id": str(correlation_id)},
+                {
+                    "kind": "chat",
+                    "operation": "remove",
+                    "correlation_id": str(correlation_id),
+                },
             ),
             state="pending",
             expires_at=NOW,

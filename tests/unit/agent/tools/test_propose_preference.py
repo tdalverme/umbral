@@ -92,3 +92,29 @@ def test_preference_list_returns_active_facts() -> None:
     result = call_tool(executor, "list_search_preferences", {})
     assert result.status == "ok"
     assert payload(result)["preferences"] == []
+
+
+def test_learning_confirmation_tool_creates_pending_decision() -> None:
+    executor, _ = build_executor()
+    result = call_tool(
+        executor,
+        "propose_learning_confirmation",
+        {"learning_proposal_id": str(UUID(int=95))},
+    )
+    assert result.status == "ok"
+    data = payload(result)
+    assert data["state"] == "pending"
+    assert data["diff"]["concept_key"] == "luminosidad"
+    assert data["diff"]["operation"] == "learning"
+    assert data["impact"]["source"] == "feedback"
+
+
+def test_learning_confirmation_tool_requires_valid_uuid() -> None:
+    executor, _ = build_executor()
+    result = call_tool(
+        executor,
+        "propose_learning_confirmation",
+        {"learning_proposal_id": "no-uuid"},
+    )
+    assert result.status == "error"
+    assert result.error_code == "tool.args_invalid"

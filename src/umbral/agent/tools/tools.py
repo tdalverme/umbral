@@ -121,6 +121,10 @@ class FeedbackPort(Protocol):
         self, *, owner_id: UUID, profile_id: UUID
     ) -> tuple[PreferenceFact, ...]: ...
 
+    def get_proposal(
+        self, *, owner_id: UUID, profile_id: UUID, proposal_id: UUID
+    ) -> LearningProposal: ...
+
     def propose_preference_removal(
         self,
         *,
@@ -161,6 +165,7 @@ def build_tool_implementations(services: ToolServices) -> dict[str, ToolImplemen
         "propose_search_profile_update": _propose(services),
         "propose_search_preference_update": _propose_preference(services),
         "propose_search_preference_removal": _propose_preference_removal(services),
+        "propose_learning_confirmation": _propose_learning_confirmation(services),
         "apply_search_profile_update": _apply(services),
         "find_matches": _find_matches(services),
         "explain_match": _explain_match(services),
@@ -329,6 +334,44 @@ def _propose_preference_removal(services: ToolServices) -> ToolImplementation:
                 "will_recompute": True,
                 "operation": "remove",
                 "current_fact": dict(impact.current) if impact.current else None,
+            },
+            "state": proposal.state,
+            "expires_at": proposal.expires_at.isoformat(),
+        }
+
+    return run
+
+
+def _propose_learning_confirmation(services: ToolServices) -> ToolImplementation:
+    def run(
+        context: ToolRunContext, args: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        try:
+            proposal = services.feedback.get_proposal(
+                owner_id=context.user_id,
+                profile_id=context.search_profile_id,
+                proposal_id=UUID(str(args["learning_proposal_id"])),
+            )
+        except Exception as exc:  # noqa: BLE001 - sanitized at the boundary
+            if type(exc).__name__ in {"ProposalNotFound", "FeedbackNotFound"}:
+                raise ToolError(code="preference.not_found") from exc
+            raise
+        if proposal.state != "pending":
+            raise ToolError(code="preference.not_pending")
+        diff: dict[str, object] = {
+            "concept_key": proposal.change.concept_key,
+            "polarity": proposal.change.polarity,
+            "operation": "learning",
+        }
+        return {
+            "proposal_id": str(proposal.proposal_id),
+            "diff": diff,
+            "impact": {
+                "concept_key": proposal.change.concept_key,
+                "polarity": proposal.change.polarity,
+                "will_recompute": True,
+                "operation": "learning",
+                "source": "feedback",
             },
             "state": proposal.state,
             "expires_at": proposal.expires_at.isoformat(),
@@ -508,6 +551,42 @@ def _compare_listings(services: ToolServices) -> ToolImplementation:
     return run
 
 
+_REASON_LABEL_KEYS = {
+    "poca luz": "lighting_bad",
+    "sin luz": "lighting_bad",
+    "precio alto": "price_too_high",
+    "precio": "price_too_high",
+    "caro": "price_too_high",
+    "expensas altas": "expensas_high",
+    "expensas": "expensas_high",
+    "ubicacion": "location_no",
+    "ubicacion no": "location_no",
+    "ambientes": "rooms_wrong",
+    "superficie chica": "surface_wrong",
+    "superficie": "surface_wrong",
+    "estado del edificio": "building_state",
+    "estado": "building_state",
+    "otra razon": "other",
+    "otro": "other",
+}
+
+
+def _normalize_reason_keys(raw_reasons: object) -> tuple[str, ...]:
+    """Map natural reason labels to canonical quick-reason keys (0 LLM)."""
+    if not isinstance(raw_reasons, list):
+        return ()
+    keys: list[str] = []
+    for item in raw_reasons:
+        if not isinstance(item, str):
+            continue
+        key = item.strip().lower()
+        if key in _REASON_LABEL_KEYS:
+            key = _REASON_LABEL_KEYS[key]
+        if key not in keys:
+            keys.append(key)
+    return tuple(keys)
+
+
 def _record_feedback(services: ToolServices) -> ToolImplementation:
     def run(
         context: ToolRunContext, args: Mapping[str, object]
@@ -522,12 +601,7 @@ def _record_feedback(services: ToolServices) -> ToolImplementation:
                 owner_id=context.user_id, profile_id=context.search_profile_id
             )
         )
-        raw_reasons = args.get("reason_keys")
-        reason_keys = (
-            tuple(str(item) for item in raw_reasons)
-            if isinstance(raw_reasons, list)
-            else ()
-        )
+        reason_keys = _normalize_reason_keys(args.get("reason_keys"))
         record = services.feedback.record_feedback(
             owner_id=context.user_id,
             profile_id=context.search_profile_id,

@@ -38,6 +38,7 @@ def test_intent_contract_declares_five_intents_with_policy() -> None:
         "propose_search_profile_update",
         "propose_search_preference_update",
         "propose_search_preference_removal",
+        "propose_learning_confirmation",
     )
     assert contract.allowed_tools_for("fuera_de_alcance") == ()
     assert contract.known_intents() == names

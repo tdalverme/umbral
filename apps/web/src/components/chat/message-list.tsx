@@ -13,6 +13,7 @@ interface MessageListProps {
   pendingDecision: ProposalDecision | null;
   onDecision: (decision: Record<string, unknown>) => void;
   busy: boolean;
+  onFeedback?: (text: string) => void;
 }
 
 /** Scrollable message list with jump-to-latest (FR-027). */
@@ -23,6 +24,7 @@ export function MessageList({
   pendingDecision,
   onDecision,
   busy,
+  onFeedback,
 }: MessageListProps): React.ReactElement {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
@@ -58,6 +60,7 @@ export function MessageList({
               pendingDecision={pendingDecision}
               onDecision={onDecision}
               busy={busy}
+              onFeedback={onFeedback}
             />
           ))
         )}

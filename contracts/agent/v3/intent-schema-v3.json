@@ -21,7 +21,8 @@
       "allowed_tools": [
         "propose_search_profile_update",
         "propose_search_preference_update",
-        "propose_search_preference_removal"
+        "propose_search_preference_removal",
+        "propose_learning_confirmation"
       ]
     },
     {

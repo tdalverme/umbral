@@ -313,8 +313,41 @@ class _RecordingPreferenceGateway:
         self.removed: list[UUID] = []
         self.rejected: list[UUID] = []
 
-    def get_proposal(self, **kwargs: object) -> object:
-        raise AssertionError("resume path not exercised here")
+    def get_proposal(
+        self, *, owner_id: UUID, profile_id: UUID, proposal_id: UUID
+    ) -> object:
+        from datetime import datetime, timezone
+
+        from umbral.application.feedback.contracts import (
+            LearningProposal,
+            ProposalChange,
+        )
+
+        return LearningProposal(
+            proposal_id=proposal_id,
+            profile_id=profile_id,
+            concept_id=UUID(int=96),
+            concept_key="luminosidad",
+            policy_version_id=UUID(int=97),
+            policy_version="1",
+            change=ProposalChange(
+                kind="preference_fact",
+                concept_key="luminosidad",
+                polarity="negative",
+                suggested_weight=0.3,
+                suggested_confidence=0.6,
+                value=None,
+            ),
+            prior_fact=None,
+            evidence_refs=(),
+            state="pending",
+            expires_at=datetime(2026, 9, 11, 12, 0, tzinfo=timezone.utc),
+            superseded_by=None,
+            applied_profile_version_id=None,
+            applied_run_id=None,
+            created_at=datetime(2026, 8, 12, 12, 0, tzinfo=timezone.utc),
+            correlation_id=UUID(int=4),
+        )
 
     def confirm_proposal(self, **kwargs: object) -> object:
         self.confirmed.append(UUID(str(kwargs["proposal_id"])))
@@ -505,3 +538,85 @@ def test_built_graph_v3_preference_removal_hitl_confirms() -> None:
     assert len(preference_gateway.removed) == 1
     assert UUID(str(payload["proposal_id"])) == preference_gateway.removed[0]
     assert preference_gateway.confirmed == []
+
+
+def test_built_graph_v3_learning_confirmation_hitl_confirms() -> None:
+    services = FakeServices()
+    implementations = build_tool_implementations(
+        ToolServices(
+            radar=services.radar,
+            scoring=services.scoring,
+            feedback=services.feedback,
+            criteria=services.criteria,
+            proposals=services.proposals,  # type: ignore[arg-type]
+            vocabulary=load_preference_vocabulary(),
+        )
+    )
+    preference_gateway = _RecordingPreferenceGateway()
+    gateway = _Gateway(
+        [
+            {
+                "reply_text": "registro",
+                "refs": [],
+                "tool_calls": [
+                    {
+                        "tool": "record_feedback",
+                        "args": {
+                            "listing_id": str(UUID(int=70)),
+                            "decision": "like",
+                            "reason_keys": ["balcony_wanted"],
+                            "idempotency_key": "k-learn-1",
+                        },
+                    }
+                ],
+            },
+            {"reply_text": "listo", "refs": [], "tool_calls": []},
+        ]
+    )
+    graph = _build(
+        {
+            "intent": "refinamiento",
+            "allowed_tools": [
+                "record_feedback",
+                "propose_learning_confirmation",
+            ],
+        },
+        gateway=gateway,
+        implementations=implementations,
+        preference_gateway=preference_gateway,
+    )
+    run_id = UUID(int=14)
+    config = {"configurable": {"thread_id": str(run_id)}}
+    interrupted: list[object] = []
+    for chunk in graph.compiled.stream(
+        _run_state(run_id, "me gusta este depto, quiero balcon"),
+        config,
+        stream_mode="updates",
+    ):
+        value = _interrupt_value(chunk)
+        if value is not None:
+            interrupted.append(value)
+    assert len(interrupted) == 1
+    payload = interrupted[0]
+    assert isinstance(payload, dict)
+    assert payload["kind"] == "preference"
+    assert payload["diff"]["concept_key"] == "luminosidad"
+    assert payload["proposal_id"] == str(UUID(int=90))
+
+    for chunk in graph.compiled.stream(
+        Command(resume={"kind": "approve"}), config, stream_mode="updates"
+    ):
+        _interrupt_value(chunk)
+    final = graph.compiled.get_state(config).values
+    assert final["errors"] == []
+    assert len(preference_gateway.confirmed) == 1
+    assert UUID(int=90) == preference_gateway.confirmed[0]
+    assert any(
+        item.get("tool") == "record_feedback" and item.get("status") == "ok"
+        for item in final["tool_results"]
+    )
+    assert any(
+        item.get("tool") == "confirm_search_preference"
+        and item.get("status") == "ok"
+        for item in final["context"]["tool_results_context"]
+    )

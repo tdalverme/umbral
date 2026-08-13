@@ -54,10 +54,18 @@ _EFFECT_ASSISTANT_MESSAGE = "assistant_message"
 _PROPOSE_TOOL = "propose_search_profile_update"
 _PREFERENCE_PROPOSE_TOOL = "propose_search_preference_update"
 _PREFERENCE_REMOVAL_TOOL = "propose_search_preference_removal"
+_LEARNING_CONFIRM_TOOL = "propose_learning_confirmation"
 _PROPOSE_TOOLS = frozenset(
-    {_PROPOSE_TOOL, _PREFERENCE_PROPOSE_TOOL, _PREFERENCE_REMOVAL_TOOL}
+    {
+        _PROPOSE_TOOL,
+        _PREFERENCE_PROPOSE_TOOL,
+        _PREFERENCE_REMOVAL_TOOL,
+        _LEARNING_CONFIRM_TOOL,
+    }
 )
-_PREFERENCE_TOOLS = frozenset({_PREFERENCE_PROPOSE_TOOL, _PREFERENCE_REMOVAL_TOOL})
+_PREFERENCE_TOOLS = frozenset(
+    {_PREFERENCE_PROPOSE_TOOL, _PREFERENCE_REMOVAL_TOOL, _LEARNING_CONFIRM_TOOL}
+)
 
 
 @dataclass(slots=True)
@@ -855,6 +863,12 @@ def build_topology_v3(
                         "matches.\n"
                         "- tool.args_invalid: falta un dato para la accion; "
                         "pedi el dato que falta.\n"
+                        "Aprendizaje: cuando record_feedback devuelva "
+                        "learning_proposal_id, ofrece aplicar lo aprendido "
+                        "con propose_learning_confirmation (nunca lo apliques "
+                        "sin confirmacion). Cuando el usuario confirme, la "
+                        "preferencia aprendida se registra y el ranking "
+                        "recomputa.\n"
                         "Preferencias: cuando propongas una preferencia "
                         "(propose_search_preference_update), ejecuta una sola "
                         "propuesta por turno y usa la frase natural del "
@@ -1053,6 +1067,7 @@ def build_topology_v3(
                 session_id=_uuid(context, "session_id"),
                 run_id=run_id,
             )
+            args = _with_normalized_reason_keys(name, args)
             outcome = deps.tool_executor.execute(
                 user_id=_uuid(context, "user_id"),
                 session_id=_uuid(context, "session_id"),
@@ -1082,6 +1097,13 @@ def build_topology_v3(
             for item in results
         ):
             context["proposal_created"] = True
+        if any(
+            item.get("tool") == "record_feedback"
+            and item.get("status") == "ok"
+            and _learning_proposal_id(item) is not None
+            for item in results
+        ):
+            context["proposal_created"] = True
         existing = list(state.get("tool_results") or [])
         return {
             "context": context,
@@ -1103,19 +1125,33 @@ def build_topology_v3(
         if pending is None:
             kind, proposal_id, diff, impact, expires_at = _waiting_proposal(state)
             operation = str(diff.get("operation", "propose"))
-            state["pending_action"] = {
-                "kind": kind,
-                "proposal_id": proposal_id,
-                "operation": operation,
-            }
-            payload: dict[str, object] = {
-                "type": "proposal_decision",
-                "kind": kind,
-                "proposal_id": proposal_id,
-                "diff": diff,
-                "impact": impact,
-                "expires_at": expires_at,
-            }
+            decision_payload: dict[str, object]
+            if kind == "preference_learning":
+                learning = deps.preference_gateway.get_proposal(
+                    owner_id=_uuid(context, "user_id"),
+                    profile_id=_uuid(context, "search_profile_id"),
+                    proposal_id=UUID(proposal_id),
+                )
+                state["pending_action"] = {
+                    "kind": "preference",
+                    "proposal_id": proposal_id,
+                    "operation": "learning",
+                }
+                decision_payload = _payload_from_preference_proposal(learning)
+            else:
+                state["pending_action"] = {
+                    "kind": kind,
+                    "proposal_id": proposal_id,
+                    "operation": operation,
+                }
+                decision_payload = {
+                    "type": "proposal_decision",
+                    "kind": kind,
+                    "proposal_id": proposal_id,
+                    "diff": diff,
+                    "impact": impact,
+                    "expires_at": expires_at,
+                }
         else:
             pending_data = pending if isinstance(pending, Mapping) else {}
             kind = str(pending_data.get("kind", "profile"))
@@ -1126,7 +1162,7 @@ def build_topology_v3(
                     profile_id=_uuid(context, "search_profile_id"),
                     proposal_id=UUID(proposal_id),
                 )
-                payload = _payload_from_preference_proposal(proposal)
+                decision_payload = _payload_from_preference_proposal(proposal)
             else:
                 proposal = deps.decision_gateway.get(
                     user_id=_uuid(context, "user_id"),
@@ -1134,8 +1170,8 @@ def build_topology_v3(
                     search_profile_id=_uuid(context, "search_profile_id"),
                     proposal_id=UUID(proposal_id),
                 )
-                payload = _payload_from_proposal(proposal)
-        decision = interrupt(payload)
+                decision_payload = _payload_from_proposal(proposal)
+        decision = interrupt(decision_payload)
         context["decision"] = decision
         context["resume_decision"] = False
         _finish_node(
@@ -1235,7 +1271,11 @@ def build_topology_v3(
                     "text": (
                         "Listo, quité la preferencia de tu radar."
                         if operation == "remove"
-                        else "Listo, apliqué la preferencia a tu radar."
+                        else (
+                            "Listo, apliqué lo que aprendí a tu radar."
+                            if operation == "learning"
+                            else "Listo, apliqué la preferencia a tu radar."
+                        )
                     ),
                     "refs": [],
                 }
@@ -1417,7 +1457,7 @@ def _waiting_proposal(
     str, str, Mapping[str, object], Mapping[str, object], str
 ]:
     """Return (kind, proposal_id, diff, impact, expires_at) of the proposal
-    created by a propose tool in the current turn."""
+    created by a propose tool or a learning feedback in the current turn."""
     for item in state.get("tool_results") or []:
         if item.get("tool") in _PROPOSE_TOOLS and item.get("status") == "ok":
             result = item.get("result")
@@ -1434,6 +1474,18 @@ def _waiting_proposal(
                     _mapping_or_empty(result.get("impact")),
                     str(result.get("expires_at", "")),
                 )
+        if (
+            item.get("tool") == "record_feedback"
+            and item.get("status") == "ok"
+            and _learning_proposal_id(item) is not None
+        ):
+            return (
+                "preference_learning",
+                str(_learning_proposal_id(item)),
+                {},
+                {},
+                "",
+            )
     return ("", "", {}, {}, "")
 
 
@@ -1475,6 +1527,32 @@ def _payload_from_preference_proposal(proposal: object) -> dict[str, object]:
 
 def _mapping_or_empty(value: object) -> Mapping[str, object]:
     return value if isinstance(value, Mapping) else {}
+
+
+def _learning_proposal_id(item: Mapping[str, object]) -> str | None:
+    """Extract the learning proposal id from a record_feedback result."""
+    result = item.get("result")
+    if not isinstance(result, Mapping):
+        return None
+    value = result.get("learning_proposal_id")
+    return str(value) if value else None
+
+
+def _with_normalized_reason_keys(
+    name: str, args: Mapping[str, object]
+) -> Mapping[str, object]:
+    """Map natural reason labels to canonical quick-reason keys before the
+    registry enum validation (0 LLM guessing, same seam as the vocabulary)."""
+    if name != "record_feedback":
+        return args
+    raw = args.get("reason_keys")
+    if not isinstance(raw, list) or not raw:
+        return args
+    from umbral.agent.tools.tools import _normalize_reason_keys
+
+    updated = dict(args)
+    updated["reason_keys"] = list(_normalize_reason_keys(raw))
+    return updated
 
 
 def _record_preference_confirmation(

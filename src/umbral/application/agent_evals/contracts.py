@@ -63,6 +63,7 @@ KNOWN_TOOLS: frozenset[str] = frozenset(
         "search_urban_context",
         "propose_search_preference_update",
         "propose_search_preference_removal",
+        "propose_learning_confirmation",
         "list_search_preferences",
         "get_listing_detail",
     }
