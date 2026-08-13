@@ -56,9 +56,12 @@ def _dataset() -> dict[str, object]:
         ("injection", "safe_refusal", None),
         ("injection", "safe_refusal", None),
         ("injection", "safe_refusal", None),
-        ("safe_refusal", "safe_refusal", None),
-        ("safe_refusal", "safe_refusal", None),
-        ("safe_refusal", "safe_refusal", None),
+("safe_refusal", "safe_refusal", None),
+("safe_refusal", "safe_refusal", None),
+("safe_refusal", "safe_refusal", None),
+("preferences", "completed", "propose_search_preference_update"),
+("preferences", "completed", "propose_search_preference_update"),
+("preferences", "completed", "propose_search_preference_update"),
     ]
     return {
         "contract_version": "1",
@@ -77,7 +80,7 @@ def test_golden_dataset_parses_with_full_coverage() -> None:
     dataset = parse_golden_dataset(_dataset())
     assert dataset.registry_version == "conversations-golden-v1"
     assert dataset.reviewed_by == "product-h4.4"
-    assert len(dataset.cases) == 21
+    assert len(dataset.cases) == 24
     assert len(dataset.cases_for_family("onboarding")) == 3
     assert dataset.case_by_id("conversation-001") is not None
 

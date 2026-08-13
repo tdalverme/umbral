@@ -103,6 +103,6 @@ def test_recompute_scope_parser_uses_normalizer_version() -> None:
     summary = context.service.process_extraction(
         RecomputeScope("parser", "silver-v2"), job_execution_id=uuid4()
     )
-    assert summary["published"] == 6
+    assert summary["published"] == 7
     listings = {item.listing_id for item in context.observations.rows}
     assert len(listings) == 1

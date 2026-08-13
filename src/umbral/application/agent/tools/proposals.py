@@ -437,7 +437,7 @@ def _normalize_value(field: str, value: object) -> object:
     return value
 
 
-def _normalize_zones(value: object) -> tuple[str, ...]:
+def _normalize_zones(value: object) -> list[str]:
     raw = value if isinstance(value, list) else [value]
     if not raw:
         raise ProposalInvalidChange()
@@ -449,7 +449,7 @@ def _normalize_zones(value: object) -> tuple[str, ...]:
         if not code:
             raise ProposalInvalidChange()
         zones.append(code)
-    return tuple(zones)
+    return zones
 
 
 def _zone_code(name: str) -> str:

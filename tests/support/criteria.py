@@ -36,6 +36,8 @@ def build_listing(
     amenities: tuple[str, ...] = (),
     normalizer_version: str = "silver-v1",
     listing_id: UUID | None = None,
+    geometry: tuple[float, float] | None = None,
+    geo_precision: str = "neighborhood",
 ) -> NormalizedListing:
     return NormalizedListing(
         listing_id=listing_id or uuid4(),
@@ -66,8 +68,8 @@ def build_listing(
         description_text=description_text,
         location_text="Caballito",
         neighborhood="Caballito",
-        geo_precision="neighborhood",
-        geometry=None,
+        geo_precision=geo_precision,
+        geometry=geometry,
         geo_source=None,
         normalization_errors=(),
     )
@@ -82,6 +84,7 @@ class CriteriaTestContext:
         embedding_model: EmbeddingModel | None = None,
         embeddings_enabled: bool = False,
         urban_context_enabled: bool = False,
+        urban_signals: object | None = None,
     ) -> None:
         self.concepts = FakeConceptRepository()
         self.facts = FakeFactRepository()
@@ -110,12 +113,18 @@ class CriteriaTestContext:
                             "evidence": "en buen estado",
                             "confidence": 0.9,
                         },
+                        "moderno": {
+                            "value": "moderno",
+                            "evidence": "departamento moderno",
+                            "confidence": 0.9,
+                        },
                     }
                 )
                 if default_extractor
                 else None
             )
         )
+        self.urban_signals = urban_signals
         self.service = CriteriaService(
             concepts=self.concepts,
             facts=self.facts,
@@ -134,9 +143,9 @@ class CriteriaTestContext:
             embedding_model=embedding_model,
             embeddings_enabled=embeddings_enabled,
             urban_context_enabled=urban_context_enabled,
+            urban_signals=urban_signals,
             job_runtime=None,
         )
-
     def seed_concepts(self) -> None:
         self.service.seed_registry(correlation_id=uuid4())
 
@@ -148,6 +157,8 @@ class CriteriaTestContext:
         floor: int | None = None,
         amenities: tuple[str, ...] = (),
         normalizer_version: str = "silver-v1",
+        geometry: tuple[float, float] | None = None,
+        geo_precision: str = "neighborhood",
     ) -> NormalizedListing:
         listing = build_listing(
             description_text=description_text,
@@ -155,6 +166,8 @@ class CriteriaTestContext:
             floor=floor,
             amenities=amenities,
             normalizer_version=normalizer_version,
+            geometry=geometry,
+            geo_precision=geo_precision,
         )
         self.listings.listings[listing.listing_id] = listing
         return listing

@@ -132,6 +132,7 @@ def _facts_to_criteria(
                 params=params,
                 source_ref=f"fact:{fact.fact_id}",
                 soft_to_hard=False,
+                weight=float(fact.weight),
             )
         )
     return criteria

@@ -228,6 +228,20 @@ class FakeRecomputeRunRepository:
 
 
 @dataclass
+class FakeUrbanSignalRepository:
+    signals: dict[UUID, list[Mapping[str, object]]] = field(default_factory=dict)
+
+    def insert(self, signal: Mapping[str, object]) -> None:
+        listing_id = signal["listing_id"]
+        self.signals.setdefault(listing_id, []).append(signal)
+
+    def list_for_listing(
+        self, listing_id: UUID
+    ) -> tuple[Mapping[str, object], ...]:
+        return tuple(self.signals.get(listing_id, ()))
+
+
+@dataclass
 class FakeEventRepository:
     events: list[ProductEvent] = field(default_factory=list)
 

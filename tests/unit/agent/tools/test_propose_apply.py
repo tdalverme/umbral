@@ -237,7 +237,7 @@ def test_propose_tool_accepts_canonical_change_keys() -> None:
     assert result.status == "ok"
     proposal_id = UUID(str(payload(result)["proposal_id"]))
     assert repo.proposals[proposal_id].diff == {
-        "zones": ("palermo",),
+        "zones": ["palermo"],
         "budget_max": 200000.0,
     }
 

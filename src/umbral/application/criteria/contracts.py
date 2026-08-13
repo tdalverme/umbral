@@ -11,7 +11,7 @@ from uuid import UUID
 MatcherType = Literal[
     "numeric_range", "categorical", "geo_proximity", "semantic_feature"
 ]
-ObservationSource = Literal["rule", "model"]
+ObservationSource = Literal["rule", "model", "urban"]
 ObservationState = Literal["active", "invalidated", "superseded", "failed"]
 FactState = Literal["active", "superseded"]
 ExtractionKind = Literal["rule", "prompt", "schema", "model", "embedding"]
@@ -98,6 +98,7 @@ class CompiledCriterion:
     params: Mapping[str, object]
     source_ref: str
     soft_to_hard: bool
+    weight: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

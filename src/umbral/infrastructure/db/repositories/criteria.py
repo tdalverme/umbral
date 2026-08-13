@@ -566,23 +566,27 @@ class SqlAlchemyUrbanSignalRepository:
             session.commit()
 
     def list_for_listing(self, listing_id: UUID) -> tuple[Mapping[str, object], ...]:
+        from sqlalchemy import func, select
+
         with self.session_factory() as session:
-            models = session.scalars(
-                select(UrbanSignalModel).where(
-                    UrbanSignalModel.listing_id == listing_id
-                )
-            )
+            rows = session.execute(
+                select(
+                    UrbanSignalModel,
+                    func.ST_AsText(UrbanSignalModel.geometry).label("geometry_wkt"),
+                ).where(UrbanSignalModel.listing_id == listing_id)
+            ).all()
             return tuple(
                 {
-                    "signal_id": model.id,
-                    "listing_id": model.listing_id,
-                    "signal_type": model.signal_type,
-                    "signal_source": model.signal_source,
-                    "observed_at": model.observed_at,
-                    "algorithm_version": model.algorithm_version,
-                    "payload": dict(model.payload or {}),
+                    "signal_id": row[0].id,
+                    "listing_id": row[0].listing_id,
+                    "signal_type": row[0].signal_type,
+                    "signal_source": row[0].signal_source,
+                    "observed_at": row[0].observed_at,
+                    "algorithm_version": row[0].algorithm_version,
+                    "geometry": row[1],
+                    "payload": dict(row[0].payload or {}),
                 }
-                for model in models
+                for row in rows
             )
 
 
@@ -682,6 +686,7 @@ def _to_domain_compilation(model: CompilationModel) -> Compilation:
             params=_criterion_params(item),
             source_ref=str(item.get("source_ref", "")),
             soft_to_hard=bool(item.get("soft_to_hard", False)),
+            weight=_as_optional_float(item.get("weight")),
         )
         for item in (model.criteria or [])
     )
@@ -705,13 +710,16 @@ def _criterion_payload(criterion: object) -> dict[str, object]:
 
     item = criterion
     assert isinstance(item, CompiledCriterion)
-    return {
+    payload: dict[str, object] = {
         "concept_key": item.concept_key,
         "matcher_type": item.matcher_type,
         "params": dict(item.params),
         "source_ref": item.source_ref,
         "soft_to_hard": item.soft_to_hard,
     }
+    if item.weight is not None:
+        payload["weight"] = item.weight
+    return payload
 
 
 def _to_domain_extraction_version(
@@ -870,3 +878,11 @@ def _as_mapping_signal(signal: Mapping[str, object]) -> dict[str, object]:
 def _criterion_params(item: Mapping[str, object]) -> dict[str, object]:
     params = item.get("params")
     return dict(params) if isinstance(params, Mapping) else {}
+
+
+def _as_optional_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None

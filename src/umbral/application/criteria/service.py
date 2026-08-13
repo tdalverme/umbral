@@ -11,6 +11,7 @@ invalidate only affected observations; recompute publication (new observations
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import replace
@@ -788,6 +789,25 @@ class CriteriaService:
                 },
                 correlation_id=correlation_id,
             )
+        if source == "urban":
+            concept = self.extraction_contract.concepts.get(concept_key, {})
+            proxy = concept.get("proxy")
+            proxy_map: Mapping[str, object] = (
+                proxy if isinstance(proxy, Mapping) else {}
+            )
+            radius = _as_float(proxy_map.get("radio_m"), None)
+            minimum = _as_float(proxy_map.get("min"), 1.0) or 1.0
+            return self.register_extraction_version(
+                kind="rule",
+                key=concept_key,
+                version=f"urban-r{radius}-m{minimum}",
+                payload={
+                    "rule": concept_key,
+                    "source": "urban",
+                    "proxy": dict(proxy_map),
+                },
+                correlation_id=correlation_id,
+            )
         schema = self.extraction_contract.concepts.get(concept_key, {}).get("schema")
         if not isinstance(schema, Mapping):
             raise CriteriaPermanentError(
@@ -847,6 +867,19 @@ class CriteriaService:
                     )
                 )
                 continue
+            if source == "urban":
+                observations.append(
+                    self._urban_observation(
+                        listing_id=listing.listing_id,
+                        concept_key=concept_key,
+                        matcher_type=self._matcher_type(concept_key),
+                        version_entry=version_entry,
+                        listing=listing,
+                        now=now,
+                        correlation_id=correlation_id,
+                    )
+                )
+                continue
             observations.append(
                 self._model_observation(
                     listing_id=listing.listing_id,
@@ -859,6 +892,95 @@ class CriteriaService:
                 )
             )
         return tuple(observations)
+
+    def _urban_observation(
+        self,
+        *,
+        listing_id: UUID,
+        concept_key: str,
+        matcher_type: str,
+        version_entry: ExtractionVersion,
+        listing: NormalizedListing,
+        now: datetime,
+        correlation_id: UUID,
+    ) -> ListingObservation:
+        """Consolidate versioned urban signals into one observation (fase 3).
+
+        The proxy (radio_m, min) comes from the extraction contract; the value
+        is the count of matching signals inside the radius, the score is the
+        count normalized by the proxy minimum and the evidence cites each
+        signal (id + algorithm_version) for traceability.
+        """
+        concept = self.extraction_contract.concepts.get(concept_key, {})
+        signal_type = str(concept.get("signal_type", ""))
+        proxy = concept.get("proxy")
+        proxy_map: Mapping[str, object] = (
+            proxy if isinstance(proxy, Mapping) else {}
+        )
+        radius = _as_float(proxy_map.get("radio_m"), None)
+        minimum = _as_float(proxy_map.get("min"), 1.0) or 1.0
+        if not signal_type or self.urban_signals is None:
+            return ListingObservation(
+                observation_id=uuid4(),
+                listing_id=listing_id,
+                concept_key=concept_key,
+                matcher_type=matcher_type,  # type: ignore[arg-type]
+                value=None,
+                score=0.0,
+                confidence=0.0,
+                evidence={"proxy": dict(proxy_map)},
+                source="urban",
+                extraction_version_id=version_entry.version_id,
+                state="failed",
+                failure_code="criteria.urban_unavailable",
+                recomputation_run_id=None,
+                created_at=now,
+                correlation_id=correlation_id,
+                actor_kind="service",
+                actor_id=None,
+            )
+        listing_point = listing.geometry
+        signals = [
+            signal
+            for signal in self.urban_signals.list_for_listing(listing_id)
+            if signal.get("signal_type") == signal_type
+        ]
+        counted: list[Mapping[str, object]] = []
+        for signal in signals:
+            if radius is not None:
+                distance = _signal_distance(listing_point, signal.get("geometry"))
+                if distance is None or distance > radius:
+                    continue
+            counted.append(
+                {
+                    "signal_id": str(signal.get("signal_id", "")),
+                    "algorithm_version": str(signal.get("algorithm_version", "")),
+                }
+            )
+        count = len(counted)
+        score = round(min(count / minimum, 1.0), 4)
+        return ListingObservation(
+            observation_id=uuid4(),
+            listing_id=listing_id,
+            concept_key=concept_key,
+            matcher_type=matcher_type,  # type: ignore[arg-type]
+            value=count,
+            score=score,
+            confidence=1.0,
+            evidence={
+                "signals": counted,
+                "proxy": dict(proxy_map),
+            },
+            source="urban",
+            extraction_version_id=version_entry.version_id,
+            state="active",
+            failure_code=None,
+            recomputation_run_id=None,
+            created_at=now,
+            correlation_id=correlation_id,
+            actor_kind="service",
+            actor_id=None,
+        )
 
     def _model_observation(
         self,
@@ -1068,6 +1190,61 @@ def seed_to_payload(seed: ConceptSeed) -> Mapping[str, object]:
         "defaults": dict(seed.defaults),
         "compute_policy": dict(seed.compute_policy),
     }
+
+
+def _as_float(value: object, default: float | None) -> float | None:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    return default
+
+
+def _signal_distance(
+    listing_point: object, signal_geometry: object
+) -> float | None:
+    """Great-circle distance in meters between the listing point and a signal.
+
+    The signal geometry is stored as a POINT WKT string (lon lat order);
+    unknown or malformed geometries yield None (the signal is not counted
+    when a radius filter applies).
+    """
+    listing_coords = _point_coords(listing_point)
+    signal_coords = _point_coords(signal_geometry)
+    if listing_coords is None or signal_coords is None:
+        return None
+    lat1, lon1 = listing_coords
+    lat2, lon2 = signal_coords
+    radius_earth_m = 6371000.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    return 2 * radius_earth_m * math.asin(math.sqrt(a))
+
+
+def _point_coords(value: object) -> tuple[float, float] | None:
+    if isinstance(value, tuple) and len(value) == 2:
+        lat, lon = value
+        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            return float(lat), float(lon)
+        return None
+    if isinstance(value, str):
+        raw = value.strip()
+        if raw.upper().startswith("POINT(") and raw.endswith(")"):
+            raw = raw[6:-1]
+        parts = raw.split()
+        if len(parts) == 2:
+            try:
+                lon, lat = float(parts[0]), float(parts[1])
+                return lat, lon
+            except ValueError:
+                return None
+    return None
 
 
 _DEFAULT_PROMPT = (

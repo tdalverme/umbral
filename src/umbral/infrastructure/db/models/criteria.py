@@ -32,7 +32,7 @@ OBSERVATION_STATE = ENUM(
     name="observation_state",
     create_type=True,
 )
-OBSERVATION_SOURCE = ENUM("rule", "model", name="observation_source", create_type=True)
+OBSERVATION_SOURCE = ENUM("rule", "model", "urban", name="observation_source", create_type=True)
 EXTRACTION_KIND = ENUM(
     "rule",
     "prompt",

@@ -236,7 +236,7 @@ def test_propose_translates_canonical_zone_to_profile_zones() -> None:
         change={"zona": "Palermo"},
         correlation_id=CORRELATION_ID,
     )
-    assert proposal.diff == {"zones": ("palermo",)}
+    assert proposal.diff == {"zones": ["palermo"]}
 
 
 def test_propose_normalizes_zone_names_accents_and_case() -> None:
@@ -249,7 +249,7 @@ def test_propose_normalizes_zone_names_accents_and_case() -> None:
         correlation_id=CORRELATION_ID,
     )
     assert proposal.diff == {
-        "zones": ("nunez", "villa_crespo", "san_nicolas")
+        "zones": ["nunez", "villa_crespo", "san_nicolas"]
     }
 
 
@@ -282,7 +282,7 @@ def test_propose_mixes_canonical_and_profile_keys() -> None:
         change={"zona": "Belgrano", "budget_max": 200000},
         correlation_id=CORRELATION_ID,
     )
-    assert proposal.diff == {"zones": ("belgrano",), "budget_max": 200000.0}
+    assert proposal.diff == {"zones": ["belgrano"], "budget_max": 200000.0}
 
 
 def test_propose_rejects_unsupported_criteria_with_actionable_code() -> None:

@@ -89,6 +89,7 @@ def build_criterion(
     concept_key: str,
     matcher_type: str = "categorical",
     params: dict[str, object] | None = None,
+    weight: float | None = None,
 ) -> CompiledCriterion:
     return CompiledCriterion(
         concept_key=concept_key,
@@ -96,6 +97,7 @@ def build_criterion(
         params=params or {},
         source_ref="fact:test",
         soft_to_hard=False,
+        weight=weight,
     )
 
 

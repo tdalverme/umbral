@@ -69,6 +69,24 @@
       "polarity": "positive",
       "value": null,
       "requires_value": true
+    },
+    {
+      "aliases": ["moderno", "actual"],
+      "concept_key": "moderno",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["cerca de cafes", "con cafes cerca", "cerca de un cafe"],
+      "concept_key": "proximidad_cafes",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["buen transporte", "bien conectado", "cerca del transporte"],
+      "concept_key": "acceso_transporte",
+      "polarity": "positive",
+      "value": null
     }
   ],
   "unsupported_notes": {

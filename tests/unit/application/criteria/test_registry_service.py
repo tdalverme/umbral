@@ -42,12 +42,12 @@ def test_seed_registry_is_idempotent_and_versioned() -> None:
     context = CriteriaTestContext()
     first = context.service.seed_registry(correlation_id=uuid4())
     second = context.service.seed_registry(correlation_id=uuid4())
-    assert first == 7
+    assert first == 10
     assert second == 0
     concept = context.concepts.get("balcon")
     assert concept is not None
     assert concept.current_version_id is not None
-    assert len(context.concepts.versions) == 7
+    assert len(context.concepts.versions) == 10
 
 
 def test_register_concept_version_creates_new_immutable_version() -> None:
@@ -70,7 +70,7 @@ def test_register_concept_version_creates_new_immutable_version() -> None:
     assert updated is not None
     assert updated.name == "Balcon amplio"
     versions = [item.concept_version for item in context.concepts.versions]
-    assert versions == [1, 1, 1, 1, 1, 1, 1, 2]
+    assert versions == [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2]
     events = [
         item
         for item in context.events.events
@@ -126,4 +126,4 @@ def test_invalid_concept_registration_is_rejected_without_partials() -> None:
             correlation_id=uuid4(),
         )
     assert context.concepts.get("malo") is None
-    assert len(context.concepts.versions) == 7
+    assert len(context.concepts.versions) == 10

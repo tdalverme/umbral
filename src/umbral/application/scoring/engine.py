@@ -115,16 +115,23 @@ def _score_candidate(
     contribution_sum = 0.0
     excluded = False
     fact_params = {
-        compiled.concept_key: compiled.params for compiled in compilation.criteria
+        compiled.concept_key: compiled for compiled in compilation.criteria
     }
     for criterion in policy.criteria:
         if criterion.concept in fact_params:
-            # The compiled preference params (polarity, preferred value) of a
-            # fact override the static policy entry of the same concept; the
-            # policy keeps the weight and gates (fase 2 hallazgo 1).
+            # The compiled preference params (polarity, preferred value) and
+            # weight of a fact override the static policy entry of the same
+            # concept; gates stay in the policy (fase 3, US3).
+            compiled = fact_params[criterion.concept]
+            weight = (
+                compiled.weight
+                if compiled.weight is not None
+                else criterion.weight
+            )
             criterion = replace(
                 criterion,
-                params={**criterion.params, **fact_params[criterion.concept]},
+                params={**criterion.params, **compiled.params},
+                weight=weight,
             )
         result, input_refs = _evaluate_criterion(
             criterion, profile, listing, observations
@@ -149,6 +156,38 @@ def _score_candidate(
         )
     if excluded:
         return None
+    policy_keys = {criterion.concept for criterion in policy.criteria}
+    for compiled in compilation.criteria:
+        if compiled.concept_key in policy_keys or compiled.weight is None:
+            continue
+        # Facts of concepts outside the static policy contribute with their
+        # own weight (fase 3, US3); no gates apply to them.
+        criterion = PolicyCriterion(
+            key=compiled.concept_key,
+            concept=compiled.concept_key,
+            matcher_type=compiled.matcher_type,
+            weight=compiled.weight,
+            params=dict(compiled.params),
+            gate=None,
+        )
+        result, input_refs = _evaluate_criterion(
+            criterion, profile, listing, observations
+        )
+        contribution = round(criterion.weight * result.score, 6)
+        contribution_sum += contribution
+        evaluations.append(
+            _evaluation(
+                criterion=criterion,
+                run_id=run_id,
+                listing_id=listing.listing_id,
+                version_key=version_key,
+                result=result,
+                input_refs=input_refs,
+                contribution=contribution,
+                now=now,
+                correlation_id=correlation_id,
+            )
+        )
     frozen_evaluations = tuple(evaluations)
     total = _apply_deltas(contribution_sum, policy, frozen_evaluations)
     if any(

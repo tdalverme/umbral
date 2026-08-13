@@ -760,6 +760,76 @@
         "rejects"
       ],
       "notes": "Preferencia sin traduccion canonica: rechazo accionable con el vocabulario soportado (0 invencion)."
+    },
+    {
+      "id": "conversation-025",
+      "family": "preferences",
+      "context": {
+        "profile": {
+          "budget_max": 900000,
+          "zone": "palermo"
+        }
+      },
+      "turns": [
+        "Quiero algo moderno"
+      ],
+      "expectation": {
+        "tool_calls": [
+          {
+            "tool": "propose_search_preference_update",
+            "args": {
+              "preference": "moderno"
+            },
+            "requires_confirmation": false,
+            "order": 1
+          }
+        ],
+        "grounding": {
+          "require_refs": false,
+          "min_refs": 0,
+          "declare_missing": false
+        },
+        "outcome": "completed"
+      },
+      "tags": [
+        "preferences"
+      ],
+      "notes": "Concepto cualitativo nuevo (fase 3): 'moderno' se traduce al concepto moderno sin cambios de codigo."
+    },
+    {
+      "id": "conversation-026",
+      "family": "preferences",
+      "context": {
+        "profile": {
+          "budget_max": 900000,
+          "zone": "palermo"
+        }
+      },
+      "turns": [
+        "Quiero un depto cerca de cafés"
+      ],
+      "expectation": {
+        "tool_calls": [
+          {
+            "tool": "propose_search_preference_update",
+            "args": {
+              "preference": "cerca de cafés"
+            },
+            "requires_confirmation": false,
+            "order": 1
+          }
+        ],
+        "grounding": {
+          "require_refs": false,
+          "min_refs": 0,
+          "declare_missing": false
+        },
+        "outcome": "completed"
+      },
+      "tags": [
+        "preferences"
+      ],
+      "notes": "Concepto urbano nuevo (fase 3): 'cerca de cafes' se traduce al concepto proximidad_cafes."
     }
   ]
 }

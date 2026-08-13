@@ -71,6 +71,36 @@
       "source": "seed",
       "defaults": {},
       "compute_policy": {"unknown": "exclude", "qualitative": true, "computable": false}
+    },
+    {
+      "key": "moderno",
+      "name": "Estilo moderno",
+      "aliases": ["moderno", "renovado", "actual"],
+      "matcher_type": "semantic_feature",
+      "params_schema": {"concept": "moderno"},
+      "source": "seed",
+      "defaults": {},
+      "compute_policy": {"unknown": "exclude", "qualitative": true, "computable": true}
+    },
+    {
+      "key": "proximidad_cafes",
+      "name": "Proximidad a cafes",
+      "aliases": ["cerca de cafes", "con cafes cerca", "cerca de un cafe"],
+      "matcher_type": "numeric_range",
+      "params_schema": {"min": 1, "max": 1000},
+      "source": "seed",
+      "defaults": {"min": 1},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "acceso_transporte",
+      "name": "Acceso a transporte",
+      "aliases": ["buen transporte", "bien conectado", "cerca del transporte"],
+      "matcher_type": "numeric_range",
+      "params_schema": {"min": 1, "max": 1000},
+      "source": "seed",
+      "defaults": {"min": 1},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
     }
   ]
 }

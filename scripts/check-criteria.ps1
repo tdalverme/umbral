@@ -11,6 +11,7 @@ $testPaths = @(
     "tests\contract\test_extraction_rules.py",
     "tests\contract\test_extraction_versions.py",
     "tests\contract\test_compilation.py",
+    "tests\contract\test_extraction_goldens.py",
     "tests\contract\test_events_registry.py",
     "tests\integration\criteria",
     "tests\migrations\test_0006_criteria_observations.py"

@@ -15,12 +15,14 @@ import hashlib
 import os
 import secrets
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from umbral.application.ingestion.contracts import RawListingSnapshot, SourceIdentity
+from umbral.application.ingestion.import_contract import validate_record
+from umbral.application.silver.silver_schema import normalize_snapshot
 from umbral.domain.identity.models import (
     MagicLinkAttempt,
     MagicLinkRequest,
@@ -37,10 +39,8 @@ from umbral.infrastructure.db.repositories.silver import (
     SqlAlchemyCanonicalPropertyRepository,
     SqlAlchemySilverListingRepository,
 )
-from umbral.infrastructure.silver.contract_loader import load_silver_schema
-from umbral.application.silver.silver_schema import normalize_snapshot
 from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
-from umbral.application.ingestion.import_contract import validate_record
+from umbral.infrastructure.silver.contract_loader import load_silver_schema
 
 NOW = datetime.now(timezone.utc)
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+psycopg://umbral:local@127.0.0.1/umbral")
@@ -112,6 +112,7 @@ def main() -> None:
         )
 
     _seed_silver(factory)
+    _seed_urban_signals(factory)
     _seed_soft(factory)
 
     print()
@@ -164,13 +165,72 @@ def _build_local_criteria(factory):
             extraction_model=managed_model,
             qualitative_max_attempts=2,
             batch_size=250,
+            urban_context_enabled=True,
         )
     return build_criteria_service(
         session_factory=factory,
         job_runtime=None,
         extraction_provider="fake",
         extractor=FakeStructuredExtractor(dict(_SOFT_QUALITATIVE_DEFAULTS)),
+        urban_context_enabled=True,
     )
+
+
+_URBAN_SIGNALS_DEMO = [
+    # Palermo (9f024c31) y Belgrano/Recoleta: cafes y transporte cerca.
+    {"listing_external": "demo-1", "signal_type": "cafe", "geometry": "POINT(-58.4245 -34.5833)", "algorithm_version": "v1"},
+    {"listing_external": "demo-1", "signal_type": "cafe", "geometry": "POINT(-58.4240 -34.5831)", "algorithm_version": "v1"},
+    {"listing_external": "demo-1", "signal_type": "transport", "geometry": "POINT(-58.4242 -34.5835)", "algorithm_version": "v1"},
+    {"listing_external": "demo-2", "signal_type": "cafe", "geometry": "POINT(-58.4260 -34.5850)", "algorithm_version": "v1"},
+    {"listing_external": "demo-2", "signal_type": "transport", "geometry": "POINT(-58.4262 -34.5852)", "algorithm_version": "v1"},
+    {"listing_external": "demo-3", "signal_type": "transport", "geometry": "POINT(-58.3915 -34.5935)", "algorithm_version": "v1"},
+]
+
+
+def _seed_urban_signals(factory) -> None:
+    """Seed demo urban signals (cafe/transport) near the demo listings."""
+    from sqlalchemy import text
+
+    from umbral.infrastructure.db.repositories.criteria import (
+        SqlAlchemyUrbanSignalRepository,
+    )
+
+    with factory() as session:
+        session.execute(
+            text("DELETE FROM urban_signals WHERE signal_source = 'osm-demo'")
+        )
+        session.commit()
+    repo = SqlAlchemyUrbanSignalRepository(factory)
+    with factory() as session:
+        rows = session.execute(
+            text(
+                "SELECT external_id, id FROM silver_listings "
+                "WHERE source_id = 'demo-source'"
+            )
+        ).all()
+    by_external = {str(row[0]): str(row[1]) for row in rows}
+    now = datetime.now(timezone.utc)
+    inserted = 0
+    for raw in _URBAN_SIGNALS_DEMO:
+        listing_id = by_external.get(raw["listing_external"])
+        if listing_id is None:
+            continue
+        repo.insert(
+            {
+                "signal_id": uuid4(),
+                "created_at": now,
+                "correlation_id": uuid4(),
+                "listing_id": UUID(listing_id),
+                "signal_type": raw["signal_type"],
+                "signal_source": "osm-demo",
+                "observed_at": now,
+                "geometry": raw["geometry"],
+                "algorithm_version": raw["algorithm_version"],
+                "payload": {"source": "demo"},
+            }
+        )
+        inserted += 1
+    print(f"Seed Urban: {inserted} senales demo (re-sembradas, sin duplicados).")
 
 
 def _seed_soft(factory, criteria=None) -> None:
