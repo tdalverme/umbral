@@ -7,9 +7,13 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from umbral.application.notifications.contracts import NotificationPreferences
+from umbral.application.notifications.contracts import (
+    DuplicateDecisionError,
+    NotificationPreferences,
+)
 from umbral.infrastructure.db.models.identity import ProductUser
 from umbral.infrastructure.db.models.notifications import (
     NotificationDecisionModel,
@@ -140,30 +144,32 @@ class SqlAlchemyDecisionRepository:
         correlation_id: UUID,
     ) -> UUID:
         decision_id = uuid4()
-        with self._session() as session:
-            session.add(
-                NotificationDecisionModel(
-                    id=decision_id,
-                    user_id=user_id,
-                    search_profile_id=search_profile_id,
-                    recommendation_item_id=recommendation_item_id,
-                    trigger=trigger,
-                    reason_code=reason_code,
-                    decision_state=decision_state,
-                    policy_version=policy_version,
-                    preferences_version=preferences_version,
-                    price_before=price_before,
-                    price_after=price_after,
-                    duplicate_of_id=duplicate_of_id,
-                    created_at=now,
-                    updated_at=now,
-                    source="notifications.decision.insert",
-                    correlation_id=correlation_id,
+        try:
+            with self._session() as session:
+                session.add(
+                    NotificationDecisionModel(
+                        id=decision_id,
+                        user_id=user_id,
+                        search_profile_id=search_profile_id,
+                        recommendation_item_id=recommendation_item_id,
+                        trigger=trigger,
+                        reason_code=reason_code,
+                        decision_state=decision_state,
+                        policy_version=policy_version,
+                        preferences_version=preferences_version,
+                        price_before=price_before,
+                        price_after=price_after,
+                        duplicate_of_id=duplicate_of_id,
+                        created_at=now,
+                        updated_at=now,
+                        source="notifications.decision.insert",
+                        correlation_id=correlation_id,
+                    )
                 )
-            )
-            session.commit()
+                session.commit()
+        except IntegrityError as exc:
+            raise DuplicateDecisionError from exc
         return decision_id
-
     def get(self, decision_id: UUID) -> Mapping[str, object] | None:
         with self._session() as session:
             row = session.execute(
@@ -256,25 +262,61 @@ class SqlAlchemyInboxRepository:
     def _session(self) -> Session:
         return self._factory()
 
+    def add_for_decision(
+        self, *, decision_id: UUID, user_id: UUID, now: datetime
+    ) -> None:
+        with self._session() as session:
+            existing = session.execute(
+                select(NotificationInboxItemModel.id).where(
+                    NotificationInboxItemModel.decision_id == decision_id
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                return
+            session.add(
+                NotificationInboxItemModel(
+                    decision_id=decision_id,
+                    user_id=user_id,
+                    created_at=now,
+                    updated_at=now,
+                    source="notifications.inbox.add_for_decision",
+                    correlation_id=decision_id,
+                )
+            )
+            session.commit()
+
     def list_for_user(
         self, *, user_id: UUID, limit: int, after: object | None
     ) -> Sequence[Mapping[str, object]]:
         with self._session() as session:
             query = (
-                select(NotificationInboxItemModel)
+                select(
+                    NotificationInboxItemModel,
+                    NotificationDecisionModel.reason_code,
+                    NotificationDecisionModel.trigger,
+                    NotificationDecisionModel.decision_state,
+                )
+                .join(
+                    NotificationDecisionModel,
+                    NotificationDecisionModel.id
+                    == NotificationInboxItemModel.decision_id,
+                )
                 .where(NotificationInboxItemModel.user_id == user_id)
                 .order_by(NotificationInboxItemModel.created_at.desc())
                 .limit(limit)
             )
-            rows = session.execute(query).scalars()
+            rows = session.execute(query)
             return [
                 {
-                    "decision_id": row.decision_id,
-                    "read_at": row.read_at,
-                    "acted_at": row.acted_at,
-                    "created_at": row.created_at,
+                    "decision_id": inbox.decision_id,
+                    "read_at": inbox.read_at,
+                    "acted_at": inbox.acted_at,
+                    "created_at": inbox.created_at,
+                    "reason_code": reason_code,
+                    "trigger": trigger,
+                    "decision_state": decision_state,
                 }
-                for row in rows
+                for inbox, reason_code, trigger, decision_state in rows
             ]
 
     def mark_read(self, *, user_id: UUID, decision_id: UUID, now: datetime) -> bool:

@@ -113,3 +113,7 @@ class PlannerValidationError(ValueError):
     def __init__(self, reason: str) -> None:
         self.reason = reason
         super().__init__(f"notifications_planner_invalid: {reason}")
+
+
+class DuplicateDecisionError(Exception):
+    """A decision for the same item and trigger already exists (unique race)."""

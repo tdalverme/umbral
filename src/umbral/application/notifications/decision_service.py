@@ -8,7 +8,10 @@ from uuid import UUID, uuid4
 
 from umbral.application.events.contracts import ProductEvent
 from umbral.application.events.registry import EventsRegistrySpec, event_version
-from umbral.application.notifications.contracts import PlannerDecision
+from umbral.application.notifications.contracts import (
+    DuplicateDecisionError,
+    PlannerDecision,
+)
 from umbral.application.notifications.ports import (
     DecisionRepository,
     InboxRepository,
@@ -63,17 +66,20 @@ class DecisionService:
                 now=now,
                 correlation_id=correlation_id,
             )
-        except Exception as exc:  # noqa: BLE001 - unique race handled below
-            from sqlalchemy.exc import IntegrityError
-
-            if isinstance(exc, IntegrityError):
-                existing = self._decisions.find_by_item_trigger(
-                    recommendation_item_id=decision.recommendation_item_id,
-                    trigger=decision.trigger,
-                )
-                if existing is not None:
-                    return existing
+        except DuplicateDecisionError:
+            existing = self._decisions.find_by_item_trigger(
+                recommendation_item_id=decision.recommendation_item_id,
+                trigger=decision.trigger,
+            )
+            if existing is not None:
+                return existing
             raise
+        if inbox_enabled:
+            self._inbox.add_for_decision(  # type: ignore[attr-defined]
+                decision_id=decision_id,
+                user_id=user_id,
+                now=now,
+            )
         self._emit_decision_created(
             decision_id=decision_id,
             search_profile_id=search_profile_id,

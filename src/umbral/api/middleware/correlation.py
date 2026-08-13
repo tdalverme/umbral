@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID, uuid4
 
 from fastapi import Request
@@ -10,6 +11,8 @@ from starlette.responses import Response
 
 from umbral.api.errors import problem_response
 from umbral.domain.errors import InternalRuntimeError
+
+logger = logging.getLogger("umbral.api.middleware")
 
 
 class CorrelationMiddleware(BaseHTTPMiddleware):
@@ -25,6 +28,11 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
         except Exception:
+            logger.exception(
+                "unhandled error on %s %s",
+                request.method,
+                request.url.path,
+            )
             response = problem_response(request, InternalRuntimeError())
         response.headers["X-Request-ID"] = request.state.request_id
         response.headers["X-Correlation-ID"] = request.state.correlation_id

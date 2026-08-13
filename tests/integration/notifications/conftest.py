@@ -22,6 +22,7 @@ from umbral.infrastructure.db.models.radar import (
 from umbral.infrastructure.db.models.silver import SilverListing
 from umbral.infrastructure.notifications.repositories import (
     SqlAlchemyDecisionRepository,
+    SqlAlchemyInboxRepository,
     SqlAlchemyPreferenceRepository,
 )
 
@@ -51,6 +52,7 @@ def notification_repos(notification_backend):
         "factory": factory,
         "preferences": SqlAlchemyPreferenceRepository(factory),
         "decisions": SqlAlchemyDecisionRepository(factory),
+        "inbox": SqlAlchemyInboxRepository(factory),
     }
 
 

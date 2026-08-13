@@ -89,6 +89,10 @@ class UserEmailReader(Protocol):
 class InboxRepository(Protocol):
     """Web inbox items 1:1 with decisions."""
 
+    def add_for_decision(
+        self, *, decision_id: UUID, user_id: UUID, now: datetime
+    ) -> None: ...
+
     def list_for_user(
         self, *, user_id: UUID, limit: int, after: object | None
     ) -> Sequence[Mapping[str, object]]: ...

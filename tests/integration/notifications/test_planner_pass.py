@@ -38,7 +38,7 @@ def _services(notification_repos, factory):
     decisions = notification_repos["decisions"]
     decision_service = DecisionService(
         decisions=decisions,
-        inbox=object(),  # type: ignore[arg-type]
+        inbox=notification_repos["inbox"],
         events_out=events_out,
         events_registry=events_registry,
         policy_version="notification-policy-v1",
@@ -90,6 +90,17 @@ def test_repeated_plan_pass_is_idempotent(
         correlation_id=notification_seed["search_profile_id"],
     )
     assert second == 0
+    decision_id = notification_repos["decisions"].find_by_item_trigger(
+        recommendation_item_id=notification_seed["recommendation_item_id"],
+        trigger="new_match",
+    )
+    inbox_items = notification_repos["inbox"].list_for_user(
+        user_id=notification_seed["user_id"], limit=10
+    )
+    assert len(inbox_items) == 1
+    assert inbox_items[0]["decision_id"] == decision_id
+    assert inbox_items[0]["reason_code"] == "new_match"
+    assert inbox_items[0]["trigger"] == "new_match"
 
 
 def test_record_is_idempotent_on_unique_race(
