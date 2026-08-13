@@ -21,7 +21,7 @@ def test_seed_loads_from_the_published_contract() -> None:
     doc = parse_learning_policy(load_learning_policy_seed())
     assert doc.contract_version == "1"
     assert doc.learning_policy_version == "learning-v1"
-    assert doc.min_signals == 3
+    assert doc.min_signals == 2
     assert doc.window_days == 90
     assert doc.cooldown_days == 7
     assert doc.proposal_expiration_days == 30

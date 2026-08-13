@@ -8,7 +8,7 @@ performs I/O: the run job loads the frozen inputs first (FR-008, SC-001).
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -114,7 +114,18 @@ def _score_candidate(
     evaluations: list[CriterionEvaluation] = []
     contribution_sum = 0.0
     excluded = False
+    fact_params = {
+        compiled.concept_key: compiled.params for compiled in compilation.criteria
+    }
     for criterion in policy.criteria:
+        if criterion.concept in fact_params:
+            # The compiled preference params (polarity, preferred value) of a
+            # fact override the static policy entry of the same concept; the
+            # policy keeps the weight and gates (fase 2 hallazgo 1).
+            criterion = replace(
+                criterion,
+                params={**criterion.params, **fact_params[criterion.concept]},
+            )
         result, input_refs = _evaluate_criterion(
             criterion, profile, listing, observations
         )

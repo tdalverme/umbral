@@ -17,7 +17,7 @@
     },
     {
       "name": "refinamiento",
-      "description": "Request to change search criteria; always goes through propose + HITL confirmation; never direct apply.",
+      "description": "Request to change search criteria or a general preference of the search ('no me gustan los deptos oscuros'); always goes through propose + HITL confirmation; never direct apply.",
       "allowed_tools": [
         "propose_search_profile_update",
         "propose_search_preference_update",
@@ -32,7 +32,7 @@
     },
     {
       "name": "feedback",
-      "description": "Register like/dislike with optional reasons.",
+      "description": "Opinion about one specific listing ('este depto no me gusta', 'me encanto este depto'); register like/dislike with optional reasons.",
       "allowed_tools": ["record_feedback"]
     },
     {

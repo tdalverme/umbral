@@ -27,7 +27,7 @@ Validado en vivo: `dislike + razón` ("poca luz") → señales del concepto → 
 - Tool `propose_learning_confirmation` (13 herramientas publicadas): surfcea una learning proposal pendiente por su id.
 - Normalización determinística de razones: labels naturales ("poca luz") → claves canónicas (`lighting_bad`) antes de la validación del contrato.
 - UI: el mini-card del chat tiene botones "Me gusta / No me gusta" con razones rápidas que envían el feedback al chat.
-- `min_signals: 3` en la política publicada (la demo local se ajustó a 2 para validar con 2 listings accesibles).
+- `min_signals: 2` en la política publicada: Umbral propone aprender tras 2 señales consistentes del mismo concepto (beta con poco feedback).
 - Hallazgo de calibración: el evaluador de `luminosidad` no discrimina observaciones baja/alta con polarity negative en el dataset demo — backlog de scoring.
 
 ## Prerrequisitos

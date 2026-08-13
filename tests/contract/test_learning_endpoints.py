@@ -100,7 +100,7 @@ def _seed_pending_proposal(
         payload={
             "contract_version": "1",
             "learning_policy_version": "learning-v1",
-            "min_signals": 3,
+            "min_signals": 2,
             "window_days": 90,
             "min_signal_confidence": 1.0,
             "cooldown_days": 7,

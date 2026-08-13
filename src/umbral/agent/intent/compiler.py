@@ -33,6 +33,7 @@ _INTENT_EXAMPLES: Mapping[str, tuple[str, ...]] = {
         "prefiero con balcon",
         "quiero una cocina separada",
         "no me gustan los deptos oscuros",
+        "prefiero deptos en buen estado",
     ),
     "comparacion": (
         "compara estos dos deptos que guarde",
@@ -43,6 +44,9 @@ _INTENT_EXAMPLES: Mapping[str, tuple[str, ...]] = {
         "este depto no me gusta",
         "me encanto este depto",
         "guarda este, me interesa",
+        "no me gusta este depto, la cocina es muy chica",
+        "no me gusta este depto por poca luz",
+        "me gusta este depto, quiero balcon",
     ),
     "fuera_de_alcance": (
         "contame un chiste de programacion",

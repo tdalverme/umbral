@@ -913,7 +913,7 @@ class CriteriaService:
             concept_key=concept_key,
             matcher_type=matcher_type,  # type: ignore[arg-type]
             value=result,
-            score=0.0,
+            score=_qualitative_score(result, schema),
             confidence=confidence,
             evidence={
                 "fragment": evidence,
@@ -1012,6 +1012,27 @@ def _rule_score(value: object, fragment: str | None) -> float:
     if value is None:
         return 0.0
     return 1.0 if fragment is not None else 0.6
+
+
+def _qualitative_score(value: object, schema: Mapping[str, object]) -> float:
+    """Derive a 0..1 observation score from the published qualitative enum.
+
+    Positional over the schema's ``value`` enum (first = 0, last = 1) so the
+    semantic evaluator can compare listings deterministically; unknown values
+    score 0 (the observation is still stored with its value and confidence).
+    """
+    properties = schema.get("properties")
+    if not isinstance(properties, Mapping):
+        return 0.0
+    value_schema = properties.get("value")
+    if not isinstance(value_schema, Mapping):
+        return 0.0
+    enum = value_schema.get("enum")
+    if not isinstance(enum, list) or len(enum) < 2:
+        return 0.0
+    if value not in enum:
+        return 0.0
+    return enum.index(value) / (len(enum) - 1)
 
 
 def _cause_slug(cause: str) -> str:

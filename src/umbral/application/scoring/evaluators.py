@@ -62,7 +62,18 @@ def evaluate_categorical(
         return EvaluationResult(0.0, 0.0, "unknown", "no_observation_data")
     allowed = params.get("allowed_values")
     allowed_values = allowed if isinstance(allowed, list) else []
-    if value in allowed_values:
+    polarity = str(params.get("polarity", "positive"))
+    preferred = params.get("preferred_value")
+    if preferred is not None:
+        matched = value == preferred if polarity == "positive" else value != preferred
+    elif polarity == "negative":
+        # Binary domains ("true"/"false"): a negative preference matches the
+        # absence marker; multi-value domains without a preferred value can
+        # never match a generic negative preference.
+        matched = value == "false"
+    else:
+        matched = value in allowed_values
+    if matched:
         return EvaluationResult(1.0, 1.0, "match", "concept_observed")
     return EvaluationResult(0.0, 1.0, "mismatch", "concept_missing")
 
@@ -77,9 +88,17 @@ def evaluate_semantic_feature(
         return EvaluationResult(0.0, 0.0, "unknown", "no_observation_data")
     threshold = _as_float(params.get("threshold"), 0.5) or 0.5
     confidence = _as_float(observation_confidence, score)
-    state: EvaluationState = "match" if score >= threshold else "mismatch"
+    polarity = str(params.get("polarity", "positive"))
+    if polarity == "negative":
+        # "no me gusta la luminosidad": a low observed score is the match and
+        # the contribution grows as the observed score drops (1 - score).
+        degree = round(1.0 - score, 4)
+        state: EvaluationState = "match" if degree >= threshold else "mismatch"
+    else:
+        degree = round(score, 4)
+        state = "match" if degree >= threshold else "mismatch"
     reason = "concept_observed" if state == "match" else "concept_missing"
-    return EvaluationResult(round(score, 4), confidence or 0.0, state, reason)
+    return EvaluationResult(degree, confidence or 0.0, state, reason)
 
 
 def evaluate_geo_proximity(in_zone: bool, geo_precision: str) -> EvaluationResult:

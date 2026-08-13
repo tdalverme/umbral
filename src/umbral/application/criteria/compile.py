@@ -121,11 +121,15 @@ def _facts_to_criteria(
         if concept is None:
             warnings.append(f"fact_concept_not_found:{fact.concept_key}")
             continue
+        params = dict(concept.params_schema)
+        params["polarity"] = fact.polarity
+        if fact.value is not None:
+            params["preferred_value"] = fact.value
         criteria.append(
             CompiledCriterion(
                 concept_key=fact.concept_key,
                 matcher_type=cast(MatcherType, concept.matcher_type),
-                params=dict(concept.params_schema),
+                params=params,
                 source_ref=f"fact:{fact.fact_id}",
                 soft_to_hard=False,
             )
