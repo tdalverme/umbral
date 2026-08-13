@@ -7,8 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from tests.integration.agent.conftest import (  # noqa: F401
-    agent_backend,
+from tests.integration.agent.conftest import (
     build_stack,
     create_session,
     seed_user,
@@ -16,10 +15,10 @@ from tests.integration.agent.conftest import (  # noqa: F401
 
 from umbral.application.agent_evals.contracts import EvalSuiteReport
 from umbral.application.agent_evals.price import load_price_table
-from umbral.infrastructure.agent_ops.overview import SqlAlchemyOpsRunRepository
 from umbral.infrastructure.agent_evals.repositories import (
     SqlAlchemyEvalSuiteRepository,
 )
+from umbral.infrastructure.agent_ops.overview import SqlAlchemyOpsRunRepository
 
 
 def test_overview_aggregates_match_the_source_records(agent_backend) -> None:

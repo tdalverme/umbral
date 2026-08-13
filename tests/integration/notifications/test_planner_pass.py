@@ -52,7 +52,7 @@ def _services(notification_repos, factory):
         decision_service=decision_service,
         preferences=prefs,
         profiles=SqlAlchemyProfileReader(factory),
-        delivery=object(),  # type: ignore[arg-type]
+        delivery=object(),
         policy=policy,
     )
     return prefs, decisions, decision_service, planner, events_out

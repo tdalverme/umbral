@@ -242,7 +242,10 @@ def _extract_proposal_id(body: str) -> str | None:
 
             payload = json.loads(line[len("data: ") :])
             interrupt = payload.get("interrupt")
-            if isinstance(interrupt, dict) and interrupt.get("type") == "proposal_decision":
+            if (
+                isinstance(interrupt, dict)
+                and interrupt.get("type") == "proposal_decision"
+            ):
                 return str(interrupt.get("proposal_id"))
     return None
 

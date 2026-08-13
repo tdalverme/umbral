@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from umbral.application.agent_evals.contracts import (
     AgentEvalsBlocked,
     CaseEvalResult,
+    EvalSuiteReport,
     GoldenConversationCase,
+    GoldenDataset,
     GraphRelease,
     ReleaseActivation,
     ReleaseComponents,
@@ -31,7 +35,10 @@ def _release(release_id: str) -> GraphRelease:
         justification="x",
         affected_case_ids=(),
         activation=ReleaseActivation(
-            status="active", approved_by=None, approval_evidence=None, reverted_reason=None
+            status="active",
+            approved_by=None,
+            approval_evidence=None,
+            reverted_reason=None,
         ),
         date="2026-08-10",
     )
@@ -48,7 +55,7 @@ def _case(case_id: str) -> GoldenConversationCase:
 
 
 def _result(case_id: str, **overrides: object) -> CaseEvalResult:
-    values = {
+    values: dict[str, Any] = {
         "tool_selection_ok": True,
         "args_valid": True,
         "grounding_ok": True,
@@ -62,23 +69,38 @@ def _result(case_id: str, **overrides: object) -> CaseEvalResult:
     return CaseEvalResult(case_id=case_id, **values)
 
 
-def _report(**kwargs):
+def _report(
+    *,
+    baseline_results: tuple[CaseEvalResult, ...],
+    candidate_results: tuple[CaseEvalResult, ...],
+    baseline_release: GraphRelease,
+    candidate_release: GraphRelease,
+    declared_cases: frozenset[str],
+    gate_enabled: bool = True,
+) -> EvalSuiteReport:
     return run_regression(
         dataset=_Dataset(),
-        baseline_results=kwargs["baseline_results"],
-        candidate_results=kwargs["candidate_results"],
-        baseline_release=kwargs["baseline_release"],
-        candidate_release=kwargs["candidate_release"],
-        declared_cases=kwargs["declared_cases"],
+        baseline_results=baseline_results,
+        candidate_results=candidate_results,
+        baseline_release=baseline_release,
+        candidate_release=candidate_release,
+        declared_cases=declared_cases,
         cost_threshold_pct=20.0,
         latency_threshold_ms=1500,
-        gate_enabled=kwargs.get("gate_enabled", True),
+        gate_enabled=gate_enabled,
     )
 
 
-class _Dataset:
-    registry_version = "conversations-golden-v1"
-    cases = (_case("conversation-001"), _case("conversation-002"))
+class _Dataset(GoldenDataset):
+    def __init__(self) -> None:
+        super().__init__(
+            contract_version="1",
+            registry_version="conversations-golden-v1",
+            reviewed_by="unit",
+            reviewed_at="2026-08-10",
+            min_cases_per_family=1,
+            cases=(_case("conversation-001"), _case("conversation-002")),
+        )
 
 
 def test_baseline_equals_candidate_passes() -> None:
@@ -111,8 +133,13 @@ def test_deterministic_deviation_without_release_blocks() -> None:
             candidate_release=_release("graph-release-002"),
             declared_cases=frozenset(),
         )
-    assert any("agent_evals.undeclared_change" in reason for reason in excinfo.value.reasons)
-    assert any("agent_evals.tool_selection_change" in reason for reason in excinfo.value.reasons)
+    assert any(
+        "agent_evals.undeclared_change" in reason for reason in excinfo.value.reasons
+    )
+    assert any(
+        "agent_evals.tool_selection_change" in reason
+        for reason in excinfo.value.reasons
+    )
 
 
 def test_declared_release_matching_diff_passes() -> None:
@@ -145,12 +172,20 @@ def test_release_mismatch_blocks() -> None:
             candidate_release=_release("graph-release-002"),
             declared_cases=frozenset({"conversation-002"}),
         )
-    assert any("agent_evals.release_mismatch" in reason for reason in excinfo.value.reasons)
+    assert any(
+        "agent_evals.release_mismatch" in reason for reason in excinfo.value.reasons
+    )
 
 
 def test_cost_threshold_blocks_undeclared() -> None:
-    baseline = (_result("conversation-001", cost_usd=0.01), _result("conversation-002", cost_usd=0.01))
-    candidate = (_result("conversation-001", cost_usd=0.02), _result("conversation-002", cost_usd=0.01))
+    baseline = (
+        _result("conversation-001", cost_usd=0.01),
+        _result("conversation-002", cost_usd=0.01),
+    )
+    candidate = (
+        _result("conversation-001", cost_usd=0.02),
+        _result("conversation-002", cost_usd=0.01),
+    )
     with pytest.raises(AgentEvalsBlocked) as excinfo:
         _report(
             baseline_results=baseline,

@@ -174,9 +174,9 @@ class FakeListingReader:
         self, listing_ids: tuple[UUID, ...]
     ) -> tuple[NormalizedListing, ...]:
         return tuple(
-            self.rows.get(listing_id)
+            listing
             for listing_id in listing_ids
-            if listing_id in self.rows
+            if (listing := self.rows.get(listing_id)) is not None
         )
 
 

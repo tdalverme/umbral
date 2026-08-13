@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
+from typing import Any
 
 import pytest
 
@@ -13,7 +14,7 @@ from umbral.application.agent_evals.contracts import (
 from umbral.application.agent_evals.releases import activation_allowed, parse_releases
 
 
-def _releases() -> dict[str, object]:
+def _releases() -> dict[str, Any]:
     return {
         "contract_version": "1",
         "registry_version": "graph-releases-v1",
@@ -45,7 +46,9 @@ def _releases() -> dict[str, object]:
 
 
 def test_releases_parse_with_active_release() -> None:
-    registry = parse_releases(_releases(), known_case_ids={"conversation-001"})
+    registry = parse_releases(
+        _releases(), known_case_ids=frozenset({"conversation-001"})
+    )
     release = registry.active_release()
     assert release is not None and release.id == "graph-release-001"
     assert activation_allowed(release) is True
@@ -58,11 +61,11 @@ def test_activation_is_automatic_when_deterministic_components() -> None:
 
 def test_activation_requires_approval_when_prompts_or_model_change() -> None:
     data = _releases()
-    release = dict(data["releases"][0])
-    components = dict(release["components"])
+    release_data = dict(data["releases"][0])
+    components = dict(release_data["components"])
     components["touches_prompts_or_model"] = True
-    release["components"] = components
-    data["releases"] = [release]
+    release_data["components"] = components
+    data["releases"] = [release_data]
     registry = parse_releases(data)
     release = registry.releases[0]
     assert activation_allowed(release) is False
@@ -76,7 +79,7 @@ def test_activation_requires_approval_when_prompts_or_model_change() -> None:
 def test_releases_reject_unknown_affected_case() -> None:
     data = _releases()
     with pytest.raises(AgentEvalsValidationError) as excinfo:
-        parse_releases(data, known_case_ids={"conversation-999"})
+        parse_releases(data, known_case_ids=frozenset({"conversation-999"}))
     assert any(
         "agent_evals.unknown_affected_case" in code
         for code in excinfo.value.error_codes
@@ -95,11 +98,11 @@ def test_releases_reject_duplicate_ids() -> None:
 
 def test_releases_reject_unknown_activation_status() -> None:
     data = _releases()
-    release = dict(data["releases"][0])
-    activation = dict(release["activation"])
+    release_data = dict(data["releases"][0])
+    activation = dict(release_data["activation"])
     activation["status"] = "half-open"
-    release["activation"] = activation
-    data["releases"] = [release]
+    release_data["activation"] = activation
+    data["releases"] = [release_data]
     with pytest.raises(AgentEvalsValidationError) as excinfo:
         parse_releases(data)
     assert any(

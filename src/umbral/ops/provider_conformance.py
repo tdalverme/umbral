@@ -236,7 +236,7 @@ def _resend_check(http: HttpClient, api_key: str) -> DependencyCheck:
         "resend.reachability",
         _accepted(response),
         "dependency.ok" if _accepted(response) else "dependency.failed",
-        {"status_code": status_code} if status_code is not None else None,
+        {"status_code": str(status_code)} if status_code is not None else None,
     )
 
 
@@ -254,7 +254,7 @@ def _supabase_reachability_check(
         "supabase.reachability",
         _accepted(response),
         "dependency.ok" if _accepted(response) else "dependency.failed",
-        {"status_code": status_code} if status_code is not None else None,
+        {"status_code": str(status_code)} if status_code is not None else None,
     )
 
 

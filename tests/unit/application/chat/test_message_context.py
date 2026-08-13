@@ -7,7 +7,11 @@ from umbral.application.chat.contracts import validate_message_content
 
 def test_context_is_accepted_on_user_text() -> None:
     errors = validate_message_content(
-        {"kind": "text", "text": "contame de este listing", "context": {"entity": "listing", "id": "l1"}},
+        {
+            "kind": "text",
+            "text": "contame de este listing",
+            "context": {"entity": "listing", "id": "l1"},
+        },
         max_text_length=4000,
     )
     assert errors == ()
@@ -15,7 +19,11 @@ def test_context_is_accepted_on_user_text() -> None:
 
 def test_comparison_context_is_accepted() -> None:
     errors = validate_message_content(
-        {"kind": "text", "text": "comparalos", "context": {"entity": "comparison", "id": "a,b"}},
+        {
+            "kind": "text",
+            "text": "comparalos",
+            "context": {"entity": "comparison", "id": "a,b"},
+        },
         max_text_length=4000,
     )
     assert errors == ()

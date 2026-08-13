@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -72,7 +71,7 @@ def seed_user(factory: SessionFactory) -> UUID:
     )
 
     del SqlAlchemySearchProfileRepository
-    return cast(UUID, _seed_user(factory))
+    return _seed_user(factory)
 
 
 def seed_concepts(factory: SessionFactory) -> None:

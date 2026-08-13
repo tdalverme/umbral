@@ -8,8 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from tests.integration.agent.conftest import (  # noqa: F401
-    agent_backend,
+from tests.integration.agent.conftest import (
     build_stack,
     create_session,
     seed_profile,
@@ -17,7 +16,7 @@ from tests.integration.agent.conftest import (  # noqa: F401
 )
 from tests.integration.chat.conftest import build_chat
 
-from umbral.agent.events import BudgetWarning
+from umbral.agent.events import BudgetWarning, RuntimeEvent
 from umbral.agent.runtime import ChatRuntime
 from umbral.application.agent.budgets import BudgetPolicy
 from umbral.application.agent.contracts import (
@@ -57,13 +56,17 @@ def test_turn_emits_budget_warning_without_interruption(agent_backend) -> None:
     stack = build_stack(factory, _url)
     user_id = seed_user(factory)
     session = create_session(factory, user_id)
-    _runtime(stack, policy=BudgetPolicy(session_token_cap=1_000_000, user_token_cap=1_000_000)).run_turn(
+    runtime = _runtime(
+        stack,
+        policy=BudgetPolicy(session_token_cap=1_000_000, user_token_cap=1_000_000),
+    )
+    runtime.run_turn(
         user_id=user_id,
         session_id=session.session_id,
         text="primer turno que consume tokens",
         correlation_id=uuid4(),
     )
-    events = []
+    events: list[RuntimeEvent] = []
     policy = BudgetPolicy(
         session_token_cap=100, user_token_cap=100, warning_ratio=0.001
     )

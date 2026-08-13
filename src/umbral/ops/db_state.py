@@ -13,7 +13,8 @@ def main() -> None:
     with psycopg.connect(database_url) as connection:
         with connection.cursor() as cursor:
             cursor.execute("select version_num from alembic_version")
-            revision = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            revision = None if row is None else row[0]
             cursor.execute(
                 "select extname from pg_extension "
                 "where extname in ('postgis', 'vector')"

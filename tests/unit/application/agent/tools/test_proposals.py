@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -18,6 +19,7 @@ from umbral.application.agent.tools.contracts import (
     ProposalStale,
     ProposalUnsupportedChange,
 )
+from umbral.application.agent.tools.ports import ProposalRepository
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.events.contracts import ProductEvent
 from umbral.application.events.registry import parse_events_registry
@@ -148,7 +150,7 @@ def _make_service(
     radar = _Radar(_profile())
     events = _Events()
     service = SearchProfileUpdateProposals(
-        repository=repo,
+        repository=cast(ProposalRepository, repo),
         radar=radar,
         events=events,
         events_registry=_registry(),

@@ -8,7 +8,9 @@ from pathlib import Path
 from umbral.application.notifications.policy import load_policy
 
 ROOT = Path(__file__).resolve().parents[2]
-POLICY_PATH = ROOT / "contracts" / "notifications" / "v1" / "notification-policy-v1.json"
+POLICY_PATH = (
+    ROOT / "contracts" / "notifications" / "v1" / "notification-policy-v1.json"
+)
 
 
 def test_policy_document_is_valid_json() -> None:

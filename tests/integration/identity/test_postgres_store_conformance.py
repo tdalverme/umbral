@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from threading import Barrier
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -35,7 +36,9 @@ NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
 @pytest.fixture
-def store_factory(postgres_container: ServiceConnection):
+def store_factory(
+    postgres_container: ServiceConnection,
+) -> Iterator[Callable[[], SqlAlchemyIdentityStore]]:
     """Use the migrated schema, rather than metadata creation, as production does."""
 
     config = Config("alembic.ini")
@@ -69,7 +72,7 @@ def _request() -> MagicLinkRequest:
 
 
 def test_store_reloads_domain_state_and_safe_export_after_restart(
-    store_factory,
+    store_factory: Callable[[], SqlAlchemyIdentityStore],
 ) -> None:
     """Catches process-local state or an export that leaks credentials/addresses."""
 
@@ -109,7 +112,9 @@ def test_store_reloads_domain_state_and_safe_export_after_restart(
     assert "d" * 32 not in repr(export)
 
 
-def test_provider_dedupe_is_atomic_across_store_instances(store_factory) -> None:
+def test_provider_dedupe_is_atomic_across_store_instances(
+    store_factory: Callable[[], SqlAlchemyIdentityStore],
+) -> None:
     """Catches a process-local webhook claim or a duplicate audit event."""
 
     event = AccessAuditEvent(
@@ -138,7 +143,9 @@ def test_provider_dedupe_is_atomic_across_store_instances(store_factory) -> None
     assert reader.audit_events() == (event,)
 
 
-def test_ignored_provider_event_is_validated_and_deduplicated(store_factory) -> None:
+def test_ignored_provider_event_is_validated_and_deduplicated(
+    store_factory: Callable[[], SqlAlchemyIdentityStore],
+) -> None:
     """Catches restart-unsafe ignored webhooks or an unregistered audit claim."""
 
     store = store_factory()
@@ -157,7 +164,9 @@ def test_ignored_provider_event_is_validated_and_deduplicated(store_factory) -> 
     )
 
 
-def test_transaction_rollback_leaves_no_identity_or_audit_row(store_factory) -> None:
+def test_transaction_rollback_leaves_no_identity_or_audit_row(
+    store_factory: Callable[[], SqlAlchemyIdentityStore],
+) -> None:
     """Catches a store that commits one part of an access decision independently."""
 
     store = store_factory()
@@ -182,7 +191,9 @@ def test_transaction_rollback_leaves_no_identity_or_audit_row(store_factory) -> 
     assert restarted.audit_events() == ()
 
 
-def test_nested_rollback_preserves_outer_transaction(store_factory) -> None:
+def test_nested_rollback_preserves_outer_transaction(
+    store_factory: Callable[[], SqlAlchemyIdentityStore],
+) -> None:
     """Catches nested failures that leak inner rows into an outer commit."""
 
     store = store_factory()
@@ -216,7 +227,7 @@ def test_nested_rollback_preserves_outer_transaction(store_factory) -> None:
 
 
 def test_rate_limit_serializes_concurrent_requests_and_report_restarts(
-    store_factory,
+    store_factory: Callable[[], SqlAlchemyIdentityStore],
 ) -> None:
     """Catches limiter races that let both concurrent fourth requests through."""
 
@@ -235,7 +246,9 @@ def test_rate_limit_serializes_concurrent_requests_and_report_restarts(
     assert report["sessions"] == 0
 
 
-def test_concurrent_confirmation_consumes_one_attempt_once(store_factory) -> None:
+def test_concurrent_confirmation_consumes_one_attempt_once(
+    store_factory: Callable[[], SqlAlchemyIdentityStore],
+) -> None:
     """Catches confirmation races that create two sessions for one link."""
 
     store = store_factory()
@@ -271,7 +284,9 @@ def test_concurrent_confirmation_consumes_one_attempt_once(store_factory) -> Non
     assert store_factory().session_count() == 1
 
 
-def test_concurrent_issuance_serializes_an_empty_subject(store_factory) -> None:
+def test_concurrent_issuance_serializes_an_empty_subject(
+    store_factory: Callable[[], SqlAlchemyIdentityStore],
+) -> None:
     """Catches two issuers both seeing no current attempt for one invitation."""
 
     class BarrierEmail(RecordingEmailAdapter):
@@ -310,14 +325,20 @@ def test_concurrent_issuance_serializes_an_empty_subject(store_factory) -> None:
         list(executor.map(issue, (first.id, second.id)))
 
     states = {
-        store_factory().attempt(first.id).state,
-        store_factory().attempt(second.id).state,
+        _state_after(store_factory(), first.id),
+        _state_after(store_factory(), second.id),
     }
     assert states == {"issued", "superseded"}
 
 
+def _state_after(store: SqlAlchemyIdentityStore, attempt_id: UUID) -> str:
+    attempt = store.attempt(attempt_id)
+    assert attempt is not None
+    return attempt.state
+
+
 def test_authorization_activity_and_audit_commit_and_rollback_together(
-    store_factory,
+    store_factory: Callable[[], SqlAlchemyIdentityStore],
 ) -> None:
     """Catches activity updates committing when their authorization audit rolls back."""
 
@@ -350,9 +371,9 @@ def test_authorization_activity_and_audit_commit_and_rollback_together(
         now=activity_at,
     )
     reader = store_factory()
-    assert (
-        reader.session_by_digest(session.token_digest).last_activity_at == activity_at
-    )
+    last_activity = reader.session_by_digest(session.token_digest)
+    assert last_activity is not None
+    assert last_activity.last_activity_at == activity_at
     assert reader.audit_events()[-1].event_type == "authorization.allowed.v1"
     before_audits = reader.audit_events()
 
@@ -369,8 +390,7 @@ def test_authorization_activity_and_audit_commit_and_rollback_together(
         )
 
     rolled_back = store_factory()
-    assert (
-        rolled_back.session_by_digest(session.token_digest).last_activity_at
-        == activity_at
-    )
+    rolled_back_session = rolled_back.session_by_digest(session.token_digest)
+    assert rolled_back_session is not None
+    assert rolled_back_session.last_activity_at == activity_at
     assert rolled_back.audit_events() == before_audits

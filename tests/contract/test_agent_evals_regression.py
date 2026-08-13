@@ -9,6 +9,7 @@ import pytest
 from umbral.application.agent_evals.contracts import (
     AgentEvalsBlocked,
     CaseEvalResult,
+    GoldenDataset,
 )
 from umbral.application.agent_evals.golden import load_golden_dataset
 from umbral.application.agent_evals.regression import run_regression
@@ -19,15 +20,12 @@ GOLDEN_PATH = ROOT / "contracts" / "agent-evals" / "v1" / "conversations-golden-
 RELEASES_PATH = ROOT / "contracts" / "agent-evals" / "v1" / "graph-releases-v1.json"
 
 
-def _results_from_expectations(dataset, *, tamper_case_id: str | None = None):
+def _results_from_expectations(
+    dataset: GoldenDataset, *, tamper_case_id: str | None = None
+) -> list[CaseEvalResult]:
     results: list[CaseEvalResult] = []
     for case in dataset.cases:
-        expected_tools = tuple(call.tool for call in case.expectation.tool_calls)
         recorded_ok = case.expectation.outcome in {"completed"}
-        tool_ok = expected_tools != () or case.expectation.outcome in {
-            "clarification",
-            "safe_refusal",
-        }
         results.append(
             CaseEvalResult(
                 case_id=case.id,
@@ -46,7 +44,10 @@ def _results_from_expectations(dataset, *, tamper_case_id: str | None = None):
 
 def test_baseline_vs_itself_passes_over_the_published_dataset() -> None:
     dataset = load_golden_dataset(GOLDEN_PATH)
-    releases = load_releases(RELEASES_PATH, known_case_ids={case.id for case in dataset.cases})
+    releases = load_releases(
+        RELEASES_PATH,
+        known_case_ids=frozenset({case.id for case in dataset.cases}),
+    )
     release = releases.active_release()
     assert release is not None
     results = _results_from_expectations(dataset)
@@ -66,7 +67,10 @@ def test_baseline_vs_itself_passes_over_the_published_dataset() -> None:
 
 def test_tampered_candidate_blocks_unless_declared() -> None:
     dataset = load_golden_dataset(GOLDEN_PATH)
-    releases = load_releases(RELEASES_PATH, known_case_ids={case.id for case in dataset.cases})
+    releases = load_releases(
+        RELEASES_PATH,
+        known_case_ids=frozenset({case.id for case in dataset.cases}),
+    )
     release = releases.active_release()
     assert release is not None
     baseline = _results_from_expectations(dataset)
@@ -83,7 +87,8 @@ def test_tampered_candidate_blocks_unless_declared() -> None:
             latency_threshold_ms=1500,
         )
     assert any(
-        "agent_evals.tool_selection_change" in reason for reason in excinfo.value.reasons
+        "agent_evals.tool_selection_change" in reason
+        for reason in excinfo.value.reasons
     )
     report = run_regression(
         dataset=dataset,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
-from uuid import UUID, uuid4
+from typing import Any
+from uuid import uuid4
 
 from tests.integration.radar.conftest import (
     build_radar_service,
@@ -29,7 +29,7 @@ def _context(logical_target: str) -> Any:
 def test_paging_over_run_items_has_no_repeats_or_omissions(radar_backend: Any) -> None:
     factory = radar_backend
     seed_silver_listings(factory, count=6)
-    user_id = cast(UUID, seed_user(factory))
+    user_id = seed_user(factory)
     service = build_radar_service(factory)
     handler = RecommendationRunHandler(service)
 
@@ -73,7 +73,7 @@ def test_paging_over_run_items_has_no_repeats_or_omissions(radar_backend: Any) -
 def test_explicit_run_id_pages_the_same_frozen_set(radar_backend: Any) -> None:
     factory = radar_backend
     seed_silver_listings(factory, count=4)
-    user_id = cast(UUID, seed_user(factory))
+    user_id = seed_user(factory)
     service = build_radar_service(factory)
     handler = RecommendationRunHandler(service)
 

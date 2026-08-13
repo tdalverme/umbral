@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from umbral.application.scoring.contracts import CriterionEvaluation
@@ -36,7 +37,7 @@ _RUN_ID = uuid4()
 _LISTING_ID = uuid4()
 
 
-def _evaluation(case: Mapping[str, object]) -> CriterionEvaluation:
+def _evaluation(case: Mapping[str, Any]) -> CriterionEvaluation:
     return CriterionEvaluation(
         evaluation_id=uuid4(),
         run_id=_RUN_ID,
@@ -48,7 +49,7 @@ def _evaluation(case: Mapping[str, object]) -> CriterionEvaluation:
         input_refs=(),
         score=float(case["score"]),
         confidence=float(case["confidence"]),
-        state=case["state"],  # type: ignore[arg-type]
+        state=case["state"],
         contribution=float(case["contribution"]),
         reason_code=str(case["reason_code"]),
         evidence_refs=tuple(dict(ref) for ref in case["evidence_refs"]),
@@ -91,7 +92,7 @@ def test_all_golden_explanation_cases_match() -> None:
 def test_two_calls_produce_identical_copy() -> None:
     case = GOLDEN["cases"][0]
     evaluations = tuple(_evaluation(item) for item in case["evaluations"])
-    kwargs = dict(
+    kwargs: dict[str, Any] = dict(
         search_profile_id=_PROFILE_ID,
         run_id=_RUN_ID,
         listing_id=_LISTING_ID,

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from umbral.ops.release import ReleaseManifest
 from umbral.ops.release_lock import ReleaseLock, ReleaseLockBusy

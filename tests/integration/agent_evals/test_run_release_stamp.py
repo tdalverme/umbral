@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -14,7 +13,6 @@ from tests.integration.agent.conftest import (
     seed_user,
 )
 from tests.integration.chat.conftest import build_chat
-from tests.integration.agent.conftest import agent_backend  # noqa: F401
 
 from umbral.agent.runtime import ChatRuntime
 from umbral.infrastructure.db.models.agent import AgentGraphRun

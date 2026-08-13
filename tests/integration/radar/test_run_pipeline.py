@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
-from uuid import UUID, uuid4
+from typing import Any
+from uuid import uuid4
 
 from tests.integration.radar.conftest import (
     build_radar_service,
@@ -51,7 +51,7 @@ def _context(logical_target: str) -> Any:
 def test_run_pipeline_publishes_atomically(radar_backend: Any) -> None:
     factory = radar_backend
     seed_silver_listings(factory, count=3)
-    user_id = cast(UUID, seed_user(factory))
+    user_id = seed_user(factory)
     service = build_radar_service(factory)
     handler = RecommendationRunHandler(service)
     profile, _, summary = _create_and_run(
@@ -83,7 +83,7 @@ def test_run_pipeline_publishes_atomically(radar_backend: Any) -> None:
 def test_identical_profiles_produce_identical_orders(radar_backend: Any) -> None:
     factory = radar_backend
     seed_silver_listings(factory, count=3)
-    user_id = cast(UUID, seed_user(factory))
+    user_id = seed_user(factory)
     service = build_radar_service(factory)
     handler = RecommendationRunHandler(service)
 
@@ -120,7 +120,7 @@ def test_identical_profiles_produce_identical_orders(radar_backend: Any) -> None
 def test_failed_run_keeps_last_valid_run_visible(radar_backend: Any) -> None:
     factory = radar_backend
     seed_silver_listings(factory, count=3)
-    user_id = cast(UUID, seed_user(factory))
+    user_id = seed_user(factory)
     service = build_radar_service(factory)
     handler = RecommendationRunHandler(service)
     profile, _, summary = _create_and_run(
@@ -165,7 +165,7 @@ def test_invalid_profile_is_rejected_without_side_effects(radar_backend: Any) ->
 
     factory = radar_backend
     seed_silver_listings(factory, count=1)
-    user_id = cast(UUID, seed_user(factory))
+    user_id = seed_user(factory)
     service = build_radar_service(factory)
 
     with pytest.raises(RadarValidationError):

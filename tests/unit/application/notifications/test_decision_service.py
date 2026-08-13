@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import cast
 from uuid import UUID, uuid4
 
+from umbral.application.events.registry import EventsRegistrySpec
 from umbral.application.notifications.contracts import (
     DuplicateDecisionError,
     PlannerDecision,
 )
 from umbral.application.notifications.decision_service import DecisionService
+from umbral.application.notifications.ports import (
+    DecisionRepository,
+    InboxRepository,
+)
 
 _NOW = datetime(2026, 8, 13, 12, 0, tzinfo=timezone.utc)
 
@@ -43,7 +49,9 @@ class _InboxWriter:
     def __init__(self) -> None:
         self.added: list[object] = []
 
-    def add_for_decision(self, *, decision_id: object, user_id: object, now: object) -> None:
+    def add_for_decision(
+        self, *, decision_id: object, user_id: object, now: object
+    ) -> None:
         self.added.append(decision_id)
 
 
@@ -71,10 +79,10 @@ def test_duplicate_race_returns_existing_without_re_emitting() -> None:
     events = _EventWriter()
     inbox = _InboxWriter()
     service = DecisionService(
-        decisions=_DuplicateOnSecondInsert(existing),
-        inbox=inbox,
+        decisions=cast(DecisionRepository, _DuplicateOnSecondInsert(existing)),
+        inbox=cast(InboxRepository, inbox),
         events_out=events,
-        events_registry=_EventsRegistry(),
+        events_registry=cast(EventsRegistrySpec, _EventsRegistry()),
         policy_version="notification-policy-v1",
         clock=lambda: _NOW,
     )
@@ -105,10 +113,10 @@ def test_inbox_item_created_once_when_inbox_enabled() -> None:
     events = _EventWriter()
     inbox = _InboxWriter()
     service = DecisionService(
-        decisions=_DuplicateOnSecondInsert(uuid4()),
-        inbox=inbox,
+        decisions=cast(DecisionRepository, _DuplicateOnSecondInsert(uuid4())),
+        inbox=cast(InboxRepository, inbox),
         events_out=events,
-        events_registry=_EventsRegistry(),
+        events_registry=cast(EventsRegistrySpec, _EventsRegistry()),
         policy_version="notification-policy-v1",
         clock=lambda: _NOW,
     )
@@ -128,10 +136,10 @@ def test_no_inbox_item_when_inbox_disabled() -> None:
     events = _EventWriter()
     inbox = _InboxWriter()
     service = DecisionService(
-        decisions=_DuplicateOnSecondInsert(uuid4()),
-        inbox=inbox,
+        decisions=cast(DecisionRepository, _DuplicateOnSecondInsert(uuid4())),
+        inbox=cast(InboxRepository, inbox),
         events_out=events,
-        events_registry=_EventsRegistry(),
+        events_registry=cast(EventsRegistrySpec, _EventsRegistry()),
         policy_version="notification-policy-v1",
         clock=lambda: _NOW,
     )

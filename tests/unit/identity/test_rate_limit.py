@@ -7,6 +7,7 @@ from uuid import uuid4
 from tests.support.identity import access_with_recording_jobs, requested_attempt
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.identity.administration import AccessAdministration
+from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.infrastructure.db.repositories.identity import InMemoryIdentityStore
 from umbral.infrastructure.email.recording import RecordingEmailAdapter
 from umbral.infrastructure.identity.fake import FakeIdentityProvider
@@ -40,7 +41,7 @@ def test_email_limit_is_exact_and_does_not_create_attempt() -> None:
         )
     third = requested_attempt(service, store)
     runtime = service.job_runtime
-    assert runtime is not None
+    assert isinstance(runtime, InMemoryJobRuntime)
     submissions_before = len(runtime.submissions)
     attempts_before = store.attempt_save_calls
     service.request_magic_link(

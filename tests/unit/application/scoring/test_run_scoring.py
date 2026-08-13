@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 from tests.support.radar import build_listing, build_profile
@@ -12,8 +13,10 @@ from tests.support.scoring import (
     build_observation,
 )
 
+from umbral.application.scoring.engine import ScoredCandidate
 
-def _scored_twice() -> tuple[object, object]:
+
+def _scored_twice() -> tuple[tuple[ScoredCandidate, ...], tuple[ScoredCandidate, ...]]:
     context = ScoringTestContext()
     profile = build_profile()
     listings = (build_listing(total_cost=700.0), build_listing(total_cost=500.0))
@@ -31,7 +34,7 @@ def _scored_twice() -> tuple[object, object]:
         profile_version_id=uuid4(),
         criteria=(build_criterion("balcon", matcher_type="categorical"),),
     )
-    kwargs = dict(
+    kwargs: dict[str, Any] = dict(
         profile=profile,
         compilation=compilation,
         candidates=listings,
@@ -52,7 +55,9 @@ def test_identical_inputs_produce_identical_order_and_breakdown() -> None:
         candidate.score for candidate in second
     ]
 
-    def breakdown(candidates: object) -> list[list[tuple[str, float, float, str]]]:
+    def breakdown(
+        candidates: tuple[ScoredCandidate, ...],
+    ) -> list[list[tuple[str, float, float, str]]]:
         return [
             [
                 (

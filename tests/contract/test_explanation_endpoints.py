@@ -29,6 +29,11 @@ from umbral.api.routers.comparisons import router as comparisons_router
 from umbral.api.routers.explanations import router as explanations_router
 from umbral.application.identity.authorization import AccessControl
 from umbral.application.identity.contracts import CurrentPrincipal, IdentityError
+from umbral.application.radar.contracts import (
+    RecommendationItem,
+    RecommendationRun,
+    SearchProfile,
+)
 from umbral.application.radar.service import RadarService
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.radar.contract_loader import (
@@ -78,7 +83,7 @@ def _settings() -> Settings:
 
 def _scoring_context(
     comparator_enabled: bool = False,
-) -> tuple[ScoringTestContext, object, object, object, object]:
+) -> tuple[ScoringTestContext, UUID, UUID, UUID, UUID]:
     context = ScoringTestContext(comparator_enabled=comparator_enabled)
     owner_id = uuid4()
     profile_id = uuid4()
@@ -121,9 +126,11 @@ def _scoring_context(
 
 
 def _radar(
-    profile: object, run: object | None = None, items: tuple[object, ...] = ()
+    profile: SearchProfile,
+    run: RecommendationRun | None = None,
+    items: tuple[RecommendationItem, ...] = (),
 ) -> RadarService:
-    shared_items: dict = {}
+    shared_items: dict[UUID, list[RecommendationItem]] = {}
     runs = FakeRunRepository(items_by_run=shared_items)
     items_repo = FakeItemRepository(items_by_run=shared_items)
     runs.items_by_run = shared_items
@@ -143,7 +150,7 @@ def _radar(
     service.profiles.insert(profile)
     if run is not None:
         service.runs.insert(run)
-        service.items.items_by_run[run.run_id] = list(items)
+        items_repo.items_by_run[run.run_id] = list(items)
     return service
 
 
@@ -182,7 +189,7 @@ PRINCIPAL = CurrentPrincipal(
 )
 
 
-def _principal_for(owner_id: object) -> CurrentPrincipal:
+def _principal_for(owner_id: UUID) -> CurrentPrincipal:
     return CurrentPrincipal(
         owner_id, ("user",), datetime(2026, 8, 1, tzinfo=timezone.utc)
     )

@@ -110,7 +110,11 @@ def test_adapter_verifies_magic_link_and_maps_only_provider_neutral_proof() -> N
     )
 
     assert client.verify_requests == [
-        {"type": "magiclink", "token_hash": "provider-token-hash"}
+        {
+            "type": "magiclink",
+            "token_hash": "provider-token-hash",
+            "options": {"shouldCreateUser": True},
+        }
     ]
     assert proof.provider == "supabase"
     assert proof.issuer == issuer

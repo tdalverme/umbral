@@ -13,6 +13,7 @@ import pytest
 from redis import Redis
 from rq import Worker
 from rq.serializers import JSONSerializer
+from rq.worker import SimpleWorker
 
 import umbral.workers.__main__ as workers_cli
 import umbral.workers.composition as worker_composition
@@ -70,7 +71,7 @@ def test_rq_worker_uses_umbral_queue_and_json_serializer() -> None:
 
     worker = build_rq_worker(queue)
 
-    assert isinstance(worker, Worker)
+    assert isinstance(worker, (Worker, SimpleWorker))
     assert worker.queues[0].name == "umbral"
     assert worker.serializer is JSONSerializer
     assert isinstance(worker.queues[0].serializer, JSONSerializer)

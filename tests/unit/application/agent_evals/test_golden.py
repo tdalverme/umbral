@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from umbral.application.agent_evals.contracts import AgentEvalsValidationError
@@ -10,7 +12,7 @@ from umbral.application.agent_evals.golden import parse_golden_dataset
 
 def _case(
     case_id: str, family: str, outcome: str, tool: str | None = None
-) -> dict[str, object]:
+) -> dict[str, Any]:
     tool_calls = (
         [{"tool": tool, "args": {}, "requires_confirmation": False, "order": 1}]
         if tool
@@ -36,7 +38,7 @@ def _case(
     }
 
 
-def _dataset() -> dict[str, object]:
+def _dataset() -> dict[str, Any]:
     spec: list[tuple[str, str, str | None]] = [
         ("onboarding", "completed", "get_search_profile"),
         ("onboarding", "completed", "find_matches"),
@@ -112,7 +114,12 @@ def test_golden_dataset_rejects_unknown_tool() -> None:
     case = dict(data["cases"][0])
     expectation = dict(case["expectation"])
     expectation["tool_calls"] = [
-        {"tool": "drop_database", "args": {}, "requires_confirmation": False, "order": 1}
+        {
+            "tool": "drop_database",
+            "args": {},
+            "requires_confirmation": False,
+            "order": 1,
+        }
     ]
     case["expectation"] = expectation
     data["cases"] = [case] + list(data["cases"][1:])

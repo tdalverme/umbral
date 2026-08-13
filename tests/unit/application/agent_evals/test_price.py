@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from umbral.application.agent_evals.contracts import (
@@ -11,7 +13,7 @@ from umbral.application.agent_evals.contracts import (
 from umbral.application.agent_evals.price import case_cost, parse_price_table
 
 
-def _price_table() -> dict[str, object]:
+def _price_table() -> dict[str, Any]:
     return {
         "contract_version": "1",
         "registry_version": "price-table-v1",
@@ -52,7 +54,11 @@ def test_case_cost_derives_from_tokens_and_prices() -> None:
 def test_case_cost_ignores_unknown_model() -> None:
     table = parse_price_table(_price_table())
     cost = case_cost(
-        [ModelCallCostRecord(model_version="unknown", input_tokens=1000, output_tokens=0)],
+        [
+            ModelCallCostRecord(
+                model_version="unknown", input_tokens=1000, output_tokens=0
+            )
+        ],
         table,
     )
     assert cost == 0.0

@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from itertools import count
-from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -67,7 +66,7 @@ def build_chat(factory: SessionFactory) -> ChatService:
 def seed_user(factory: SessionFactory) -> UUID:
     from tests.integration.radar.conftest import seed_user as _seed_user
 
-    return cast(UUID, _seed_user(factory))
+    return _seed_user(factory)
 
 
 def seed_profile(factory: SessionFactory, owner_id: UUID) -> SearchProfile:

@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[3]
 def _load_seed():
     path = ROOT / "scripts" / "seed-local.py"
     spec = importlib.util.spec_from_file_location("umbral_seed_local", path)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"cannot load seed script: {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -35,7 +37,7 @@ class _FakeCriteria:
 def test_seed_soft_sows_registry_and_extracts_full_scope() -> None:
     seed = _load_seed()
     criteria = _FakeCriteria()
-    seed._seed_soft(None, criteria=criteria)  # type: ignore[attr-defined]
+    seed._seed_soft(None, criteria=criteria)
     assert len(criteria.seed_calls) == 1
     assert criteria.extractions == [("full", "full")]
 
@@ -43,8 +45,8 @@ def test_seed_soft_sows_registry_and_extracts_full_scope() -> None:
 def test_seed_soft_runs_twice_are_idempotent_at_service_level() -> None:
     seed = _load_seed()
     criteria = _FakeCriteria()
-    seed._seed_soft(None, criteria=criteria)  # type: ignore[attr-defined]
-    seed._seed_soft(None, criteria=criteria)  # type: ignore[attr-defined]
+    seed._seed_soft(None, criteria=criteria)
+    seed._seed_soft(None, criteria=criteria)
     assert len(criteria.seed_calls) == 2
     assert len(criteria.extractions) == 2
     assert criteria.extractions[0] == criteria.extractions[1]
@@ -52,6 +54,6 @@ def test_seed_soft_runs_twice_are_idempotent_at_service_level() -> None:
 
 def test_seed_builds_local_criteria_with_fake_extractor() -> None:
     seed = _load_seed()
-    criteria = seed._build_local_criteria(None)  # type: ignore[attr-defined]
+    criteria = seed._build_local_criteria(None)
     assert criteria is not None
     assert criteria.extractor is not None

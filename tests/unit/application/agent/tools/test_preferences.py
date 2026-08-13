@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any, cast
 
 import pytest
 
@@ -13,7 +14,7 @@ from umbral.application.agent.tools.preferences import (
     parse_preference_vocabulary,
 )
 
-_VALID = {
+_VALID: dict[str, Any] = {
     "registry_version": "preferences-vocabulary-v1",
     "schema_version": "preferences-v1",
     "entries": [
@@ -131,6 +132,22 @@ class _Version:
 
 def _preference_service(active_fact: object | None = None):
     """Minimal FeedbackService surface for propose_preference (D-02/D-04)."""
+    from umbral.application.events.registry import EventsRegistrySpec
+    from umbral.application.feedback.contracts import (
+        LearningPolicyDoc,
+        QuickReasonsSpec,
+    )
+    from umbral.application.feedback.ports import (
+        ConceptReader,
+        EventWriter,
+        FactReader,
+        FeedbackEventRepository,
+        LearningPolicyRepository,
+        LearningProposalRepository,
+        ListingReader,
+        ProfileReader,
+        ShortlistPort,
+    )
     from umbral.application.feedback.service import FeedbackService
 
     class _Facts:
@@ -156,26 +173,35 @@ def _preference_service(active_fact: object | None = None):
 
     repo = _Repo()
     service = FeedbackService(
-        events=object(),
-        policies=_FakePolicies(),
-        proposals=repo,
-        shortlists=object(),
-        profiles=object(),
-        listings=object(),
-        concepts=_FakeConcepts(),
-        facts=_Facts(),
-        events_out=object(),
-        events_registry=object(),
-        reasons=object(),
+        events=cast(FeedbackEventRepository, object()),
+        policies=cast(LearningPolicyRepository, _FakePolicies()),
+        proposals=cast(LearningProposalRepository, repo),
+        shortlists=cast(ShortlistPort, object()),
+        profiles=cast(ProfileReader, object()),
+        listings=cast(ListingReader, object()),
+        concepts=cast(ConceptReader, _FakeConcepts()),
+        facts=cast(FactReader, _Facts()),
+        events_out=cast(EventWriter, object()),
+        events_registry=cast(EventsRegistrySpec, object()),
+        reasons=cast(QuickReasonsSpec, object()),
         policy_seed={},
         policy_seed_version="learning-policy-v1",
         clock=lambda: datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc),
     )
-    service._owned = lambda owner_id, profile_id: type(
+    service._owned = lambda owner_id, profile_id: type(  # type: ignore[method-assign]
         "P", (), {"profile_id": profile_id, "status": "active"}
     )()
-    service.policies.latest_version = _FakePolicies().latest_version
-    service.latest_learning_document = lambda: _Policy()  # type: ignore[method-assign]
+    service.latest_learning_document = lambda: LearningPolicyDoc(  # type: ignore[method-assign]
+        contract_version="1",
+        learning_policy_version="learning-policy-v1",
+        min_signals=1,
+        window_days=30,
+        min_signal_confidence=0.7,
+        cooldown_days=14,
+        proposal_expiration_days=7,
+        default_suggested_weight=0.5,
+        default_suggested_confidence=0.7,
+    )
     service._emit_server_event = lambda **kwargs: None  # type: ignore[method-assign]
     return service, repo
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from typing import cast
 from uuid import UUID
 
 from tests.support.agent import RecordingRunRecorder
@@ -14,7 +15,10 @@ from umbral.agent.tools.executor import ToolExecutor
 from umbral.agent.tools.registry import ToolRegistry
 from umbral.agent.tools.tools import ToolServices, build_tool_implementations
 from umbral.application.agent.tools.contracts import Proposal
-from umbral.application.agent.tools.ports import SessionScope
+from umbral.application.agent.tools.ports import (
+    ProposalRepository,
+    SessionScope,
+)
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.radar.contracts import SearchProfile
 from umbral.infrastructure.agent.tools.preferences_loader import (
@@ -172,7 +176,7 @@ def _make_executor() -> tuple[ToolExecutor, _Repo, _Radar]:
     radar = _Radar()
     events = _Events()
     proposals = SearchProfileUpdateProposals(
-        repository=repo,
+        repository=cast(ProposalRepository, repo),
         radar=radar,
         events=events,
         events_registry=_registry(),

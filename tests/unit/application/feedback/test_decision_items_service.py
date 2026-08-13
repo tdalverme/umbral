@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from tests.support.feedback import FeedbackTestContext
 
+from umbral.application.radar.contracts import SearchProfile
 
-def _record(ctx: FeedbackTestContext, profile, event_type: str, listing_id):
+
+def _record(
+    ctx: FeedbackTestContext,
+    profile: SearchProfile,
+    event_type: str,
+    listing_id: UUID,
+) -> object:
     return ctx.service.record_feedback(
         owner_id=profile.owner_id,
         profile_id=profile.profile_id,

@@ -10,7 +10,10 @@ _FIXTURES = Path(__file__).resolve().parent
 
 
 def _load(name: str) -> dict[str, Any]:
-    return cast(dict[str, Any], json.loads((_FIXTURES / name).read_text(encoding="utf-8")))
+    return cast(
+        dict[str, Any],
+        json.loads((_FIXTURES / name).read_text(encoding="utf-8")),
+    )
 
 
 def concepts_golden() -> dict[str, Any]:

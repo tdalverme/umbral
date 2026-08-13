@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import cast
 from uuid import uuid4
 
 from tests.support.identity import access_with_recording_jobs, requested_attempt
 from umbral.application.identity.administration import AccessAdministration
+from umbral.application.identity.ports import IdentityStore
 from umbral.domain.identity.models import (
     IdentityExportLink,
     IdentityExportRecord,
@@ -72,14 +74,15 @@ def test_operator_reporting_uses_read_only_projections() -> None:
     """Catches report paths that load all audits or issue one role query per user."""
 
     store = _ProjectedIdentityStore()
+    projected = cast(IdentityStore, store)
 
-    assert build_access_report(store) == {
+    assert build_access_report(projected) == {
         "events": {"authorization.allowed.v1": 2},
         "reasons": {"eligible": 2},
         "users": 1,
         "sessions": 1,
     }
-    exported = export_identity_snapshot(store)
+    exported = export_identity_snapshot(projected)
     assert exported[0]["roles"] == ["user"]
     assert exported[0]["links"] == [
         {"provider": "provider", "issuer": "issuer", "subject": "subject"}

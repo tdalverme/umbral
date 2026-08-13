@@ -75,7 +75,7 @@ class DecisionService:
                 return existing
             raise
         if inbox_enabled:
-            self._inbox.add_for_decision(  # type: ignore[attr-defined]
+            self._inbox.add_for_decision(
                 decision_id=decision_id,
                 user_id=user_id,
                 now=now,

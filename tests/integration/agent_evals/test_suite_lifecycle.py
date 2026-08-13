@@ -5,14 +5,15 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from tests.integration.agent_evals.conftest import eval_backend, eval_context  # noqa: F401
-
 from umbral.application.agent_evals.regression import run_regression
 from umbral.application.agent_evals.runner import run_suite
 from umbral.infrastructure.agent_evals.repositories import (
     SqlAlchemyEvalSuiteRepository,
 )
-from umbral.infrastructure.db.models.agent_evals import AgentEvalCaseResult, AgentEvalSuite
+from umbral.infrastructure.db.models.agent_evals import (
+    AgentEvalCaseResult,
+    AgentEvalSuite,
+)
 
 
 def test_suite_runs_over_the_published_dataset(eval_context) -> None:
@@ -49,8 +50,14 @@ def test_two_runs_of_the_same_suite_are_reproducible(eval_context) -> None:
         release=release,
         price_table=eval_context.price_table,
     )
-    first_signals = [(r.case_id, r.tool_selection_ok, r.args_valid, r.grounding_ok, r.outcome_ok) for r in first]
-    second_signals = [(r.case_id, r.tool_selection_ok, r.args_valid, r.grounding_ok, r.outcome_ok) for r in second]
+    first_signals = [
+        (r.case_id, r.tool_selection_ok, r.args_valid, r.grounding_ok, r.outcome_ok)
+        for r in first
+    ]
+    second_signals = [
+        (r.case_id, r.tool_selection_ok, r.args_valid, r.grounding_ok, r.outcome_ok)
+        for r in second
+    ]
     assert first_signals == second_signals
 
 

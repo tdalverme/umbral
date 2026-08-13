@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID, uuid4
 
 from tests.fakes.scoring import (
@@ -29,7 +30,7 @@ from umbral.infrastructure.scoring.contract_loader import (
     load_scoring_policy_seed,
 )
 
-SEED = load_scoring_policy_seed()
+SEED: dict[str, Any] = dict(load_scoring_policy_seed())
 TEMPLATES = load_explanations_templates()
 MATCHER_TYPES = load_matcher_types()
 

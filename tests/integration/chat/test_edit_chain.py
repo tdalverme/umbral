@@ -6,10 +6,9 @@ from __future__ import annotations
 from uuid import UUID
 
 from tests.integration.chat.test_hitl_lifecycle import (
-    _Events,
-    _build,
-    USER_ID,
     SESSION_ID,
+    USER_ID,
+    _build,
 )
 
 

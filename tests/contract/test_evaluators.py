@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from umbral.application.scoring.evaluators import (
+    EvaluationResult,
     evaluate_categorical,
     evaluate_fixed_criterion,
     evaluate_geo_proximity,
@@ -88,11 +89,12 @@ def test_fixed_criterion_golden_cases() -> None:
 
 
 def test_unknown_never_counts_as_mismatch() -> None:
-    for evaluator_call in (
+    evaluator_calls: tuple[Callable[[], EvaluationResult], ...] = (
         lambda: evaluate_numeric_range(None, {"min": 0, "max": 5}),
         lambda: evaluate_categorical(None, {"allowed_values": ["si"]}),
         lambda: evaluate_semantic_feature(None, None, {"threshold": 0.5}),
-    ):
+    )
+    for evaluator_call in evaluator_calls:
         result = evaluator_call()
         assert result.state == "unknown"
         assert result.confidence == 0.0

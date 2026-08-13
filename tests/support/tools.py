@@ -14,13 +14,18 @@ from umbral.agent.tools.executor import ToolExecutor
 from umbral.agent.tools.registry import ToolRegistry
 from umbral.agent.tools.tools import ToolServices, build_tool_implementations
 from umbral.application.agent.tools.ports import SessionScope
-from umbral.application.criteria.contracts import Compilation, CompiledCriterion
+from umbral.application.criteria.contracts import (
+    Compilation,
+    CompiledCriterion,
+    PreferenceFact,
+)
 from umbral.application.feedback.contracts import (
     DecisionState,
     FeedbackEvent,
     FeedbackEventType,
     FeedbackRecord,
     LearningProposal,
+    PreferenceImpact,
     ProposalChange,
 )
 from umbral.application.radar.contracts import (
@@ -265,7 +270,7 @@ class FakeFeedback:
         correlation_id: UUID,
         actor_kind: str = "service",
         actor_id: str | None = None,
-    ) -> tuple[object, object]:
+    ) -> tuple[LearningProposal, PreferenceImpact]:
         self.preference_calls.append(
             {
                 "profile_id": str(profile_id),
@@ -303,13 +308,11 @@ class FakeFeedback:
             actor_kind=actor_kind,
             actor_id=actor_id,
         )
-        from umbral.application.feedback.contracts import PreferenceImpact
-
         return proposal, PreferenceImpact(contradicts=False, current=None)
 
     def active_preferences(
         self, *, owner_id: UUID, profile_id: UUID
-    ) -> tuple[object, ...]:
+    ) -> tuple[PreferenceFact, ...]:
         return ()
 
     def get_proposal(
@@ -351,7 +354,7 @@ class FakeFeedback:
         correlation_id: UUID,
         actor_kind: str = "service",
         actor_id: str | None = None,
-    ) -> tuple[object, object]:
+    ) -> tuple[LearningProposal, PreferenceImpact]:
         self.preference_calls.append(
             {
                 "profile_id": str(profile_id),
@@ -394,8 +397,6 @@ class FakeFeedback:
             actor_kind=actor_kind,
             actor_id=actor_id,
         )
-        from umbral.application.feedback.contracts import PreferenceImpact
-
         return proposal, PreferenceImpact(
             contradicts=False,
             current={"concept_key": concept_key, "polarity": "positive"},
@@ -516,7 +517,7 @@ def call_tool(
     )
 
 
-def payload(result: ToolResult) -> Mapping[str, object]:
+def payload(result: ToolResult) -> Mapping[str, Any]:
     """Return the redacted tool payload, asserting the call succeeded."""
     assert result.status == "ok", result.error_code
     assert result.result is not None

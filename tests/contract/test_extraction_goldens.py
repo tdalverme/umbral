@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from umbral.application.criteria.goldens import (
     ExtractionGoldenInvalid,
     evaluate_extraction_golden,
@@ -39,7 +42,7 @@ def test_rule_golden_runs_the_real_rule() -> None:
 def test_urban_golden_enforces_min_count() -> None:
     golden = load_extraction_goldens()["proximidad_cafes"]
 
-    def extract(case_input):
+    def extract(case_input: Mapping[str, Any]) -> int:
         return int(case_input.get("signal_count", 0))
 
     evaluation = evaluate_extraction_golden(golden, extract)

@@ -10,6 +10,9 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from tests.integration.agent.conftest import (  # noqa: F401
+    agent_backend,
+)
 from tests.integration.chat.conftest import seed_profile
 from tests.integration.radar.conftest import seed_user
 from tests.support.containers import ServiceConnection
@@ -49,12 +52,12 @@ def eval_context(eval_backend):
     dataset = load_golden_dataset(CONTRACTS / "conversations-golden-v1.json")
     releases = load_releases(
         CONTRACTS / "graph-releases-v1.json",
-        known_case_ids={case.id for case in dataset.cases},
+        known_case_ids=frozenset({case.id for case in dataset.cases}),
     )
     price_table = load_price_table(CONTRACTS / "price-table-v1.json")
     contexts = load_conversation_contexts(
         CONTRACTS / "conversation-context-v1.json",
-        known_case_ids={case.id for case in dataset.cases},
+        known_case_ids=frozenset({case.id for case in dataset.cases}),
     )
     context_map = {
         case_id: {

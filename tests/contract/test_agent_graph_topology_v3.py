@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -17,7 +18,11 @@ from tests.support.chat import RecordingConversation
 from tests.support.tools import (
     FakeServices,
 )
-from umbral.agent.graph import CHAT_TOPOLOGY_VERSION, build_topology_v3
+from umbral.agent.graph import (
+    CHAT_TOPOLOGY_VERSION,
+    AgentGraphV3,
+    build_topology_v3,
+)
 from umbral.agent.tools.executor import ToolExecutor
 from umbral.agent.tools.registry import ToolRegistry
 from umbral.agent.tools.tools import ToolServices, build_tool_implementations
@@ -80,7 +85,7 @@ class _NoopPreferences:
 
 
 class _FakeCompiler:
-    def __init__(self, compilation: Mapping[str, object]) -> None:
+    def __init__(self, compilation: Mapping[str, Any]) -> None:
         self._compilation = compilation
 
     def compile(self, **kwargs: object) -> object:
@@ -88,7 +93,7 @@ class _FakeCompiler:
 
 
 class _CompilationResult:
-    def __init__(self, data: Mapping[str, object]) -> None:
+    def __init__(self, data: Mapping[str, Any]) -> None:
         self.intent = str(data.get("intent", ""))
         self.allowed_tools = tuple(data.get("allowed_tools", []))
         self.parameters = tuple(data.get("parameters", []))
@@ -97,12 +102,14 @@ class _CompilationResult:
 
 
 def _build(
-    compilation: Mapping[str, object],
+    compilation: Mapping[str, Any],
     *,
     gateway: "_Gateway | None" = None,
-    implementations: Mapping[str, object] | None = None,
+    implementations: (
+        Mapping[str, Callable[..., Mapping[str, object]]] | None
+    ) = None,
     preference_gateway: object | None = None,
-) -> object:
+) -> AgentGraphV3:
     recorder = RecordingRunRecorder()
     registry = ToolRegistry(load_tool_contract)
     scope = SessionScope(
@@ -385,7 +392,7 @@ def _run_state(run_id: UUID, text: str) -> dict[str, object]:
     }
 
 
-def _interrupt_value(chunk: object) -> object | None:
+def _interrupt_value(chunk: object) -> Any | None:
     if not isinstance(chunk, dict):
         return None
     for value in chunk.values():

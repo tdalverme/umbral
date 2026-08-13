@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -26,7 +27,7 @@ NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 @pytest.fixture(params=[InMemoryIdentityStore])
 def store(request: pytest.FixtureRequest) -> InMemoryIdentityStore:
-    return request.param()
+    return cast(type[InMemoryIdentityStore], request.param)()
 
 
 def test_store_persists_identity_records_through_its_behavioral_interface(
@@ -309,8 +310,9 @@ def test_store_rolls_back_provider_dedupe_deeply_and_reentrantly(
                 store.save_invitation(invitation)
                 store.append_provider_audit_once("email", "evt-nested", event)
                 raise RuntimeError("inner")
-        assert store.invitation_for_email("nested@example.com") is not None
-        assert store.invitation_for_email("nested@example.com").status == "active"
+        nested = store.invitation_for_email("nested@example.com")
+        assert nested is not None
+        assert nested.status == "active"
         assert store.append_provider_audit_once("email", "evt-nested", event) is True
 
     assert store.audit_events() == (event,)

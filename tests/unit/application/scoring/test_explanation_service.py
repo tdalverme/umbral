@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from tests.support.scoring import (
@@ -21,7 +21,7 @@ from umbral.application.scoring.contracts import (
 
 
 def _evaluation(
-    run_id: object, listing_id: object, criterion_key: str = "presupuesto"
+    run_id: UUID, listing_id: UUID, criterion_key: str = "presupuesto"
 ) -> CriterionEvaluation:
     return CriterionEvaluation(
         evaluation_id=uuid4(),
@@ -45,7 +45,7 @@ def _evaluation(
     )
 
 
-def _context_with_run() -> tuple[ScoringTestContext, object, object, object, object]:
+def _context_with_run() -> tuple[ScoringTestContext, UUID, UUID, UUID, UUID]:
     context = ScoringTestContext()
     owner_id = uuid4()
     profile_id = uuid4()

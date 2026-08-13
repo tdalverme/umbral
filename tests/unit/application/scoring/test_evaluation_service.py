@@ -12,10 +12,12 @@ from tests.support.scoring import (
     build_observation,
 )
 
+from umbral.application.scoring.engine import ScoredCandidate
+
 
 def _service_with_observations(
-    *, observation: object, concept: str = "balcon"
-) -> tuple[ScoringTestContext, object]:
+    *, observation: str | None, concept: str = "balcon"
+) -> tuple[ScoringTestContext, tuple[ScoredCandidate, ...]]:
     context = ScoringTestContext()
     profile = build_profile()
     listing = build_listing()

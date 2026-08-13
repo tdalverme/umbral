@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from tests.support.radar import build_listing, build_profile
@@ -22,7 +22,7 @@ from umbral.application.scoring.contracts import (
 
 def _context_with_run(
     enabled: bool = True,
-) -> tuple[ScoringTestContext, object, object, object]:
+) -> tuple[ScoringTestContext, UUID, UUID, UUID]:
     context = ScoringTestContext(comparator_enabled=enabled)
     owner_id = uuid4()
     profile_id = uuid4()

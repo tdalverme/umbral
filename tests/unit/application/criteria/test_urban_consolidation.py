@@ -3,15 +3,19 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from collections.abc import Mapping
+from uuid import UUID, uuid4
 
 from tests.fakes.criteria import FakeUrbanSignalRepository
 from tests.support.criteria import CriteriaTestContext
 
 from umbral.application.criteria.contracts import RecomputeScope
+from umbral.application.silver.contracts import NormalizedListing
 
 
-def _context_with_signals(listing_id, signals) -> CriteriaTestContext:
+def _context_with_signals(
+    listing_id: UUID | None, signals: list[Mapping[str, object]]
+) -> tuple[CriteriaTestContext, NormalizedListing]:
     context = CriteriaTestContext(
         urban_context_enabled=True,
         urban_signals=FakeUrbanSignalRepository(),
@@ -22,6 +26,7 @@ def _context_with_signals(listing_id, signals) -> CriteriaTestContext:
         geometry=(-34.5833, -58.4245),
         geo_precision="exact",
     )
+    assert context.urban_signals is not None
     for signal in signals:
         context.urban_signals.insert(
             {
@@ -68,6 +73,7 @@ def test_urban_consolidation_counts_signals_inside_radius() -> None:
     assert observation.score == 1.0
     assert observation.state == "active"
     signals = observation.evidence["signals"]
+    assert isinstance(signals, list)
     assert len(signals) == 2
     assert all(signal["algorithm_version"] == "v1" for signal in signals)
 
@@ -95,6 +101,7 @@ def test_urban_consolidation_filters_other_signal_types() -> None:
             }
         ],
     )
+    assert context.urban_signals is not None
     context.urban_signals.insert(
         {
             "signal_id": uuid4(),

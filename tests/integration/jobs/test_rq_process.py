@@ -26,9 +26,9 @@ def test_rq_process_envelope_is_json_serializable_without_a_redis_server() -> No
 
     serialized = queue.serializer.dumps(queue.queue.arguments)  # type: ignore[no-untyped-call]
     assert queue.queue.serializer.loads(serialized) == {
-        "function": "umbral.workers.worker:run_message",
+        "function": "umbral.workers.worker.run_message",
         "execution_id": str(execution_id),
         "attempt_number": 1,
         "correlation_id": str(correlation_id),
-        "job_id": f"{execution_id}:1",
+        "job_id": f"{execution_id}-1",
     }

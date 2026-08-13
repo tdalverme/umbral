@@ -19,7 +19,7 @@ RELEASES_PATH = ROOT / "contracts" / "agent-evals" / "v1" / "graph-releases-v1.j
 def test_releases_reference_existing_cases_and_are_append_only() -> None:
     dataset = load_golden_dataset(GOLDEN_PATH)
     releases = load_releases(
-        RELEASES_PATH, known_case_ids={case.id for case in dataset.cases}
+        RELEASES_PATH, known_case_ids=frozenset({case.id for case in dataset.cases})
     )
     assert releases.registry_version == "graph-releases-v1"
     active = releases.active_release()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from tests.support.radar import build_listing, build_profile
@@ -23,7 +23,7 @@ from umbral.application.scoring.contracts import (
 
 
 def _context_with_run() -> tuple[
-    ScoringTestContext, object, object, tuple[object, object]
+    ScoringTestContext, UUID, UUID, tuple[UUID, UUID]
 ]:
     context = ScoringTestContext()
     owner_id = uuid4()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -58,7 +58,7 @@ def radar_backend(request: pytest.FixtureRequest) -> SessionFactory:
     return factory
 
 
-def seed_user(factory: SessionFactory) -> object:
+def seed_user(factory: SessionFactory) -> UUID:
     """Create one active product user and return its id."""
     from umbral.domain.identity.models import ProductUser, RoleAssignment
     from umbral.infrastructure.db.repositories.identity import (

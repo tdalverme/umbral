@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from typing import cast
 from uuid import UUID
 
 from umbral.application.criteria.contracts import (
@@ -232,7 +233,7 @@ class FakeUrbanSignalRepository:
     signals: dict[UUID, list[Mapping[str, object]]] = field(default_factory=dict)
 
     def insert(self, signal: Mapping[str, object]) -> None:
-        listing_id = signal["listing_id"]
+        listing_id = cast(UUID, signal["listing_id"])
         self.signals.setdefault(listing_id, []).append(signal)
 
     def list_for_listing(

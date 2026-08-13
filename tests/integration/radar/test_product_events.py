@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
-from uuid import UUID, uuid4
+from typing import Any
+from uuid import uuid4
 
 import pytest
 from tests.integration.radar.conftest import (
@@ -28,7 +28,7 @@ def _events_of(factory: Any) -> list[dict[str, object]]:
 
 def test_client_events_persist_after_registry_validation(radar_backend: Any) -> None:
     factory = radar_backend
-    user_id = cast(UUID, seed_user(factory))
+    user_id = seed_user(factory)
     service = build_radar_service(factory)
     profile, _ = service.create_profile(
         owner_id=user_id,
@@ -64,7 +64,7 @@ def test_client_events_persist_after_registry_validation(radar_backend: Any) -> 
 
 def test_invalid_client_event_is_rejected_without_rows(radar_backend: Any) -> None:
     factory = radar_backend
-    user_id = cast(UUID, seed_user(factory))
+    user_id = seed_user(factory)
     service = build_radar_service(factory)
     seed_user(factory)
 

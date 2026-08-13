@@ -10,7 +10,10 @@ from umbral.api.dependencies import _load_settings, build_runtime_dependencies
 from umbral.application.identity.ports import IdentityStore
 from umbral.application.runtime.readiness import ReadinessCheck
 from umbral.infrastructure.config.settings import SettingsValidationError
-from umbral.infrastructure.db.session import SessionProvider, create_engine_for_execution
+from umbral.infrastructure.db.session import (
+    SessionProvider,
+    create_engine_for_execution,
+)
 from umbral.infrastructure.runtime.composition import RuntimeCompositionFactories
 
 

@@ -34,14 +34,16 @@ def test_valid_reply_content_is_accepted() -> None:
 
 
 def test_invalid_reply_content_is_rejected() -> None:
-    reply_schema = {"reply_text": {}, "refs": {}}
+    reply_schema: dict[str, object] = {"reply_text": {}, "refs": {}}
     assert _validated_content({"content": {}}, reply_schema) is None
     assert (
         _validated_content({"content": {"reply_text": "", "refs": []}}, reply_schema)
         is None
     )
     assert (
-        _validated_content({"content": {"reply_text": "x", "refs": "nope"}}, reply_schema)
+        _validated_content(
+            {"content": {"reply_text": "x", "refs": "nope"}}, reply_schema
+        )
         is None
     )
     assert (

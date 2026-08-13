@@ -6,16 +6,15 @@ import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
+from umbral.application.ingestion.contracts import SourceIdentity
 from umbral.application.radar.contracts import RecommendationItem, SearchProfile
 from umbral.application.scoring.comparison import build_comparison
 from umbral.application.scoring.contracts import CriterionEvaluation
 from umbral.application.scoring.policy import parse_policy_document
-from umbral.application.silver.contracts import (
-    NormalizedListing,
-    SourceIdentity,
-)
+from umbral.application.silver.contracts import NormalizedListing
 from umbral.infrastructure.criteria.contract_loader import load_matcher_types
 from umbral.infrastructure.scoring.contract_loader import load_scoring_policy_seed
 
@@ -56,7 +55,7 @@ def _profile(profile_id: UUID) -> SearchProfile:
     )
 
 
-def _listing(case: Mapping[str, object]) -> NormalizedListing:
+def _listing(case: Mapping[str, Any]) -> NormalizedListing:
     return NormalizedListing(
         listing_id=UUID(str(case["listing_id"])),
         canonical_property_id=uuid4(),
@@ -86,7 +85,7 @@ def _listing(case: Mapping[str, object]) -> NormalizedListing:
         description_text="",
         location_text="",
         neighborhood=case["neighborhood"],
-        geo_precision=case["geo_precision"],  # type: ignore[arg-type]
+        geo_precision=case["geo_precision"],
         geometry=None,
         geo_source="fixture",
         normalization_errors=(),
@@ -105,7 +104,7 @@ def _item(listing_id: UUID, position: int, score: float) -> RecommendationItem:
 
 
 def _evaluation(
-    listing_id: UUID, criterion_key: str, case: Mapping[str, object]
+    listing_id: UUID, criterion_key: str, case: Mapping[str, Any]
 ) -> CriterionEvaluation:
     return CriterionEvaluation(
         evaluation_id=uuid4(),
@@ -118,7 +117,7 @@ def _evaluation(
         input_refs=(),
         score=float(case["score"]),
         confidence=float(case["confidence"]),
-        state=case["state"],  # type: ignore[arg-type]
+        state=case["state"],
         contribution=0.0,
         reason_code=str(case["reason_code"]),
         evidence_refs=tuple(dict(ref) for ref in case["evidence_refs"]),

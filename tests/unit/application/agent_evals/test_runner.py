@@ -5,6 +5,7 @@ from __future__ import annotations
 from umbral.application.agent_evals.contracts import (
     CaseTrace,
     GoldenConversationCase,
+    GoldenDataset,
     GraphRelease,
     ModelCallCostRecord,
     PriceTable,
@@ -18,22 +19,34 @@ _TABLE = PriceTable(
     registry_version="price-table-v1",
     currency="usd",
     entries=(
-        PriceTableEntry(model_version="provider-x-model-y", price_input_per_1k=0.0005, price_output_per_1k=0.0015),
+        PriceTableEntry(
+            model_version="provider-x-model-y",
+            price_input_per_1k=0.0005,
+            price_output_per_1k=0.0015,
+        ),
     ),
 )
 
 
-class _FakeDataset:
+class _FakeDataset(GoldenDataset):
     def __init__(self, cases: tuple[GoldenConversationCase, ...]) -> None:
-        self.registry_version = "conversations-golden-v1"
-        self.cases = cases
+        super().__init__(
+            contract_version="1",
+            registry_version="conversations-golden-v1",
+            reviewed_by="unit",
+            reviewed_at="2026-08-10",
+            min_cases_per_family=1,
+            cases=cases,
+        )
 
 
 class _FakeExecutor:
     def __init__(self, trace: CaseTrace) -> None:
         self.trace = trace
 
-    def execute(self, *, case: GoldenConversationCase, release: GraphRelease) -> CaseTrace:
+    def execute(
+        self, *, case: GoldenConversationCase, release: GraphRelease
+    ) -> CaseTrace:
         return CaseTrace(
             case_id=case.id,
             run_status=self.trace.run_status,
@@ -59,7 +72,9 @@ def _case(case_id: str) -> GoldenConversationCase:
         turns=("hola",),
         expectation=GoldenExpectation(
             tool_calls=(),
-            grounding=GroundingExpectation(require_refs=False, min_refs=0, declare_missing=False),
+            grounding=GroundingExpectation(
+                require_refs=False, min_refs=0, declare_missing=False
+            ),
             outcome="completed",
         ),
     )
@@ -73,8 +88,16 @@ def test_run_suite_evaluates_every_case_with_the_executor() -> None:
             run_status="completed",
             intent="consulta",
             clarification_pending=False,
-            tool_calls=(RecordedToolCall(name="get_search_profile", status="completed"),),
-            model_calls=(ModelCallCostRecord(model_version="provider-x-model-y", input_tokens=8, output_tokens=16),),
+            tool_calls=(
+                RecordedToolCall(name="get_search_profile", status="completed"),
+            ),
+            model_calls=(
+                ModelCallCostRecord(
+                    model_version="provider-x-model-y",
+                    input_tokens=8,
+                    output_tokens=16,
+                ),
+            ),
             latency_ms=4,
             refs=(),
         )
@@ -87,7 +110,10 @@ def test_run_suite_evaluates_every_case_with_the_executor() -> None:
         price_table=_TABLE,
     )
     assert len(results) == 2
-    assert {item.case_id for item in results} == {"conversation-001", "conversation-002"}
+    assert {item.case_id for item in results} == {
+        "conversation-001",
+        "conversation-002",
+    }
     assert all(item.latency_ms == 4 for item in results)
 
 
@@ -112,7 +138,10 @@ def _release() -> GraphRelease:
         justification="release inicial",
         affected_case_ids=(),
         activation=ReleaseActivation(
-            status="active", approved_by=None, approval_evidence=None, reverted_reason=None
+            status="active",
+            approved_by=None,
+            approval_evidence=None,
+            reverted_reason=None,
         ),
         date="2026-08-10",
     )

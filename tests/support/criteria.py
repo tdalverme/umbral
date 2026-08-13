@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import UUID, uuid4
 
 from tests.fakes.criteria import (
@@ -16,6 +17,7 @@ from tests.fakes.criteria import (
     FakeProfileSnapshotReader,
     FakeRecomputeRunRepository,
 )
+from umbral.application.criteria.ports import UrbanSignalRepository
 from umbral.application.criteria.service import CriteriaService, EmbeddingModel
 from umbral.application.ingestion.contracts import SourceIdentity
 from umbral.application.silver.contracts import NormalizedListing
@@ -37,7 +39,9 @@ def build_listing(
     normalizer_version: str = "silver-v1",
     listing_id: UUID | None = None,
     geometry: tuple[float, float] | None = None,
-    geo_precision: str = "neighborhood",
+    geo_precision: Literal[
+        "exact", "block", "neighborhood", "approximate", "unknown"
+    ] = "neighborhood",
 ) -> NormalizedListing:
     return NormalizedListing(
         listing_id=listing_id or uuid4(),
@@ -84,7 +88,7 @@ class CriteriaTestContext:
         embedding_model: EmbeddingModel | None = None,
         embeddings_enabled: bool = False,
         urban_context_enabled: bool = False,
-        urban_signals: object | None = None,
+        urban_signals: UrbanSignalRepository | None = None,
     ) -> None:
         self.concepts = FakeConceptRepository()
         self.facts = FakeFactRepository()
@@ -158,7 +162,9 @@ class CriteriaTestContext:
         amenities: tuple[str, ...] = (),
         normalizer_version: str = "silver-v1",
         geometry: tuple[float, float] | None = None,
-        geo_precision: str = "neighborhood",
+        geo_precision: Literal[
+            "exact", "block", "neighborhood", "approximate", "unknown"
+        ] = "neighborhood",
     ) -> NormalizedListing:
         listing = build_listing(
             description_text=description_text,
