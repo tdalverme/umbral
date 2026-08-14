@@ -10,6 +10,12 @@ import jsonschema  # type: ignore[import-untyped]
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+MANDATORY_INVARIANTS = [
+    "final_state_matches_expected",
+    "no_unconfirmed_material_effect",
+    "forbidden_bindings_are_non_computable",
+    "no_wrong_target_mutation",
+]
 
 
 def _load_json(relative_path: str) -> dict[str, Any]:
@@ -67,7 +73,10 @@ def test_trajectory_schema_accepts_declared_state_evolution() -> None:
                     }
                 ],
                 "final_state": {"zones": [], "active_subjects": ["luminosidad"]},
-                "invariants": ["no_wrong_target_mutation"],
+                "invariants": [
+                    *MANDATORY_INVARIANTS,
+                    "no_repeated_answered_question",
+                ],
             }
         ],
     }
@@ -124,16 +133,26 @@ def test_trajectory_schema_accepts_executable_invariant_for_each_category() -> N
     )
 
     assert declared_ids == set(registry)
+    assert schema["x-mandatory-invariant-ids"] == MANDATORY_INVARIANTS
     assert {
         invariant_id: registry[invariant_id]["category"]
         for invariant_id in expected_categories
     } == expected_categories
-    assert all(registry[invariant_id]["evidence"] for invariant_id in declared_ids)
     assert all(
         registry[invariant_id]["pass_condition"] for invariant_id in declared_ids
     )
+    assert all(registry[invariant_id]["evaluator_id"] for invariant_id in declared_ids)
+    evidence_sources = schema["x-evidence-source-registry"]
+    assert all(
+        source_id in evidence_sources
+        for invariant_id in declared_ids
+        for source_id in registry[invariant_id]["evidence_sources"]
+    )
     for invariant_id in expected_categories:
-        jsonschema.validate(_dataset_with_invariants([invariant_id]), schema)
+        invariants = list(MANDATORY_INVARIANTS)
+        if invariant_id not in invariants:
+            invariants.append(invariant_id)
+        jsonschema.validate(_dataset_with_invariants(invariants), schema)
 
 
 def test_trajectory_schema_rejects_unknown_invariant_id() -> None:
@@ -143,7 +162,39 @@ def test_trajectory_schema_rejects_unknown_invariant_id() -> None:
     )
 
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(_dataset_with_invariants(["made_up_invariant"]), schema)
+        jsonschema.validate(
+            _dataset_with_invariants([*MANDATORY_INVARIANTS, "made_up_invariant"]),
+            schema,
+        )
+
+
+@pytest.mark.parametrize("omitted_id", MANDATORY_INVARIANTS)
+def test_trajectory_schema_rejects_omitted_mandatory_invariant(
+    omitted_id: str,
+) -> None:
+    """Every acceptance case must exercise all four critical categories."""
+    schema = _load_json(
+        "contracts/agent-evals/v2/conversation-trajectories-v2.schema.json"
+    )
+    invariants = [item for item in MANDATORY_INVARIANTS if item != omitted_id]
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(_dataset_with_invariants(invariants), schema)
+
+
+def test_trajectory_schema_rejects_duplicate_invariant_id() -> None:
+    """A repeated ID must not inflate critical invariant coverage."""
+    schema = _load_json(
+        "contracts/agent-evals/v2/conversation-trajectories-v2.schema.json"
+    )
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            _dataset_with_invariants(
+                [*MANDATORY_INVARIANTS, MANDATORY_INVARIANTS[0]]
+            ),
+            schema,
+        )
 
 
 def test_release_gate_is_strict() -> None:

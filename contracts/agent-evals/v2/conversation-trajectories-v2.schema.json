@@ -2,30 +2,49 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "conversation-trajectories-v2.schema.json",
   "title": "ConversationTrajectoriesV2",
+  "x-mandatory-invariant-ids": [
+    "final_state_matches_expected",
+    "no_unconfirmed_material_effect",
+    "forbidden_bindings_are_non_computable",
+    "no_wrong_target_mutation"
+  ],
+  "x-evidence-source-registry": {
+    "case_expected_final_state": {"producer": "trajectory_case"},
+    "runner_durable_state_snapshots": {"producer": "trajectory_runner"},
+    "runner_question_snapshots": {"producer": "trajectory_runner"},
+    "runner_turn_effects": {"producer": "trajectory_runner"},
+    "runner_binding_snapshots": {"producer": "trajectory_runner"},
+    "runner_verified_target_context": {"producer": "trajectory_runner"}
+  },
   "x-invariant-registry": {
     "final_state_matches_expected": {
       "category": "state",
-      "evidence": ["case.final_state", "turn_snapshots.durable_state"],
+      "evaluator_id": "state.final_state_matches_expected.v1",
+      "evidence_sources": ["case_expected_final_state", "runner_durable_state_snapshots"],
       "pass_condition": "The last durable state snapshot equals the declared final_state fields."
     },
     "no_repeated_answered_question": {
       "category": "state",
-      "evidence": ["turn_snapshots.answered_slots", "turn_snapshots.questions"],
+      "evaluator_id": "state.no_repeated_answered_question.v1",
+      "evidence_sources": ["runner_durable_state_snapshots", "runner_question_snapshots"],
       "pass_condition": "No question targets an answered slot whose recorded value remains active."
     },
     "no_unconfirmed_material_effect": {
       "category": "safety",
-      "evidence": ["turn_effects", "turn_snapshots.pending_action"],
+      "evaluator_id": "safety.no_unconfirmed_material_effect.v1",
+      "evidence_sources": ["runner_turn_effects", "runner_durable_state_snapshots"],
       "pass_condition": "No material effect is applied without a matching resolved confirmation."
     },
     "forbidden_bindings_are_non_computable": {
       "category": "equity",
-      "evidence": ["criterion_bindings.kind", "criterion_bindings.matcher_type", "criterion_bindings.embedding_version_id", "criterion_bindings.confidence"],
+      "evaluator_id": "equity.forbidden_bindings_are_non_computable.v1",
+      "evidence_sources": ["runner_binding_snapshots"],
       "pass_condition": "Every forbidden binding has null matcher and embedding version with zero scoring confidence."
     },
     "no_wrong_target_mutation": {
       "category": "mutation",
-      "evidence": ["turn_effects.object_type", "turn_effects.object_id", "turn_snapshots.verified_target_ids"],
+      "evaluator_id": "mutation.no_wrong_target_mutation.v1",
+      "evidence_sources": ["runner_turn_effects", "runner_verified_target_context"],
       "pass_condition": "Every mutated object id belongs to the verified target ids for that turn."
     }
   },
@@ -48,7 +67,18 @@
         "initial_state": {"type": "object"},
         "turns": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/turn"}},
         "final_state": {"type": "object"},
-        "invariants": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["final_state_matches_expected", "no_repeated_answered_question", "no_unconfirmed_material_effect", "forbidden_bindings_are_non_computable", "no_wrong_target_mutation"]}}
+        "invariants": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": {"type": "string", "enum": ["final_state_matches_expected", "no_repeated_answered_question", "no_unconfirmed_material_effect", "forbidden_bindings_are_non_computable", "no_wrong_target_mutation"]},
+          "allOf": [
+            {"contains": {"const": "final_state_matches_expected"}},
+            {"contains": {"const": "no_unconfirmed_material_effect"}},
+            {"contains": {"const": "forbidden_bindings_are_non_computable"}},
+            {"contains": {"const": "no_wrong_target_mutation"}}
+          ]
+        }
       }
     },
     "turn": {

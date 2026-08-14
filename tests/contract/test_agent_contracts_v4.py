@@ -162,8 +162,56 @@ def test_graph_v4_closes_deterministic_effect_routing_conditions() -> None:
         (
             "apply_safe_effects",
             "require_confirmation",
-            "confirmation_required",
+            "confirmation_required_and_not_refresh_required",
         ),
         ("apply_safe_effects", "schedule_refresh", "refresh_required"),
-        ("apply_safe_effects", "compose_reply", "no_refresh"),
+        (
+            "apply_safe_effects",
+            "compose_reply",
+            "not_refresh_required_and_not_confirmation_required",
+        ),
+    }
+    schedule_branches = {
+        (edge["from"], edge["to"], edge.get("condition"))
+        for edge in topology["edges"]
+        if edge["from"] == "schedule_refresh"
+    }
+    assert schedule_branches == {
+        ("schedule_refresh", "require_confirmation", "confirmation_required"),
+        ("schedule_refresh", "compose_reply", "not_confirmation_required"),
+    }
+
+
+def test_graph_v4_publishes_four_case_effect_routing_truth_table() -> None:
+    """Combined refresh and confirmation must enqueue once before interrupting."""
+    topology = _load_contract("contracts/agent/v4/graph-topology-v4.json")
+
+    assert topology["effect_routing"] == {
+        "inputs": ["refresh_required", "confirmation_required"],
+        "cases": [
+            {
+                "refresh_required": False,
+                "confirmation_required": False,
+                "route": ["compose_reply"],
+                "refresh_enqueues": 0,
+            },
+            {
+                "refresh_required": True,
+                "confirmation_required": False,
+                "route": ["schedule_refresh", "compose_reply"],
+                "refresh_enqueues": 1,
+            },
+            {
+                "refresh_required": False,
+                "confirmation_required": True,
+                "route": ["require_confirmation"],
+                "refresh_enqueues": 0,
+            },
+            {
+                "refresh_required": True,
+                "confirmation_required": True,
+                "route": ["schedule_refresh", "require_confirmation"],
+                "refresh_enqueues": 1,
+            },
+        ],
     }
