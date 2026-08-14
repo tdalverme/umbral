@@ -21,7 +21,7 @@
     {"from": "apply_safe_effects", "to": "require_confirmation", "condition": "confirmation_required"},
     {"from": "apply_safe_effects", "to": "schedule_refresh", "condition": "refresh_required"},
     {"from": "apply_safe_effects", "to": "compose_reply", "condition": "no_refresh"},
-    {"from": "require_confirmation", "to": "end", "condition": "interrupt"},
+    {"from": "require_confirmation", "to": "resolve_pending", "condition": "resume"},
     {"from": "resolve_pending", "to": "interpret_turn", "condition": "continue"},
     {"from": "schedule_refresh", "to": "compose_reply"},
     {"from": "compose_reply", "to": "persist_reply"},

@@ -102,3 +102,48 @@ def test_reply_and_graph_v4_publish_the_deterministic_turn_boundaries() -> None:
         "compose_reply",
         "persist_reply",
     }
+
+
+def test_graph_v4_reaches_normal_refresh_and_resumed_confirmation_paths() -> None:
+    """A missing resume ingress must not strand a pending action or later acts."""
+    topology = _load_contract("contracts/agent/v4/graph-topology-v4.json")
+    edges = {
+        (edge["from"], edge["to"], edge.get("condition"))
+        for edge in topology["edges"]
+    }
+    edge_pairs = {(source, target) for source, target, _condition in edges}
+
+    paths = (
+        (
+            "load_context",
+            "interpret_turn",
+            "plan_effects",
+            "apply_safe_effects",
+            "compose_reply",
+            "persist_reply",
+            "end",
+        ),
+        ("apply_safe_effects", "schedule_refresh", "compose_reply"),
+        (
+            "apply_safe_effects",
+            "require_confirmation",
+            "resolve_pending",
+            "interpret_turn",
+        ),
+    )
+    for path in paths:
+        for source, target in zip(path, path[1:]):
+            assert (source, target) in edge_pairs
+
+    assert ("require_confirmation", "resolve_pending", "resume") in edges
+
+    reachable = {topology["entry"]}
+    while True:
+        discovered = {
+            target for source, target in edge_pairs if source in reachable
+        }
+        expanded = reachable | discovered
+        if expanded == reachable:
+            break
+        reachable = expanded
+    assert {node["name"] for node in topology["nodes"]} <= reachable

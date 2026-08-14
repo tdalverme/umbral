@@ -21,7 +21,7 @@
         "initial_state": {"type": "object"},
         "turns": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/turn"}},
         "final_state": {"type": "object"},
-        "invariants": {"type": "array", "items": {"type": "string", "enum": ["no_wrong_target_mutation", "no_repeated_answered_question"]}}
+        "invariants": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["no_wrong_target_mutation", "no_repeated_answered_question"]}}
       }
     },
     "turn": {

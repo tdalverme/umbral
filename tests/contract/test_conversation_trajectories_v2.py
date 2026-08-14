@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import jsonschema  # type: ignore[import-untyped]
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -48,6 +49,37 @@ def test_trajectory_schema_accepts_declared_state_evolution() -> None:
     }
 
     jsonschema.validate(dataset, schema)
+
+
+def test_trajectory_schema_rejects_case_without_critical_invariant() -> None:
+    """An invariant-free case cannot contribute to a 100% critical gate."""
+    schema = _load_json(
+        "contracts/agent-evals/v2/conversation-trajectories-v2.schema.json"
+    )
+    dataset = {
+        "contract_version": "2",
+        "registry_version": "conversation-trajectories-v2",
+        "cases": [
+            {
+                "id": "non-evaluable-case",
+                "family": "context_continuity",
+                "initial_state": {},
+                "turns": [
+                    {
+                        "user": "Quiero un depto luminoso",
+                        "expected_acts": ["create_radar", "express_preference"],
+                        "expected_effects": ["radar.created"],
+                        "forbidden": [],
+                    }
+                ],
+                "final_state": {"active_subjects": ["luminosidad"]},
+                "invariants": [],
+            }
+        ],
+    }
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(dataset, schema)
 
 
 def test_release_gate_is_strict() -> None:
