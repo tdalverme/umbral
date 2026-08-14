@@ -50,7 +50,7 @@ def test_handler_processes_a_run_atomically() -> None:
         attempt_number=1,
         correlation_id=uuid4(),
         release_id="test",
-        logical_target=f"{profile.profile_id}:{profile.current_version_id}",
+        logical_target=str(run.run_id) if run is not None else None,
     )
     summary = handler.run(context)
 
@@ -95,7 +95,7 @@ def test_handler_processes_an_open_partial_profile() -> None:
         attempt_number=1,
         correlation_id=uuid4(),
         release_id="test",
-        logical_target=f"{profile.profile_id}:{profile.current_version_id}",
+        logical_target=str(run.run_id) if run is not None else None,
     )
 
     summary = handler.run(context)
@@ -113,7 +113,7 @@ def test_hard_filters_exclude_unknown_price_and_out_of_zones() -> None:
         build_listing(neighborhood="recoleta"),
         build_listing(total_cost=1500.0),
     )
-    profile, _ = ctx.service.create_profile(
+    _, run = ctx.service.create_profile(
         owner_id=uuid4(),
         name="Radar",
         zones=("palermo",),
@@ -131,7 +131,7 @@ def test_hard_filters_exclude_unknown_price_and_out_of_zones() -> None:
         attempt_number=1,
         correlation_id=uuid4(),
         release_id="test",
-        logical_target=f"{profile.profile_id}:{profile.current_version_id}",
+        logical_target=str(run.run_id) if run is not None else None,
     )
     summary = handler.run(context)
     assert summary["candidate_count"] == 1
@@ -157,12 +157,61 @@ def test_terminal_replay_returns_the_existing_result() -> None:
         attempt_number=1,
         correlation_id=uuid4(),
         release_id="test",
-        logical_target=f"{profile.profile_id}:{profile.current_version_id}",
+        logical_target=str(run.run_id) if run is not None else None,
     )
     first = handler.run(context)
     second = handler.run(context)
     assert first["run_id"] == second["run_id"]
     assert len(ctx.runs.events) == 1
+
+
+def test_handler_processes_the_exact_run_when_one_version_has_two_triggers() -> None:
+    ctx = _ctx_with_candidates(build_listing(total_cost=700.0))
+    owner = uuid4()
+    profile, created_run = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=0,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    paused, _ = ctx.service.set_status(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        status="paused",
+        correlation_id=uuid4(),
+    )
+    _, resumed_run = ctx.service.set_status(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=paused.version,
+        status="active",
+        correlation_id=uuid4(),
+    )
+    assert created_run is not None
+    assert resumed_run is not None
+    handler = RecommendationRunHandler(ctx.service)
+
+    created_summary = handler.run(
+        JobContext(
+            execution_id=created_run.job_execution_id or uuid4(),
+            attempt_number=1,
+            correlation_id=uuid4(),
+            release_id="test",
+            logical_target=str(created_run.run_id),
+        )
+    )
+
+    assert created_summary["run_id"] == str(created_run.run_id)
+    persisted_resumed = ctx.runs.get(resumed_run.run_id)
+    assert persisted_resumed is not None
+    assert persisted_resumed.state == "pending"
 
 
 def test_invalid_target_is_a_permanent_failure() -> None:

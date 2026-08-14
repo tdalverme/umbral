@@ -160,8 +160,7 @@ def seed_run(factory: SessionFactory) -> tuple[Any, Any, Any]:
     )
     runs.insert(run)
     radar.process_run(
-        profile_id=profile.profile_id,
-        profile_version_id=version.version_id,
+        run_id=run.run_id,
         job_execution_id=uuid4(),
     )
     return radar, profile, runs.get(run.run_id)

@@ -182,9 +182,9 @@ class RadarService:
             actor_kind=actor_kind,
             actor_id=actor_id,
         )
-        self.profiles.insert(profile)
         version = self._snapshot(profile, payload, profile_version=1)
         profile = replace(profile, current_version_id=version.version_id)
+        self.profiles.insert_with_version(profile, version)
         self._emit_server_event(
             event_type="radar.created.v1",
             actor_id=owner_id,
@@ -194,7 +194,7 @@ class RadarService:
                 "profile_version": version.profile_version,
             },
         )
-        run = self._submit_run(profile, version, trigger="created")
+        run = self._schedule_after_commit(profile, version, trigger="created")
         return profile, run
 
     def list_profiles(
@@ -258,11 +258,7 @@ class RadarService:
             actor_kind=actor_kind,
             actor_id=actor_id,
         )
-        run = self.schedule_version_run(
-            profile=profile,
-            version=version,
-            trigger="edited",
-        )
+        run = self._schedule_after_commit(profile, version, trigger="edited")
         return profile, run
 
     def version_profile(
@@ -318,19 +314,13 @@ class RadarService:
             current_version.profile_version + 1 if current_version is not None else 1
         )
         version = self._snapshot(updated, merged, profile_version=next_profile_version)
-        self.profiles.save(
+        self.profiles.save_with_version(
             replace(
-                profile,
-                name=updated.name,
-                zones=updated.zones,
-                budget_max=updated.budget_max,
-                budget_min=updated.budget_min,
-                min_rooms=updated.min_rooms,
-                surface_min=updated.surface_min,
-                surface_max=updated.surface_max,
+                updated,
                 current_version_id=version.version_id,
-                updated_at=now,
-            )
+                version=profile.version,
+            ),
+            version,
         )
         updated = replace(updated, current_version_id=version.version_id)
         return updated, version
@@ -378,7 +368,9 @@ class RadarService:
         if status == "active" and profile.status == "paused":
             current_version = self.versions.latest_for_profile(profile_id)
             if current_version is not None:
-                run = self._submit_run(updated, current_version, trigger="resumed")
+                run = self._schedule_after_commit(
+                    updated, current_version, trigger="resumed"
+                )
         return updated, run
 
     def bump_profile_version(
@@ -554,10 +546,16 @@ class RadarService:
     def process_run(
         self,
         *,
-        profile_id: UUID,
-        profile_version_id: UUID,
+        run_id: UUID,
         job_execution_id: UUID | None,
     ) -> Mapping[str, object]:
+        run = self.runs.get(run_id)
+        if run is None:
+            raise RadarPermanentError(
+                "radar.run_not_found", "recommendation run is not visible"
+            )
+        profile_id = run.profile_id
+        profile_version_id = run.profile_version_id
         profile = self.profiles.get(profile_id)
         if profile is None:
             raise RadarPermanentError(
@@ -568,22 +566,24 @@ class RadarService:
             raise RadarPermanentError(
                 "radar.version_not_found", "profile version is not visible"
             )
-        run = self.runs.get_for_version(profile_id, profile_version_id)
-        if run is None:
-            raise RadarPermanentError(
-                "radar.run_not_found", "recommendation run is not visible"
-            )
         if run.state in {"succeeded", "failed"}:
             return self._summary(run)
 
         if job_execution_id is not None and run.job_execution_id is None:
             run = replace(run, job_execution_id=job_execution_id)
 
-        candidates = self.candidates.list_candidates(profile)
+        candidates = self.candidates.list_candidates(
+            profile,
+            supported_neighborhoods=self.policy.neighborhoods,
+        )
         passed = tuple(
             listing
             for listing in candidates
-            if apply_hard_filters(cast(CandidateListing, listing), profile)
+            if apply_hard_filters(
+                cast(CandidateListing, listing),
+                profile,
+                supported_neighborhoods=self.policy.neighborhoods,
+            )
         )
         items: tuple[RecommendationItem, ...]
         evaluations: tuple[CriterionEvaluation, ...] = ()
@@ -748,7 +748,6 @@ class RadarService:
             actor_kind=profile.actor_kind,
             actor_id=profile.actor_id,
         )
-        self.versions.insert(version)
         return version
 
     def _submit_run(
@@ -756,8 +755,6 @@ class RadarService:
     ) -> RecommendationRun | None:
         if self.job_runtime is None:
             return None
-        if self.runs.exists(profile.profile_id, version.version_id, trigger):
-            return self.runs.get_for_version(profile.profile_id, version.version_id)
         run = RecommendationRun(
             run_id=uuid4(),
             profile_id=profile.profile_id,
@@ -775,20 +772,42 @@ class RadarService:
             actor_kind=profile.actor_kind,
             actor_id=profile.actor_id,
         )
+        run = self.runs.reserve(run)
+        if run.job_execution_id is not None:
+            return run
         job = self.job_runtime.submit(
             SubmitJob.create(
                 job_type=self.run_job_type,
-                logical_target=_job_target(profile.profile_id, version.version_id),
-                idempotency_key=(
-                    f"recommendation:{profile.profile_id}:{version.version_id}"
-                ),
+                logical_target=_job_target(run.run_id),
+                idempotency_key=f"recommendation:{run.run_id}",
                 correlation_id=profile.correlation_id,
                 actor=AuditActor.system(),
             )
         )
-        run = replace(run, job_execution_id=job.execution_id)
-        self.runs.insert(run)
-        return run
+        return self.runs.bind_job(run.run_id, job.execution_id)
+
+    def _schedule_after_commit(
+        self,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        *,
+        trigger: RecommendationRunTrigger,
+    ) -> RecommendationRun | None:
+        try:
+            return self.schedule_version_run(
+                profile=profile,
+                version=version,
+                trigger=trigger,
+            )
+        except Exception:
+            reserved = self.runs.get_reserved(
+                profile.profile_id,
+                version.version_id,
+                trigger,
+            )
+            if reserved is None or reserved.job_execution_id is not None:
+                raise
+            return reserved
 
     def _emit_server_event(
         self,
@@ -859,8 +878,8 @@ def _payload_from_profile(profile: SearchProfile) -> dict[str, object]:
     )
 
 
-def _job_target(profile_id: UUID, version_id: UUID) -> str:
-    return f"{profile_id}:{version_id}"
+def _job_target(run_id: UUID) -> str:
+    return str(run_id)
 
 
 def _optional_number(value: object) -> float | None:

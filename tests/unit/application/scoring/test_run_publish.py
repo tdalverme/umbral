@@ -105,8 +105,7 @@ def test_run_publishes_evaluations_atomically_with_the_run() -> None:
     )
     runs.insert(run)
     summary = radar.process_run(
-        profile_id=profile.profile_id,
-        profile_version_id=version.version_id,
+        run_id=run.run_id,
         job_execution_id=uuid4(),
     )
     assert summary["state"] == "succeeded"
@@ -173,8 +172,7 @@ def test_optimistic_lock_conflict_becomes_transient_and_keeps_last_valid() -> No
     runs.publish = conflicting_publish  # type: ignore[method-assign]
     with pytest.raises(Exception) as excinfo:
         radar.process_run(
-            profile_id=profile.profile_id,
-            profile_version_id=version.version_id,
+            run_id=run.run_id,
             job_execution_id=uuid4(),
         )
     assert excinfo.type.__name__ == "RadarTransientError"

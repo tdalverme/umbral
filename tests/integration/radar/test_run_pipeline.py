@@ -11,8 +11,23 @@ from tests.integration.radar.conftest import (
     seed_user,
 )
 
+from umbral.application.jobs.contracts import JobSnapshot, SubmitJob
+from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.application.radar.contracts import RadarValidationError
+from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.workers.radar import RecommendationRunHandler
+
+
+class _FailOnceRuntime(InMemoryJobRuntime):
+    def __init__(self) -> None:
+        super().__init__(queue=RecordingJobQueue())
+        self.fail_next_submit = True
+
+    def submit(self, command: SubmitJob) -> JobSnapshot:
+        if self.fail_next_submit:
+            self.fail_next_submit = False
+            raise RuntimeError("enqueue unavailable")
+        return super().submit(command)
 
 
 def _create_and_run(
@@ -30,9 +45,8 @@ def _create_and_run(
         unknown_strategy=None,
         correlation_id=uuid4(),
     )
-    summary = handler.run(
-        _context(f"{profile.profile_id}:{profile.current_version_id}")
-    )
+    assert run is not None
+    summary = handler.run(_context(str(run.run_id)))
     return profile, run, summary
 
 
@@ -57,10 +71,13 @@ def test_run_pipeline_publishes_atomically(radar_backend: Any) -> None:
     profile, _, summary = _create_and_run(
         service, handler, owner=user_id, name="Radar A"
     )
+    persisted_profile = service.get_profile(user_id, profile.profile_id)
 
     assert summary["state"] == "succeeded"
     assert summary["candidate_count"] == 3
     assert summary["published_item_count"] == 3
+    assert persisted_profile.current_version_id == profile.current_version_id
+    assert persisted_profile.version == profile.version
 
     page = service.get_matches(
         owner_id=user_id,
@@ -181,6 +198,49 @@ def test_invalid_profile_is_rejected_without_side_effects(radar_backend: Any) ->
             unknown_strategy=None,
             correlation_id=uuid4(),
         )
+
+
+def test_durable_run_reservation_survives_enqueue_failure_and_retries(
+    radar_backend: Any,
+) -> None:
+    factory = radar_backend
+    user_id = seed_user(factory)
+    runtime = _FailOnceRuntime()
+    service = build_radar_service(factory, job_runtime=runtime)
+
+    profile, reserved = service.create_profile(
+        owner_id=user_id,
+        name="Radar diferido",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+
+    assert reserved is not None
+    assert reserved.job_execution_id is None
+    persisted = service.runs.get(reserved.run_id)
+    assert persisted is not None
+    assert persisted.job_execution_id is None
+    version_id = profile.current_version_id
+    assert version_id is not None
+    version = service.versions.get(version_id)
+    assert version is not None
+
+    retried = service.schedule_version_run(
+        profile=profile,
+        version=version,
+        trigger="created",
+    )
+
+    assert retried is not None
+    assert retried.run_id == reserved.run_id
+    assert retried.job_execution_id is not None
+    assert len(runtime.submissions) == 1
 
 
 def _events_of(factory: Any) -> list[str]:

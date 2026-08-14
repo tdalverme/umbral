@@ -73,10 +73,9 @@ def test_duplicate_publish_is_arbitrated_by_unique_constraint(
     scoring_backend: Any,
 ) -> None:
     factory = scoring_backend
-    radar, profile, run = seed_run(factory)
+    radar, _, run = seed_run(factory)
     summary = radar.process_run(
-        profile_id=profile.profile_id,
-        profile_version_id=run.profile_version_id,
+        run_id=run.run_id,
         job_execution_id=uuid4(),
     )
     assert summary["state"] == "succeeded"

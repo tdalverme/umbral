@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from threading import RLock
 from typing import Protocol
 from uuid import UUID
 
@@ -23,9 +24,25 @@ from umbral.domain.errors import ConcurrencyConflict
 @dataclass
 class FakeSearchProfileRepository:
     rows: dict[UUID, SearchProfile] = field(default_factory=dict)
+    version_rows: dict[UUID, ProfileVersion] = field(default_factory=dict)
+    fail_next_atomic_save: bool = False
+    _lock: RLock = field(default_factory=RLock, init=False, repr=False)
 
     def insert(self, profile: SearchProfile) -> None:
         self.rows[profile.profile_id] = profile
+
+    def insert_with_version(
+        self, profile: SearchProfile, version: ProfileVersion
+    ) -> None:
+        with self._lock:
+            if profile.profile_id in self.rows or self._version_exists(version):
+                raise ConcurrencyConflict(
+                    expected_version=profile.version,
+                    actual_version=self._actual_version(profile.profile_id),
+                )
+            self._validate_snapshot_pointer(profile, version)
+            self.rows[profile.profile_id] = profile
+            self.version_rows[version.version_id] = version
 
     def get(self, profile_id: UUID) -> SearchProfile | None:
         return self.rows.get(profile_id)
@@ -50,6 +67,51 @@ class FakeSearchProfileRepository:
                 expected_version=profile.version, actual_version=current.version
             )
         self.rows[profile.profile_id] = replace(profile, version=current.version + 1)
+
+    def save_with_version(
+        self, profile: SearchProfile, version: ProfileVersion
+    ) -> None:
+        with self._lock:
+            current = self.rows.get(profile.profile_id)
+            if current is None:
+                raise KeyError(profile.profile_id)
+            if self.fail_next_atomic_save:
+                self.fail_next_atomic_save = False
+                raise ConcurrencyConflict(
+                    expected_version=profile.version,
+                    actual_version=current.version,
+                )
+            if current.version != profile.version or self._version_exists(version):
+                raise ConcurrencyConflict(
+                    expected_version=profile.version,
+                    actual_version=current.version,
+                )
+            self._validate_snapshot_pointer(profile, version)
+            self.rows[profile.profile_id] = replace(
+                profile, version=current.version + 1
+            )
+            self.version_rows[version.version_id] = version
+
+    def _actual_version(self, profile_id: UUID) -> int | None:
+        profile = self.rows.get(profile_id)
+        return profile.version if profile is not None else None
+
+    def _version_exists(self, version: ProfileVersion) -> bool:
+        return version.version_id in self.version_rows or any(
+            existing.profile_id == version.profile_id
+            and existing.profile_version == version.profile_version
+            for existing in self.version_rows.values()
+        )
+
+    @staticmethod
+    def _validate_snapshot_pointer(
+        profile: SearchProfile, version: ProfileVersion
+    ) -> None:
+        if (
+            profile.current_version_id != version.version_id
+            or profile.profile_id != version.profile_id
+        ):
+            raise ValueError("profile current version must reference its snapshot")
 
 
 @dataclass
@@ -81,10 +143,55 @@ class FakeRunRepository:
     evaluations_by_run: dict[UUID, list[CriterionEvaluation]] = field(
         default_factory=dict
     )
+    fail_next_bind: bool = False
+    _lock: RLock = field(default_factory=RLock, init=False, repr=False)
 
     def insert(self, run: RecommendationRun) -> None:
         self.rows[run.run_id] = run
         self.items_by_run.setdefault(run.run_id, [])
+
+    def reserve(self, run: RecommendationRun) -> RecommendationRun:
+        with self._lock:
+            existing = next(
+                (
+                    current
+                    for current in self.rows.values()
+                    if current.profile_id == run.profile_id
+                    and current.profile_version_id == run.profile_version_id
+                    and current.trigger == run.trigger
+                ),
+                None,
+            )
+            if existing is not None:
+                return existing
+            self.rows[run.run_id] = run
+            self.items_by_run.setdefault(run.run_id, [])
+            return run
+
+    def bind_job(
+        self, run_id: UUID, job_execution_id: UUID
+    ) -> RecommendationRun:
+        with self._lock:
+            current = self.rows.get(run_id)
+            if current is None:
+                raise KeyError(run_id)
+            if current.job_execution_id is not None:
+                if current.job_execution_id == job_execution_id:
+                    return current
+                raise ConcurrencyConflict(
+                    expected_version=current.version,
+                    actual_version=current.version,
+                )
+            if self.fail_next_bind:
+                self.fail_next_bind = False
+                raise RuntimeError("bind unavailable")
+            bound = replace(
+                current,
+                job_execution_id=job_execution_id,
+                version=current.version + 1,
+            )
+            self.rows[run_id] = bound
+            return bound
 
     def get(self, run_id: UUID) -> RecommendationRun | None:
         return self.rows.get(run_id)
@@ -107,6 +214,20 @@ class FakeRunRepository:
         if not matches:
             return None
         return max(matches, key=lambda item: item.created_at)
+
+    def get_reserved(
+        self, profile_id: UUID, profile_version_id: UUID, trigger: str
+    ) -> RecommendationRun | None:
+        return next(
+            (
+                run
+                for run in self.rows.values()
+                if run.profile_id == profile_id
+                and run.profile_version_id == profile_version_id
+                and run.trigger == trigger
+            ),
+            None,
+        )
 
     def latest_succeeded_for_profile(
         self, profile_id: UUID
@@ -227,8 +348,13 @@ class FakeEventRepository:
 class FakeCandidateListingReader:
     listings: list[NormalizedListing] = field(default_factory=list)
 
-    def list_candidates(self, profile: SearchProfile) -> tuple[NormalizedListing, ...]:
-        del profile
+    def list_candidates(
+        self,
+        profile: SearchProfile,
+        *,
+        supported_neighborhoods: tuple[str, ...],
+    ) -> tuple[NormalizedListing, ...]:
+        del profile, supported_neighborhoods
         return tuple(self.listings)
 
 

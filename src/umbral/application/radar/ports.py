@@ -22,6 +22,12 @@ from umbral.application.silver.contracts import NormalizedListing
 class SearchProfileRepository(Protocol):
     def insert(self, profile: SearchProfile) -> None: ...
 
+    def insert_with_version(
+        self, profile: SearchProfile, version: ProfileVersion
+    ) -> None:
+        """Atomically insert a profile, its first snapshot and current pointer."""
+        ...
+
     def get(self, profile_id: UUID) -> SearchProfile | None: ...
 
     def list_by_owner(
@@ -29,6 +35,12 @@ class SearchProfileRepository(Protocol):
     ) -> tuple[SearchProfile, ...]: ...
 
     def save(self, profile: SearchProfile) -> None: ...
+
+    def save_with_version(
+        self, profile: SearchProfile, version: ProfileVersion
+    ) -> None:
+        """Atomically apply an optimistic profile update and its snapshot."""
+        ...
 
 
 class ProfileVersionRepository(Protocol):
@@ -42,10 +54,24 @@ class ProfileVersionRepository(Protocol):
 class RunRepository(Protocol):
     def insert(self, run: RecommendationRun) -> None: ...
 
+    def reserve(self, run: RecommendationRun) -> RecommendationRun:
+        """Insert one durable intent or return the existing unique run."""
+        ...
+
+    def bind_job(
+        self, run_id: UUID, job_execution_id: UUID
+    ) -> RecommendationRun:
+        """Bind a durable reservation to its idempotent job execution."""
+        ...
+
     def get(self, run_id: UUID) -> RecommendationRun | None: ...
 
     def get_for_version(
         self, profile_id: UUID, profile_version_id: UUID
+    ) -> RecommendationRun | None: ...
+
+    def get_reserved(
+        self, profile_id: UUID, profile_version_id: UUID, trigger: str
     ) -> RecommendationRun | None: ...
 
     def latest_for_profile(self, profile_id: UUID) -> RecommendationRun | None: ...
@@ -87,7 +113,10 @@ class CandidateListingReader(Protocol):
     """Reads Silver listings that can pass the profile's hard filters."""
 
     def list_candidates(
-        self, profile: SearchProfile
+        self,
+        profile: SearchProfile,
+        *,
+        supported_neighborhoods: tuple[str, ...],
     ) -> tuple[NormalizedListing, ...]: ...
 
 

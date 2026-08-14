@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timezone
+from threading import Barrier
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -96,12 +99,13 @@ def test_open_profile_candidate_query_omits_unset_predicates() -> None:
     reader = SqlAlchemyCandidateListingReader(lambda: cast(Session, session))
 
     assert reader.list_candidates(
-        build_profile(zones=(), budget_max=None, min_rooms=None)
+        build_profile(zones=(), budget_max=None, min_rooms=None),
+        supported_neighborhoods=("palermo", "recoleta"),
     ) == ()
     sql = str(session.statement)
     assert "total_cost <=" not in sql
     assert "property_type IN" in sql
-    assert "lower(silver_listings.neighborhood)" not in sql
+    assert "lower(silver_listings.neighborhood)" in sql
     assert "silver_listings.rooms >=" not in sql
 
 
@@ -148,6 +152,25 @@ def test_run_repository_fail_records_code() -> None:
     assert failed is not None
     assert failed.state == "failed"
     assert failed.failure_code == "radar.test_failure"
+
+
+def test_concurrent_run_reservations_return_one_durable_run() -> None:
+    repository = FakeRunRepository()
+    profile_id = uuid4()
+    version_id = uuid4()
+    first = build_run(profile_id, version_id)
+    second = replace(first, run_id=uuid4())
+    barrier = Barrier(2)
+
+    def reserve(run: RecommendationRun) -> RecommendationRun:
+        barrier.wait()
+        return repository.reserve(run)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = tuple(executor.map(reserve, (first, second)))
+
+    assert results[0].run_id == results[1].run_id
+    assert len(repository.rows) == 1
 
 
 def build_run(profile_id: UUID, version_id: UUID) -> RecommendationRun:

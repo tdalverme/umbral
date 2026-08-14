@@ -15,7 +15,7 @@ from typing import Literal, Protocol
 
 from umbral.application.radar.contracts import SearchProfile
 
-_RESIDENTIAL_PROPERTY_TYPES = frozenset({"apartment", "house", "room", "studio"})
+RESIDENTIAL_PROPERTY_TYPES = frozenset({"apartment", "house", "room", "studio"})
 
 
 class CandidateListing(Protocol):
@@ -37,11 +37,23 @@ class CandidateListing(Protocol):
     def rooms(self) -> int | None: ...
 
 
-def apply_hard_filters(listing: CandidateListing, profile: SearchProfile) -> bool:
+def apply_hard_filters(
+    listing: CandidateListing,
+    profile: SearchProfile,
+    *,
+    supported_neighborhoods: tuple[str, ...],
+) -> bool:
     """True when the listing passes every hard filter of the profile."""
     if listing.operation != profile.operation:
         return False
-    if listing.property_type not in _RESIDENTIAL_PROPERTY_TYPES:
+    if listing.property_type not in RESIDENTIAL_PROPERTY_TYPES:
+        return False
+
+    if listing.neighborhood is None:
+        return False
+    neighborhood = listing.neighborhood.casefold()
+    supported = frozenset(zone.casefold() for zone in supported_neighborhoods)
+    if neighborhood not in supported:
         return False
 
     if profile.budget_max is not None:
@@ -51,9 +63,7 @@ def apply_hard_filters(listing: CandidateListing, profile: SearchProfile) -> boo
             return False
 
     if profile.zones:
-        if listing.neighborhood is None:
-            return False
-        if listing.neighborhood.casefold() not in _zones_casefold(profile):
+        if neighborhood not in _zones_casefold(profile):
             return False
 
     if profile.min_rooms is not None and profile.min_rooms > 0:

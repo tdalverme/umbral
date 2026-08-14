@@ -42,6 +42,9 @@ def test_create_persists_profile_version_event_and_run() -> None:
     assert profile.version == 1
     assert profile.status == "active"
     assert profile.current_version_id is not None
+    persisted_profile = ctx.profiles.get(profile.profile_id)
+    assert persisted_profile is not None
+    assert persisted_profile.current_version_id == profile.current_version_id
 
     version = ctx.versions.get(profile.current_version_id)
     assert version is not None

@@ -33,7 +33,7 @@ def test_reimporting_creates_no_duplicate_runs_or_matches(radar_backend: Any) ->
     service = build_radar_service(factory)
     handler = RecommendationRunHandler(service)
 
-    profile, _ = service.create_profile(
+    profile, run = service.create_profile(
         owner_id=user_id,
         name="Radar E2E",
         zones=("palermo",),
@@ -45,7 +45,8 @@ def test_reimporting_creates_no_duplicate_runs_or_matches(radar_backend: Any) ->
         unknown_strategy=None,
         correlation_id=uuid4(),
     )
-    target = f"{profile.profile_id}:{profile.current_version_id}"
+    assert run is not None
+    target = str(run.run_id)
     first = handler.run(_context(target))
     assert first["published_item_count"] == 3
 
