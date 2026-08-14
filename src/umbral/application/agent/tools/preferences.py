@@ -8,6 +8,7 @@ structural problems in the contract raise ``PreferenceVocabularyInvalid``.
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -140,4 +141,8 @@ def parse_preference_vocabulary(
 
 
 def _alias_key(phrase: str) -> str:
-    return " ".join(phrase.strip().lower().split())
+    normalized = unicodedata.normalize("NFD", phrase.strip().casefold())
+    without_marks = "".join(
+        char for char in normalized if unicodedata.category(char) != "Mn"
+    )
+    return " ".join(without_marks.split())

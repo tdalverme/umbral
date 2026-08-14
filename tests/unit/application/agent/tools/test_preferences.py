@@ -54,6 +54,25 @@ def test_resolves_alias_exact_case_insensitive() -> None:
     assert spec.resolve("con luz").concept_key == "luminosidad"
 
 
+def test_resolves_accents_in_natural_phrases() -> None:
+    spec = parse_preference_vocabulary(
+        {
+            "registry_version": "preferences-vocabulary-v1",
+            "schema_version": "preferences-v1",
+            "entries": [
+                {
+                    "aliases": ["cerca de cafes"],
+                    "concept_key": "proximidad_cafes",
+                    "polarity": "positive",
+                    "value": None,
+                }
+            ],
+        }
+    )
+
+    assert spec.resolve("cerca de cafés").concept_key == "proximidad_cafes"
+
+
 def test_resolve_normalizes_whitespace() -> None:
     spec = _spec()
     assert spec.resolve("  con   balcon ").concept_key == "balcon"

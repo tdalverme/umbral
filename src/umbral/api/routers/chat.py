@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import queue
 import threading
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -100,6 +101,40 @@ def _correlation(request: Request) -> UUID | None:
         return UUID(value)
     except ValueError:
         return None
+
+
+def _natural_decision(text: str, *, run_id: UUID) -> dict[str, object] | None:
+    """Recognize a small, explicit confirmation vocabulary for pending HITL."""
+    normalized = unicodedata.normalize("NFD", text.casefold())
+    normalized = "".join(
+        char for char in normalized if unicodedata.category(char) != "Mn"
+    )
+    normalized = " ".join(
+        "".join(
+            char if char.isalnum() or char.isspace() else " " for char in normalized
+        ).split()
+    )
+    if normalized in {"confirmo", "confirmar", "si", "aplicar", "dale", "ok"}:
+        return {
+            "kind": "approve",
+            "idempotency_key": f"chat-natural-{run_id}-approve",
+        }
+    if normalized in {"rechazo", "rechazar", "no", "descartar", "descarto"}:
+        return {
+            "kind": "reject",
+            "reason": "desde el chat",
+            "idempotency_key": f"chat-natural-{run_id}-reject",
+        }
+    return None
+
+
+def _is_pending_decision(run: object) -> bool:
+    error_summary = getattr(run, "error_summary", None)
+    return (
+        getattr(run, "status", None) == "interrupted"
+        and isinstance(error_summary, Mapping)
+        and error_summary.get("code") == "agent.interrupt_proposal_decision"
+    )
 
 
 def _principal(request: Request) -> CurrentPrincipal:
@@ -385,13 +420,30 @@ def send_message(
 ) -> StreamingResponse | JSONResponse:
     principal = _require(request, "product.chat.message.write")
     text = str(body.get("text", ""))
+    try:
+        _chat().assert_accepts_turn(user_id=principal.user_id, session_id=session_id)
+    except ChatError as error:
+        response = _error_problem(request, error)
+        assert response is not None
+        return response
     active = _graph_runs().active_for_session(session_id)
-    if active is not None and active.status == "interrupted":
-        return _problem(
-            request,
-            409,
-            "chat.decision_pending",
-            "La conversación espera tu decisión sobre una propuesta.",
+    if active is not None and _is_pending_decision(active):
+        decision = _natural_decision(text, run_id=active.run_id)
+        if decision is None:
+            return _problem(
+                request,
+                409,
+                "chat.decision_pending",
+                "La conversación espera tu decisión sobre una propuesta.",
+            )
+        _require(request, "product.chat.decision.write")
+        return _stream_turn(
+            user_id=principal.user_id,
+            session_id=session_id,
+            text="",
+            correlation_id=_correlation(request) or uuid4(),
+            resume=True,
+            decision=decision,
         )
     client_message_id = body.get("client_message_id")
     context = body.get("context")
@@ -416,6 +468,12 @@ def resume_session(
     request: Request, session_id: UUID
 ) -> StreamingResponse | JSONResponse:
     principal = _require(request, "product.chat.message.write")
+    try:
+        _chat().assert_accepts_turn(user_id=principal.user_id, session_id=session_id)
+    except ChatError as error:
+        response = _error_problem(request, error)
+        assert response is not None
+        return response
     active = _graph_runs().active_for_session(session_id)
     if active is None:
         return _problem(
@@ -439,6 +497,12 @@ def decide_run(
     request: Request, session_id: UUID, run_id: UUID, body: dict[str, Any]
 ) -> StreamingResponse | JSONResponse:
     principal = _require(request, "product.chat.decision.write")
+    try:
+        _chat().assert_accepts_turn(user_id=principal.user_id, session_id=session_id)
+    except ChatError as error:
+        response = _error_problem(request, error)
+        assert response is not None
+        return response
     run = _graph_runs().get(run_id)
     if run is None or run.session_id != session_id:
         return _problem(request, 404, "agent.run_not_found", "No existe esa ejecución.")

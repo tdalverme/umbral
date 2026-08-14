@@ -374,7 +374,10 @@ export default function RadarViewPage(): React.ReactElement {
       )}
 
       <section className="mt-6" aria-label="Chat con Umbral">
-        <ChatPanel profileId={profileId} />
+        <ChatPanel
+          profileId={profileId}
+          onDecisionApplied={() => setReloadKey((current) => current + 1)}
+        />
       </section>
     </main>
   );

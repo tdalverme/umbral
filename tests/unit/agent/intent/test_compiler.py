@@ -177,6 +177,26 @@ def test_compile_normalizes_canonical_keys() -> None:
     assert compilation.high_impact_missing == ("zona",)
 
 
+def test_compile_does_not_ask_for_zone_for_a_preference_request() -> None:
+    compiler = _compiler(
+        replies={
+            _PROMPT: {
+                "intent": "refinamiento",
+                "parameters": [
+                    {"key": "preferencia", "value": "luminoso", "confidence": 0.9}
+                ],
+                "high_impact_missing": ["zona"],
+                "contradictions": [],
+            }
+        }
+    )
+
+    compilation = compiler.compile(message_text="Quiero un depto luminoso")
+
+    assert compilation.parameters[0].key == "preferencia"
+    assert compilation.high_impact_missing == ()
+
+
 def test_compile_gateway_failure_is_typed() -> None:
     class FailingGateway:
         def generate_structured(self, **kwargs: object) -> object:

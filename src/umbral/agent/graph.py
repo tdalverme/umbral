@@ -990,6 +990,15 @@ def build_topology_v3(
                 tool_calls = [
                     dict(item) for item in calls if isinstance(item, Mapping)
                 ]
+            if (
+                not tool_calls
+                and not state.get("tool_results")
+                and isinstance(intent_data, Mapping)
+            ):
+                tool_calls = _fallback_tool_calls(
+                    intent_data,
+                    message_text=str(_context(state).get("user_message_text", "")),
+                )
             if text:
                 _emit_reply_chunks(
                     run_id=run_id,
@@ -1487,6 +1496,68 @@ def _waiting_proposal(
                 "",
             )
     return ("", "", {}, {}, "")
+
+
+def _fallback_tool_calls(
+    intent_data: Mapping[str, object], *, message_text: str
+) -> list[dict[str, object]]:
+    """Recover one omitted proposal call from compiled parameters.
+
+    The model may return useful structured parameters while forgetting the
+    corresponding function call. This only selects a permitted proposal tool;
+    validation and confirmation still happen in the existing executor.
+    """
+    if intent_data.get("intent") != "refinamiento":
+        return []
+    normalized_message = " ".join(message_text.casefold().split())
+    if any(
+        marker in normalized_message
+        for marker in ("quit", "elimin", "sac", "remov", "aprend")
+    ):
+        return []
+    raw_allowed = intent_data.get("allowed_tools")
+    if not isinstance(raw_allowed, list):
+        return []
+    allowed = {str(item) for item in raw_allowed}
+    parameters = intent_data.get("parameters")
+    if not isinstance(parameters, list):
+        return []
+
+    for item in parameters:
+        if not isinstance(item, Mapping):
+            continue
+        if item.get("key") == "preferencia":
+            phrase = item.get("value")
+            if (
+                "propose_search_preference_update" in allowed
+                and isinstance(phrase, str)
+                and phrase.strip()
+            ):
+                return [
+                    {
+                        "tool": "propose_search_preference_update",
+                        "args": {"preference": phrase},
+                    }
+                ]
+
+    change: dict[str, str] = {}
+    for item in parameters:
+        if not isinstance(item, Mapping):
+            continue
+        key = item.get("key")
+        value = item.get("value")
+        if key in {"zona", "budget", "ambientes", "superficie"} and isinstance(
+            value, str
+        ):
+            change[str(key)] = value
+    if change and "propose_search_profile_update" in allowed:
+        return [
+            {
+                "tool": "propose_search_profile_update",
+                "args": {"change": change},
+            }
+        ]
+    return []
 
 
 def _payload_from_proposal(proposal: Proposal) -> dict[str, object]:

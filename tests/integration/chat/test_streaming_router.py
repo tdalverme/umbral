@@ -235,6 +235,29 @@ def test_send_while_decision_pending_returns_typed_error() -> None:
     assert second.json()["code"] == "chat.decision_pending"
 
 
+def test_send_confirmo_resumes_pending_decision() -> None:
+    client, repo, _chat = _build_stack()
+    created = client.post(
+        "/api/v1/chat/sessions", json={"search_profile_id": str(PROFILE_ID)}
+    )
+    session_id = created.json()["session_id"]
+    stream = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"text": "subÃƒÂ­ el presupuesto a 900"},
+    )
+    proposal_id = _extract_proposal_id(stream.text)
+    assert proposal_id is not None
+
+    confirmed = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"text": "Confirmo"},
+    )
+
+    assert confirmed.status_code == 200
+    assert "event: chat.run_completed" in confirmed.text
+    assert repo.proposals[UUID(proposal_id)].state == "approved"
+
+
 def _extract_proposal_id(body: str) -> str | None:
     for line in body.splitlines():
         if line.startswith("data: "):

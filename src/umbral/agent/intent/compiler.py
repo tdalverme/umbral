@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Mapping
 
 from umbral.agent.intent.contracts import (
@@ -87,6 +88,17 @@ _CANONICAL_KEYS: Mapping[str, str] = {
     "preferencia": "preferencia",
     "preferencias": "preferencia",
 }
+
+_SOFT_PREFERENCE_MARKERS = (
+    "luminos",
+    "balcon",
+    "cocina",
+    "cafe",
+    "transporte",
+    "subte",
+    "parque",
+    "espacio verde",
+)
 
 
 def _canonical_key(key: str) -> str:
@@ -210,6 +222,12 @@ class IntentCompiler:
             for item in (raw_missing if isinstance(raw_missing, list) else [])
             if isinstance(item, str)
         )
+        if intent == "refinamiento" and "zona" in missing:
+            parameter_keys = {item.key for item in parameters}
+            if "preferencia" in parameter_keys or _has_soft_preference_marker(
+                message_text
+            ):
+                missing = tuple(item for item in missing if item != "zona")
         contradictions = tuple(
             IntentContradiction(
                 key=_string(item, "key"),
@@ -239,3 +257,12 @@ def _number(value: object, default: float) -> float:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return float(value)
     return default
+
+
+def _has_soft_preference_marker(message_text: str) -> bool:
+    decomposed = unicodedata.normalize("NFD", message_text.casefold())
+    without_marks = "".join(
+        char for char in decomposed if unicodedata.category(char) != "Mn"
+    )
+    normalized = " ".join(without_marks.split())
+    return any(marker in normalized for marker in _SOFT_PREFERENCE_MARKERS)

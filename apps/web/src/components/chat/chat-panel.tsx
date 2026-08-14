@@ -13,12 +13,16 @@ import { useChatStream } from "@/lib/chat/use-chat-stream";
 
 interface ChatPanelProps {
   profileId: string;
+  onDecisionApplied?: () => void;
 }
 
 /** The single chat panel of the radar page (Q3): resumes the latest session
  * of the radar or creates one; "conversación nueva" from the same panel.
  * A `?chat_context=listing:<id>` param sends a contextual question (UM-H4-025). */
-export function ChatPanel({ profileId }: ChatPanelProps): React.ReactElement {
+export function ChatPanel({
+  profileId,
+  onDecisionApplied,
+}: ChatPanelProps): React.ReactElement {
   const chat = useChatStream(profileId);
   const searchParams = useSearchParams();
   const contextRef = useRef<string | null>(null);
@@ -76,6 +80,12 @@ export function ChatPanel({ profileId }: ChatPanelProps): React.ReactElement {
     void chat.send(text);
   };
 
+  const handleDecision = (decision: Record<string, unknown>): void => {
+    void chat.decide(decision).then((applied) => {
+      if (applied) onDecisionApplied?.();
+    });
+  };
+
   return (
     <Card data-testid="chat-panel">
       <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
@@ -100,7 +110,7 @@ export function ChatPanel({ profileId }: ChatPanelProps): React.ReactElement {
             profileId={profileId}
             runId={chat.runId}
             pendingDecision={chat.pendingDecision}
-            onDecision={(decision) => void chat.decide(decision)}
+            onDecision={handleDecision}
             busy={chat.status === "running" || chat.status === "resuming"}
             onFeedback={handleFeedback}
           />

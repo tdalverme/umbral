@@ -243,6 +243,59 @@ def test_built_graph_v3_runs_consulta_turn_to_completion() -> None:
     assert final["tool_calls"] == []
 
 
+def test_built_graph_v3_recovers_a_missing_preference_tool_call() -> None:
+    proposal_id = str(UUID(int=81))
+
+    def propose_preference(_ctx, _args):
+        return {
+            "proposal_id": proposal_id,
+            "diff": {"concept_key": "luminosidad", "polarity": "positive"},
+            "impact": {"will_recompute": True},
+            "expires_at": "2026-08-15T00:00:00+00:00",
+        }
+
+    graph = _build(
+        {
+            "intent": "refinamiento",
+            "parameters": [
+                type(
+                    "Parameter",
+                    (),
+                    {"key": "preferencia", "value": "luminoso", "confidence": 0.9},
+                )()
+            ],
+            "allowed_tools": ["propose_search_preference_update"],
+        },
+        gateway=_Gateway(
+            [
+                {
+                    "reply_text": "He creado una propuesta.",
+                    "refs": [],
+                    "tool_calls": [],
+                }
+            ]
+        ),
+        implementations={
+            "propose_search_preference_update": propose_preference,
+        },
+    )
+    run_id = UUID(int=15)
+    config = {"configurable": {"thread_id": str(run_id)}}
+
+    interrupted = []
+    for chunk in graph.compiled.stream(
+        _run_state(run_id, "Quiero un depto luminoso"),
+        config,
+        stream_mode="updates",
+    ):
+        value = _interrupt_value(chunk)
+        if value is not None:
+            interrupted.append(value)
+
+    assert len(interrupted) == 1
+    assert interrupted[0]["proposal_id"] == proposal_id
+
+
 def test_built_graph_v3_injects_idempotency_key_for_feedback() -> None:
     received: dict[str, object] = {}
 

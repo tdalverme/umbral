@@ -123,7 +123,7 @@ export function useChatStream(searchProfileId: string) {
           emitChatStreamError(searchProfileId, "chat.network_error");
           setStatus("failed");
         }
-        return;
+        return false;
       }
       if (!response.ok || response.body === null) {
         let problem: { code?: string } | null = null;
@@ -140,12 +140,18 @@ export function useChatStream(searchProfileId: string) {
           emitChatStreamError(searchProfileId, problem?.code ?? `http.${response.status}`);
           setStatus("failed");
         }
-        return;
+        return false;
       }
+      let completed = false;
       for await (const event of parseStream(response.body)) {
+        if (event.event === "chat.run_completed") completed = true;
+        if (event.event === "chat.run_failed" || event.event === "chat.run_interrupted") {
+          completed = false;
+        }
         applyEvent(event);
       }
-      if (mounted.current && !waitingRef.current) setStatus("completed");
+      if (mounted.current && completed && !waitingRef.current) setStatus("completed");
+      return completed;
     },
     [applyEvent, searchProfileId],
   );
@@ -201,11 +207,11 @@ export function useChatStream(searchProfileId: string) {
 
   const decide = useCallback(
     async (decision: Record<string, unknown>) => {
-      if (!session || !pendingRunIdRef.current) return;
+      if (!session || !pendingRunIdRef.current) return false;
       const runId = pendingRunIdRef.current;
       setStatus("running");
       setPendingDecision(null);
-      await streamFrom(chatApi.decide(session.session_id, runId, decision));
+      return streamFrom(chatApi.decide(session.session_id, runId, decision));
     },
     [session, streamFrom],
   );
