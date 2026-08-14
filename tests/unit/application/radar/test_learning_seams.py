@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from tests.support.radar import RadarTestContext, build_profile
 
 from umbral.application.jobs.contracts import JobSnapshot, SubmitJob
 from umbral.application.jobs.service import InMemoryJobRuntime
-from umbral.application.radar.contracts import RadarNotAccessible
+from umbral.application.radar.contracts import (
+    RadarNotAccessible,
+    RadarStateError,
+    RecommendationRun,
+)
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 
 
@@ -161,6 +166,132 @@ def test_schedule_retry_binds_the_same_job_after_bind_failure() -> None:
     assert retried.run_id == reserved.run_id
     assert retried.job_execution_id == runtime.submissions[0].execution_id
     assert len(runtime.submissions) == 1
+
+
+def test_create_returns_bound_reservation_when_bind_ack_is_ambiguous(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = RadarTestContext()
+    bind_job = ctx.runs.bind_job
+
+    def bind_then_raise(run_id: UUID, execution_id: UUID) -> RecommendationRun:
+        bind_job(run_id, execution_id)
+        raise RuntimeError("bind acknowledgement lost")
+
+    monkeypatch.setattr(ctx.runs, "bind_job", bind_then_raise)
+
+    profile, recovered = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar ambiguo",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+
+    assert recovered is not None
+    assert recovered.job_execution_id is not None
+    assert recovered.profile_id == profile.profile_id
+
+
+def test_update_succeeds_when_reservation_fails_and_can_be_scheduled_later() -> None:
+    ctx = RadarTestContext()
+    owner = uuid4()
+    profile, _ = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    reserve = ctx.runs.reserve
+    failed = False
+
+    def fail_once(run: RecommendationRun) -> RecommendationRun:
+        nonlocal failed
+        if not failed:
+            failed = True
+            raise RuntimeError("reservation unavailable")
+        return reserve(run)
+
+    ctx.runs.reserve = fail_once  # type: ignore[method-assign]
+
+    updated, scheduled = ctx.service.update_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={"name": "Radar durable"},
+        correlation_id=uuid4(),
+    )
+
+    assert updated.name == "Radar durable"
+    assert scheduled is None
+    assert updated.current_version_id is not None
+    assert ctx.runs.get_reserved(
+        updated.profile_id, updated.current_version_id, "edited"
+    ) is None
+    version = ctx.versions.get(updated.current_version_id)
+    assert version is not None
+    retried = ctx.service.schedule_version_run(
+        profile=updated, version=version, trigger="edited"
+    )
+    assert retried is not None
+    assert retried.job_execution_id is not None
+
+
+def test_schedule_rejects_a_version_owned_by_another_profile() -> None:
+    ctx = RadarTestContext()
+    owner = uuid4()
+    profile = build_profile(owner_id=owner)
+    ctx.profiles.insert(profile)
+    updated, version = ctx.service.version_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={},
+        correlation_id=uuid4(),
+    )
+
+    with pytest.raises(RadarStateError, match="does not belong"):
+        ctx.service.schedule_version_run(
+            profile=updated,
+            version=replace(version, profile_id=uuid4()),
+            trigger="edited",
+        )
+
+    assert ctx.runs.rows == {}
+
+
+def test_submit_run_rejects_a_version_owned_by_another_profile() -> None:
+    ctx = RadarTestContext()
+    owner = uuid4()
+    profile = build_profile(owner_id=owner)
+    ctx.profiles.insert(profile)
+    updated, version = ctx.service.version_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={},
+        correlation_id=uuid4(),
+    )
+
+    with pytest.raises(RadarStateError, match="does not belong"):
+        ctx.service.submit_run(
+            updated,
+            replace(version, profile_id=uuid4()),
+            trigger="edited",
+        )
+
+    assert ctx.runs.rows == {}
 
 
 def test_create_returns_reserved_run_when_enqueue_is_deferred() -> None:

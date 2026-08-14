@@ -34,7 +34,7 @@ def test_run_v1_publishes_items_and_evaluations_atomically(
     assert run.state == "succeeded"
     assert run.score_policy_version == "scoring-policy-v1"
     assert run.published_item_count == 3
-    assert _evaluation_count(factory, run.run_id) == 3 * 7  # seed policy criteria
+    assert _evaluation_count(factory, run.run_id) == 3 * 6  # surface is absent
 
 
 def test_evaluations_freezing_survives_observation_recompute(
@@ -79,4 +79,4 @@ def test_duplicate_publish_is_arbitrated_by_unique_constraint(
         job_execution_id=uuid4(),
     )
     assert summary["state"] == "succeeded"
-    assert _evaluation_count(factory, run.run_id) == 21
+    assert _evaluation_count(factory, run.run_id) == 18

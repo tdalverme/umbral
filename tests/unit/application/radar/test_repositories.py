@@ -6,11 +6,13 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
 from threading import Barrier
+from types import SimpleNamespace
 from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 from tests.fakes.radar import (
     FakeProfileVersionRepository,
     FakeRunRepository,
@@ -25,7 +27,10 @@ from umbral.application.radar.contracts import (
     RecommendationRun,
 )
 from umbral.domain.errors import ConcurrencyConflict
-from umbral.infrastructure.db.repositories.radar import SqlAlchemyCandidateListingReader
+from umbral.infrastructure.db.repositories.radar import (
+    SqlAlchemyCandidateListingReader,
+    SqlAlchemySearchProfileRepository,
+)
 
 NOW = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
@@ -64,6 +69,42 @@ def test_save_guards_the_optimistic_version() -> None:
         repository.save(build_profile(profile_id=profile.profile_id, version=99))
     repository.save(build_profile(profile_id=profile.profile_id, version=1))
     assert repository.rows[profile.profile_id].version == 2
+
+
+def test_sql_status_save_translates_a_commit_time_stale_write() -> None:
+    profile = build_profile()
+
+    class StaleCommitSession:
+        rolled_back = False
+        model = SimpleNamespace(version=profile.version)
+
+        def __enter__(self) -> "StaleCommitSession":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            del args
+
+        def get(self, model_type: object, profile_id: UUID) -> object:
+            del model_type, profile_id
+            if self.rolled_back:
+                return SimpleNamespace(version=profile.version + 1)
+            return self.model
+
+        def commit(self) -> None:
+            raise StaleDataError("concurrent update")
+
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+    session = StaleCommitSession()
+    repository = SqlAlchemySearchProfileRepository(lambda: cast(Session, session))
+
+    with pytest.raises(ConcurrencyConflict) as excinfo:
+        repository.save(replace(profile, status="paused"))
+
+    assert session.rolled_back
+    assert excinfo.value.expected_version == profile.version
+    assert excinfo.value.actual_version == profile.version + 1
 
 
 def test_version_repository_returns_latest_by_number() -> None:

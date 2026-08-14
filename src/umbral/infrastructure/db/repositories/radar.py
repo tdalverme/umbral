@@ -71,7 +71,10 @@ class SqlAlchemySearchProfileRepository:
             session.commit()
 
     def insert_with_version(
-        self, profile: SearchProfile, version: ProfileVersion
+        self,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        created_event: ProductEvent,
     ) -> None:
         with self.session_factory() as session:
             try:
@@ -79,6 +82,26 @@ class SqlAlchemySearchProfileRepository:
                 session.add(model)
                 session.flush()
                 session.add(_version_model(version))
+                session.flush()
+                session.add(
+                    ProductEventRow(
+                        id=created_event.event_id,
+                        created_at=created_event.occurred_at,
+                        updated_at=created_event.occurred_at,
+                        actor_kind="service",
+                        actor_id=(
+                            str(created_event.actor_id)
+                            if created_event.actor_id is not None
+                            else None
+                        ),
+                        source="radar.events",
+                        correlation_id=created_event.correlation_id,
+                        event_type=created_event.event_type,
+                        event_version=created_event.event_version,
+                        occurred_at=created_event.occurred_at,
+                        payload=dict(created_event.payload),
+                    )
+                )
                 session.flush()
                 session.execute(
                     update(SearchProfileModel)
@@ -123,7 +146,15 @@ class SqlAlchemySearchProfileRepository:
                     expected_version=profile.version, actual_version=model.version
                 )
             _update_profile_model(model, profile)
-            session.commit()
+            try:
+                session.commit()
+            except StaleDataError as error:
+                session.rollback()
+                actual_version = _profile_version(session, profile.profile_id)
+                raise ConcurrencyConflict(
+                    expected_version=profile.version,
+                    actual_version=actual_version,
+                ) from error
 
     def save_with_version(
         self, profile: SearchProfile, version: ProfileVersion

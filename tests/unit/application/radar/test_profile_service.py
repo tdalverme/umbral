@@ -105,6 +105,18 @@ def test_create_with_invalid_profile_is_rejected_without_persistence() -> None:
     assert ctx.events.events == []
 
 
+def test_create_audit_failure_rolls_back_profile_snapshot_and_event() -> None:
+    ctx = RadarTestContext()
+    ctx.profiles.fail_next_atomic_insert = True
+
+    with pytest.raises(RuntimeError, match="atomic create unavailable"):
+        _create(ctx)
+
+    assert ctx.profiles.rows == {}
+    assert ctx.versions.rows == {}
+    assert ctx.events.events == []
+
+
 def test_partial_profile_rejects_non_positive_budget_with_v2_error() -> None:
     ctx = RadarTestContext()
 

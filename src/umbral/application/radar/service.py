@@ -184,8 +184,7 @@ class RadarService:
         )
         version = self._snapshot(profile, payload, profile_version=1)
         profile = replace(profile, current_version_id=version.version_id)
-        self.profiles.insert_with_version(profile, version)
-        self._emit_server_event(
+        created_event = self._server_event(
             event_type="radar.created.v1",
             actor_id=owner_id,
             correlation_id=correlation_id,
@@ -194,6 +193,7 @@ class RadarService:
                 "profile_version": version.profile_version,
             },
         )
+        self.profiles.insert_with_version(profile, version, created_event)
         run = self._schedule_after_commit(profile, version, trigger="created")
         return profile, run
 
@@ -332,6 +332,7 @@ class RadarService:
         version: ProfileVersion,
         trigger: RecommendationRunTrigger,
     ) -> RecommendationRun | None:
+        self._check_version_owner(profile, version)
         if profile.status != "active":
             return None
         return self._submit_run(profile, version, trigger)
@@ -561,11 +562,22 @@ class RadarService:
             raise RadarPermanentError(
                 "radar.profile_not_found", "search profile is not visible"
             )
+        if profile.profile_id != run.profile_id:
+            raise RadarPermanentError(
+                "radar.run_profile_mismatch",
+                "recommendation run does not belong to the loaded profile",
+            )
         version = self.versions.get(profile_version_id)
         if version is None:
             raise RadarPermanentError(
                 "radar.version_not_found", "profile version is not visible"
             )
+        if version.version_id != run.profile_version_id:
+            raise RadarPermanentError(
+                "radar.run_version_mismatch",
+                "recommendation run does not reference the loaded profile version",
+            )
+        profile = _rehydrate_profile_version(profile, version, self.policy)
         if run.state in {"succeeded", "failed"}:
             return self._summary(run)
 
@@ -742,7 +754,10 @@ class RadarService:
             version_id=uuid4(),
             profile_id=profile.profile_id,
             profile_version=profile_version,
-            payload=dict(payload),
+            payload={
+                **payload,
+                "unknown_strategy": dict(profile.unknown_strategy),
+            },
             created_at=self.clock(),
             correlation_id=profile.correlation_id,
             actor_kind=profile.actor_kind,
@@ -753,6 +768,7 @@ class RadarService:
     def _submit_run(
         self, profile: SearchProfile, version: ProfileVersion, trigger: str
     ) -> RecommendationRun | None:
+        self._check_version_owner(profile, version)
         if self.job_runtime is None:
             return None
         run = RecommendationRun(
@@ -786,6 +802,13 @@ class RadarService:
         )
         return self.runs.bind_job(run.run_id, job.execution_id)
 
+    @staticmethod
+    def _check_version_owner(
+        profile: SearchProfile, version: ProfileVersion
+    ) -> None:
+        if version.profile_id != profile.profile_id:
+            raise RadarStateError("profile version does not belong to profile")
+
     def _schedule_after_commit(
         self,
         profile: SearchProfile,
@@ -805,8 +828,6 @@ class RadarService:
                 version.version_id,
                 trigger,
             )
-            if reserved is None or reserved.job_execution_id is not None:
-                raise
             return reserved
 
     def _emit_server_event(
@@ -817,8 +838,25 @@ class RadarService:
         correlation_id: UUID,
         payload: Mapping[str, object],
     ) -> None:
+        self.events.insert(
+            self._server_event(
+                event_type=event_type,
+                actor_id=actor_id,
+                correlation_id=correlation_id,
+                payload=payload,
+            )
+        )
+
+    def _server_event(
+        self,
+        *,
+        event_type: str,
+        actor_id: UUID | None,
+        correlation_id: UUID,
+        payload: Mapping[str, object],
+    ) -> ProductEvent:
         version = event_version(self.events_registry, event_type)
-        event = ProductEvent(
+        return ProductEvent(
             event_id=uuid4(),
             event_type=event_type,
             event_version=version or 1,
@@ -827,7 +865,6 @@ class RadarService:
             correlation_id=correlation_id,
             payload=dict(payload),
         )
-        self.events.insert(event)
 
     @staticmethod
     def _summary(run: RecommendationRun) -> Mapping[str, object]:
@@ -880,6 +917,55 @@ def _payload_from_profile(profile: SearchProfile) -> dict[str, object]:
 
 def _job_target(run_id: UUID) -> str:
     return str(run_id)
+
+
+def _rehydrate_profile_version(
+    profile: SearchProfile,
+    version: ProfileVersion,
+    policy: SearchProfilePolicySpec,
+) -> SearchProfile:
+    if version.profile_id != profile.profile_id:
+        raise RadarPermanentError(
+            "radar.version_profile_mismatch",
+            "profile version does not belong to the recommendation run profile",
+        )
+    errors = validate_profile(version.payload, policy)
+    raw_strategy = version.payload.get("unknown_strategy")
+    if errors or version.payload.get("operation") != "rental" or not isinstance(
+        raw_strategy, Mapping
+    ):
+        raise RadarPermanentError(
+            "radar.version_payload_invalid",
+            "profile version payload is invalid",
+        )
+    if any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in raw_strategy.items()
+    ):
+        raise RadarPermanentError(
+            "radar.version_payload_invalid",
+            "profile version payload is invalid",
+        )
+    raw_zones = version.payload["zones"]
+    if not isinstance(raw_zones, list):
+        raise RadarPermanentError(
+            "radar.version_payload_invalid",
+            "profile version payload is invalid",
+        )
+    return replace(
+        profile,
+        name=cast(str, version.payload["name"]),
+        operation="rental",
+        zones=tuple(cast(list[str], raw_zones)),
+        budget_max=_optional_number(version.payload.get("budget_max")),
+        budget_min=_optional_number(version.payload.get("budget_min")),
+        min_rooms=_optional_int(version.payload.get("min_rooms")),
+        surface_min=_optional_number(version.payload.get("surface_min")),
+        surface_max=_optional_number(version.payload.get("surface_max")),
+        status=cast(SearchProfileState, version.payload.get("status", "active")),
+        unknown_strategy=dict(raw_strategy),
+        current_version_id=version.version_id,
+    )
 
 
 def _optional_number(value: object) -> float | None:

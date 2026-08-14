@@ -25,6 +25,8 @@ from umbral.domain.errors import ConcurrencyConflict
 class FakeSearchProfileRepository:
     rows: dict[UUID, SearchProfile] = field(default_factory=dict)
     version_rows: dict[UUID, ProfileVersion] = field(default_factory=dict)
+    event_rows: list[ProductEvent] = field(default_factory=list)
+    fail_next_atomic_insert: bool = False
     fail_next_atomic_save: bool = False
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
 
@@ -32,7 +34,10 @@ class FakeSearchProfileRepository:
         self.rows[profile.profile_id] = profile
 
     def insert_with_version(
-        self, profile: SearchProfile, version: ProfileVersion
+        self,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        created_event: ProductEvent,
     ) -> None:
         with self._lock:
             if profile.profile_id in self.rows or self._version_exists(version):
@@ -43,6 +48,12 @@ class FakeSearchProfileRepository:
             self._validate_snapshot_pointer(profile, version)
             self.rows[profile.profile_id] = profile
             self.version_rows[version.version_id] = version
+            if self.fail_next_atomic_insert:
+                self.fail_next_atomic_insert = False
+                del self.rows[profile.profile_id]
+                del self.version_rows[version.version_id]
+                raise RuntimeError("atomic create unavailable")
+            self.event_rows.append(created_event)
 
     def get(self, profile_id: UUID) -> SearchProfile | None:
         return self.rows.get(profile_id)

@@ -14,6 +14,7 @@ from tests.fakes.radar import (
     FakeRunRepository,
     FakeSearchProfileRepository,
 )
+from umbral.application.events.contracts import ProductEvent
 from umbral.application.jobs.ports import JobRuntime
 from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.application.radar.contracts import (
@@ -49,12 +50,16 @@ class RadarTestContext:
         self, job_runtime: JobRuntime | None = None, default_runtime: bool = True
     ) -> None:
         shared_versions: dict[UUID, ProfileVersion] = {}
-        self.profiles = FakeSearchProfileRepository(version_rows=shared_versions)
+        shared_events: list[ProductEvent] = []
+        self.profiles = FakeSearchProfileRepository(
+            version_rows=shared_versions,
+            event_rows=shared_events,
+        )
         self.versions = FakeProfileVersionRepository(rows=shared_versions)
         shared_items: dict[UUID, list[RecommendationItem]] = {}
         self.runs = FakeRunRepository(items_by_run=shared_items)
         self.items = FakeItemRepository(items_by_run=shared_items)
-        self.events = FakeEventRepository()
+        self.events = FakeEventRepository(events=shared_events)
         self.candidates = FakeCandidateListingReader()
         self.listings = FakeListingReader()
         runtime = job_runtime

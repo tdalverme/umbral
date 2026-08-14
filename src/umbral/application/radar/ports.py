@@ -23,9 +23,12 @@ class SearchProfileRepository(Protocol):
     def insert(self, profile: SearchProfile) -> None: ...
 
     def insert_with_version(
-        self, profile: SearchProfile, version: ProfileVersion
+        self,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        created_event: ProductEvent,
     ) -> None:
-        """Atomically insert a profile, its first snapshot and current pointer."""
+        """Atomically insert profile, snapshot, current pointer and audit event."""
         ...
 
     def get(self, profile_id: UUID) -> SearchProfile | None: ...

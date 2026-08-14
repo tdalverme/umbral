@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from uuid import uuid4
 
 import pytest
@@ -11,7 +12,11 @@ from umbral.application.jobs.contracts import (
     JobContext,
     PermanentJobError,
 )
-from umbral.application.radar.contracts import RadarNotAccessible, RecommendationRun
+from umbral.application.radar.contracts import (
+    RadarNotAccessible,
+    RadarPermanentError,
+    RecommendationRun,
+)
 from umbral.application.silver.contracts import NormalizedListing
 from umbral.workers.radar import RecommendationRunHandler
 
@@ -212,6 +217,93 @@ def test_handler_processes_the_exact_run_when_one_version_has_two_triggers() -> 
     persisted_resumed = ctx.runs.get(resumed_run.run_id)
     assert persisted_resumed is not None
     assert persisted_resumed.state == "pending"
+
+
+def test_handler_executes_the_immutable_profile_version_after_a_later_edit() -> None:
+    ctx = _ctx_with_candidates(build_listing(total_cost=700.0))
+    owner = uuid4()
+    profile, created_run = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=0,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    ctx.service.update_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={"budget_max": 500.0},
+        correlation_id=uuid4(),
+    )
+    assert created_run is not None
+
+    summary = RecommendationRunHandler(ctx.service).run(
+        JobContext(
+            execution_id=created_run.job_execution_id or uuid4(),
+            attempt_number=1,
+            correlation_id=uuid4(),
+            release_id="test",
+            logical_target=str(created_run.run_id),
+        )
+    )
+
+    assert summary["candidate_count"] == 1
+    items = ctx.items.list_for_run(created_run.run_id, None, 10)
+    assert len(items) == 1
+    assert items[0].contributions["budget"] == 0.3
+
+
+def test_run_processing_rejects_a_profile_returned_under_the_wrong_identity() -> None:
+    ctx = RadarTestContext()
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert run is not None
+    ctx.profiles.rows[profile.profile_id] = replace(profile, profile_id=uuid4())
+
+    with pytest.raises(RadarPermanentError) as excinfo:
+        ctx.service.process_run(run_id=run.run_id, job_execution_id=uuid4())
+
+    assert excinfo.value.code == "radar.run_profile_mismatch"
+
+
+def test_run_processing_rejects_a_version_returned_under_the_wrong_identity() -> None:
+    ctx = RadarTestContext()
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert run is not None
+    version = ctx.versions.rows[run.profile_version_id]
+    ctx.versions.rows[run.profile_version_id] = replace(version, version_id=uuid4())
+
+    with pytest.raises(RadarPermanentError) as excinfo:
+        ctx.service.process_run(run_id=run.run_id, job_execution_id=uuid4())
+
+    assert excinfo.value.code == "radar.run_version_mismatch"
 
 
 def test_invalid_target_is_a_permanent_failure() -> None:
