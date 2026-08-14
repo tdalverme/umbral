@@ -27,7 +27,6 @@ from umbral.application.radar.contracts import (
     SearchProfile,
     SearchProfileState,
 )
-from umbral.application.radar.hard_filters import RESIDENTIAL_PROPERTY_TYPES
 from umbral.application.scoring.contracts import CriterionEvaluation
 from umbral.application.silver.contracts import GeoPrecision, NormalizedListing
 from umbral.domain.errors import ConcurrencyConflict
@@ -526,6 +525,7 @@ class SqlAlchemyCandidateListingReader:
         profile: SearchProfile,
         *,
         supported_neighborhoods: tuple[str, ...],
+        supported_property_types: tuple[str, ...],
     ) -> tuple[NormalizedListing, ...]:
         with self.session_factory() as session:
             statement = (
@@ -537,7 +537,7 @@ class SqlAlchemyCandidateListingReader:
                 .where(
                     SilverListingModel.operation == profile.operation,
                     SilverListingModel.property_type.in_(
-                        tuple(sorted(RESIDENTIAL_PROPERTY_TYPES))
+                        tuple(sorted(supported_property_types))
                     ),
                     func.lower(SilverListingModel.neighborhood).in_(
                         tuple(zone.casefold() for zone in supported_neighborhoods)

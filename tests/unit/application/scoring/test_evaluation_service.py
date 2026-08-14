@@ -40,6 +40,7 @@ def _service_with_observations(
         candidates=(listing,),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     return context, scored
 
@@ -74,6 +75,7 @@ def test_missing_observation_produces_unknown() -> None:
         candidates=(listing,),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     luminosidad = next(
         item for item in scored[0].evaluations if item.criterion_key == "luminosidad"
@@ -109,6 +111,7 @@ def test_open_profile_omits_undeclared_fixed_criteria() -> None:
         candidates=(listing,),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
 
     fixed_keys = {"presupuesto", "ambientes", "superficie", "ubicacion"}

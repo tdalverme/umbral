@@ -120,6 +120,7 @@ class CandidateListingReader(Protocol):
         profile: SearchProfile,
         *,
         supported_neighborhoods: tuple[str, ...],
+        supported_property_types: tuple[str, ...],
     ) -> tuple[NormalizedListing, ...]: ...
 
 

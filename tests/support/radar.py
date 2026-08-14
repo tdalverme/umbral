@@ -23,6 +23,8 @@ from umbral.application.radar.contracts import (
     SearchProfile,
     SearchProfileState,
 )
+from umbral.application.radar.hard_filters import RESIDENTIAL_PROPERTY_TYPES
+from umbral.application.radar.profile_policy import freeze_search_profile_policy
 from umbral.application.radar.service import RadarService
 from umbral.application.silver.contracts import (
     GeoPrecision,
@@ -174,3 +176,24 @@ def build_listing(
         geo_source=None,
         normalization_errors=(),
     )
+
+
+def profile_version_payload(profile: SearchProfile) -> dict[str, object]:
+    """Complete immutable payload used by manually seeded profile versions."""
+
+    return {
+        "name": profile.name,
+        "operation": profile.operation,
+        "zones": list(profile.zones),
+        "budget_max": profile.budget_max,
+        "budget_min": profile.budget_min,
+        "min_rooms": profile.min_rooms,
+        "surface_min": profile.surface_min,
+        "surface_max": profile.surface_max,
+        "status": profile.status,
+        "unknown_strategy": dict(profile.unknown_strategy),
+        "search_profile_policy": freeze_search_profile_policy(
+            load_search_profile_policy(),
+            RESIDENTIAL_PROPERTY_TYPES,
+        ),
+    }

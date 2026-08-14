@@ -9,6 +9,7 @@ from tests.support.radar import build_listing, build_profile
 
 from umbral.application.radar.contracts import SearchProfile
 from umbral.application.radar.hard_filters import (
+    RESIDENTIAL_PROPERTY_TYPES,
     CandidateListing,
     apply_hard_filters,
 )
@@ -21,6 +22,7 @@ def _passes(listing: CandidateListing, profile: SearchProfile) -> bool:
         listing,
         profile,
         supported_neighborhoods=SUPPORTED_CABA,
+        supported_property_types=tuple(RESIDENTIAL_PROPERTY_TYPES),
     )
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from tests.integration.scoring.conftest import seed_run
@@ -32,7 +32,7 @@ def test_run_v1_publishes_items_and_evaluations_atomically(
     radar, profile, run = seed_run(factory)
     assert run is not None
     assert run.state == "succeeded"
-    assert run.score_policy_version == "scoring-policy-v1"
+    assert UUID(run.score_policy_version)
     assert run.published_item_count == 3
     assert _evaluation_count(factory, run.run_id) == 3 * 6  # surface is absent
 

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -257,6 +259,138 @@ def test_handler_executes_the_immutable_profile_version_after_a_later_edit() -> 
     items = ctx.items.list_for_run(created_run.run_id, None, 10)
     assert len(items) == 1
     assert items[0].contributions["budget"] == 0.3
+
+
+def test_handler_executes_the_search_policy_revision_frozen_with_the_run() -> None:
+    ctx = _ctx_with_candidates(build_listing(neighborhood="palermo"))
+    ctx.service.policy = replace(
+        ctx.service.policy,
+        policy_version="search-profile-policy-v1",
+        neighborhoods=("palermo",),
+    )
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert profile.current_version_id is not None
+    assert run is not None
+    ctx.service.policy = replace(
+        ctx.service.policy,
+        policy_version="search-profile-policy-v2",
+        neighborhoods=("recoleta",),
+    )
+
+    summary = ctx.service.process_run(
+        run_id=run.run_id,
+        job_execution_id=run.job_execution_id,
+    )
+
+    assert summary["candidate_count"] == 1
+
+
+def test_handler_uses_the_frozen_residential_property_scope() -> None:
+    ctx = _ctx_with_candidates(build_listing(property_type="apartment"))
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert profile.current_version_id is not None
+    assert run is not None
+    version = ctx.versions.rows[profile.current_version_id]
+    payload = dict(version.payload)
+    policy = dict(
+        cast(Mapping[str, object], payload["search_profile_policy"])
+    )
+    policy["residential_property_types"] = ["house"]
+    payload["search_profile_policy"] = policy
+    ctx.versions.rows[version.version_id] = replace(version, payload=payload)
+
+    summary = ctx.service.process_run(
+        run_id=run.run_id,
+        job_execution_id=run.job_execution_id,
+    )
+
+    assert summary["candidate_count"] == 0
+
+
+def test_handler_fails_closed_without_a_frozen_search_policy() -> None:
+    ctx = _ctx_with_candidates(build_listing())
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert profile.current_version_id is not None
+    assert run is not None
+    version = ctx.versions.rows[profile.current_version_id]
+    payload = dict(version.payload)
+    del payload["search_profile_policy"]
+    ctx.versions.rows[version.version_id] = replace(version, payload=payload)
+
+    with pytest.raises(RadarPermanentError) as excinfo:
+        ctx.service.process_run(
+            run_id=run.run_id,
+            job_execution_id=run.job_execution_id,
+        )
+
+    assert excinfo.value.code == "radar.search_policy_snapshot_missing"
+
+
+def test_handler_fails_closed_when_frozen_strategy_metadata_is_missing() -> None:
+    ctx = _ctx_with_candidates(build_listing())
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert profile.current_version_id is not None
+    assert run is not None
+    version = ctx.versions.rows[profile.current_version_id]
+    payload = dict(version.payload)
+    policy = dict(
+        cast(Mapping[str, object], payload["search_profile_policy"])
+    )
+    del policy["unknown_strategies"]
+    payload["search_profile_policy"] = policy
+    ctx.versions.rows[version.version_id] = replace(version, payload=payload)
+
+    with pytest.raises(RadarPermanentError) as excinfo:
+        ctx.service.process_run(
+            run_id=run.run_id,
+            job_execution_id=run.job_execution_id,
+        )
+
+    assert excinfo.value.code == "radar.search_policy_snapshot_invalid"
 
 
 def test_run_processing_rejects_a_profile_returned_under_the_wrong_identity() -> None:

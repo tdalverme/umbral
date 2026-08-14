@@ -142,6 +142,7 @@ def test_open_profile_candidate_query_omits_unset_predicates() -> None:
     assert reader.list_candidates(
         build_profile(zones=(), budget_max=None, min_rooms=None),
         supported_neighborhoods=("palermo", "recoleta"),
+        supported_property_types=("apartment", "house", "room", "studio"),
     ) == ()
     sql = str(session.statement)
     assert "total_cost <=" not in sql

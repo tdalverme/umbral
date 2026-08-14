@@ -42,11 +42,12 @@ def apply_hard_filters(
     profile: SearchProfile,
     *,
     supported_neighborhoods: tuple[str, ...],
+    supported_property_types: tuple[str, ...],
 ) -> bool:
     """True when the listing passes every hard filter of the profile."""
     if listing.operation != profile.operation:
         return False
-    if listing.property_type not in RESIDENTIAL_PROPERTY_TYPES:
+    if listing.property_type not in supported_property_types:
         return False
 
     if listing.neighborhood is None:

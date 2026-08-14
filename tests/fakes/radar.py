@@ -155,6 +155,8 @@ class FakeRunRepository:
         default_factory=dict
     )
     fail_next_bind: bool = False
+    fail_next_reserve: bool = False
+    fail_next_get_reserved: bool = False
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
 
     def insert(self, run: RecommendationRun) -> None:
@@ -163,6 +165,9 @@ class FakeRunRepository:
 
     def reserve(self, run: RecommendationRun) -> RecommendationRun:
         with self._lock:
+            if self.fail_next_reserve:
+                self.fail_next_reserve = False
+                raise RuntimeError("reservation unavailable")
             existing = next(
                 (
                     current
@@ -229,6 +234,9 @@ class FakeRunRepository:
     def get_reserved(
         self, profile_id: UUID, profile_version_id: UUID, trigger: str
     ) -> RecommendationRun | None:
+        if self.fail_next_get_reserved:
+            self.fail_next_get_reserved = False
+            raise RuntimeError("reservation lookup unavailable")
         return next(
             (
                 run
@@ -364,8 +372,9 @@ class FakeCandidateListingReader:
         profile: SearchProfile,
         *,
         supported_neighborhoods: tuple[str, ...],
+        supported_property_types: tuple[str, ...],
     ) -> tuple[NormalizedListing, ...]:
-        del profile, supported_neighborhoods
+        del profile, supported_neighborhoods, supported_property_types
         return tuple(self.listings)
 
 

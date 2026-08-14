@@ -42,7 +42,11 @@ from umbral.application.radar.contracts import (
     SearchProfile,
     SearchProfileState,
 )
-from umbral.application.radar.hard_filters import CandidateListing, apply_hard_filters
+from umbral.application.radar.hard_filters import (
+    RESIDENTIAL_PROPERTY_TYPES,
+    CandidateListing,
+    apply_hard_filters,
+)
 from umbral.application.radar.ports import (
     CandidateListingReader,
     EventRepository,
@@ -56,6 +60,9 @@ from umbral.application.radar.profile_policy import (
     SearchProfilePolicySpec,
     can_transition,
     default_unknown_strategy,
+    freeze_search_profile_policy,
+    frozen_search_profile_policy,
+    rehydrate_profile_version,
     validate_profile,
 )
 from umbral.application.radar.scoring import (
@@ -63,7 +70,11 @@ from umbral.application.radar.scoring import (
     ScoringBaselineSpec,
     compute_score,
 )
-from umbral.application.scoring.contracts import CriterionEvaluation
+from umbral.application.scoring.contracts import (
+    CriterionEvaluation,
+    ScoringNotFound,
+    ScoringValidationError,
+)
 from umbral.application.scoring.engine import PolicyRunEngine
 from umbral.application.silver.contracts import NormalizedListing
 from umbral.domain.audit import AuditActor
@@ -577,7 +588,10 @@ class RadarService:
                 "radar.run_version_mismatch",
                 "recommendation run does not reference the loaded profile version",
             )
-        profile = _rehydrate_profile_version(profile, version, self.policy)
+        frozen_policy, residential_property_types = frozen_search_profile_policy(
+            version
+        )
+        profile = rehydrate_profile_version(profile, version, frozen_policy)
         if run.state in {"succeeded", "failed"}:
             return self._summary(run)
 
@@ -586,7 +600,8 @@ class RadarService:
 
         candidates = self.candidates.list_candidates(
             profile,
-            supported_neighborhoods=self.policy.neighborhoods,
+            supported_neighborhoods=frozen_policy.neighborhoods,
+            supported_property_types=residential_property_types,
         )
         passed = tuple(
             listing
@@ -594,23 +609,38 @@ class RadarService:
             if apply_hard_filters(
                 cast(CandidateListing, listing),
                 profile,
-                supported_neighborhoods=self.policy.neighborhoods,
+                supported_neighborhoods=frozen_policy.neighborhoods,
+                supported_property_types=residential_property_types,
             )
         )
         items: tuple[RecommendationItem, ...]
         evaluations: tuple[CriterionEvaluation, ...] = ()
-        if self.policy_engine is not None:
+        if run.score_policy_version != self.scoring.score_policy_version:
+            if self.policy_engine is None:
+                raise RadarPermanentError(
+                    "radar.score_policy_not_found",
+                    "run scoring policy is not available",
+                )
             compilation = self.policy_engine.compilation_for(profile_version_id)
-        else:
-            compilation = None
-        if self.policy_engine is not None and compilation is not None:
-            scored_v1 = self.policy_engine.score_run(
-                profile=profile,
-                compilation=compilation,
-                candidates=passed,
-                run_id=run.run_id,
-                correlation_id=run.correlation_id,
-            )
+            if compilation is None:
+                raise RadarPermanentError(
+                    "radar.compilation_not_found",
+                    "run criteria compilation is not available",
+                )
+            try:
+                scored_v1 = self.policy_engine.score_run(
+                    profile=profile,
+                    compilation=compilation,
+                    candidates=passed,
+                    run_id=run.run_id,
+                    correlation_id=run.correlation_id,
+                    score_policy_version=run.score_policy_version,
+                )
+            except (ScoringNotFound, ScoringValidationError) as error:
+                raise RadarPermanentError(
+                    "radar.score_policy_not_found",
+                    "run scoring policy is not available",
+                ) from error
             items = tuple(
                 RecommendationItem(
                     item_id=uuid4(),
@@ -653,7 +683,7 @@ class RadarService:
                         "rooms": contributions["rooms"],
                         "surface": contributions["surface"],
                         "location_precision": contributions["location_precision"],
-                        "score_policy_version": self.scoring.score_policy_version,
+                        "score_policy_version": run.score_policy_version,
                     },
                 )
                 for position, (score, listing, contributions) in enumerate(scored)
@@ -671,7 +701,7 @@ class RadarService:
                 "run_id": str(run.run_id),
                 "candidate_count": len(passed),
                 "published_item_count": len(items),
-                "score_policy_version": self.scoring.score_policy_version,
+                "score_policy_version": run.score_policy_version,
             },
         )
         try:
@@ -757,6 +787,10 @@ class RadarService:
             payload={
                 **payload,
                 "unknown_strategy": dict(profile.unknown_strategy),
+                "search_profile_policy": freeze_search_profile_policy(
+                    self.policy,
+                    RESIDENTIAL_PROPERTY_TYPES,
+                ),
             },
             created_at=self.clock(),
             correlation_id=profile.correlation_id,
@@ -777,7 +811,7 @@ class RadarService:
             profile_version_id=version.version_id,
             state="pending",
             trigger=cast(RecommendationRunTrigger, trigger),
-            score_policy_version=self.score_policy_version,
+            score_policy_version=self._pin_score_policy_version(),
             candidate_count=0,
             published_item_count=0,
             failure_code=None,
@@ -802,6 +836,13 @@ class RadarService:
         )
         return self.runs.bind_job(run.run_id, job.execution_id)
 
+    def _pin_score_policy_version(self) -> str:
+        if self.policy_engine is not None:
+            return self.policy_engine.pin_policy_version()
+        if self.score_policy_version != self.scoring.score_policy_version:
+            raise RadarStateError("loaded baseline scoring revision does not match")
+        return self.score_policy_version
+
     @staticmethod
     def _check_version_owner(
         profile: SearchProfile, version: ProfileVersion
@@ -823,12 +864,14 @@ class RadarService:
                 trigger=trigger,
             )
         except Exception:
-            reserved = self.runs.get_reserved(
-                profile.profile_id,
-                version.version_id,
-                trigger,
-            )
-            return reserved
+            try:
+                return self.runs.get_reserved(
+                    profile.profile_id,
+                    version.version_id,
+                    trigger,
+                )
+            except Exception:
+                return None
 
     def _emit_server_event(
         self,
@@ -917,55 +960,6 @@ def _payload_from_profile(profile: SearchProfile) -> dict[str, object]:
 
 def _job_target(run_id: UUID) -> str:
     return str(run_id)
-
-
-def _rehydrate_profile_version(
-    profile: SearchProfile,
-    version: ProfileVersion,
-    policy: SearchProfilePolicySpec,
-) -> SearchProfile:
-    if version.profile_id != profile.profile_id:
-        raise RadarPermanentError(
-            "radar.version_profile_mismatch",
-            "profile version does not belong to the recommendation run profile",
-        )
-    errors = validate_profile(version.payload, policy)
-    raw_strategy = version.payload.get("unknown_strategy")
-    if errors or version.payload.get("operation") != "rental" or not isinstance(
-        raw_strategy, Mapping
-    ):
-        raise RadarPermanentError(
-            "radar.version_payload_invalid",
-            "profile version payload is invalid",
-        )
-    if any(
-        not isinstance(key, str) or not isinstance(value, str)
-        for key, value in raw_strategy.items()
-    ):
-        raise RadarPermanentError(
-            "radar.version_payload_invalid",
-            "profile version payload is invalid",
-        )
-    raw_zones = version.payload["zones"]
-    if not isinstance(raw_zones, list):
-        raise RadarPermanentError(
-            "radar.version_payload_invalid",
-            "profile version payload is invalid",
-        )
-    return replace(
-        profile,
-        name=cast(str, version.payload["name"]),
-        operation="rental",
-        zones=tuple(cast(list[str], raw_zones)),
-        budget_max=_optional_number(version.payload.get("budget_max")),
-        budget_min=_optional_number(version.payload.get("budget_min")),
-        min_rooms=_optional_int(version.payload.get("min_rooms")),
-        surface_min=_optional_number(version.payload.get("surface_min")),
-        surface_max=_optional_number(version.payload.get("surface_max")),
-        status=cast(SearchProfileState, version.payload.get("status", "active")),
-        unknown_strategy=dict(raw_strategy),
-        current_version_id=version.version_id,
-    )
 
 
 def _optional_number(value: object) -> float | None:

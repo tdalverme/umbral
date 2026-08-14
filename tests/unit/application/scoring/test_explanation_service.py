@@ -2,33 +2,40 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 import pytest
+from tests.support.radar import profile_version_payload
 from tests.support.scoring import (
     ScoringTestContext,
     build_item,
     build_run,
 )
 
+from umbral.application.radar.contracts import ProfileVersion
 from umbral.application.scoring.contracts import (
     CriterionEvaluation,
     ExplanationUnavailable,
     ScoringNotAccessible,
     ScoringNotFound,
+    ScoringStateError,
 )
 
 
 def _evaluation(
-    run_id: UUID, listing_id: UUID, criterion_key: str = "presupuesto"
+    run_id: UUID,
+    listing_id: UUID,
+    score_policy_version: str,
+    criterion_key: str = "presupuesto",
 ) -> CriterionEvaluation:
     return CriterionEvaluation(
         evaluation_id=uuid4(),
         run_id=run_id,
         listing_id=listing_id,
         criterion_key=criterion_key,
-        criterion_version="policy:scoring-policy-v1",
+        criterion_version=f"policy:{score_policy_version}",
         matcher_type="numeric_range",
         params={},
         input_refs=(),
@@ -51,14 +58,31 @@ def _context_with_run() -> tuple[ScoringTestContext, UUID, UUID, UUID, UUID]:
     profile_id = uuid4()
     listing_id = uuid4()
     run_id = uuid4()
-    run = build_run(profile_id=profile_id, profile_version_id=uuid4(), run_id=run_id)
+    profile_version_id = uuid4()
+    score_policy_version = context.service.pin_policy_version()
+    run = build_run(
+        profile_id=profile_id,
+        profile_version_id=profile_version_id,
+        run_id=run_id,
+        score_policy_version=score_policy_version,
+    )
     context.runs.rows[run_id] = run
     context.items.items_by_run[run_id] = [build_item(run_id, listing_id)]
-    context.evaluations.rows.append(_evaluation(run_id, listing_id))
+    context.evaluations.rows.append(
+        _evaluation(run_id, listing_id, score_policy_version)
+    )
     from tests.support.radar import build_profile
 
     profile = build_profile(owner_id=owner_id, profile_id=profile_id)
     context.profiles.rows[profile_id] = profile
+    context.versions.rows[profile_version_id] = ProfileVersion(
+        version_id=profile_version_id,
+        profile_id=profile_id,
+        profile_version=1,
+        payload=profile_version_payload(profile),
+        created_at=profile.created_at,
+        correlation_id=profile.correlation_id,
+    )
     return context, owner_id, profile_id, run_id, listing_id
 
 
@@ -67,16 +91,19 @@ def test_get_explanation_returns_breakdown_with_evidence() -> None:
     explanation = context.service.get_explanation(
         owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
     )
-    assert explanation.score_version == "scoring-policy-v1"
+    assert explanation.score_version == context.runs.rows[run_id].score_policy_version
     assert explanation.run_id == run_id
     assert explanation.listing_id == listing_id
     assert any(reason.criterion_key == "presupuesto" for reason in explanation.reasons)
     assert all(reason.evidence_refs for reason in explanation.reasons)
     assert "budget_max" in explanation.satisfied_filters
-    assert explanation.profile_snapshot["policy_version_id"] == "scoring-policy-v1"
+    assert (
+        explanation.profile_snapshot["policy_version_id"]
+        == context.runs.rows[run_id].score_policy_version
+    )
 
 
-def test_open_profile_reports_no_satisfied_hard_filters() -> None:
+def test_explanations_keep_the_run_v1_filters_after_profile_v2_opens() -> None:
     context, owner_id, profile_id, run_id, listing_id = _context_with_run()
     from tests.support.radar import build_profile
 
@@ -95,7 +122,47 @@ def test_open_profile_reports_no_satisfied_hard_filters() -> None:
         listing_id=listing_id,
     )
 
-    assert explanation.satisfied_filters == ()
+    page = context.service.list_explanations(
+        owner_id=owner_id,
+        profile_id=profile_id,
+        run_id=run_id,
+        after_position=None,
+        limit=10,
+    )
+
+    assert explanation.satisfied_filters == ("budget_max", "zones", "min_rooms")
+    assert page[0].satisfied_filters == ("budget_max", "zones", "min_rooms")
+
+
+def test_explanation_fails_when_the_run_policy_revision_is_missing() -> None:
+    context, owner_id, profile_id, run_id, listing_id = _context_with_run()
+    context.policies.rows.clear()
+
+    with pytest.raises(ScoringNotFound, match="policy version not found"):
+        context.service.get_explanation(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            run_id=run_id,
+            listing_id=listing_id,
+        )
+
+
+def test_explanation_rejects_a_version_owned_by_another_profile() -> None:
+    context, owner_id, profile_id, run_id, listing_id = _context_with_run()
+    run = context.runs.rows[run_id]
+    version = context.versions.rows[run.profile_version_id]
+    context.versions.rows[version.version_id] = replace(
+        version,
+        profile_id=uuid4(),
+    )
+
+    with pytest.raises(ScoringStateError, match="does not belong"):
+        context.service.get_explanation(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            run_id=run_id,
+            listing_id=listing_id,
+        )
 
 
 def test_two_calls_produce_identical_explanation() -> None:
@@ -155,7 +222,9 @@ def test_list_explanations_paginates_without_mixing_versions() -> None:
         build_item(run_id, listing_id, position=0),
         build_item(run_id, second, position=1),
     ]
-    context.evaluations.rows.append(_evaluation(run_id, second))
+    context.evaluations.rows.append(
+        _evaluation(run_id, second, context.runs.rows[run_id].score_policy_version)
+    )
     page = context.service.list_explanations(
         owner_id=owner_id,
         profile_id=profile_id,
@@ -164,7 +233,10 @@ def test_list_explanations_paginates_without_mixing_versions() -> None:
         limit=1,
     )
     assert len(page) == 1
-    assert all(item.score_version == "scoring-policy-v1" for item in page)
+    assert all(
+        item.score_version == context.runs.rows[run_id].score_policy_version
+        for item in page
+    )
     next_page = context.service.list_explanations(
         owner_id=owner_id,
         profile_id=profile_id,

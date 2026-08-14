@@ -10,6 +10,7 @@ from umbral.application.scoring.service import ScoringService
 from umbral.infrastructure.criteria.contract_loader import load_matcher_types
 from umbral.infrastructure.db.repositories.radar import (
     SqlAlchemyItemRepository,
+    SqlAlchemyProfileVersionRepository,
     SqlAlchemyRunRepository,
     SqlAlchemySearchProfileRepository,
 )
@@ -45,6 +46,7 @@ def build_scoring_service(
         runs=SqlAlchemyRunRepository(session_factory),
         items=SqlAlchemyItemRepository(session_factory),
         profiles=SqlAlchemySearchProfileRepository(session_factory),
+        versions=SqlAlchemyProfileVersionRepository(session_factory),
         listings=SqlAlchemyScoringListingReader(session_factory),
         shortlists=(
             SqlAlchemyShortlistRepository(session_factory)

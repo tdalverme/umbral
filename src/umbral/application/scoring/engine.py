@@ -48,6 +48,8 @@ class PolicyRunEngine(Protocol):
 
     def compilation_for(self, profile_version_id: UUID) -> Compilation | None: ...
 
+    def pin_policy_version(self) -> str: ...
+
     def score_run(
         self,
         *,
@@ -56,6 +58,7 @@ class PolicyRunEngine(Protocol):
         candidates: tuple[NormalizedListing, ...],
         run_id: UUID,
         correlation_id: UUID,
+        score_policy_version: str,
     ) -> tuple[ScoredCandidate, ...]: ...
 
 

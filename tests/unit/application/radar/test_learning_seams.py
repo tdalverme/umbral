@@ -198,6 +198,35 @@ def test_create_returns_bound_reservation_when_bind_ack_is_ambiguous(
     assert recovered.profile_id == profile.profile_id
 
 
+def test_create_succeeds_when_reservation_and_recovery_store_are_unavailable() -> None:
+    ctx = RadarTestContext()
+    ctx.runs.fail_next_reserve = True
+    ctx.runs.fail_next_get_reserved = True
+
+    profile, scheduled = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar diferido",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+
+    assert scheduled is None
+    assert profile.current_version_id is not None
+    version = ctx.versions.get(profile.current_version_id)
+    assert version is not None
+    retried = ctx.service.schedule_version_run(
+        profile=profile, version=version, trigger="created"
+    )
+    assert retried is not None
+    assert retried.job_execution_id is not None
+
+
 def test_update_succeeds_when_reservation_fails_and_can_be_scheduled_later() -> None:
     ctx = RadarTestContext()
     owner = uuid4()
@@ -239,6 +268,43 @@ def test_update_succeeds_when_reservation_fails_and_can_be_scheduled_later() -> 
     assert ctx.runs.get_reserved(
         updated.profile_id, updated.current_version_id, "edited"
     ) is None
+    version = ctx.versions.get(updated.current_version_id)
+    assert version is not None
+    retried = ctx.service.schedule_version_run(
+        profile=updated, version=version, trigger="edited"
+    )
+    assert retried is not None
+    assert retried.job_execution_id is not None
+
+
+def test_update_succeeds_when_reservation_and_recovery_store_are_unavailable() -> None:
+    ctx = RadarTestContext()
+    owner = uuid4()
+    profile, _ = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    ctx.runs.fail_next_reserve = True
+    ctx.runs.fail_next_get_reserved = True
+
+    updated, scheduled = ctx.service.update_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={"name": "Radar durable"},
+        correlation_id=uuid4(),
+    )
+
+    assert scheduled is None
+    assert updated.current_version_id is not None
     version = ctx.versions.get(updated.current_version_id)
     assert version is not None
     retried = ctx.service.schedule_version_run(
@@ -418,6 +484,51 @@ def test_resume_returns_reserved_run_when_enqueue_is_deferred() -> None:
     assert retried.job_execution_id is not None
 
 
+def test_resume_succeeds_when_reservation_and_recovery_store_are_unavailable() -> None:
+    ctx = RadarTestContext()
+    owner = uuid4()
+    profile, _ = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    paused, _ = ctx.service.set_status(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        status="paused",
+        correlation_id=uuid4(),
+    )
+    ctx.runs.fail_next_reserve = True
+    ctx.runs.fail_next_get_reserved = True
+
+    resumed, scheduled = ctx.service.set_status(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=paused.version,
+        status="active",
+        correlation_id=uuid4(),
+    )
+
+    assert scheduled is None
+    assert resumed.status == "active"
+    assert resumed.current_version_id is not None
+    version = ctx.versions.get(resumed.current_version_id)
+    assert version is not None
+    retried = ctx.service.schedule_version_run(
+        profile=resumed, version=version, trigger="resumed"
+    )
+    assert retried is not None
+    assert retried.job_execution_id is not None
+
+
 def test_schedule_version_run_skips_paused_profile() -> None:
     ctx = RadarTestContext()
     owner = uuid4()
@@ -437,6 +548,30 @@ def test_schedule_version_run_skips_paused_profile() -> None:
         )
         is None
     )
+    assert ctx.runs.rows == {}
+
+
+def test_static_scheduler_rejects_a_label_other_than_the_loaded_baseline() -> None:
+    ctx = RadarTestContext()
+    owner = uuid4()
+    profile = build_profile(owner_id=owner)
+    ctx.profiles.insert(profile)
+    updated, version = ctx.service.version_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={},
+        correlation_id=uuid4(),
+    )
+    ctx.service.score_policy_version = "scoring-baseline-v2"
+
+    with pytest.raises(RadarStateError, match="does not match"):
+        ctx.service.schedule_version_run(
+            profile=updated,
+            version=version,
+            trigger="edited",
+        )
+
     assert ctx.runs.rows == {}
 
 

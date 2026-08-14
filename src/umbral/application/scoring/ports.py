@@ -9,6 +9,7 @@ from uuid import UUID
 
 from umbral.application.criteria.contracts import Compilation, ListingObservation
 from umbral.application.radar.contracts import (
+    ProfileVersion,
     RecommendationItem,
     RecommendationRun,
     SearchProfile,
@@ -87,6 +88,10 @@ class ItemReader(Protocol):
 
 class ProfileReader(Protocol):
     def get(self, profile_id: UUID) -> SearchProfile | None: ...
+
+
+class ProfileVersionReader(Protocol):
+    def get(self, version_id: UUID) -> ProfileVersion | None: ...
 
 
 class ListingReader(Protocol):

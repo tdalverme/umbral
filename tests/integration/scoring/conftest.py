@@ -13,7 +13,7 @@ from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from tests.support.containers import ServiceConnection
-from tests.support.radar import build_profile
+from tests.support.radar import build_profile, profile_version_payload
 
 from umbral.application.radar.service import RadarService
 from umbral.application.scoring.service import ScoringService
@@ -116,18 +116,7 @@ def seed_run(factory: SessionFactory) -> tuple[Any, Any, Any]:
         version_id=uuid4(),
         profile_id=profile.profile_id,
         profile_version=1,
-        payload={
-            "name": profile.name,
-            "operation": profile.operation,
-            "zones": list(profile.zones),
-            "budget_max": profile.budget_max,
-            "budget_min": profile.budget_min,
-            "min_rooms": profile.min_rooms,
-            "surface_min": profile.surface_min,
-            "surface_max": profile.surface_max,
-            "status": profile.status,
-            "unknown_strategy": dict(profile.unknown_strategy),
-        },
+        payload=profile_version_payload(profile),
         created_at=_NOW,
         correlation_id=uuid4(),
     )
@@ -152,6 +141,7 @@ def seed_run(factory: SessionFactory) -> tuple[Any, Any, Any]:
     )
     scoring = build_scoring(factory)
     radar = build_radar(factory, scoring)
+    score_policy_version = scoring.pin_policy_version()
     runs = SqlAlchemyRunRepository(factory)
     run = RecommendationRun(
         run_id=uuid4(),
@@ -159,7 +149,7 @@ def seed_run(factory: SessionFactory) -> tuple[Any, Any, Any]:
         profile_version_id=version.version_id,
         state="running",
         trigger="created",
-        score_policy_version="scoring-policy-v1",
+        score_policy_version=score_policy_version,
         candidate_count=0,
         published_item_count=0,
         failure_code=None,

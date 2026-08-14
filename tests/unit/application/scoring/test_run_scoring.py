@@ -40,6 +40,7 @@ def _scored_twice() -> tuple[tuple[ScoredCandidate, ...], tuple[ScoredCandidate,
         candidates=listings,
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     first = context.service.score_run(**kwargs)
     second = context.service.score_run(**kwargs)
@@ -94,6 +95,7 @@ def test_evaluations_carry_versioned_input_refs_and_reason() -> None:
         candidates=(listing,),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     balcon = next(
         item for item in scored[0].evaluations if item.criterion_key == "balcon"

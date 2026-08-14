@@ -9,6 +9,7 @@ from uuid import UUID
 
 from umbral.application.criteria.contracts import Compilation, ListingObservation
 from umbral.application.radar.contracts import (
+    ProfileVersion,
     RecommendationItem,
     RecommendationRun,
     SearchProfile,
@@ -161,6 +162,14 @@ class FakeProfileReader:
 
     def get(self, profile_id: UUID) -> SearchProfile | None:
         return self.rows.get(profile_id)
+
+
+@dataclass
+class FakeProfileVersionReader:
+    rows: dict[UUID, ProfileVersion] = field(default_factory=dict)
+
+    def get(self, version_id: UUID) -> ProfileVersion | None:
+        return self.rows.get(version_id)
 
 
 @dataclass

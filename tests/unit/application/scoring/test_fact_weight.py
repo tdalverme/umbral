@@ -47,6 +47,7 @@ def _scored_with_fact(fact_weight: float | None) -> float:
         candidates=(listing,),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     return scored[0].score
 
@@ -88,6 +89,7 @@ def test_fact_without_weight_falls_back_to_policy() -> None:
         candidates=(listing,),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     balcon = next(
         item
