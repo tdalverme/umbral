@@ -1,7 +1,7 @@
 """Pure loader and validator for the published search profile contract.
 
-The rule set is loaded from ``contracts/search-profiles/v1/search-profile-policy.json``
-by an infrastructure loader and passed in as a :class:`SearchProfilePolicySpec`.
+The versioned rule set is loaded from ``contracts/search-profiles`` by an
+infrastructure loader and passed in as a :class:`SearchProfilePolicySpec`.
 Validation is deterministic and versioned; unknown-value strategies are explicit
 per filter and never silently defaulted.
 """
@@ -28,7 +28,7 @@ class SearchProfilePolicySpec:
 
 
 def parse_search_profile_policy(data: Mapping[str, object]) -> SearchProfilePolicySpec:
-    if data.get("contract_version") != "1":
+    if data.get("contract_version") not in {"1", "2"}:
         raise ValueError("unsupported search profile policy document version")
     policy_version = data.get("policy_version")
     if not isinstance(policy_version, str) or not policy_version:
@@ -94,7 +94,7 @@ def validate_profile(
         errors.append("radar.name_required")
 
     raw_zones = payload.get("zones")
-    if not isinstance(raw_zones, list) or not raw_zones:
+    if not isinstance(raw_zones, list):
         errors.append("radar.zones_required")
     else:
         zones_min = _limit_int(spec, "zones_min", 1)
@@ -106,14 +106,24 @@ def validate_profile(
                 errors.append("radar.zone_unknown")
 
     budget_max = payload.get("budget_max")
-    if not isinstance(budget_max, (int, float)) or isinstance(budget_max, bool):
+    if budget_max is None and spec.contract_version == "1":
         errors.append("radar.budget_required")
-    elif budget_max <= 0:
-        errors.append("radar.budget_required")
+    elif budget_max is not None and (
+        not isinstance(budget_max, (int, float))
+        or isinstance(budget_max, bool)
+        or budget_max <= 0
+    ):
+        errors.append(
+            "radar.budget_range"
+            if spec.contract_version == "2"
+            else "radar.budget_required"
+        )
     budget_min = payload.get("budget_min")
     if budget_min is not None and (
         not isinstance(budget_min, (int, float)) or isinstance(budget_min, bool)
     ):
+        errors.append("radar.budget_range")
+    elif budget_min is not None and budget_min < 0:
         errors.append("radar.budget_range")
     elif (
         budget_min is not None
@@ -123,7 +133,9 @@ def validate_profile(
         errors.append("radar.budget_range")
 
     min_rooms = payload.get("min_rooms")
-    if not isinstance(min_rooms, int) or isinstance(min_rooms, bool):
+    if min_rooms is None and spec.contract_version == "2":
+        pass
+    elif not isinstance(min_rooms, int) or isinstance(min_rooms, bool):
         errors.append("radar.rooms_range")
     else:
         rooms_min = _limit_int(spec, "min_rooms_min", 0)

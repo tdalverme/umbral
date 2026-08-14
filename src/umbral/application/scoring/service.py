@@ -395,11 +395,11 @@ def _item_confidence(
 
 def _satisfied_filters(profile: SearchProfile) -> tuple[str, ...]:
     filters: list[str] = []
-    if profile.budget_max > 0:
+    if profile.budget_max is not None and profile.budget_max > 0:
         filters.append("budget_max")
     if profile.zones:
         filters.append("zones")
-    if profile.min_rooms > 0:
+    if profile.min_rooms is not None and profile.min_rooms > 0:
         filters.append("min_rooms")
     if profile.surface_min is not None or profile.surface_max is not None:
         filters.append("surface")

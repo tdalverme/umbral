@@ -75,6 +75,38 @@ def test_handler_processes_a_run_atomically() -> None:
     assert published_events[0].payload["candidate_count"] == 2
 
 
+def test_handler_processes_an_open_partial_profile() -> None:
+    ctx = _ctx_with_candidates(build_listing())
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Nueva búsqueda",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    handler = RecommendationRunHandler(ctx.service)
+    context = JobContext(
+        execution_id=uuid4(),
+        attempt_number=1,
+        correlation_id=uuid4(),
+        release_id="test",
+        logical_target=f"{profile.profile_id}:{profile.current_version_id}",
+    )
+
+    summary = handler.run(context)
+
+    assert summary["candidate_count"] == 1
+    assert run is not None
+    items = ctx.items.list_for_run(run.run_id, None, 100)
+    assert items[0].contributions["budget"] == 0.0
+    assert items[0].contributions["rooms"] == 0.0
+
+
 def test_hard_filters_exclude_unknown_price_and_out_of_zones() -> None:
     ctx = _ctx_with_candidates(
         build_listing(total_cost=700.0),

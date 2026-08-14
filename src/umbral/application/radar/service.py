@@ -133,9 +133,9 @@ class RadarService:
         owner_id: UUID,
         name: str,
         zones: tuple[str, ...],
-        budget_max: float,
+        budget_max: float | None,
         budget_min: float | None,
-        min_rooms: int,
+        min_rooms: int | None,
         surface_min: float | None,
         surface_max: float | None,
         unknown_strategy: Mapping[str, str] | None,
@@ -166,7 +166,7 @@ class RadarService:
             name=name,
             operation="rental",
             zones=zones,
-            budget_max=float(budget_max),
+            budget_max=(float(budget_max) if budget_max is not None else None),
             budget_min=(float(budget_min) if budget_min is not None else None),
             min_rooms=min_rooms,
             surface_min=(float(surface_min) if surface_min is not None else None),
@@ -249,6 +249,33 @@ class RadarService:
         actor_kind: str = "service",
         actor_id: str | None = None,
     ) -> tuple[SearchProfile, RecommendationRun | None]:
+        profile, version = self.version_profile(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            expected_version=expected_version,
+            changes=changes,
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        run = self.schedule_version_run(
+            profile=profile,
+            version=version,
+            trigger="edited",
+        )
+        return profile, run
+
+    def version_profile(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        expected_version: int,
+        changes: Mapping[str, object],
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[SearchProfile, ProfileVersion]:
         profile = self._owned(owner_id, profile_id)
         self._check_version(profile, expected_version)
         if profile.status == "archived":
@@ -266,9 +293,9 @@ class RadarService:
             if isinstance(raw_zones, list)
             else ()
         )
-        merged_budget_max = _number(merged["budget_max"])
+        merged_budget_max = _optional_number(merged.get("budget_max"))
         merged_budget_min = _optional_number(merged.get("budget_min"))
-        merged_min_rooms = _int(merged["min_rooms"])
+        merged_min_rooms = _optional_int(merged.get("min_rooms"))
         merged_surface_min = _optional_number(merged.get("surface_min"))
         merged_surface_max = _optional_number(merged.get("surface_max"))
         updated = replace(
@@ -305,11 +332,19 @@ class RadarService:
                 updated_at=now,
             )
         )
-        run = None
-        if updated.status == "active":
-            run = self._submit_run(updated, version, trigger="edited")
         updated = replace(updated, current_version_id=version.version_id)
-        return updated, run
+        return updated, version
+
+    def schedule_version_run(
+        self,
+        *,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        trigger: RecommendationRunTrigger,
+    ) -> RecommendationRun | None:
+        if profile.status != "active":
+            return None
+        return self._submit_run(profile, version, trigger)
 
     def set_status(
         self,
@@ -363,35 +398,15 @@ class RadarService:
         """
 
         profile = self._owned(owner_id, profile_id)
-        if profile.status == "archived":
-            raise RadarStateError("archived profiles cannot be edited")
-        now = self.clock()
-        updated = replace(
-            profile,
-            version=profile.version + 1,
-            updated_at=now,
+        return self.version_profile(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            expected_version=profile.version,
+            changes={},
+            correlation_id=correlation_id,
             actor_kind=actor_kind,
             actor_id=actor_id,
-            correlation_id=correlation_id,
         )
-        current_version = self.versions.latest_for_profile(profile_id)
-        next_profile_version = (
-            current_version.profile_version + 1 if current_version is not None else 1
-        )
-        version = self._snapshot(
-            updated,
-            _payload_from_profile(updated),
-            profile_version=next_profile_version,
-        )
-        self.profiles.save(
-            replace(
-                profile,
-                current_version_id=version.version_id,
-                updated_at=now,
-            )
-        )
-        updated = replace(updated, current_version_id=version.version_id)
-        return updated, version
 
     def submit_run(
         self,
@@ -811,9 +826,9 @@ def _payload(
     *,
     name: str,
     zones: tuple[str, ...],
-    budget_max: float,
+    budget_max: float | None,
     budget_min: float | None,
-    min_rooms: int,
+    min_rooms: int | None,
     surface_min: float | None,
     surface_max: float | None,
     status: str,
@@ -848,21 +863,17 @@ def _job_target(profile_id: UUID, version_id: UUID) -> str:
     return f"{profile_id}:{version_id}"
 
 
-def _number(value: object) -> float:
-    return float(value) if isinstance(value, (int, float)) else 0.0
-
-
 def _optional_number(value: object) -> float | None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
     return float(value)
 
 
-def _int(value: object) -> int:
+def _optional_int(value: object) -> int | None:
     if isinstance(value, bool):
-        return 0
+        return None
     if isinstance(value, int):
         return value
     if isinstance(value, float):
         return int(value)
-    return 0
+    return None

@@ -76,6 +76,28 @@ def test_get_explanation_returns_breakdown_with_evidence() -> None:
     assert explanation.profile_snapshot["policy_version_id"] == "scoring-policy-v1"
 
 
+def test_open_profile_reports_no_satisfied_hard_filters() -> None:
+    context, owner_id, profile_id, run_id, listing_id = _context_with_run()
+    from tests.support.radar import build_profile
+
+    context.profiles.rows[profile_id] = build_profile(
+        owner_id=owner_id,
+        profile_id=profile_id,
+        zones=(),
+        budget_max=None,
+        min_rooms=None,
+    )
+
+    explanation = context.service.get_explanation(
+        owner_id=owner_id,
+        profile_id=profile_id,
+        run_id=run_id,
+        listing_id=listing_id,
+    )
+
+    assert explanation.satisfied_filters == ()
+
+
 def test_two_calls_produce_identical_explanation() -> None:
     context, owner_id, profile_id, run_id, listing_id = _context_with_run()
     first = context.service.get_explanation(

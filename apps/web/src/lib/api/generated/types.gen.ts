@@ -148,7 +148,7 @@ export type CreateSearchProfileRequest = {
     /**
      * Budget Max
      */
-    budget_max: number;
+    budget_max?: number | null;
     /**
      * Budget Min
      */
@@ -156,7 +156,7 @@ export type CreateSearchProfileRequest = {
     /**
      * Min Rooms
      */
-    min_rooms?: number;
+    min_rooms?: number | null;
     /**
      * Name
      */
@@ -178,7 +178,7 @@ export type CreateSearchProfileRequest = {
     /**
      * Zones
      */
-    zones: Array<string>;
+    zones?: Array<string>;
 };
 
 /**
@@ -1198,7 +1198,7 @@ export type SearchProfileResponse = {
     /**
      * Budget Max
      */
-    budget_max: number;
+    budget_max: number | null;
     /**
      * Budget Min
      */
@@ -1211,7 +1211,7 @@ export type SearchProfileResponse = {
     /**
      * Min Rooms
      */
-    min_rooms: number;
+    min_rooms: number | null;
     /**
      * Name
      */

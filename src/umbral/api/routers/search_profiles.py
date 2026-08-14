@@ -32,10 +32,10 @@ RunState = Literal["pending", "running", "succeeded", "failed"]
 class CreateSearchProfileRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=80)
-    zones: list[str] = Field(min_length=1, max_length=15)
-    budget_max: float = Field(gt=0)
+    zones: list[str] = Field(default_factory=list, max_length=15)
+    budget_max: float | None = Field(default=None, gt=0)
     budget_min: float | None = None
-    min_rooms: int = Field(default=0, ge=0, le=200)
+    min_rooms: int | None = Field(default=None, ge=0, le=200)
     surface_min: float | None = None
     surface_max: float | None = None
     unknown_strategy: dict[str, str] | None = None
@@ -50,6 +50,10 @@ class UpdateSearchProfileRequest(BaseModel):
     min_rooms: int | None = Field(default=None, ge=0, le=200)
     surface_min: float | None = None
     surface_max: float | None = None
+
+
+def _profile_changes(body: UpdateSearchProfileRequest) -> dict[str, object]:
+    return body.model_dump(exclude_unset=True)
 
 
 class StatusRequest(BaseModel):
@@ -90,9 +94,9 @@ class SearchProfileResponse(BaseModel):
     name: str
     operation: str
     zones: list[str]
-    budget_max: float
+    budget_max: float | None
     budget_min: float | None = None
-    min_rooms: int
+    min_rooms: int | None
     surface_min: float | None = None
     surface_max: float | None = None
     status: ProfileState
@@ -338,7 +342,7 @@ async def update_search_profile(
         principal = _require(request, "product.search_profile.update")
     except IdentityError as error:
         return _problem(request, error.status, error.code, error.recovery or "")
-    changes = body.model_dump(exclude_none=True)
+    changes = _profile_changes(body)
     try:
         profile, run = _radar().update_profile(
             owner_id=principal.user_id,

@@ -117,9 +117,9 @@ class SqlAlchemySearchProfileRepository:
                 )
             model.name = profile.name
             model.zones = list(profile.zones)
-            model.budget_max = profile.budget_max
+            model.budget_max = cast(Any, profile.budget_max)
             model.budget_min = profile.budget_min
-            model.min_rooms = profile.min_rooms
+            model.min_rooms = cast(Any, profile.min_rooms)
             model.surface_min = profile.surface_min
             model.surface_max = profile.surface_max
             model.status = profile.status
@@ -429,18 +429,24 @@ class SqlAlchemyCandidateListingReader:
                 )
                 .where(
                     SilverListingModel.operation == profile.operation,
+                    SilverListingModel.property_type.in_(
+                        ("apartment", "house", "room", "studio")
+                    ),
+                )
+                .order_by(SilverListingModel.id)
+            )
+            if profile.budget_max is not None:
+                statement = statement.where(
                     SilverListingModel.total_cost.is_not(None),
                     SilverListingModel.total_cost > 0,
                     SilverListingModel.total_cost <= profile.budget_max,
                 )
-                .order_by(SilverListingModel.id)
-            )
-            if profile.unknown_strategy.get("location", "exclude") == "exclude":
+            if profile.zones:
                 zones = [zone.casefold() for zone in profile.zones]
                 statement = statement.where(
                     func.lower(SilverListingModel.neighborhood).in_(zones)
                 )
-            if profile.min_rooms > 0:
+            if profile.min_rooms is not None and profile.min_rooms > 0:
                 statement = statement.where(
                     (SilverListingModel.rooms.is_(None))
                     | (SilverListingModel.rooms >= profile.min_rooms)
@@ -510,7 +516,7 @@ def _to_domain_profile(model: SearchProfileModel) -> SearchProfile:
         name=model.name,
         operation=cast(Any, model.operation),
         zones=tuple(model.zones or ()),
-        budget_max=float(model.budget_max),
+        budget_max=float(model.budget_max) if model.budget_max is not None else None,
         budget_min=float(model.budget_min) if model.budget_min is not None else None,
         min_rooms=model.min_rooms,
         surface_min=(

@@ -283,9 +283,16 @@
         "additionalProperties": false,
         "properties": {
           "budget_max": {
-            "exclusiveMinimum": 0.0,
-            "title": "Budget Max",
-            "type": "number"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Max"
           },
           "budget_min": {
             "anyOf": [
@@ -299,11 +306,17 @@
             "title": "Budget Min"
           },
           "min_rooms": {
-            "default": 0,
-            "maximum": 200.0,
-            "minimum": 0.0,
-            "title": "Min Rooms",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Rooms"
           },
           "name": {
             "maxLength": 80,
@@ -352,15 +365,12 @@
               "type": "string"
             },
             "maxItems": 15,
-            "minItems": 1,
             "title": "Zones",
             "type": "array"
           }
         },
         "required": [
-          "name",
-          "zones",
-          "budget_max"
+          "name"
         ],
         "title": "CreateSearchProfileRequest",
         "type": "object"
@@ -2067,8 +2077,15 @@
         "additionalProperties": false,
         "properties": {
           "budget_max": {
-            "title": "Budget Max",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Max"
           },
           "budget_min": {
             "anyOf": [
@@ -2097,8 +2114,15 @@
             ]
           },
           "min_rooms": {
-            "title": "Min Rooms",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Rooms"
           },
           "name": {
             "title": "Name",

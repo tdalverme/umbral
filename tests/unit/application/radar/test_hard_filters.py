@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import cast
 
 from tests.support.radar import build_listing, build_profile
@@ -43,6 +44,19 @@ def test_budget_above_cap_is_excluded() -> None:
     profile = build_profile(budget_max=1000.0)
     assert apply_hard_filters(build_listing(total_cost=1000.0), profile)
     assert not apply_hard_filters(build_listing(total_cost=1000.01), profile)
+
+
+def test_open_profile_does_not_filter_known_caba_listing() -> None:
+    profile = replace(build_profile(), zones=(), budget_max=None, min_rooms=None)
+
+    assert apply_hard_filters(build_listing(), profile)
+
+
+def test_open_profile_excludes_non_residential_listing() -> None:
+    profile = replace(build_profile(), zones=(), budget_max=None, min_rooms=None)
+
+    assert not apply_hard_filters(build_listing(property_type="commercial"), profile)
+    assert not apply_hard_filters(build_listing(property_type="other"), profile)
 
 
 def test_operation_mismatch_is_excluded() -> None:

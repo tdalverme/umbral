@@ -117,7 +117,6 @@ def test_run_publishes_evaluations_atomically_with_the_run() -> None:
     assert {item.criterion_key for item in stored} == {
         "presupuesto",
         "ambientes",
-        "superficie",
         "ubicacion",
         "balcon",
         "luminosidad",

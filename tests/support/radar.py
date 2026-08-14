@@ -26,6 +26,7 @@ from umbral.application.silver.contracts import (
     GeoPrecision,
     NormalizedListing,
     OperationType,
+    PropertyType,
 )
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.infrastructure.radar.contract_loader import (
@@ -79,9 +80,9 @@ def build_profile(
     owner_id: UUID | None = None,
     name: str = "Mi radar",
     zones: tuple[str, ...] = ("palermo",),
-    budget_max: float = 1000.0,
+    budget_max: float | None = 1000.0,
     budget_min: float | None = None,
-    min_rooms: int = 2,
+    min_rooms: int | None = 2,
     surface_min: float | None = None,
     surface_max: float | None = None,
     status: SearchProfileState = "active",
@@ -126,6 +127,7 @@ def build_listing(
     surface_m2: float | None = 50.0,
     geo_precision: GeoPrecision = "neighborhood",
     operation: OperationType = "rental",
+    property_type: PropertyType = "apartment",
 ) -> NormalizedListing:
     return NormalizedListing(
         listing_id=listing_id or uuid4(),
@@ -145,7 +147,7 @@ def build_listing(
         last_observed_at=datetime.now(timezone.utc),
         normalizer_version="silver-schema-v1",
         operation=operation,
-        property_type="apartment",
+        property_type=property_type,
         price_value=total_cost,
         price_currency="ARS",
         expenses_value=None,

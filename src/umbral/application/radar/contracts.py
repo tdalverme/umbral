@@ -23,9 +23,9 @@ class SearchProfile:
     name: str
     operation: OperationType
     zones: tuple[str, ...]
-    budget_max: float
+    budget_max: float | None
     budget_min: float | None
-    min_rooms: int
+    min_rooms: int | None
     surface_min: float | None
     surface_max: float | None
     status: SearchProfileState
@@ -40,7 +40,7 @@ class SearchProfile:
     actor_id: str | None = None
 
     @property
-    def budget_bound(self) -> float:
+    def budget_bound(self) -> float | None:
         return self.budget_max
 
 

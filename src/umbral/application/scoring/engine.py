@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
 from umbral.application.criteria.contracts import Compilation, ListingObservation
@@ -118,6 +118,10 @@ def _score_candidate(
         compiled.concept_key: compiled for compiled in compilation.criteria
     }
     for criterion in policy.criteria:
+        if is_fixed_criterion(criterion.key) and not _fixed_criterion_declared(
+            criterion.key, profile
+        ):
+            continue
         if criterion.concept in fact_params:
             # The compiled preference params (polarity, preferred value) and
             # weight of a fact override the static policy entry of the same
@@ -220,6 +224,18 @@ def _score_candidate(
     )
 
 
+def _fixed_criterion_declared(key: str, profile: SearchProfile) -> bool:
+    if key == "presupuesto":
+        return profile.budget_max is not None
+    if key == "ambientes":
+        return profile.min_rooms is not None
+    if key == "superficie":
+        return profile.surface_min is not None or profile.surface_max is not None
+    if key == "ubicacion":
+        return bool(profile.zones)
+    return True
+
+
 def _evaluate_criterion(
     criterion: PolicyCriterion,
     profile: SearchProfile,
@@ -229,9 +245,9 @@ def _evaluate_criterion(
     if is_fixed_criterion(criterion.key):
         result = evaluate_fixed_criterion(
             criterion.key,
-            budget_max=profile.budget_max,
+            budget_max=cast(float, profile.budget_max),
             total_cost=listing.total_cost,
-            min_rooms=profile.min_rooms,
+            min_rooms=cast(int, profile.min_rooms),
             rooms=listing.rooms,
             surface_min=profile.surface_min,
             surface_max=profile.surface_max,

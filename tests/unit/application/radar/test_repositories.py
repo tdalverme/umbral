@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy.orm import Session
 from tests.fakes.radar import (
     FakeProfileVersionRepository,
     FakeRunRepository,
@@ -20,6 +22,7 @@ from umbral.application.radar.contracts import (
     RecommendationRun,
 )
 from umbral.domain.errors import ConcurrencyConflict
+from umbral.infrastructure.db.repositories.radar import SqlAlchemyCandidateListingReader
 
 NOW = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
@@ -69,6 +72,37 @@ def test_version_repository_returns_latest_by_number() -> None:
     repository.insert(second)
     assert repository.latest_for_profile(profile_id) == second
     assert repository.get(first.version_id) == first
+
+
+def test_open_profile_candidate_query_omits_unset_predicates() -> None:
+    class EmptyRows:
+        def all(self) -> list[object]:
+            return []
+
+    class RecordingSession:
+        statement: object | None = None
+
+        def __enter__(self) -> "RecordingSession":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            del args
+
+        def execute(self, statement: object) -> EmptyRows:
+            self.statement = statement
+            return EmptyRows()
+
+    session = RecordingSession()
+    reader = SqlAlchemyCandidateListingReader(lambda: cast(Session, session))
+
+    assert reader.list_candidates(
+        build_profile(zones=(), budget_max=None, min_rooms=None)
+    ) == ()
+    sql = str(session.statement)
+    assert "total_cost <=" not in sql
+    assert "property_type IN" in sql
+    assert "lower(silver_listings.neighborhood)" not in sql
+    assert "silver_listings.rooms >=" not in sql
 
 
 def test_run_repository_publishes_items_and_event_atomically() -> None:
