@@ -7,10 +7,8 @@ from uuid import uuid4
 
 import pytest
 from tests.fakes.preferences import (
-    FakeBindingRepository,
     FakeConceptReader,
-    FakeExpressionRepository,
-    FakeFactWriter,
+    FakePreferenceStore,
 )
 
 from umbral.application.preferences.contracts import (
@@ -25,9 +23,11 @@ from umbral.application.preferences.service import PreferenceService
 
 @pytest.fixture
 def preference_service() -> PreferenceService:
+    store = FakePreferenceStore()
     return PreferenceService(
-        expressions=FakeExpressionRepository(),
-        bindings=FakeBindingRepository(),
+        expressions=store,
+        bindings=store,
+        mutations=store,
         concepts=FakeConceptReader(
             {
                 "balcon": PreferenceConcept(
@@ -35,7 +35,6 @@ def preference_service() -> PreferenceService:
                 )
             }
         ),
-        facts=FakeFactWriter(),
         policy=PreferencePolicySpec.v1(),
         clock=lambda: datetime(2026, 8, 14, tzinfo=timezone.utc),
     )

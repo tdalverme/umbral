@@ -18,6 +18,9 @@ BindingMode = Literal["soft", "hard"]
 PreferenceSourceKind = Literal[
     "chat", "structured", "feedback", "suggestion", "migration"
 ]
+PreferenceMutationKind = Literal["record", "revise", "withdraw"]
+
+ABSOLUTE_SEMANTIC_MAX_WEIGHT = 0.10
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +42,14 @@ class PreferencePolicySpec:
     missing_evidence_contribution: float
     policy_version: str = "preference-policy-v1"
 
+    def __post_init__(self) -> None:
+        if self.semantic_mode != "soft":
+            raise ValueError("semantic_mode must be soft")
+        if not 0.0 <= self.semantic_max_weight <= ABSOLUTE_SEMANTIC_MAX_WEIGHT:
+            raise ValueError("semantic_max_weight exceeds absolute maximum")
+        if self.missing_evidence_contribution != 0.0:
+            raise ValueError("missing_evidence_contribution must be zero")
+
     @classmethod
     def v1(cls) -> PreferencePolicySpec:
         return cls(
@@ -47,6 +58,13 @@ class PreferencePolicySpec:
             semantic_max_weight=0.10,
             missing_evidence_contribution=0.0,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class HardConfirmationRef:
+    """Durable action that explicitly confirmed one structured hard binding."""
+
+    action_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +81,7 @@ class BindingDraft:
     limitations: tuple[str, ...] = ()
     query_embedding: tuple[float, ...] | None = None
     embedding_version_id: UUID | None = None
+    confirmation: HardConfirmationRef | None = None
 
     @classmethod
     def structured(
@@ -75,6 +94,7 @@ class BindingDraft:
         mode: BindingMode = "soft",
         evidence_refs: tuple[Mapping[str, object], ...] = (),
         limitations: tuple[str, ...] = (),
+        confirmation: HardConfirmationRef | None = None,
     ) -> BindingDraft:
         return cls(
             kind="structured",
@@ -85,6 +105,7 @@ class BindingDraft:
             confidence=confidence,
             evidence_refs=evidence_refs,
             limitations=limitations,
+            confirmation=confirmation,
         )
 
     @classmethod
@@ -179,6 +200,33 @@ class CriterionBinding:
     correlation_id: UUID
     actor_kind: str = "service"
     actor_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BindingSupersession:
+    """Explicit lineage from a retired binding to its successor, if any."""
+
+    previous_binding_id: UUID
+    replacement_binding_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class PreferenceMutation:
+    """One all-or-nothing durable preference state transition."""
+
+    kind: PreferenceMutationKind
+    expression: PreferenceExpression
+    bindings: tuple[CriterionBinding, ...]
+    fact_binding_ids: tuple[UUID, ...]
+    previous_expression_id: UUID | None = None
+    binding_supersessions: tuple[BindingSupersession, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PreferenceMutationResult:
+    """Fact identities created inside the same mutation as their bindings."""
+
+    fact_ids: tuple[UUID, ...]
 
 
 @dataclass(frozen=True, slots=True)

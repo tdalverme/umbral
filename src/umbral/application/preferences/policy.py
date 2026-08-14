@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from umbral.application.preferences.contracts import (
+    ABSOLUTE_SEMANTIC_MAX_WEIGHT,
     BindingDraft,
     PreferenceAuthority,
     PreferencePolicySpec,
@@ -53,7 +54,9 @@ def validate_binding(
         weight = draft.params.get("weight")
         if not isinstance(weight, (int, float)) or isinstance(weight, bool):
             errors.append("preferences.semantic_weight_required")
-        elif not 0.0 <= float(weight) <= policy.semantic_max_weight:
+        elif not 0.0 <= float(weight) <= min(
+            policy.semantic_max_weight, ABSOLUTE_SEMANTIC_MAX_WEIGHT
+        ):
             errors.append("preferences.semantic_weight_exceeds_policy")
     else:
         if draft.concept_key is not None or draft.matcher_type is not None:
@@ -64,4 +67,12 @@ def validate_binding(
             errors.append("preferences.noncomputable_embedding_forbidden")
         if draft.confidence != 0.0:
             errors.append("preferences.noncomputable_confidence_must_be_zero")
+    if (
+        draft.kind == "structured"
+        and draft.mode == "hard"
+        and draft.confirmation is None
+    ):
+        errors.append("preferences.hard_binding_requires_confirmation")
+    if draft.kind != "structured" and draft.confirmation is not None:
+        errors.append("preferences.nonstructured_confirmation_forbidden")
     return tuple(errors)
