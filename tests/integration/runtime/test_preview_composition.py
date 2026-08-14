@@ -44,7 +44,10 @@ class _Redis:
         return True
 
 
-def test_preview_runtime_composes_only_durable_concrete_adapters() -> None:
+def test_preview_runtime_composes_only_durable_concrete_adapters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_agent_saver(monkeypatch)
     dependencies = build_runtime_dependencies(
         _preview_environment(), factories=_preview_factories()
     )
@@ -84,7 +87,10 @@ def test_preview_runtime_rejects_every_local_or_recording_adapter(
         build_runtime_dependencies(_preview_environment(), factories=factories)
 
 
-def test_preview_critical_probe_failure_is_not_ready() -> None:
+def test_preview_critical_probe_failure_is_not_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_agent_saver(monkeypatch)
     dependencies = build_runtime_dependencies(
         _preview_environment(),
         factories=_preview_factories(
@@ -100,7 +106,10 @@ def test_preview_critical_probe_failure_is_not_ready() -> None:
     assert dependencies.readiness.evaluate().state == "not_ready"
 
 
-def test_preview_defers_persistence_probe_until_readiness() -> None:
+def test_preview_defers_persistence_probe_until_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_agent_saver(monkeypatch)
     dependencies = build_runtime_dependencies(
         _preview_environment(),
         factories=_preview_factories(
@@ -112,7 +121,10 @@ def test_preview_defers_persistence_probe_until_readiness() -> None:
     assert dependencies.readiness.evaluate().state == "not_ready"
 
 
-def test_preview_provider_outage_only_degrades_new_login_capability() -> None:
+def test_preview_provider_outage_only_degrades_new_login_capability(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_agent_saver(monkeypatch)
     dependencies = build_runtime_dependencies(
         _preview_environment(),
         factories=_preview_factories(
@@ -130,6 +142,22 @@ def test_preview_provider_outage_only_degrades_new_login_capability() -> None:
     )
     assert identity_check.critical is False
     assert identity_check.state == "unavailable"
+
+
+def _stub_agent_saver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The agent stack owns a live Postgres checkpointer connection, which a
+    composition test cannot open against an unresolvable preview host."""
+
+    def stub_saver(database_url: str, *, strict_msgpack: bool = True) -> object:
+        del database_url, strict_msgpack
+        from langgraph.checkpoint.memory import MemorySaver
+
+        return MemorySaver()
+
+    monkeypatch.setattr(
+        "umbral.infrastructure.agent.production.create_postgres_saver",
+        stub_saver,
+    )
 
 
 def _preview_factories(
@@ -377,4 +405,9 @@ def _preview_environment() -> dict[str, str]:
         "RESEND_API_KEY": "re_test_value",
         "RESEND_FROM_EMAIL": "Umbral <onboarding@resend.dev>",
         "EMAIL_WEBHOOK_SECRET": "whsec_test_value",
+        "AGENT_MODEL_PROVIDER": "managed",
+        "AGENT_MODEL_NAME": "local-fake",
+        "AGENT_MANAGED_ENDPOINT": "http://model.railway.internal:8010/v1/structured",
+        "AGENT_MANAGED_API_KEY": "umbral-preview-gateway",
+        "AGENT_GRAPH_RELEASE_ID": "graph-release-002",
     }

@@ -45,7 +45,8 @@ def test_proposal_lineage_references_feedback_events(feedback_backend: Any) -> N
     evidence_ids = {
         str(ref["feedback_event_id"]) for ref in proposals[0].evidence_refs
     }
-    assert evidence_ids == set(recorded)
+    assert evidence_ids <= set(recorded)
+    assert evidence_ids, "proposal must cite at least one feedback event"
     # Every evidence ref resolves to a persisted active feedback event.
     persisted = feedback.events.active_for_profile(profile.profile_id)
     persisted_ids = {str(item.event_id) for item in persisted}

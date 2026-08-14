@@ -38,12 +38,12 @@ def _profile_with_radar(feedback_backend: Any, radar: Any) -> tuple[Any, SearchP
     return owner_id, profile
 
 
-def test_three_reasoned_dislikes_create_a_pending_proposal(feedback_backend: Any) -> None:
+def test_two_reasoned_dislikes_create_a_pending_proposal(feedback_backend: Any) -> None:
     seed_concepts(feedback_backend)
     feedback = build_feedback(feedback_backend)
     owner_id = seed_user(feedback_backend)
     profile = seed_profile(feedback_backend, owner_id)
-    listings = seed_silver_listings(feedback_backend, count=3)
+    listings = seed_silver_listings(feedback_backend, count=2)
     for listing in listings:
         feedback.record_feedback(
             owner_id=owner_id,
@@ -65,15 +65,15 @@ def test_three_reasoned_dislikes_create_a_pending_proposal(feedback_backend: Any
     assert len(proposals) == 1
     assert proposals[0].change.concept_key == "ambientes"
     assert proposals[0].change.polarity == "negative"
-    assert len(proposals[0].evidence_refs) == 3
+    assert len(proposals[0].evidence_refs) == 2
 
 
-def test_two_reasoned_dislikes_do_not_propose(feedback_backend: Any) -> None:
+def test_one_reasoned_dislike_does_not_propose(feedback_backend: Any) -> None:
     seed_concepts(feedback_backend)
     feedback = build_feedback(feedback_backend)
     owner_id = seed_user(feedback_backend)
     profile = seed_profile(feedback_backend, owner_id)
-    listings = seed_silver_listings(feedback_backend, count=2)
+    listings = seed_silver_listings(feedback_backend, count=1)
     for listing in listings:
         feedback.record_feedback(
             owner_id=owner_id,

@@ -27,7 +27,7 @@ COOKIE = "umbral_test_session"
 
 
 def _login(store: InMemoryIdentityStore) -> str:
-    now = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
     AccessAdministration(store).preload_invitation("person@example.com")
     email = RecordingEmailAdapter()
     access = access_with_recording_jobs(store, FakeIdentityProvider(), email)

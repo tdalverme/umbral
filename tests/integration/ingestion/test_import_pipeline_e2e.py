@@ -11,9 +11,9 @@ from tests.integration.ingestion.conftest import IngestionBackend
 from umbral.application.ingestion.contracts import ImportBatchRequest, SourceIdentity
 from umbral.application.ingestion.import_contract import ContractSpec
 from umbral.application.jobs.contracts import JobState, SubmitJob
-from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.domain.audit import AuditActor
 from umbral.infrastructure.ingestion.composition import build_ingestion_service
+from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.workers.imports import IngestionImportHandler
 
@@ -37,7 +37,7 @@ def test_operator_import_and_run_read_end_to_end(
     ingestion_backend: IngestionBackend, ingestion_contract: ContractSpec
 ) -> None:
     factory, object_store, _ = ingestion_backend
-    runtime = InMemoryJobRuntime(queue=RecordingJobQueue())
+    runtime = SqlAlchemyJobRuntime(factory, queue=RecordingJobQueue())
     service = build_ingestion_service(
         session_factory=factory,
         object_store=object_store,
@@ -46,7 +46,8 @@ def test_operator_import_and_run_read_end_to_end(
         clock=lambda: datetime(2026, 8, 1, tzinfo=timezone.utc),
     )
     handler = IngestionImportHandler(service)
-    runtime = InMemoryJobRuntime(
+    runtime = SqlAlchemyJobRuntime(
+        factory,
         queue=RecordingJobQueue(),
         handlers={"ingestion.import_batch": handler},
     )

@@ -30,7 +30,7 @@ def test_lineage_walk_covers_every_observation(criteria_backend: Any) -> None:
 
     with factory() as session:
         observations = list(session.execute(select(ObservationModel)).scalars())
-        assert len(observations) == 3 * 6
+        assert len(observations) == 3 * 9
         for observation in observations:
             assert observation.extraction_version_id is not None
             version = session.get(

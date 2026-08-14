@@ -31,7 +31,7 @@ def _script_directory() -> ScriptDirectory:
 def test_migration_graph_has_one_linear_head() -> None:
     heads = _script_directory().get_heads()
 
-    assert heads == ["0012_agent_evals"]
+    assert heads == ["0015_observation_source_urban"]
 
 
 def test_bootstrap_metadata_matches_declared_schema_without_drift() -> None:

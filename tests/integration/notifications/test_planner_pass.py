@@ -95,7 +95,7 @@ def test_repeated_plan_pass_is_idempotent(
         trigger="new_match",
     )
     inbox_items = notification_repos["inbox"].list_for_user(
-        user_id=notification_seed["user_id"], limit=10
+        user_id=notification_seed["user_id"], limit=10, after=None
     )
     assert len(inbox_items) == 1
     assert inbox_items[0]["decision_id"] == decision_id

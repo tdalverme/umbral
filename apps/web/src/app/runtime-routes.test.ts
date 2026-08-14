@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET as health } from "./health/route";
 import { GET as ready } from "./ready/route";
@@ -13,6 +13,11 @@ function manifestPath(): string {
 describe("web runtime routes", () => {
   beforeEach(() => {
     process.env.UMBRAL_RELEASE_MANIFEST = manifestPath();
+    process.env.UMBRAL_API_BASE_URL = "http://api.test.internal";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
   });
 
   afterEach(() => {
@@ -21,6 +26,8 @@ describe("web runtime routes", () => {
     } else {
       process.env.UMBRAL_RELEASE_MANIFEST = previousManifest;
     }
+    delete process.env.UMBRAL_API_BASE_URL;
+    vi.unstubAllGlobals();
   });
 
   it("returns a cache-free liveness response without querying dependencies", async () => {

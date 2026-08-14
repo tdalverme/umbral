@@ -1,4 +1,5 @@
 """Contract checks for the versioned public OpenAPI surface."""
+# ruff: noqa: E501
 
 from __future__ import annotations
 
@@ -24,6 +25,45 @@ EXPECTED_OPERATION_IDS = {
     "GET /api/v1/auth/session": "getCurrentSession",
     "POST /api/v1/auth/logout": "logoutCurrentSession",
     "POST /api/v1/integrations/email/resend-events": "receiveResendEvent",
+    "GET /api/v1/imports/quarantine/{record_id}": "getQuarantineRecord",
+    "GET /api/v1/imports/runs/{run_id}": "getImportRun",
+    "GET /api/v1/imports/runs/{run_id}/quality": "getImportQuality",
+    "GET /api/v1/imports/runs/{run_id}/quality/download": "downloadImportQuality",
+    "POST /api/v1/imports/batches": "submitImportBatch",
+    "GET /api/v1/listings/{listing_id}": "getListingDetail",
+    "GET /api/v1/search-profiles": "listSearchProfiles",
+    "GET /api/v1/search-profiles/{search_profile_id}": "getSearchProfile",
+    "PATCH /api/v1/search-profiles/{search_profile_id}": "updateSearchProfile",
+    "POST /api/v1/search-profiles": "createSearchProfile",
+    "POST /api/v1/search-profiles/{search_profile_id}/status": "setSearchProfileStatus",
+    "GET /api/v1/search-profiles/{search_profile_id}/matches": "listMatches",
+    "GET /api/v1/search-profiles/{search_profile_id}/explanations": "listExplanations",
+    "GET /api/v1/search-profiles/{search_profile_id}/explanations/{listing_id}": "getExplanation",
+    "POST /api/v1/search-profiles/{search_profile_id}/comparisons": "createComparison",
+    "GET /api/v1/search-profiles/{search_profile_id}/comparison-shortlist": "getComparisonShortlist",
+    "PUT /api/v1/search-profiles/{search_profile_id}/comparison-shortlist": "setComparisonShortlist",
+    "GET /api/v1/search-profiles/{search_profile_id}/decision-items": "listDecisionItems",
+    "POST /api/v1/search-profiles/{search_profile_id}/feedback": "recordFeedback",
+    "GET /api/v1/search-profiles/{search_profile_id}/learning-proposals": "listLearningProposals",
+    "PUT /api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}": "expandLearningProposal",
+    "POST /api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/confirm": "confirmLearningProposal",
+    "POST /api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/reject": "rejectLearningProposal",
+    "POST /api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/undo": "undoLearningProposal",
+    "GET /api/v1/search-profiles/{search_profile_id}/update-proposals": "listUpdateProposals",
+    "GET /api/v1/chat/sessions": "listChatSessions",
+    "GET /api/v1/chat/sessions/{session_id}": "getChatSession",
+    "GET /api/v1/chat/sessions/{session_id}/messages": "listChatSessionMessages",
+    "POST /api/v1/chat/sessions": "createSession",
+    "POST /api/v1/chat/sessions/{session_id}/messages": "sendChatMessage",
+    "POST /api/v1/chat/sessions/{session_id}/resume": "resumeChatSession",
+    "POST /api/v1/chat/sessions/{session_id}/runs/{run_id}/decision": "decideChatRun",
+    "POST /api/v1/product-events": "emitProductEvent",
+    "GET /api/v1/agent/ops/overview": "agentOpsOverview",
+    "GET /api/v1/notifications/inbox": "get_inbox_api_v1_notifications_inbox_get",
+    "PATCH /api/v1/notifications/inbox/{decision_id}": "patch_inbox_api_v1_notifications_inbox__decision_id__patch",
+    "GET /api/v1/notifications/preferences": "get_preferences_api_v1_notifications_preferences_get",
+    "PUT /api/v1/notifications/preferences": "put_preferences_api_v1_notifications_preferences_put",
+    "POST /api/v1/notifications/unsubscribe": "unsubscribe_api_v1_notifications_unsubscribe_post",
 }
 EXPECTED_GET_OPERATION_IDS = EXPECTED_OPERATION_IDS
 

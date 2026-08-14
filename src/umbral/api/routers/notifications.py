@@ -227,7 +227,7 @@ async def get_inbox(
     if services is None:
         raise IdentityError("auth.forbidden", status=403, recovery="none")
     items = services.inbox.list_for_user(  # type: ignore[attr-defined]
-        user_id=principal.user_id, limit=max(1, min(page_size, 50))
+        user_id=principal.user_id, limit=max(1, min(page_size, 50)), after=None
     )
     return InboxResponse(
         items=[

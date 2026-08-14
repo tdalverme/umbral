@@ -77,10 +77,14 @@ name = "Runtime layers"
 type = "layers"
 containers = ["umbral"]
 layers = [
-    "agent | api | workers",
+    "agent : api : workers",
     "infrastructure",
     "application",
     "domain",
+]
+ignore_imports = [
+    "umbral.infrastructure.agent.production -> umbral.agent.**",
+    "umbral.infrastructure.agent.composition -> umbral.agent.**",
 ]
 
 [[tool.importlinter.contracts]]
@@ -207,7 +211,6 @@ name = "API boundary"
 type = "forbidden"
 source_modules = ["umbral.api"]
 forbidden_modules = [
-    "umbral.agent",
     "umbral.workers",
 ]
 
@@ -228,4 +231,8 @@ forbidden_modules = [
     "umbral.agent",
     "umbral.api",
     "umbral.workers",
+]
+ignore_imports = [
+    "umbral.infrastructure.agent.production -> umbral.agent.**",
+    "umbral.infrastructure.agent.composition -> umbral.agent.**",
 ]

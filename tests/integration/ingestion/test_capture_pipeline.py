@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import cast
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from tests.integration.ingestion.conftest import IngestionBackend
 
@@ -14,9 +13,6 @@ from umbral.application.ingestion.contracts import (
     SourceIdentity,
 )
 from umbral.application.ingestion.import_contract import ContractSpec
-from umbral.application.ingestion.service import ImportRunService
-from umbral.application.jobs.service import InMemoryJobRuntime
-from umbral.application.objects.contracts import ProviderObjectRef
 from umbral.domain.audit import AuditActor
 from umbral.infrastructure.db.repositories.imports import (
     SqlAlchemyImportRunRepository,
@@ -24,6 +20,7 @@ from umbral.infrastructure.db.repositories.imports import (
     SqlAlchemyRawSnapshotRepository,
 )
 from umbral.infrastructure.ingestion.composition import build_ingestion_service
+from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -46,7 +43,7 @@ def test_capture_persists_snapshots_quarantine_and_raw_object(
     ingestion_backend: IngestionBackend, ingestion_contract: ContractSpec
 ) -> None:
     factory, object_store, _ = ingestion_backend
-    runtime = InMemoryJobRuntime(queue=RecordingJobQueue())
+    runtime = SqlAlchemyJobRuntime(factory, queue=RecordingJobQueue())
     service = build_ingestion_service(
         session_factory=factory,
         object_store=object_store,
@@ -57,8 +54,9 @@ def test_capture_persists_snapshots_quarantine_and_raw_object(
 
     snapshot = service.submit(_request("pipeline-1"))
     assert snapshot.state == "pending"
-    execution_id = runtime.submissions[-1].execution_id
-    finished = service.process(execution_id)
+    run = service.runs.get_by_identity("source-a", "pipeline-1")
+    assert run is not None and run.job_execution_id is not None
+    finished = service.process(run.job_execution_id)
 
     assert finished.state == "succeeded"
     assert finished.accepted == 9
@@ -73,7 +71,7 @@ def test_capture_persists_snapshots_quarantine_and_raw_object(
 
     run = SqlAlchemyImportRunRepository(factory).get(finished.run_id)
     assert run is not None
-    info = object_store.stat(ProviderObjectRef(run.raw_storage_key))
+    info = object_store.stat(object_store.ref_for_key(run.raw_storage_key))
     assert info.sha256 == run.file_sha256
     assert info.size_bytes == run.file_size_bytes
 
@@ -82,7 +80,7 @@ def test_capture_is_idempotent_on_real_backend(
     ingestion_backend: IngestionBackend, ingestion_contract: ContractSpec
 ) -> None:
     factory, object_store, _ = ingestion_backend
-    runtime = InMemoryJobRuntime(queue=RecordingJobQueue())
+    runtime = SqlAlchemyJobRuntime(factory, queue=RecordingJobQueue())
     service = build_ingestion_service(
         session_factory=factory,
         object_store=object_store,
@@ -92,21 +90,18 @@ def test_capture_is_idempotent_on_real_backend(
     )
     snapshots = SqlAlchemyRawSnapshotRepository(factory)
 
-    service.submit(_request("k1"))
-    service.process(runtime.submissions[-1].execution_id)
-    first_count = len(snapshots.list_for_run(service.get(_run_id(service)).run_id))
+    first = service.submit(_request("k1"))
+    first_run = service.runs.get_by_identity("source-a", "k1")
+    assert first_run is not None and first_run.job_execution_id is not None
+    service.process(first_run.job_execution_id)
+    first_count = len(snapshots.list_for_run(first.run_id))
 
     service.submit(_request("k2"))
-    second = service.process(runtime.submissions[-1].execution_id)
+    second_run = service.runs.get_by_identity("source-a", "k2")
+    assert second_run is not None and second_run.job_execution_id is not None
+    second = service.process(second_run.job_execution_id)
 
     assert first_count == 9
     assert second.accepted == 0
     assert second.duplicates == 10
     assert len(snapshots.list_for_run(second.run_id)) == 0
-
-
-def _run_id(service: ImportRunService) -> UUID:
-    runtime = cast(InMemoryJobRuntime, service.job_runtime)
-    run = service.runs.find_by_job_execution(runtime.submissions[-1].execution_id)
-    assert run is not None
-    return run.run_id

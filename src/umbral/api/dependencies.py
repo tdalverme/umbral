@@ -82,7 +82,30 @@ def _build_agent_stack(
         "agent_runtime": stack.runtime,
         "proposals": stack.proposals,
         "graph_runs": stack.graph_runs,
+        "ops_overview": _build_ops_overview(settings),
     }
+
+
+def _build_ops_overview(settings: Settings) -> object:
+    from umbral.application.agent_evals.price import load_price_table
+    from umbral.application.agent_ops.service import OpsOverviewService
+    from umbral.infrastructure.agent_ops.overview import (
+        SqlAlchemyOpsRunRepository,
+    )
+
+    price_table = load_price_table(
+        Path(__file__).resolve().parents[3]
+        / "contracts"
+        / "agent-evals"
+        / "v1"
+        / "price-table-v1.json"
+    )
+    return OpsOverviewService(
+        SqlAlchemyOpsRunRepository(
+            SessionProvider(settings.database_url).session_factory,
+            price_table,
+        )
+    )
 
 _LOCAL_RELEASE_MANIFEST = "<local>"
 

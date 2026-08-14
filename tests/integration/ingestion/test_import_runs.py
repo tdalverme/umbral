@@ -2,19 +2,31 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from sqlalchemy.orm import Session
 from tests.integration.ingestion.conftest import IngestionBackend
 
 from umbral.application.ingestion.contracts import SourceIdentity
+from umbral.application.jobs.contracts import JobSnapshot
 from umbral.infrastructure.db.repositories.imports import (
     SqlAlchemyImportRunRepository,
     SqlAlchemyQuarantineRepository,
     SqlAlchemyRawSnapshotRepository,
 )
+from umbral.infrastructure.jobs.runtime import SqlAlchemyJobRuntime
+from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 
 NOW = datetime(2026, 8, 1, tzinfo=timezone.utc)
+
+
+def _seed_execution(
+    factory: Callable[[], Session], job_type: str, target: str
+) -> JobSnapshot:
+    runtime = SqlAlchemyJobRuntime(factory, queue=RecordingJobQueue())
+    return runtime.submit_simple(job_type, target, idempotency_key=target)
 
 
 def test_run_lifecycle_and_identity_lookup(
@@ -23,6 +35,7 @@ def test_run_lifecycle_and_identity_lookup(
     factory, _, _ = ingestion_backend
     runs = SqlAlchemyImportRunRepository(factory)
     source = SourceIdentity("source-a", "v1", "1")
+    execution = _seed_execution(factory, "test.import", "batch-key-1")
     run = runs.create(
         run_id=uuid4(),
         source=source,
@@ -32,7 +45,7 @@ def test_run_lifecycle_and_identity_lookup(
         file_sha256="a" * 64,
         file_size_bytes=1024,
         raw_storage_key="ingestion/raw/" + "a" * 64,
-        job_execution_id=uuid4(),
+        job_execution_id=execution.execution_id,
         correlation_id=uuid4(),
         actor_kind="operator",
         actor_id="operator-1",
@@ -51,6 +64,7 @@ def test_run_state_transitions_are_saved(
     factory, _, _ = ingestion_backend
     runs = SqlAlchemyImportRunRepository(factory)
     source = SourceIdentity("source-a", "v1", "1")
+    execution = _seed_execution(factory, "test.import", "batch-key-2")
     run = runs.create(
         run_id=uuid4(),
         source=source,
@@ -60,7 +74,7 @@ def test_run_state_transitions_are_saved(
         file_sha256="b" * 64,
         file_size_bytes=1024,
         raw_storage_key="ingestion/raw/" + "b" * 64,
-        job_execution_id=uuid4(),
+        job_execution_id=execution.execution_id,
         correlation_id=uuid4(),
         actor_kind="operator",
         actor_id="operator-1",
@@ -94,6 +108,7 @@ def test_snapshot_and_quarantine_repositories(
     snapshots = SqlAlchemyRawSnapshotRepository(factory)
     quarantine = SqlAlchemyQuarantineRepository(factory)
     source = SourceIdentity("source-a", "v1", "1")
+    execution = _seed_execution(factory, "test.import", "batch-key-3")
     run = runs.create(
         run_id=uuid4(),
         source=source,
@@ -103,7 +118,7 @@ def test_snapshot_and_quarantine_repositories(
         file_sha256="c" * 64,
         file_size_bytes=1024,
         raw_storage_key="ingestion/raw/" + "c" * 64,
-        job_execution_id=uuid4(),
+        job_execution_id=execution.execution_id,
         correlation_id=uuid4(),
         actor_kind="operator",
         actor_id="operator-1",

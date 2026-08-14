@@ -36,7 +36,7 @@ def test_concept_version_event_is_written(criteria_backend: Any) -> None:
         correlation_id=uuid4(),
     )
     types = _event_types(factory)
-    assert types.count("criteria.concept_version_created.v1") == 7  # seed + edit
+    assert types.count("criteria.concept_version_created.v1") == 11  # seed + edit
 
 
 def test_batch_and_recompute_events_carry_counts_only(criteria_backend: Any) -> None:
