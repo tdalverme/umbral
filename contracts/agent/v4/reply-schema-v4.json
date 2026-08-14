@@ -1,0 +1,22 @@
+{
+  "registry_version": "agent-reply-schema-v4",
+  "contract_version": "4",
+  "schema_version": "reply-v4",
+  "fields": {
+    "reply_text": {"kind": "string", "min_length": 1, "max_length": 2000, "required": true, "description": "Concise grounded response."},
+    "effects": {
+      "kind": "list",
+      "item": {
+        "act_id": "string",
+        "status": {"enum": ["applied", "pending", "remembered", "rejected"]},
+        "object_type": "string",
+        "object_id": "nullable_uuid",
+        "reason_code": "nullable_string"
+      },
+      "required": true,
+      "description": "Durable or pending effects attributed to source acts."
+    },
+    "question": {"kind": "nullable_string", "required": true, "description": "The single material clarification, when required."},
+    "refs": {"kind": "list", "item": {"entity": "string", "id": "string"}, "max_items": 10, "required": true, "description": "Product references backed by durable objects."}
+  }
+}

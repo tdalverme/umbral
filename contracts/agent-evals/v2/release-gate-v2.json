@@ -1,0 +1,8 @@
+{
+  "contract_version": "2",
+  "gate_version": "conversation-release-gate-v2",
+  "critical_invariants": 1.0,
+  "trajectory_success": 0.95,
+  "minimum_family_success": 0.90,
+  "wrong_target_mutations": 0
+}

@@ -1,0 +1,19 @@
+{
+  "registry_version": "agent-state-schema-v4",
+  "contract_version": "4",
+  "schema_version": 4,
+  "serializable": true,
+  "fields": [
+    {"name": "schema_version", "kind": "integer", "required": true, "description": "Checkpoint schema version."},
+    {"name": "messages", "kind": "list", "item": "chat_message", "required": true, "description": "Messages for the current turn."},
+    {"name": "context", "kind": "object", "serializable": true, "required": true, "search_profile_id": {"kind": "nullable_uuid", "required": true}, "description": "Verified session scope and durable object references."},
+    {"name": "interpretation", "kind": "nullable_object", "required": true, "description": "Validated conversation-interpretation-v4 output."},
+    {"name": "planned_effects", "kind": "list", "item": "planned_effect", "required": true, "description": "Deterministic effects planned from validated acts."},
+    {"name": "effect_results", "kind": "list", "item": "turn_effect", "required": true, "description": "Durable outcomes of effects applied in this turn."},
+    {"name": "clarification", "kind": "nullable_object", "required": true, "description": "At most one material clarification awaiting an answer."},
+    {"name": "pending_action", "kind": "nullable_object", "required": true, "description": "A durable action awaiting confirmation."},
+    {"name": "tool_calls", "kind": "list", "item": "tool_call", "required": true, "description": "Explicit internal service calls only."},
+    {"name": "tool_results", "kind": "list", "item": "tool_result", "required": true, "description": "Redacted results of explicit service calls."},
+    {"name": "errors", "kind": "list", "item": "typed_error", "required": true, "description": "Typed run errors without conversation content."}
+  ]
+}

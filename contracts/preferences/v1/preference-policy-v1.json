@@ -1,0 +1,8 @@
+{
+  "contract_version": "1",
+  "policy_version": "preference-policy-v1",
+  "authority_order": ["explicit", "deliberate_feedback", "passive"],
+  "auto_apply": ["soft_add", "soft_revise", "soft_withdraw", "open_location"],
+  "require_confirmation": ["hard_filter", "material_contradiction", "irreversible_delete"],
+  "semantic": {"mode": "soft", "max_weight": 0.10, "missing_evidence_contribution": 0.0}
+}

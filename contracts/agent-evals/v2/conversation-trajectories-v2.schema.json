@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "conversation-trajectories-v2.schema.json",
+  "title": "ConversationTrajectoriesV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "registry_version", "cases"],
+  "properties": {
+    "contract_version": {"const": "2"},
+    "registry_version": {"const": "conversation-trajectories-v2"},
+    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "family", "initial_state", "turns", "final_state", "invariants"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "family": {"type": "string", "minLength": 1},
+        "initial_state": {"type": "object"},
+        "turns": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/turn"}},
+        "final_state": {"type": "object"},
+        "invariants": {"type": "array", "items": {"type": "string", "enum": ["no_wrong_target_mutation", "no_repeated_answered_question"]}}
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user", "expected_acts", "expected_effects", "forbidden"],
+      "properties": {
+        "user": {"type": "string", "minLength": 1},
+        "expected_acts": {"type": "array", "items": {"type": "string", "enum": ["resolve_pending", "create_radar", "set_filter", "clear_filter", "express_preference", "revise_preference", "withdraw_preference", "record_feedback", "query"]}},
+        "expected_effects": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "forbidden": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "registry_version": "agent-graph-topology-v4",
+  "contract_version": "4",
+  "topology_version": 4,
+  "entry": "load_context",
+  "nodes": [
+    {"name": "load_context", "kind": "node"},
+    {"name": "interpret_turn", "kind": "node"},
+    {"name": "plan_effects", "kind": "node"},
+    {"name": "apply_safe_effects", "kind": "node"},
+    {"name": "require_confirmation", "kind": "node"},
+    {"name": "resolve_pending", "kind": "node"},
+    {"name": "schedule_refresh", "kind": "node"},
+    {"name": "compose_reply", "kind": "node"},
+    {"name": "persist_reply", "kind": "node"}
+  ],
+  "edges": [
+    {"from": "load_context", "to": "interpret_turn"},
+    {"from": "interpret_turn", "to": "plan_effects"},
+    {"from": "plan_effects", "to": "apply_safe_effects"},
+    {"from": "apply_safe_effects", "to": "require_confirmation", "condition": "confirmation_required"},
+    {"from": "apply_safe_effects", "to": "schedule_refresh", "condition": "refresh_required"},
+    {"from": "apply_safe_effects", "to": "compose_reply", "condition": "no_refresh"},
+    {"from": "require_confirmation", "to": "end", "condition": "interrupt"},
+    {"from": "resolve_pending", "to": "interpret_turn", "condition": "continue"},
+    {"from": "schedule_refresh", "to": "compose_reply"},
+    {"from": "compose_reply", "to": "persist_reply"},
+    {"from": "persist_reply", "to": "end"}
+  ],
+  "interrupts": [{"name": "confirmation", "description": "A single material action awaits an explicit textual resolution."}]
+}

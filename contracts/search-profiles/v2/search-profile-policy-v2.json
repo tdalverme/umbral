@@ -1,0 +1,13 @@
+{
+  "contract_version": "2",
+  "policy_version": "search-profile-v2",
+  "operation": ["rental"],
+  "scope": {"city": "caba", "residential_only": true},
+  "caba_neighborhoods": ["palermo", "recoleta", "belgrano", "caballito", "villa_crespo", "almagro", "balvanera", "san_nicolas", "retiro", "puerto_madero", "villa_urquiza", "nunez", "colegiales", "villa_devoto", "flores"],
+  "nullable_constraints": ["budget_max", "budget_min", "min_rooms", "surface_min", "surface_max"],
+  "limits": {"name_min_length": 1, "name_max_length": 80, "zones_min": 0, "zones_max": 15, "budget_max_gt": 0, "budget_min_ge": 0, "min_rooms_min": 0, "min_rooms_max": 200, "surface_min_ge": 0},
+  "states": ["active", "paused", "archived"],
+  "transitions": {"active": ["paused", "archived"], "paused": ["active", "archived"], "archived": []},
+  "unknown_strategies": {"price": "exclude", "location": "exclude", "rooms": "include", "surface": "include"},
+  "error_codes": {"radar.name_required": "name is required (1..80 chars)", "radar.zone_unknown": "zone is not in the CABA list", "radar.budget_range": "budget_min must be lower than budget_max when both are present", "radar.rooms_range": "min_rooms must be in [0, 200]", "radar.surface_range": "surface bounds are invalid", "radar.state_unknown": "status is not a known state", "radar.transition_invalid": "state transition is not allowed"}
+}
