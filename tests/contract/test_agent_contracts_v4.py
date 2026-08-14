@@ -147,3 +147,23 @@ def test_graph_v4_reaches_normal_refresh_and_resumed_confirmation_paths() -> Non
             break
         reachable = expanded
     assert {node["name"] for node in topology["nodes"]} <= reachable
+
+
+def test_graph_v4_closes_deterministic_effect_routing_conditions() -> None:
+    """A missing or renamed condition must not change deterministic branching."""
+    topology = _load_contract("contracts/agent/v4/graph-topology-v4.json")
+    branches = {
+        (edge["from"], edge["to"], edge.get("condition"))
+        for edge in topology["edges"]
+        if edge["from"] == "apply_safe_effects"
+    }
+
+    assert branches == {
+        (
+            "apply_safe_effects",
+            "require_confirmation",
+            "confirmation_required",
+        ),
+        ("apply_safe_effects", "schedule_refresh", "refresh_required"),
+        ("apply_safe_effects", "compose_reply", "no_refresh"),
+    }

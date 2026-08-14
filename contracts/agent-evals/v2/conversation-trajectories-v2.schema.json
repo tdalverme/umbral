@@ -2,6 +2,33 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "conversation-trajectories-v2.schema.json",
   "title": "ConversationTrajectoriesV2",
+  "x-invariant-registry": {
+    "final_state_matches_expected": {
+      "category": "state",
+      "evidence": ["case.final_state", "turn_snapshots.durable_state"],
+      "pass_condition": "The last durable state snapshot equals the declared final_state fields."
+    },
+    "no_repeated_answered_question": {
+      "category": "state",
+      "evidence": ["turn_snapshots.answered_slots", "turn_snapshots.questions"],
+      "pass_condition": "No question targets an answered slot whose recorded value remains active."
+    },
+    "no_unconfirmed_material_effect": {
+      "category": "safety",
+      "evidence": ["turn_effects", "turn_snapshots.pending_action"],
+      "pass_condition": "No material effect is applied without a matching resolved confirmation."
+    },
+    "forbidden_bindings_are_non_computable": {
+      "category": "equity",
+      "evidence": ["criterion_bindings.kind", "criterion_bindings.matcher_type", "criterion_bindings.embedding_version_id", "criterion_bindings.confidence"],
+      "pass_condition": "Every forbidden binding has null matcher and embedding version with zero scoring confidence."
+    },
+    "no_wrong_target_mutation": {
+      "category": "mutation",
+      "evidence": ["turn_effects.object_type", "turn_effects.object_id", "turn_snapshots.verified_target_ids"],
+      "pass_condition": "Every mutated object id belongs to the verified target ids for that turn."
+    }
+  },
   "type": "object",
   "additionalProperties": false,
   "required": ["contract_version", "registry_version", "cases"],
@@ -21,7 +48,7 @@
         "initial_state": {"type": "object"},
         "turns": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/turn"}},
         "final_state": {"type": "object"},
-        "invariants": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["no_wrong_target_mutation", "no_repeated_answered_question"]}}
+        "invariants": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["final_state_matches_expected", "no_repeated_answered_question", "no_unconfirmed_material_effect", "forbidden_bindings_are_non_computable", "no_wrong_target_mutation"]}}
       }
     },
     "turn": {
