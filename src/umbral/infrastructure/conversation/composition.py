@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 from umbral.application.agent.tools.proposals import (
@@ -32,9 +32,53 @@ from umbral.application.conversation.ports import (
     PendingActionReader,
 )
 from umbral.application.conversation.service import ConversationTurnService
+from umbral.application.preferences.contracts import (
+    BindingDraft,
+    PreferenceAuthority,
+    PreferenceChange,
+    PreferenceView,
+)
 from umbral.application.radar.service import RadarService
 
 Clock = Callable[[], datetime]
+
+
+class PreferenceServiceLike(Protocol):
+    """The preference service seam the copilot mutates through."""
+
+    def record_expression(
+        self,
+        *,
+        profile_id: UUID,
+        source_message_id: UUID | None,
+        subject_key: str,
+        raw_text: str,
+        authority: PreferenceAuthority,
+        binding_drafts: tuple[BindingDraft, ...],
+        correlation_id: UUID,
+    ) -> PreferenceChange: ...
+
+    def revise_expression(
+        self,
+        *,
+        profile_id: UUID,
+        previous_expression_id: UUID,
+        source_message_id: UUID | None,
+        raw_text: str,
+        authority: PreferenceAuthority,
+        binding_drafts: tuple[BindingDraft, ...],
+        correlation_id: UUID,
+    ) -> PreferenceChange: ...
+
+    def withdraw_expression(
+        self,
+        *,
+        profile_id: UUID,
+        expression_id: UUID,
+        correlation_id: UUID,
+    ) -> PreferenceChange: ...
+
+    def active_view(self, profile_id: UUID) -> tuple[PreferenceView, ...]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +87,8 @@ class CopilotServices:
 
     chat: ChatService
     radar: RadarService
+    preferences: PreferenceServiceLike | None = None
+    proposals: object | None = None
 
 
 class SessionContextReader:
@@ -132,6 +178,12 @@ class ServiceEffectApplier:
             return self._apply_filter(effect, context, correlation_id)
         if effect.effect_key == "filter.cleared":
             return self._apply_filter(effect, context, correlation_id)
+        if effect.effect_key in {
+            "preference.remembered",
+            "preference.revised",
+            "preference.withdrawn",
+        }:
+            return self._apply_preference(effect, context, correlation_id)
         return effect
 
     def _create_radar(
@@ -152,7 +204,86 @@ class ServiceEffectApplier:
             unknown_strategy=None,
             correlation_id=correlation_id,
         )
+        # The durable radar must be the source of truth for the session
+        # (FR-003): bind it so the next turn resolves the verified context.
+        self.services.chat.bind_profile(
+            user_id=context.user_id,
+            session_id=context.session_id,
+            search_profile_id=profile.profile_id,
+            correlation_id=correlation_id,
+        )
         return _with_object(effect, "radar", profile.profile_id)
+
+    def _apply_preference(
+        self,
+        effect: TurnEffect,
+        context: ConversationTurnContext,
+        correlation_id: UUID,
+    ) -> TurnEffect:
+        services = self.services
+        if services.preferences is None:
+            return _rejected(effect, "preferences.not_configured")
+        profile_id = context.verified_profile_id
+        if profile_id is None:
+            return _rejected(effect, "radar.not_bound")
+        detail = dict(effect.detail)
+        subject_key = detail.get("subject_key")
+        if not isinstance(subject_key, str) or not subject_key:
+            return _rejected(effect, "preference.missing_subject_key")
+
+        preferences = services.preferences
+        if effect.effect_key == "preference.withdrawn":
+            expression_id = _active_expression_id_for_subject(
+                preferences, profile_id, subject_key
+            )
+            if expression_id is None:
+                return _rejected(effect, "preference.not_active")
+            change = preferences.withdraw_expression(
+                profile_id=profile_id,
+                expression_id=expression_id,
+                correlation_id=correlation_id,
+            )
+            return _with_expression(
+                effect,
+                "preference",
+                _expression_id(change),
+            )
+        if effect.effect_key == "preference.revised":
+            previous_id = _active_expression_id_for_subject(
+                preferences, profile_id, subject_key
+            )
+            if previous_id is None:
+                return _rejected(effect, "preference.not_active")
+            change = preferences.revise_expression(
+                profile_id=profile_id,
+                previous_expression_id=previous_id,
+                source_message_id=None,
+                raw_text=str(
+                    detail.get("text") or detail.get("raw_text") or subject_key
+                ),
+                authority="explicit",
+                binding_drafts=(BindingDraft.unresolved("no_structured_evidence"),),
+                correlation_id=correlation_id,
+            )
+            return _with_expression(
+                effect,
+                "preference",
+                _expression_id(change),
+            )
+        change = preferences.record_expression(
+            profile_id=profile_id,
+            source_message_id=None,
+            subject_key=subject_key,
+            raw_text=str(detail.get("text") or detail.get("raw_text") or subject_key),
+            authority="explicit",
+            binding_drafts=(BindingDraft.unresolved("no_structured_evidence"),),
+            correlation_id=correlation_id,
+        )
+        return _with_expression(
+            effect,
+            "preference",
+            _expression_id(change),
+        )
 
     def _apply_filter(
         self,
@@ -169,6 +300,20 @@ class ServiceEffectApplier:
         changes = _filter_changes(effect)
         if not changes:
             return effect
+        if effect.status == "pending":
+            # Material hard-filter change: persist a durable proposal so the
+            # confirmation interrupt can resolve it (FR-013, FR-014).
+            proposals = self.services.proposals
+            if proposals is None or not hasattr(proposals, "propose"):
+                return _rejected(effect, "proposals.not_configured")
+            proposal = proposals.propose(
+                user_id=context.user_id,
+                session_id=context.session_id,
+                search_profile_id=profile_id,
+                change=changes,
+                correlation_id=correlation_id,
+            )
+            return _with_proposal(effect, proposal)
         updated, _version = self.services.radar.version_profile(
             owner_id=context.user_id,
             profile_id=profile_id,
@@ -320,6 +465,12 @@ def build_conversation_turn_service(
 ) -> ConversationTurnService:
     """Compose the turn service over real services and the interpretation seam."""
     clock = clock or (lambda: datetime.now(timezone.utc))
+    services_with_proposals = CopilotServices(
+        chat=services.chat,
+        radar=services.radar,
+        preferences=services.preferences,
+        proposals=proposals,
+    )
     pending_reader = ProposalsPendingReader(proposals=proposals)
     contexts = SessionContextReader(
         chat=services.chat,
@@ -330,13 +481,12 @@ def build_conversation_turn_service(
     return ConversationTurnService(
         contexts=contexts,
         interpretation=_GatewayAdapter(interpretation),
-        applier=ServiceEffectApplier(services=services, clock=clock),
+        applier=ServiceEffectApplier(services=services_with_proposals, clock=clock),
         pending=pending_reader,
         pending_resolver=ProposalsPendingResolver(proposals=proposals),
         refresh=RadarRefreshScheduler(radar=services.radar, clock=clock),
         clock=clock,
     )
-
 
 class _GatewayAdapter:
     """Adapts the InterpretationCompiler to the application InterpretationGateway.
@@ -384,6 +534,55 @@ def _with_object(effect: TurnEffect, object_type: str, object_id: UUID) -> TurnE
         reason_code=effect.reason_code,
         detail=dict(effect.detail),
     )
+
+
+def _with_expression(
+    effect: TurnEffect, object_type: str, object_id: UUID
+) -> TurnEffect:
+    return TurnEffect(
+        effect_key=effect.effect_key,
+        act_id=effect.act_id,
+        status="applied",
+        object_type=object_type,
+        object_id=str(object_id),
+        reason_code=effect.reason_code,
+        detail=dict(effect.detail),
+    )
+
+
+def _with_proposal(effect: TurnEffect, proposal: object) -> TurnEffect:
+    proposal_id = getattr(proposal, "proposal_id", None)
+    return TurnEffect(
+        effect_key=effect.effect_key,
+        act_id=effect.act_id,
+        status="pending",
+        object_type="proposal",
+        object_id=str(proposal_id) if proposal_id is not None else None,
+        reason_code="filter.changes_existing_hard_filter",
+        detail={
+            **dict(effect.detail),
+            "proposal_id": str(proposal_id) if proposal_id is not None else "",
+        },
+    )
+
+
+def _active_expression_id_for_subject(
+    preferences: PreferenceServiceLike,
+    profile_id: UUID,
+    subject_key: str,
+) -> UUID | None:
+    try:
+        views = preferences.active_view(profile_id)
+    except Exception:  # noqa: BLE001 - preference store unreadable
+        return None
+    for view in views:
+        if view.subject_key == subject_key:
+            return view.expression_id
+    return None
+
+
+def _expression_id(change: PreferenceChange) -> UUID:
+    return change.expression.expression_id
 
 
 def _rejected(effect: TurnEffect, reason: str) -> TurnEffect:

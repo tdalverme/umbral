@@ -112,8 +112,8 @@ class InterpretationCompiler:
                 ConversationAct(
                     act_id=act_id,
                     kind=kind,
-                    target=_mapping(item.get("target")),
-                    payload=_mapping(item.get("payload")),
+                    target=_target_mapping(item.get("target")),
+                    payload=_payload_mapping(item.get("payload")),
                     confidence=_confidence(item.get("confidence")),
                 )
             )
@@ -124,10 +124,16 @@ class InterpretationCompiler:
         return TurnInterpretation(acts=())
 
 
-def _mapping(value: object) -> Mapping[str, str]:
+def _target_mapping(value: object) -> Mapping[str, str]:
     if not isinstance(value, Mapping):
         return {}
     return {str(key): str(item) for key, item in value.items()}
+
+
+def _payload_mapping(value: object) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {str(key): item for key, item in value.items()}
 
 
 def _mapping_or_none(value: object) -> Mapping[str, object] | None:

@@ -55,8 +55,14 @@ def _chat_service(radar_ctx: RadarTestContext) -> ChatService:
 def test_service_effect_applier_creates_a_durable_partial_radar() -> None:
     radar_ctx = RadarTestContext(default_runtime=False)
     user_id = uuid4()
+    chat = _chat_service(radar_ctx)
+    session = chat.create_session(
+        user_id=user_id,
+        search_profile_id=None,
+        correlation_id=uuid4(),
+    )
     applier = ServiceEffectApplier(
-        services=CopilotServices(chat=None, radar=radar_ctx.service),  # type: ignore[arg-type]
+        services=CopilotServices(chat=chat, radar=radar_ctx.service),
         clock=lambda: _NOW,
     )
     effect = TurnEffect(
@@ -64,7 +70,7 @@ def test_service_effect_applier_creates_a_durable_partial_radar() -> None:
         act_id="a1",
         status="applied",
     )
-    ctx = _context(user_id=user_id, session_id=uuid4(), profile_id=None)
+    ctx = _context(user_id=user_id, session_id=session.session_id, profile_id=None)
 
     applied = applier.apply(effect=effect, context=ctx, correlation_id=uuid4())
 
@@ -77,6 +83,9 @@ def test_service_effect_applier_creates_a_durable_partial_radar() -> None:
     assert profile.zones == ()
     assert profile.budget_max is None
     assert profile.min_rooms is None
+    # The session is bound to the durable radar (FR-003).
+    bound = chat.get_session(user_id=user_id, session_id=session.session_id)
+    assert bound.search_profile_id == UUID(applied.object_id)
 
 
 def test_service_effect_applier_versions_a_filter_change() -> None:

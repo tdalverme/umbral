@@ -123,7 +123,9 @@ def test_confirmation_required_does_not_schedule_refresh() -> None:
 
     assert result.routing.confirmation_required is True
     assert refresh.scheduled == []
-    assert applier.applied == []
+    # The pending effect reaches the applier so it can persist the durable
+    # proposal, but nothing is applied to the radar yet (FR-013).
+    assert [effect.status for effect in applier.applied] == ["pending"]
 
 
 def test_pending_effects_are_never_applied_by_the_service() -> None:
@@ -153,7 +155,9 @@ def test_pending_effects_are_never_applied_by_the_service() -> None:
     )
 
     assert result.effects[0].status == "pending"
-    assert applier.applied == []
+    # The pending effect is offered to the applier (durable proposal) but is
+    # never applied to the radar without confirmation.
+    assert [effect.status for effect in applier.applied] == ["pending"]
 
 
 def test_resolve_applies_through_the_explicit_resolver() -> None:

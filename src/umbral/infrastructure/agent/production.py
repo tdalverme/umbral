@@ -51,6 +51,7 @@ from umbral.infrastructure.agent.tools.preferences_loader import (
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.conversation.composition import (
     CopilotServices,
+    PreferenceServiceLike,
     build_conversation_turn_service,
 )
 from umbral.infrastructure.db.repositories.agent import (
@@ -283,7 +284,11 @@ def build_production_copilot_stack(
         model_version=settings.agent_model_name,
     )
     turn_service = build_conversation_turn_service(
-        services=CopilotServices(chat=chat, radar=cast(RadarService, radar)),
+        services=CopilotServices(
+            chat=chat,
+            radar=cast(RadarService, radar),
+            preferences=_build_preference_service(session_factory),
+        ),
         proposals=proposals,
         interpretation=interpretation_compiler,
         clock=clock,
@@ -318,6 +323,46 @@ def build_production_copilot_stack(
     )
     return ProductionAgentStack(
         chat=chat, runtime=runtime, proposals=proposals, graph_runs=runs
+    )
+
+
+def _build_preference_service(session_factory: SessionFactory) -> PreferenceServiceLike:
+    from umbral.application.preferences.contracts import (
+        PreferenceConcept,
+        PreferencePolicySpec,
+    )
+    from umbral.application.preferences.service import PreferenceService
+    from umbral.infrastructure.db.repositories.criteria import (
+        SqlAlchemyConceptRepository,
+    )
+    from umbral.infrastructure.db.repositories.preferences import (
+        SqlAlchemyBindingRepository,
+        SqlAlchemyExpressionRepository,
+    )
+
+    expressions = SqlAlchemyExpressionRepository(session_factory)
+    bindings = SqlAlchemyBindingRepository(session_factory)
+    concepts = SqlAlchemyConceptRepository(session_factory)
+
+    class _ConceptReader:
+        def get(self, key: str) -> PreferenceConcept | None:
+            concept = concepts.get(key)
+            if concept is None:
+                return None
+            return PreferenceConcept(
+                key=concept.key,
+                matcher_type=concept.matcher_type,
+                computable=bool(
+                    (concept.compute_policy or {}).get("computable", False)
+                ),
+            )
+
+    return PreferenceService(
+        expressions=expressions,
+        bindings=bindings,
+        mutations=expressions,
+        concepts=_ConceptReader(),
+        policy=PreferencePolicySpec.v1(),
     )
 
 

@@ -105,15 +105,13 @@ class ConversationTurnService:
         correlation_id: UUID,
     ) -> tuple[tuple[TurnEffect, ...], tuple[Mapping[str, object], ...]]:
         applied: list[TurnEffect] = []
+        active_context = context
         for effect in plan.effects:
-            if effect.status == "pending":
-                applied.append(effect)
-                continue
             try:
                 applied.append(
                     self.applier.apply(
                         effect=effect,
-                        context=context,
+                        context=active_context,
                         correlation_id=correlation_id,
                     )
                 )
@@ -125,13 +123,21 @@ class ConversationTurnService:
                         reason_code=str(error.code or "conversation.apply_failed"),
                     )
                 )
-            except Exception:
+            except Exception as error:
                 applied.append(
                     replace(
                         effect,
                         status="rejected",
-                        reason_code="conversation.apply_failed",
+                        reason_code=f"conversation.apply_failed:{type(error).__name__}",
                     )
+                )
+            # An act may have created and bound the radar (FR-003); later acts
+            # of the same turn must see the verified profile (FR-004).
+            if active_context.verified_profile_id is None:
+                active_context = self.contexts.load(
+                    user_id=context.user_id,
+                    session_id=context.session_id,
+                    correlation_id=correlation_id,
                 )
         return tuple(applied), ()
 

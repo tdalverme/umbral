@@ -121,6 +121,7 @@ class TurnEffectRecord:
     confirmed: bool = False
     object_type: str | None = None
     object_id: str | None = None
+    reason_code: str | None = None
     target_ids: tuple[str, ...] = field(default_factory=tuple)
 
 

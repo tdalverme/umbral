@@ -1,0 +1,287 @@
+{
+  "contract_version": "2",
+  "registry_version": "conversation-trajectories-v2",
+  "cases": [
+    {
+      "id": "first-turn-partial-radar",
+      "family": "radar_creation",
+      "initial_state": {"profiles": [], "session": {"profile_id": null}},
+      "turns": [
+        {
+          "user": "Quiero un depto luminoso y cerca del subte",
+          "expected_acts": ["create_radar", "express_preference", "express_preference"],
+          "expected_effects": ["radar.created", "preference.remembered"],
+          "forbidden": ["ask_zone_before_persist"]
+        }
+      ],
+      "final_state": {"zones": [], "budget_max": null, "active_subjects": ["luminosidad", "subte"]},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation",
+        "no_repeated_answered_question"
+      ]
+    },
+    {
+      "id": "open-scope-not-asked-again",
+      "family": "context_continuity",
+      "initial_state": {"profiles": [{"zones": [], "active_subjects": ["luminosidad"]}], "session": {"profile_id": "p1"}},
+      "turns": [
+        {
+          "user": "Cualquiera, pero cerca de un parque",
+          "expected_acts": ["express_preference"],
+          "expected_effects": ["preference.remembered"],
+          "forbidden": ["ask_zone_before_persist"]
+        }
+      ],
+      "final_state": {"zones": [], "active_subjects": ["luminosidad", "parque"]},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    },
+    {
+      "id": "new-filter-applies-without-confirmation",
+      "family": "radar_refinement",
+      "initial_state": {"profiles": [{"zones": [], "budget_max": null, "active_subjects": []}], "session": {"profile_id": "p1"}},
+      "turns": [
+        {
+          "user": "Aumenta el presupuesto a 900",
+          "expected_acts": ["set_filter"],
+          "expected_effects": ["filter.set"],
+          "forbidden": []
+        }
+      ],
+      "final_state": {"budget_max": 900.0, "active_subjects": []},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    },
+    {
+      "id": "material-filter-change-requires-confirmation",
+      "family": "radar_refinement",
+      "initial_state": {"profiles": [{"zones": [], "budget_max": 800.0, "active_subjects": []}], "session": {"profile_id": "p1"}},
+      "turns": [
+        {
+          "user": "Sube el presupuesto a 1200",
+          "expected_acts": ["set_filter"],
+          "expected_effects": ["filter.set"],
+          "forbidden": []
+        },
+        {
+          "user": "Confirmo",
+          "expected_acts": ["resolve_pending"],
+          "expected_effects": ["pending.resolved"],
+          "forbidden": ["feedback.listing_written"]
+        }
+      ],
+      "final_state": {"budget_max": 1200.0, "active_subjects": []},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    },
+    {
+      "id": "confirm-plus-extra-preference-same-turn",
+      "family": "multi_act",
+      "initial_state": {"profiles": [{"zones": [], "budget_max": 800.0, "active_subjects": []}], "session": {"profile_id": "p1"}, "pending_action": {"kind": "profile", "action_id": "proposal-1"}},
+      "turns": [
+        {
+          "user": "Si, confirmo, y tambien quiero balcon",
+          "expected_acts": ["resolve_pending", "express_preference"],
+          "expected_effects": ["pending.resolved", "preference.remembered"],
+          "forbidden": ["feedback.listing_written", "preference.lost_after_confirm"]
+        }
+      ],
+      "final_state": {"budget_max": 800.0, "active_subjects": ["balcon"]},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    },
+    {
+      "id": "soft-preference-revision-is-reversible",
+      "family": "correction",
+      "initial_state": {"profiles": [{"zones": [], "active_subjects": ["balcon"]}], "session": {"profile_id": "p1"}},
+      "turns": [
+        {
+          "user": "En realidad el balcon no me importa",
+          "expected_acts": ["withdraw_preference"],
+          "expected_effects": ["preference.withdrawn"],
+          "forbidden": ["confirmation_required_for_soft_change"]
+        }
+      ],
+      "final_state": {"active_subjects": []},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    },
+    {
+      "id": "out-of-catalog-desire-is-preserved",
+      "family": "preference_diversity",
+      "initial_state": {"profiles": [{"zones": [], "active_subjects": []}], "session": {"profile_id": "p1"}},
+      "turns": [
+        {
+          "user": "Quiero una cocina grande y cafes donde pueda trabajar",
+          "expected_acts": ["express_preference", "express_preference"],
+          "expected_effects": ["preference.remembered"],
+          "forbidden": ["closed_vocabulary_rejection"]
+        }
+      ],
+      "final_state": {"active_subjects": ["cocina_grande", "cafes_home_office"]},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    },
+    {
+      "id": "no-evidence-desire-contributes-zero",
+      "family": "preference_diversity",
+      "initial_state": {"profiles": [{"zones": [], "active_subjects": ["luminosidad"]}], "session": {"profile_id": "p1"}},
+      "turns": [
+        {
+          "user": "Quiero algo moderno",
+          "expected_acts": ["express_preference"],
+          "expected_effects": ["preference.remembered"],
+          "forbidden": ["rejection_unknown_concept"]
+        }
+      ],
+      "final_state": {"active_subjects": ["luminosidad", "moderno"]},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    },
+    {
+      "id": "transcription-sc007-regression",
+      "family": "transcription_regression",
+      "initial_state": {"profiles": [], "session": {"profile_id": null}},
+      "turns": [
+        {
+          "user": "Quiero un depto luminoso y cerca del subte",
+          "expected_acts": ["create_radar", "express_preference", "express_preference"],
+          "expected_effects": ["radar.created", "preference.remembered"],
+          "forbidden": ["ask_zone_before_persist"]
+        },
+        {
+          "user": "Cerca de un parque tambien",
+          "expected_acts": ["express_preference"],
+          "expected_effects": ["preference.remembered"],
+          "forbidden": ["ask_zone_before_persist"]
+        },
+        {
+          "user": "Y una cocina grande",
+          "expected_acts": ["express_preference"],
+          "expected_effects": ["preference.remembered"],
+          "forbidden": []
+        },
+        {
+          "user": "Y cafes donde pueda trabajar",
+          "expected_acts": ["express_preference"],
+          "expected_effects": ["preference.remembered"],
+          "forbidden": []
+        },
+        {
+          "user": "Un lugar tranquilo",
+          "expected_acts": ["express_preference"],
+          "expected_effects": ["preference.remembered"],
+          "forbidden": ["repeated_zone_question"]
+        }
+      ],
+      "final_state": {
+        "zones": [],
+        "active_subjects": ["luminosidad", "subte", "parque", "cocina_grande", "cafes_home_office", "tranquilo"]
+      },
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation",
+        "no_repeated_answered_question"
+      ]
+    },
+    {
+      "id": "zone-decision-replaced-and-open-scope",
+      "family": "transcription_regression",
+      "initial_state": {"profiles": [{"zones": ["nunez"], "active_subjects": ["luminosidad"]}], "session": {"profile_id": "p1"}},
+      "turns": [
+        {
+          "user": "Sin zona fija, cualquier barrio",
+          "expected_acts": ["clear_filter", "express_preference"],
+          "expected_effects": ["filter.cleared", "preference.remembered"],
+          "forbidden": ["repeated_zone_question"]
+        },
+        {
+          "user": "Confirmo",
+          "expected_acts": ["resolve_pending"],
+          "expected_effects": ["pending.resolved"],
+          "forbidden": []
+        }
+      ],
+      "final_state": {"zones": [], "active_subjects": ["luminosidad", "deseo_personalizado"]},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    },
+    {
+      "id": "pending-action-takes-precedence-over-listing",
+      "family": "context_continuity",
+      "initial_state": {"profiles": [{"zones": [], "active_subjects": []}], "session": {"profile_id": "p1"}, "pending_action": {"kind": "profile", "action_id": "proposal-9"}},
+      "turns": [
+        {
+          "user": "Confirmo",
+          "expected_acts": ["resolve_pending"],
+          "expected_effects": ["pending.resolved"],
+          "forbidden": ["feedback.listing_written"]
+        }
+      ],
+      "final_state": {"active_subjects": []},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    },
+    {
+      "id": "query-never-mutates",
+      "family": "query_safety",
+      "initial_state": {"profiles": [{"zones": [], "active_subjects": ["luminosidad"]}], "session": {"profile_id": "p1"}},
+      "turns": [
+        {
+          "user": "Que criterios tengo?",
+          "expected_acts": ["query"],
+          "expected_effects": ["query"],
+          "forbidden": ["mutation_on_query"]
+        }
+      ],
+      "final_state": {"active_subjects": ["luminosidad"]},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
+    }
+  ]
+}

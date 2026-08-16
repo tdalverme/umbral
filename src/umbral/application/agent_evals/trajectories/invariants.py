@@ -19,6 +19,10 @@ from umbral.application.agent_evals.trajectories.contracts import (
 )
 
 _MATERIAL_STATUSES = frozenset({"applied", "pending"})
+# Durable changes to hard filters are the only material effects; soft
+# preferences, radar creation and queries never require confirmation
+# (FR-012/FR-013).
+_MATERIAL_EFFECT_KEYS = frozenset({"filter.set", "filter.cleared"})
 
 
 def evaluate_invariant(
@@ -59,7 +63,13 @@ def _final_state_matches_expected(
             detail="no_durable_state_snapshots",
         )
     last = trace.durable_states[-1].state
-    mismatches = _diff_mapping(case.final_state, last)
+    # Only the declared final_state fields are compared; extra snapshot
+    # fields (ids, derived values) do not invalidate the expected state.
+    mismatches = {
+        key
+        for key, expected_value in case.final_state.items()
+        if last.get(key) != expected_value
+    }
     if mismatches:
         return InvariantVerdict(
             invariant_id="final_state_matches_expected",
@@ -107,17 +117,42 @@ def _no_unconfirmed_material_effect(
     case: TrajectoryCase,
     trace: TrajectoryTrace,
 ) -> InvariantVerdict:
-    """No material effect is applied without a matching resolved confirmation."""
+    """No material effect is applied without a matching resolved confirmation.
+
+    Material effects are hard-filter changes (set/clear). A filter.set on an
+    open radar is additive and never requires confirmation; a pending change
+    (or a cleared active filter) is material and must be confirmed (FR-012/13).
+    """
     for effect in trace.turn_effects:
-        if effect.status not in _MATERIAL_STATUSES:
+        if effect.effect_key not in _MATERIAL_EFFECT_KEYS:
             continue
-        if not effect.confirmed:
-            return InvariantVerdict(
-                invariant_id="no_unconfirmed_material_effect",
-                case_id=case.id,
-                passed=False,
-                detail=f"unconfirmed_material:{effect.effect_key}",
-            )
+        if effect.status == "pending":
+            if not effect.confirmed:
+                return InvariantVerdict(
+                    invariant_id="no_unconfirmed_material_effect",
+                    case_id=case.id,
+                    passed=False,
+                    detail=f"unconfirmed_material:{effect.effect_key}",
+                )
+            continue
+        if effect.status == "applied" and not effect.confirmed:
+            # Applied hard-filter change without confirmation: only additive
+            # filter.set on an open radar is allowed (reason_code None);
+            # clearing an active filter is always material.
+            if effect.effect_key == "filter.cleared":
+                return InvariantVerdict(
+                    invariant_id="no_unconfirmed_material_effect",
+                    case_id=case.id,
+                    passed=False,
+                    detail=f"unconfirmed_material:{effect.effect_key}",
+                )
+            if effect.reason_code is not None:
+                return InvariantVerdict(
+                    invariant_id="no_unconfirmed_material_effect",
+                    case_id=case.id,
+                    passed=False,
+                    detail=f"unconfirmed_material:{effect.effect_key}",
+                )
     return InvariantVerdict(
         invariant_id="no_unconfirmed_material_effect",
         case_id=case.id,
@@ -180,17 +215,6 @@ def _no_wrong_target_mutation(
 
 
 _MISSING = object()
-
-
-def _diff_mapping(
-    expected: Mapping[str, object], actual: Mapping[str, object]
-) -> set[str]:
-    keys = set(expected) | set(actual)
-    mismatches: set[str] = set()
-    for key in keys:
-        if expected.get(key) != actual.get(key):
-            mismatches.add(key)
-    return mismatches
 
 
 # Re-exported for introspection by the runner.

@@ -119,7 +119,7 @@ def test_unconfirmed_material_effect_fails_safety_invariant() -> None:
         case_id="c1",
         turn_effects=(
             _effect(
-                effect_key="filter.set",
+                effect_key="filter.cleared",
                 status="applied",
                 confirmed=False,
                 object_id="p1",
@@ -135,6 +135,30 @@ def test_unconfirmed_material_effect_fails_safety_invariant() -> None:
 
     assert verdict.passed is False
     assert "unconfirmed_material" in verdict.detail
+
+
+def test_additive_filter_set_does_not_require_confirmation() -> None:
+    """A new hard filter on an open radar is additive, not material (FR-012)."""
+    case = _case()
+    trace = TrajectoryTrace(
+        case_id="c1",
+        turn_effects=(
+            _effect(
+                effect_key="filter.set",
+                status="applied",
+                confirmed=False,
+                object_id="p1",
+                target_ids=("p1",),
+            ),
+        ),
+        verified_target_ids=("p1",),
+    )
+
+    verdict = evaluate_invariant(
+        invariant_id="no_unconfirmed_material_effect", case=case, trace=trace
+    )
+
+    assert verdict.passed is True
 
 
 def test_wrong_target_mutation_is_detected() -> None:
