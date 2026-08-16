@@ -15,6 +15,7 @@ secretos ni hosts privados.
 | PATCH | `/api/v1/search-profiles/{id}` | Busquedas | Actualizar criterios con `expected_version` (409 tipado en concurrencia). | Implementado |
 | POST | `/api/v1/search-profiles/{id}/status` | Busquedas | Pausar, reanudar o archivar una busqueda. | Implementado |
 | GET | `/api/v1/search-profiles/{id}/matches` | Recomendaciones | Listar matches persistentes del run (score, contribuciones, punto autorizado, resumen del listing). | Implementado |
+| GET | `/api/v1/search-profiles/{id}/preferences` | Preferencias | Inspeccionar deseos expresados, vinculaciones, confianza y limitaciones del radar (feature 016). | Implementado |
 | GET | `/api/v1/listings/{listing_id}` | Listings | Obtener detalle, atributos, faltantes, cambios conocidos y fuente (autorizado via runs del usuario). | Implementado |
 | POST | `/api/v1/product-events` | Eventos | Registrar eventos versionados de producto emitidos por el cliente (impresion, vista, fuente abierta). | Implementado |
 | POST | `/api/v1/search-profiles/{id}/feedback` | Feedback | Registrar like, dislike, save, dismiss u otra senal del usuario. | Futuro (H3) |

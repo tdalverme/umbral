@@ -150,7 +150,7 @@ def _build_stack() -> tuple[TestClient, _Repo, ChatService]:
         reply_max_refs=10,
     )
     runtime = ChatRuntime(
-        graph=graph,  # type: ignore[arg-type]
+        graph=graph,
         conversation=chat,
         runs=runs,
         recorder=recorder,

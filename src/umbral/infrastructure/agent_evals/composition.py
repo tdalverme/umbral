@@ -574,8 +574,19 @@ def _run_case(
         model_calls=tuple(model_calls),
         latency_ms=latency,
         refs=tuple(refs),
-        allowed_ref_ids=_allowed_ref_ids(user_context, session.search_profile_id),
+        allowed_ref_ids=_allowed_ref_ids(
+            user_context,
+            session.search_profile_id
+            if session.search_profile_id is not None
+            else _sentinel_profile_id(),
+        ),
     )
+
+
+def _sentinel_profile_id() -> UUID:
+    import uuid as _uuid
+
+    return _uuid.UUID(int=0)
 
 
 def _allowed_ref_ids(

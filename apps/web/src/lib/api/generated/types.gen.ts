@@ -723,6 +723,64 @@ export type MatchesResponse = {
 };
 
 /**
+ * PreferenceViewItem
+ */
+export type PreferenceViewItem = {
+    /**
+     * Binding Id
+     */
+    binding_id: string;
+    /**
+     * Binding Kind
+     */
+    binding_kind: string;
+    /**
+     * Confidence
+     */
+    confidence: number;
+    /**
+     * Evidence Refs
+     */
+    evidence_refs: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Expression Id
+     */
+    expression_id: string;
+    /**
+     * Limitations
+     */
+    limitations: Array<string>;
+    /**
+     * Mode
+     */
+    mode: string;
+    /**
+     * Raw Text
+     */
+    raw_text: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Subject Key
+     */
+    subject_key: string;
+};
+
+/**
+ * PreferenceViewResponse
+ */
+export type PreferenceViewResponse = {
+    /**
+     * Items
+     */
+    items: Array<PreferenceViewItem>;
+};
+
+/**
  * PreferencesBody
  */
 export type PreferencesBody = {
@@ -1491,7 +1549,7 @@ export type UmbralApiRoutersSearchProfilesRunResponse = {
     /**
      * State
      */
-    state: 'pending' | 'running' | 'succeeded' | 'failed';
+    state: 'pending' | 'running' | 'succeeded' | 'failed' | 'superseded';
     /**
      * Trigger
      */
@@ -3150,6 +3208,49 @@ export type ListMatchesResponses = {
 };
 
 export type ListMatchesResponse = ListMatchesResponses[keyof ListMatchesResponses];
+
+export type ListSearchProfilePreferencesData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/preferences';
+};
+
+export type ListSearchProfilePreferencesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListSearchProfilePreferencesError = ListSearchProfilePreferencesErrors[keyof ListSearchProfilePreferencesErrors];
+
+export type ListSearchProfilePreferencesResponses = {
+    /**
+     * Successful Response
+     */
+    200: PreferenceViewResponse;
+};
+
+export type ListSearchProfilePreferencesResponse = ListSearchProfilePreferencesResponses[keyof ListSearchProfilePreferencesResponses];
 
 export type SetSearchProfileStatusData = {
     body: StatusRequest;

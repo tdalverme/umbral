@@ -97,6 +97,26 @@ class RunRepository(Protocol):
 
     def fail(self, run: RecommendationRun, failure_code: str) -> None: ...
 
+    def supersede(
+        self,
+        run_id: UUID,
+        *,
+        reason: str,
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        """Atomically mark a stale non-terminal run as superseded."""
+        ...
+
+    def set_diagnostics(
+        self,
+        run_id: UUID,
+        *,
+        diagnostics: Mapping[str, object],
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        """Persist deterministic diagnostics on a run without changing state."""
+        ...
+
 
 class ItemRepository(Protocol):
     def list_for_run(

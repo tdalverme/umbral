@@ -47,6 +47,18 @@ class PolicyBonusPenalty:
 
 
 @dataclass(frozen=True, slots=True)
+class SemanticPolicy:
+    """The semantic-signal policy block of a scoring policy v2 document."""
+
+    mode: str
+    max_weight: float
+    missing_evidence_contribution: float
+
+
+_SEMANTIC_MAX_WEIGHT = 0.10
+
+
+@dataclass(frozen=True, slots=True)
 class ScoringPolicyDoc:
     """Validated, executable interpretation of one policy version payload."""
 
@@ -59,6 +71,7 @@ class ScoringPolicyDoc:
     bonuses: tuple[PolicyBonusPenalty, ...]
     penalties: tuple[PolicyBonusPenalty, ...]
     tie_break: tuple[str, ...]
+    semantic: SemanticPolicy | None = None
 
     @property
     def criterion_by_key(self) -> Mapping[str, PolicyCriterion]:
@@ -71,7 +84,8 @@ def parse_policy_document(
     """Parse and validate a policy document; raises on the first error group."""
 
     errors: list[str] = []
-    if data.get("contract_version") != "1":
+    contract_version = data.get("contract_version")
+    if contract_version not in {"1", "2"}:
         errors.append("policy.unsupported_contract_version")
     score_policy_version = data.get("score_policy_version")
     if not isinstance(score_policy_version, str) or not score_policy_version:
@@ -83,6 +97,7 @@ def parse_policy_document(
     if not 2 <= score_round <= 6:
         errors.append("policy.invalid_score_round")
     confidence = _confidence(data.get("confidence"))
+    semantic = _semantic_policy(data.get("semantic"), errors)
     raw_criteria = data.get("criteria")
     criteria: list[PolicyCriterion] = []
     if isinstance(raw_criteria, list) and raw_criteria:
@@ -106,8 +121,8 @@ def parse_policy_document(
     if errors:
         raise ScoringValidationError(tuple(errors))
     return ScoringPolicyDoc(
-        contract_version=str(data["contract_version"]),
-        score_policy_version=str(score_policy_version),
+        contract_version=str(contract_version or ""),
+        score_policy_version=str(score_policy_version or ""),
         normalization=normalization,
         score_round=score_round,
         confidence=confidence,
@@ -115,6 +130,32 @@ def parse_policy_document(
         bonuses=bonuses,
         penalties=penalties,
         tie_break=tie_break,
+        semantic=semantic,
+    )
+
+
+def _semantic_policy(
+    raw: object, errors: list[str]
+) -> SemanticPolicy | None:
+    """Parse the v2 semantic block; semantic signals are always soft-capped."""
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        errors.append("policy.semantic_invalid_shape")
+        return None
+    mode = raw.get("mode")
+    if mode != "soft":
+        errors.append("policy.semantic_must_be_soft")
+    max_weight = _as_float(raw.get("max_weight"), _SEMANTIC_MAX_WEIGHT)
+    if max_weight is None or max_weight > _SEMANTIC_MAX_WEIGHT:
+        errors.append("policy.semantic_max_weight_exceeded")
+    missing = _as_float(raw.get("missing_evidence_contribution"), 0.0)
+    if missing not in (None, 0.0):
+        errors.append("policy.semantic_missing_evidence_nonzero")
+    return SemanticPolicy(
+        mode="soft",
+        max_weight=max_weight if max_weight is not None else _SEMANTIC_MAX_WEIGHT,
+        missing_evidence_contribution=0.0,
     )
 
 

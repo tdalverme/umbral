@@ -1,4 +1,4 @@
-"""Versioned agent state schemas v1/v2/v3 (UM-H4-002, FR-004/FR-005)."""
+"""Versioned agent state schemas v1/v2/v3/v4 (UM-H4-002, FR-004/FR-005)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any, TypedDict
 STATE_SCHEMA_VERSION = 1
 TOOLS_STATE_SCHEMA_VERSION = 2
 CHAT_STATE_SCHEMA_VERSION = 3
+COPILOT_STATE_SCHEMA_VERSION = 4
 
 
 class AgentState(TypedDict, total=False):
@@ -17,6 +18,9 @@ class AgentState(TypedDict, total=False):
     messages: list[dict[str, object]]
     context: dict[str, object]
     intent: object | None
+    interpretation: object | None
+    planned_effects: list[dict[str, object]]
+    effect_results: list[dict[str, object]]
     clarification: object | None
     pending_action: object | None
     tool_calls: list[dict[str, object]]
@@ -74,4 +78,8 @@ def as_serializable(state: AgentState) -> dict[str, Any]:
     data["tool_calls"] = [dict(item) for item in state.get("tool_calls") or []]
     data["tool_results"] = [dict(item) for item in state.get("tool_results") or []]
     data["errors"] = [dict(item) for item in state.get("errors") or []]
+    data["planned_effects"] = [
+        dict(item) for item in state.get("planned_effects") or []
+    ]
+    data["effect_results"] = [dict(item) for item in state.get("effect_results") or []]
     return data

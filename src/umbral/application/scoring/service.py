@@ -38,6 +38,7 @@ from umbral.application.scoring.contracts import (
     ScoringNotAccessible,
     ScoringNotFound,
     ScoringStateError,
+    SemanticSignal,
 )
 from umbral.application.scoring.engine import (
     ScoredCandidate,
@@ -55,6 +56,7 @@ from umbral.application.scoring.ports import (
     ProfileReader,
     ProfileVersionReader,
     RunReader,
+    SemanticSignalReader,
     ShortlistRepository,
 )
 from umbral.application.silver.contracts import NormalizedListing
@@ -85,6 +87,7 @@ class ScoringService:
         legacy_score_policy_version: str = _LEGACY_POLICY,
         comparison_max_listings: int = 6,
         comparator_enabled: bool = False,
+        semantic_signals: SemanticSignalReader | None = None,
         clock: Clock | None = None,
     ) -> None:
         self.policies = policies
@@ -104,6 +107,7 @@ class ScoringService:
         self.legacy_score_policy_version = legacy_score_policy_version
         self.comparison_max_listings = comparison_max_listings
         self.comparator_enabled = comparator_enabled
+        self.semantic_signals = semantic_signals
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     # ------------------------------------------------------------------
@@ -171,6 +175,12 @@ class ScoringService:
         observations = self.observations.active_for_listings(
             tuple(candidate.listing_id for candidate in candidates)
         )
+        semantic_signals: Mapping[UUID, tuple[SemanticSignal, ...]] = {}
+        if self.semantic_signals is not None:
+            semantic_signals = self.semantic_signals.for_profile_version_and_listings(
+                compilation.profile_version_id,
+                tuple(candidate.listing_id for candidate in candidates),
+            )
         return score_candidates(
             profile=profile,
             compilation=compilation,
@@ -180,6 +190,7 @@ class ScoringService:
             run_id=run_id,
             correlation_id=correlation_id,
             now=self.clock(),
+            semantic_signals=semantic_signals,
         )
 
     # ------------------------------------------------------------------

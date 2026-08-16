@@ -56,6 +56,10 @@ from umbral.infrastructure.db.models.notifications import (
     NotificationPreferencesModel,
 )
 from umbral.infrastructure.db.models.objects import StoredObject, StoredObjectVersion
+from umbral.infrastructure.db.models.preferences import (
+    CriterionBinding,
+    PreferenceExpression,
+)
 from umbral.infrastructure.db.models.radar import (
     ProductEventRow,
     RecommendationItem,
@@ -121,6 +125,8 @@ __all__ = [
     "RecommendationRun",
     "RecommendationItem",
     "ProductEventRow",
+    "PreferenceExpression",
+    "CriterionBinding",
     "ScoringPolicy",
     "ScoringPolicyVersion",
     "CriterionEvaluation",

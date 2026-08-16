@@ -1351,6 +1351,91 @@
         "title": "MatchesResponse",
         "type": "object"
       },
+      "PreferenceViewItem": {
+        "additionalProperties": false,
+        "properties": {
+          "binding_id": {
+            "format": "uuid",
+            "title": "Binding Id",
+            "type": "string"
+          },
+          "binding_kind": {
+            "title": "Binding Kind",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "evidence_refs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Evidence Refs",
+            "type": "array"
+          },
+          "expression_id": {
+            "format": "uuid",
+            "title": "Expression Id",
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "raw_text": {
+            "title": "Raw Text",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject_key": {
+            "title": "Subject Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expression_id",
+          "raw_text",
+          "subject_key",
+          "status",
+          "binding_id",
+          "binding_kind",
+          "mode",
+          "confidence",
+          "limitations",
+          "evidence_refs"
+        ],
+        "title": "PreferenceViewItem",
+        "type": "object"
+      },
+      "PreferenceViewResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PreferenceViewItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PreferenceViewResponse",
+        "type": "object"
+      },
       "PreferencesBody": {
         "additionalProperties": false,
         "properties": {
@@ -2621,7 +2706,8 @@
               "pending",
               "running",
               "succeeded",
-              "failed"
+              "failed",
+              "superseded"
             ],
             "title": "State",
             "type": "string"
@@ -4514,6 +4600,51 @@
         "summary": "List Matches",
         "tags": [
           "Matches"
+        ]
+      }
+    },
+    "/api/v1/search-profiles/{search_profile_id}/preferences": {
+      "get": {
+        "operationId": "listSearchProfilePreferences",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceViewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Search Profile Preferences",
+        "tags": [
+          "Search Profiles"
         ]
       }
     },

@@ -476,3 +476,106 @@ def test_matches_page_of_a_profile_requires_ownership() -> None:
             after_position=None,
             limit=25,
         )
+
+
+def test_stale_pending_run_is_superseded_when_newer_results_exist() -> None:
+    ctx = _ctx_with_candidates(build_listing(total_cost=700.0))
+    owner = uuid4()
+    profile, first_run = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=0,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert first_run is not None
+    # A newer radar version edits and its run publishes first.
+    edited, _ = ctx.service.update_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={"budget_max": 1200.0},
+        correlation_id=uuid4(),
+    )
+    ctx.service.schedule_version_run(
+        profile=edited,
+        version=ctx.versions.latest_for_profile(profile.profile_id),  # type: ignore[arg-type]
+        trigger="edited",
+    )
+    newer_run = ctx.runs.latest_for_profile(profile.profile_id)
+    assert newer_run is not None
+    handler = RecommendationRunHandler(ctx.service)
+    handler.run(
+        JobContext(
+            execution_id=newer_run.job_execution_id or uuid4(),
+            attempt_number=1,
+            correlation_id=uuid4(),
+            release_id="test",
+            logical_target=str(newer_run.run_id),
+        )
+    )
+
+    # The stale first run, processed later, must not replace newer results.
+    summary = handler.run(
+        JobContext(
+            execution_id=first_run.job_execution_id or uuid4(),
+            attempt_number=1,
+            correlation_id=uuid4(),
+            release_id="test",
+            logical_target=str(first_run.run_id),
+        )
+    )
+
+    assert summary["state"] == "superseded"
+    persisted = _run_for(ctx, first_run)
+    assert persisted is not None
+    assert persisted.state == "superseded"
+    assert persisted.failure_code == "radar.results_superseded"
+
+
+def test_zero_match_run_persists_diagnostics_and_relaxations() -> None:
+    ctx = _ctx_with_candidates(
+        build_listing(total_cost=900.0, neighborhood="palermo", rooms=1),
+        build_listing(total_cost=2000.0, neighborhood="palermo", rooms=1),
+    )
+    _, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=500.0,
+        budget_min=None,
+        min_rooms=3,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    handler = RecommendationRunHandler(ctx.service)
+    context = JobContext(
+        execution_id=uuid4(),
+        attempt_number=1,
+        correlation_id=uuid4(),
+        release_id="test",
+        logical_target=str(run.run_id) if run is not None else None,
+    )
+
+    summary = handler.run(context)
+
+    assert summary["state"] == "succeeded"
+    assert summary["candidate_count"] == 0
+    persisted = _run_for(ctx, run) if run is not None else None
+    assert persisted is not None
+    diagnostics = persisted.diagnostics
+    assert diagnostics.get("passed_count") == 0
+    exclusion_counts = diagnostics.get("exclusion_counts", {})
+    assert isinstance(exclusion_counts, Mapping)
+    assert exclusion_counts.get("budget_max") == 2
+    proposals = diagnostics.get("relaxation_proposals", [])
+    assert isinstance(proposals, list) and proposals
+    proposed_keys = {item.get("criterion") for item in proposals}
+    assert {"budget_max", "min_rooms"} <= proposed_keys

@@ -297,6 +297,7 @@ class FakeRunRepository:
             finished_at=event.occurred_at,
             correlation_id=run.correlation_id,
             version=current.version + 1,
+            diagnostics=dict(run.diagnostics or {}),
         )
         self.items_by_run[run.run_id] = list(items)
         self.events.append(event)
@@ -327,6 +328,65 @@ class FakeRunRepository:
             correlation_id=run.correlation_id,
             version=current.version + 1,
         )
+
+    def supersede(
+        self,
+        run_id: UUID,
+        *,
+        reason: str,
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        current = self.rows.get(run_id)
+        if current is None:
+            return None
+        if current.state in {"succeeded", "failed", "superseded"}:
+            return current
+        self.rows[run_id] = RecommendationRun(
+            run_id=current.run_id,
+            profile_id=current.profile_id,
+            profile_version_id=current.profile_version_id,
+            state="superseded",
+            trigger=current.trigger,
+            score_policy_version=current.score_policy_version,
+            candidate_count=current.candidate_count,
+            published_item_count=0,
+            failure_code=reason,
+            job_execution_id=current.job_execution_id,
+            created_at=current.created_at,
+            finished_at=None,
+            correlation_id=correlation_id,
+            version=current.version + 1,
+        )
+        return self.rows[run_id]
+
+    def set_diagnostics(
+        self,
+        run_id: UUID,
+        *,
+        diagnostics: Mapping[str, object],
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        current = self.rows.get(run_id)
+        if current is None:
+            return None
+        self.rows[run_id] = RecommendationRun(
+            run_id=current.run_id,
+            profile_id=current.profile_id,
+            profile_version_id=current.profile_version_id,
+            state=current.state,
+            trigger=current.trigger,
+            score_policy_version=current.score_policy_version,
+            candidate_count=current.candidate_count,
+            published_item_count=current.published_item_count,
+            failure_code=current.failure_code,
+            job_execution_id=current.job_execution_id,
+            created_at=current.created_at,
+            finished_at=current.finished_at,
+            correlation_id=correlation_id,
+            version=current.version + 1,
+            diagnostics=dict(diagnostics),
+        )
+        return self.rows[run_id]
 
 
 @dataclass

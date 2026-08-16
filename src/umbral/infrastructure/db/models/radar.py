@@ -29,6 +29,7 @@ RECOMMENDATION_RUN_STATE = ENUM(
     "running",
     "succeeded",
     "failed",
+    "superseded",
     name="recommendation_run_state",
     create_type=True,
 )
@@ -43,7 +44,10 @@ class SearchProfile(IdentityAuditMixin, Base):
     __table_args__ = (
         UniqueConstraint("owner_id", "name", name="uq_search_profiles_owner_name"),
         CheckConstraint(
-            "budget_max > 0 AND (budget_min IS NULL OR budget_min < budget_max)",
+            "(budget_max IS NULL OR budget_max > 0) "
+            "AND (budget_min IS NULL OR budget_min >= 0) "
+            "AND (budget_min IS NULL OR budget_max IS NULL "
+            "OR budget_min < budget_max)",
             name="ck_search_profiles_budget",
         ),
         CheckConstraint(
@@ -66,9 +70,9 @@ class SearchProfile(IdentityAuditMixin, Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     operation: Mapped[str] = mapped_column(String(20), nullable=False)
     zones: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
-    budget_max: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
+    budget_max: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
     budget_min: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
-    min_rooms: Mapped[int] = mapped_column(Integer, nullable=False)
+    min_rooms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     surface_min: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     surface_max: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     status: Mapped[str] = mapped_column(SEARCH_PROFILE_STATE, nullable=False)
@@ -118,7 +122,7 @@ class RecommendationRun(IdentityAuditMixin, Base):
             name="uq_recommendation_runs_profile_version",
         ),
         CheckConstraint(
-            "state IN ('pending', 'running', 'succeeded', 'failed')"
+            "state IN ('pending', 'running', 'succeeded', 'failed', 'superseded')"
             " AND (state IN ('pending', 'running') OR finished_at IS NOT NULL)",
             name="ck_recommendation_runs_state_finished",
         ),
@@ -145,6 +149,9 @@ class RecommendationRun(IdentityAuditMixin, Base):
         Integer, nullable=False, default=0
     )
     failure_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    diagnostics: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
     job_execution_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True
     )

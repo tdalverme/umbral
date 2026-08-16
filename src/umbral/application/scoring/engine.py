@@ -15,7 +15,10 @@ from uuid import UUID, uuid4
 
 from umbral.application.criteria.contracts import Compilation, ListingObservation
 from umbral.application.radar.contracts import SearchProfile
-from umbral.application.scoring.contracts import CriterionEvaluation
+from umbral.application.scoring.contracts import (
+    CriterionEvaluation,
+    SemanticSignal,
+)
 from umbral.application.scoring.evaluators import (
     EvaluationResult,
     evaluate_fixed_criterion,
@@ -30,6 +33,7 @@ from umbral.application.silver.contracts import NormalizedListing
 
 ObservationsByConcept = Mapping[str, ListingObservation]
 ObservationsByListing = Mapping[UUID, ObservationsByConcept]
+SemanticSignalsByListing = Mapping[UUID, tuple[SemanticSignal, ...]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,9 +76,11 @@ def score_candidates(
     run_id: UUID,
     correlation_id: UUID,
     now: datetime,
+    semantic_signals: SemanticSignalsByListing | None = None,
 ) -> tuple[ScoredCandidate, ...]:
     """Score every candidate against the policy; returns frozen candidates."""
 
+    signals = semantic_signals or {}
     scored: list[ScoredCandidate] = []
     for listing in candidates:
         candidate = _score_candidate(
@@ -86,6 +92,7 @@ def score_candidates(
             run_id=run_id,
             correlation_id=correlation_id,
             now=now,
+            semantic_signals=signals.get(listing.listing_id, ()),
         )
         if candidate is not None:
             scored.append(candidate)
@@ -112,6 +119,7 @@ def _score_candidate(
     run_id: UUID,
     correlation_id: UUID,
     now: datetime,
+    semantic_signals: tuple[SemanticSignal, ...] = (),
 ) -> ScoredCandidate | None:
     version_key = f"policy:{policy.score_policy_version}"
     evaluations: list[CriterionEvaluation] = []
@@ -196,6 +204,8 @@ def _score_candidate(
             )
         )
     frozen_evaluations = tuple(evaluations)
+    semantic_contribution = _semantic_contribution(policy, semantic_signals)
+    contribution_sum += semantic_contribution
     total = _apply_deltas(contribution_sum, policy, frozen_evaluations)
     if any(
         criterion.gate == "cap_0.6_on_mismatch"
@@ -237,6 +247,24 @@ def _fixed_criterion_declared(key: str, profile: SearchProfile) -> bool:
     if key == "ubicacion":
         return bool(profile.zones)
     return True
+
+
+def _semantic_contribution(
+    policy: ScoringPolicyDoc,
+    signals: tuple[SemanticSignal, ...],
+) -> float:
+    """Soft-only bounded contribution of semantic evidence (FR-018, FR-022).
+
+    Semantic signals never become hard filters: they add at most the policy
+    ``semantic.max_weight`` per candidate, weighted by signal confidence, and
+    zero when the policy has no semantic block or no signal is available.
+    """
+    if not signals or policy.semantic is None:
+        return 0.0
+    cap = policy.semantic.max_weight
+    raw = sum(signal.score * signal.confidence for signal in signals)
+    normalized = raw / len(signals)
+    return round(min(cap, cap * normalized), 6)
 
 
 def _evaluate_criterion(

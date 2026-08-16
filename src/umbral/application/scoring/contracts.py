@@ -65,6 +65,23 @@ class CriterionEvaluation:
 
 
 @dataclass(frozen=True, slots=True)
+class SemanticSignal:
+    """Frozen semantic signal consumed by the pure scoring engine.
+
+    Produced only when query and listing embeddings exist and their versions
+    are compatible; otherwise the evaluation stays unknown with zero
+    contribution and a visible limitation (FR-017/FR-018).
+    """
+
+    binding_id: UUID
+    listing_id: UUID
+    score: float
+    confidence: float
+    query_embedding_ref: UUID
+    listing_embedding_ref: UUID
+
+
+@dataclass(frozen=True, slots=True)
 class ExplanationReason:
     """One reason with evidence level and deterministic copy."""
 

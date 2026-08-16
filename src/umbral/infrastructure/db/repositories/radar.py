@@ -435,6 +435,45 @@ class SqlAlchemyRunRepository:
             model.updated_at = now
             session.commit()
 
+    def supersede(
+        self,
+        run_id: UUID,
+        *,
+        reason: str,
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        now = datetime.now(timezone.utc)
+        with self.session_factory() as session:
+            model = session.get(RecommendationRunModel, run_id)
+            if model is None:
+                return None
+            if model.state in {"succeeded", "failed", "superseded"}:
+                return _to_domain_run(model)
+            model.state = "superseded"
+            model.failure_code = reason
+            model.finished_at = now
+            model.updated_at = now
+            model.correlation_id = correlation_id
+            session.commit()
+            return _to_domain_run(model)
+
+    def set_diagnostics(
+        self,
+        run_id: UUID,
+        *,
+        diagnostics: Mapping[str, object],
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        with self.session_factory() as session:
+            model = session.get(RecommendationRunModel, run_id)
+            if model is None:
+                return None
+            model.diagnostics = dict(diagnostics)
+            model.updated_at = datetime.now(timezone.utc)
+            model.correlation_id = correlation_id
+            session.commit()
+            return _to_domain_run(model)
+
 
 class SqlAlchemyItemRepository:
     def __init__(self, session_factory: SessionFactory) -> None:
@@ -690,6 +729,7 @@ def _run_model(run: RecommendationRun) -> RecommendationRunModel:
         failure_code=run.failure_code,
         job_execution_id=run.job_execution_id,
         finished_at=run.finished_at,
+        diagnostics=dict(run.diagnostics or {}),
     )
 
 
@@ -753,6 +793,7 @@ def _to_domain_run(model: RecommendationRunModel) -> RecommendationRun:
         version=model.version,
         actor_kind=model.actor_kind,
         actor_id=model.actor_id,
+        diagnostics=dict(model.diagnostics or {}),
     )
 
 

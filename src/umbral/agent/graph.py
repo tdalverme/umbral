@@ -13,7 +13,7 @@ import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID, uuid4
 
 from langgraph.graph import END, START, StateGraph
@@ -43,10 +43,80 @@ from umbral.application.agent.tools.ports import (
     ProposalDecisionGateway,
 )
 from umbral.application.chat.ports import ConversationGateway
+from umbral.application.conversation.contracts import (
+    ConversationTurnContext,
+    PendingAction,
+    TurnEffect,
+    TurnInterpretation,
+)
+from umbral.application.conversation.policy import TurnPlan
+
+
+class TurnServiceLike(Protocol):
+    """The subset of ConversationTurnService the v4 graph consumes."""
+
+    def load_context(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        correlation_id: UUID,
+    ) -> ConversationTurnContext: ...
+
+    def plan(
+        self,
+        *,
+        interpretation: TurnInterpretation,
+        context: ConversationTurnContext,
+    ) -> TurnPlan: ...
+
+    def apply_safe(
+        self,
+        *,
+        plan: TurnPlan,
+        context: ConversationTurnContext,
+        correlation_id: UUID,
+    ) -> tuple[tuple[TurnEffect, ...], tuple[Mapping[str, object], ...]]: ...
+
+    def resolve(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        decision: Mapping[str, object],
+        correlation_id: UUID,
+    ) -> tuple[TurnEffect, ...]: ...
+
+    def schedule_refresh(
+        self,
+        *,
+        context: ConversationTurnContext,
+        correlation_id: UUID,
+    ) -> tuple[Mapping[str, object], ...]: ...
+
+
+class InterpretationLike(Protocol):
+    """The subset of InterpretationCompiler the v4 graph consumes."""
+
+    def interpret(
+        self,
+        *,
+        message_text: str,
+        pending_action: Mapping[str, object] | None,
+        correlation_id: object | None = None,
+    ) -> TurnInterpretation: ...
+
+    def _interpretation_from_data(
+        self, data: Mapping[str, object]
+    ) -> TurnInterpretation: ...
+
+    def _empty_interpretation(self) -> TurnInterpretation: ...
+
 
 TOPOLOGY_VERSION = 1
 TOOLS_TOPOLOGY_VERSION = 2
 CHAT_TOPOLOGY_VERSION = 3
+COPILOT_TOPOLOGY_VERSION = 4
 
 _EFFECT_USER_MESSAGE = "user_message"
 _EFFECT_ASSISTANT_MESSAGE = "assistant_message"
@@ -132,6 +202,22 @@ class AgentGraphV3:
 
     compiled: Any
     deps: GraphDepsV3
+
+
+@dataclass(slots=True)
+class GraphDepsV4(GraphDepsV3):
+    """Topology v4 dependencies: the turn service and interpretation compiler."""
+
+    turn_service: TurnServiceLike
+    interpretation: InterpretationLike
+
+
+@dataclass(frozen=True, slots=True)
+class AgentGraphV4:
+    """The compiled topology v4 graph plus its per-run dependency holder."""
+
+    compiled: Any
+    deps: GraphDepsV4
 
 
 def build_topology_v1(
@@ -1458,6 +1544,663 @@ def build_topology_v3(
     builder.add_edge("persist_reply", END)
     compiled = builder.compile(checkpointer=saver)
     return AgentGraphV3(compiled=compiled, deps=deps)
+
+
+def build_topology_v4(
+    *,
+    gateway: ModelGateway,
+    conversation: ConversationGateway,
+    recorder: RunRecorder,
+    saver: Any,
+    turn_service: TurnServiceLike,
+    interpretation: InterpretationLike,
+    clock: Callable[[], datetime],
+    model_version: str,
+    prompt_version: str,
+    schema_version: str,
+    reply_schema: Mapping[str, object],
+    reply_chunk_words: int = 12,
+    reply_max_refs: int = 10,
+) -> AgentGraphV4:
+    """Build the copilot topology v4 graph (UM-H4-022, R-01..R-05).
+
+    Deterministic turn boundaries: load verified context, interpret ordered
+    multi-acts, plan effects, apply only safe/reversible effects and route to
+    confirmation (interrupt), background refresh or reply composition. The
+    model never decides routing, hard filters or durable state.
+    """
+
+    deps = GraphDepsV4(
+        gateway=gateway,
+        conversation=conversation,
+        recorder=recorder,
+        sinks=GraphSinks(),
+        clock=clock,
+        model_version=model_version,
+        prompt_version=prompt_version,
+        schema_version=schema_version,
+        reply_schema=reply_schema,
+        tool_executor=None,  # type: ignore[arg-type]
+        max_calls_per_turn=0,
+        intent_compiler=None,  # type: ignore[arg-type]
+        decision_gateway=None,  # type: ignore[arg-type]
+        preference_gateway=None,  # type: ignore[arg-type]
+        high_impact_keys=(),
+        clarification_min_confidence=0.0,
+        clarification_max_rounds=0,
+        reply_chunk_words=reply_chunk_words,
+        reply_max_refs=reply_max_refs,
+        turn_service=turn_service,
+        interpretation=interpretation,
+    )
+
+    def _load_context(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        node_started = deps.clock()
+        errors = list(state.get("errors") or [])
+        try:
+            loaded = deps.turn_service.load_context(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+            )
+        except Exception as exc:  # noqa: BLE001 - typed at the boundary
+            code = str(getattr(exc, "code", "conversation.load_failed"))
+            errors.append({"code": code})
+            _finish_node(
+                recorder=recorder,
+                node_name="load_context",
+                graph_run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="failed",
+                error_summary=errors[-1],
+            )
+            return {"context": context, "errors": errors}
+        profile_id = loaded.verified_profile_id
+        pending = loaded.pending_action
+        context["verified_profile_id"] = (
+            str(profile_id) if profile_id is not None else None
+        )
+        context["profile_name"] = loaded.profile_name
+        context["pending_action"] = (
+            {
+                "kind": pending.kind,
+                "action_id": pending.action_id,
+                "diff": dict(pending.diff),
+                "impact": dict(pending.impact),
+            }
+            if pending is not None
+            else None
+        )
+        context["radar_filters"] = dict(loaded.radar_filters)
+        context["answered_slots"] = list(loaded.answered_slots)
+        _finish_node(
+            recorder=recorder,
+            node_name="load_context",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context, "errors": errors}
+
+    def _interpret_turn(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        node_started = deps.clock()
+        errors = list(state.get("errors") or [])
+        pending = context.get("pending_action")
+        try:
+            interpretation = deps.interpretation.interpret(
+                message_text=str(context.get("user_message_text", "")),
+                pending_action=pending if isinstance(pending, Mapping) else None,
+                correlation_id=_uuid(context, "correlation_id"),
+            )
+        except Exception as exc:  # noqa: BLE001 - typed at the boundary
+            code = str(getattr(exc, "code", "conversation.interpretation_failed"))
+            errors.append({"code": code})
+            _finish_node(
+                recorder=recorder,
+                node_name="interpret_turn",
+                graph_run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="failed",
+                error_summary=errors[-1],
+            )
+            return {"context": context, "errors": errors}
+        interpretation_data: dict[str, object] = {
+            "acts": [
+                {
+                    "act_id": act.act_id,
+                    "kind": act.kind,
+                    "target": dict(act.target),
+                    "payload": dict(act.payload),
+                    "confidence": act.confidence,
+                }
+                for act in interpretation.acts
+            ],
+            "ambiguity": (
+                dict(interpretation.ambiguity) if interpretation.ambiguity else None
+            ),
+        }
+        _finish_node(
+            recorder=recorder,
+            node_name="interpret_turn",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {
+            "context": context,
+            "interpretation": interpretation_data,
+            "errors": errors,
+        }
+
+    def _plan_effects(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        node_started = deps.clock()
+        errors = list(state.get("errors") or [])
+        interpretation_data = state.get("interpretation")
+        if not isinstance(interpretation_data, Mapping):
+            errors.append({"code": "conversation.no_interpretation"})
+            _finish_node(
+                recorder=recorder,
+                node_name="plan_effects",
+                graph_run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="failed",
+                error_summary=errors[-1],
+            )
+            return {"context": context, "errors": errors}
+        try:
+            interpretation = deps.interpretation._interpretation_from_data(
+                interpretation_data
+            )
+        except Exception as exc:  # noqa: BLE001 - sanitized
+            code = str(getattr(exc, "code", "conversation.plan_failed"))
+            errors.append({"code": code})
+            _finish_node(
+                recorder=recorder,
+                node_name="plan_effects",
+                graph_run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="failed",
+                error_summary=errors[-1],
+            )
+            return {"context": context, "errors": errors}
+        turn_context = _turn_context(context)
+        plan = deps.turn_service.plan(
+            interpretation=interpretation, context=turn_context
+        )
+        planned: list[dict[str, object]] = [
+            {
+                "effect_key": effect.effect_key,
+                "act_id": effect.act_id,
+                "status": effect.status,
+                "object_type": effect.object_type,
+                "object_id": effect.object_id,
+                "reason_code": effect.reason_code,
+                "detail": dict(effect.detail),
+            }
+            for effect in plan.effects
+        ]
+        context["refresh_required"] = plan.routing.refresh_required
+        context["confirmation_required"] = plan.routing.confirmation_required
+        context["turn_question"] = plan.question
+        _finish_node(
+            recorder=recorder,
+            node_name="plan_effects",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {
+            "context": context,
+            "planned_effects": planned,
+            "errors": errors,
+        }
+
+    def _apply_safe_effects(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        node_started = deps.clock()
+        errors = list(state.get("errors") or [])
+        interpretation_data = state.get("interpretation")
+        turn_context = _turn_context(context)
+        try:
+            interpretation = (
+                deps.interpretation._interpretation_from_data(interpretation_data)
+                if isinstance(interpretation_data, Mapping)
+                else deps.interpretation._empty_interpretation()
+            )
+            plan = deps.turn_service.plan(
+                interpretation=interpretation, context=turn_context
+            )
+            applied, _refreshed = deps.turn_service.apply_safe(
+                plan=plan,
+                context=turn_context,
+                correlation_id=_uuid(context, "correlation_id"),
+            )
+        except Exception as exc:  # noqa: BLE001 - typed at the boundary
+            code = str(getattr(exc, "code", "conversation.apply_failed"))
+            errors.append({"code": code})
+            _finish_node(
+                recorder=recorder,
+                node_name="apply_safe_effects",
+                graph_run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="failed",
+                error_summary=errors[-1],
+            )
+            return {"context": context, "errors": errors}
+        results: list[dict[str, object]] = [
+            {
+                "effect_key": effect.effect_key,
+                "act_id": effect.act_id,
+                "status": effect.status,
+                "object_type": effect.object_type,
+                "object_id": effect.object_id,
+                "reason_code": effect.reason_code,
+                "detail": dict(effect.detail),
+            }
+            for effect in applied
+        ]
+        existing = list(state.get("effect_results") or [])
+        _finish_node(
+            recorder=recorder,
+            node_name="apply_safe_effects",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {
+            "context": context,
+            "effect_results": existing + results,
+            "errors": errors,
+        }
+
+    def _route_from_apply(state: AgentState) -> str:
+        context = _context(state)
+        if context.get("refresh_required") and not context.get("confirmation_required"):
+            return "schedule_refresh"
+        if context.get("confirmation_required"):
+            return "require_confirmation"
+        return "compose_reply"
+
+    def _route_from_schedule(state: AgentState) -> str:
+        context = _context(state)
+        if context.get("confirmation_required"):
+            return "require_confirmation"
+        return "compose_reply"
+
+    def _schedule_refresh(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        node_started = deps.clock()
+        profile_id = context.get("verified_profile_id")
+        if profile_id is None:
+            _finish_node(
+                recorder=recorder,
+                node_name="schedule_refresh",
+                graph_run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="completed",
+            )
+            return {"context": context}
+        refreshed = deps.turn_service.schedule_refresh(
+            context=_turn_context(context),
+            correlation_id=_uuid(context, "correlation_id"),
+        )
+        if refreshed:
+            context["refresh_run_id"] = str(refreshed[0].get("run_id", ""))
+        _finish_node(
+            recorder=recorder,
+            node_name="schedule_refresh",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context}
+
+    def _confirmation_payload(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        results = state.get("effect_results") or []
+        pending = [
+            dict(item)
+            for item in results
+            if isinstance(item, Mapping) and item.get("status") == "pending"
+        ]
+        return {
+            "type": "conversation_confirmation",
+            "pending_action": context.get("pending_action"),
+            "effects": pending,
+        }
+
+    def _require_confirmation(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        payload = _confirmation_payload(state)
+        decision = interrupt(payload)
+        context["decision"] = decision
+        context["resume_decision"] = False
+        context["confirmation_required"] = False
+        _finish_node(
+            recorder=recorder,
+            node_name="require_confirmation",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=deps.clock(),
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context}
+
+    def _resolve_pending(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        node_started = deps.clock()
+        errors = list(state.get("errors") or [])
+        decision = context.get("decision")
+        if not isinstance(decision, Mapping):
+            context["generated_reply"] = {
+                "text": "No recibí una decisión válida para ese cambio.",
+                "refs": [],
+            }
+            return {"context": context}
+        try:
+            resolved = deps.turn_service.resolve(
+                user_id=_uuid(context, "user_id"),
+                session_id=_uuid(context, "session_id"),
+                decision=decision,
+                correlation_id=_uuid(context, "correlation_id"),
+            )
+        except Exception as exc:  # noqa: BLE001 - typed at the boundary
+            code = str(getattr(exc, "code", "conversation.resolve_failed"))
+            errors.append({"code": code})
+            context["generated_reply"] = {
+                "text": "No pude aplicar la decisión; "
+                + _friendly_error(code),
+                "refs": [],
+            }
+            _finish_node(
+                recorder=recorder,
+                node_name="resolve_pending",
+                graph_run_id=_uuid(context, "run_id"),
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="failed",
+                error_summary=errors[-1],
+            )
+            return {"context": context, "errors": errors}
+        results = list(state.get("effect_results") or [])
+        for effect in resolved:
+            results.append(
+                {
+                    "effect_key": effect.effect_key,
+                    "act_id": effect.act_id,
+                    "status": effect.status,
+                    "object_type": effect.object_type,
+                    "object_id": effect.object_id,
+                    "reason_code": effect.reason_code,
+                    "detail": dict(effect.detail),
+                }
+            )
+        context["resolved"] = True
+        _finish_node(
+            recorder=recorder,
+            node_name="resolve_pending",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context, "effect_results": results, "errors": errors}
+
+    def _compose_reply(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        run_id = _uuid(context, "run_id")
+        node_started = deps.clock()
+        errors = list(state.get("errors") or [])
+        effects = state.get("effect_results") or []
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Compón una respuesta breve en español sobre los cambios "
+                    "aplicados. Nunca inventes hechos ni resultados: cita "
+                    "solo los efectos listados y usa refs verificables."
+                ),
+            },
+            _user_message(context),
+            {
+                "role": "user",
+                "content": "Efectos de este turno:\n"
+                + json.dumps(effects, ensure_ascii=False, default=str),
+            },
+        ]
+        try:
+            result = deps.gateway.generate_structured(
+                messages=tuple(messages),
+                schema=deps.reply_schema,
+                schema_version=deps.schema_version,
+                prompt_version=deps.prompt_version,
+                model_version=deps.model_version,
+            )
+        except Exception as exc:  # noqa: BLE001 - unknown provider failure
+            _finish_node(
+                recorder=recorder,
+                node_name="compose_reply",
+                graph_run_id=run_id,
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="interrupted",
+                error_summary={
+                    "code": "agent.provider_exception",
+                    "kind": type(exc).__name__,
+                },
+            )
+            raise
+        deps.recorder.record_model_call(
+            ModelCall(
+                call_id=uuid4(),
+                graph_run_id=run_id,
+                model_version=result.model_version,
+                prompt_version=deps.prompt_version,
+                schema_version=deps.schema_version,
+                status=result.status,
+                correlation_id=_uuid(context, "correlation_id"),
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                total_tokens=result.total_tokens,
+                latency_ms=result.latency_ms,
+                error_code=result.error_code,
+            )
+        )
+        if result.status != "success" or result.content is None:
+            errors.append({"code": result.error_code or "agent.generation_failed"})
+            _finish_node(
+                recorder=recorder,
+                node_name="compose_reply",
+                graph_run_id=run_id,
+                correlation_id=_uuid(context, "correlation_id"),
+                started_at=node_started,
+                finished_at=deps.clock(),
+                status="failed",
+                error_summary=errors[-1],
+            )
+            return {"context": context, "errors": errors}
+        content = result.content
+        text = str(content.get("reply_text", ""))
+        refs = content.get("refs")
+        ref_list = [dict(item) for item in refs] if isinstance(refs, list) else []
+        question = content.get("question")
+        context["generated_reply"] = {
+            "text": text,
+            "refs": ref_list,
+            "question": question if isinstance(question, str) else None,
+        }
+        if text:
+            _emit_reply_chunks(
+                run_id=run_id,
+                text=text,
+                words=deps.reply_chunk_words,
+                emit=deps.sinks.emit,
+            )
+        _finish_node(
+            recorder=recorder,
+            node_name="compose_reply",
+            graph_run_id=run_id,
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context, "errors": errors}
+
+    def _persist_reply(state: AgentState) -> dict[str, object]:
+        context = _context(state)
+        effects = dict(_effects(context))
+        if _EFFECT_ASSISTANT_MESSAGE in effects:
+            return {"context": context}
+        reply = context.get("generated_reply")
+        if not isinstance(reply, Mapping):
+            return {"context": context}
+        node_started = deps.clock()
+        raw_refs = reply.get("refs", [])
+        ref_list = [
+            {"entity": str(item["entity"]), "id": str(item["id"])}
+            for item in raw_refs
+            if isinstance(item, Mapping)
+        ]
+        valid_refs, _dropped = _validated_refs(state, ref_list, deps.reply_max_refs)
+        message = deps.conversation.persist_assistant_message(
+            user_id=_uuid(context, "user_id"),
+            session_id=_uuid(context, "session_id"),
+            text=str(reply.get("text", "")),
+            refs=tuple(valid_refs),
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            now=deps.clock(),
+        )
+        effects[_EFFECT_ASSISTANT_MESSAGE] = _str(context, "run_id")
+        context["effects_applied"] = effects
+        context["assistant_message_id"] = str(message.message_id)
+        _finish_node(
+            recorder=recorder,
+            node_name="persist_reply",
+            graph_run_id=_uuid(context, "run_id"),
+            correlation_id=_uuid(context, "correlation_id"),
+            started_at=node_started,
+            finished_at=deps.clock(),
+            status="completed",
+        )
+        return {"context": context}
+
+    builder = StateGraph(AgentState)
+    builder.add_node("load_context", _load_context)
+    builder.add_node("interpret_turn", _interpret_turn)
+    builder.add_node("plan_effects", _plan_effects)
+    builder.add_node("apply_safe_effects", _apply_safe_effects)
+    builder.add_node("require_confirmation", _require_confirmation)
+    builder.add_node("resolve_pending", _resolve_pending)
+    builder.add_node("schedule_refresh", _schedule_refresh)
+    builder.add_node("compose_reply", _compose_reply)
+    builder.add_node("persist_reply", _persist_reply)
+    builder.add_edge(START, "load_context")
+    builder.add_edge("load_context", "interpret_turn")
+    builder.add_edge("interpret_turn", "plan_effects")
+    builder.add_edge("plan_effects", "apply_safe_effects")
+    builder.add_conditional_edges(
+        "apply_safe_effects",
+        _route_from_apply,
+        {
+            "schedule_refresh": "schedule_refresh",
+            "require_confirmation": "require_confirmation",
+            "compose_reply": "compose_reply",
+        },
+    )
+    builder.add_conditional_edges(
+        "schedule_refresh",
+        _route_from_schedule,
+        {
+            "require_confirmation": "require_confirmation",
+            "compose_reply": "compose_reply",
+        },
+    )
+    builder.add_edge("require_confirmation", "resolve_pending")
+    builder.add_edge("resolve_pending", "compose_reply")
+    builder.add_edge("compose_reply", "persist_reply")
+    builder.add_edge("persist_reply", END)
+    compiled = builder.compile(checkpointer=saver)
+    return AgentGraphV4(compiled=compiled, deps=deps)
+
+
+def _effect_from_data(data: Mapping[str, object]) -> TurnEffect:
+    return TurnEffect(
+        effect_key=str(data.get("effect_key", "")),
+        act_id=str(data.get("act_id", "")),
+        status=str(data.get("status", "rejected")),  # type: ignore[arg-type]
+        object_type=data.get("object_type"),  # type: ignore[arg-type]
+        object_id=data.get("object_id"),  # type: ignore[arg-type]
+        reason_code=data.get("reason_code"),  # type: ignore[arg-type]
+        detail=_mapping_or_empty(data.get("detail")),
+    )
+
+
+def _turn_context(context: Mapping[str, object]) -> ConversationTurnContext:
+    profile_id = context.get("verified_profile_id")
+    pending = context.get("pending_action")
+    filters = context.get("radar_filters")
+    return ConversationTurnContext(
+        user_id=_uuid(context, "user_id"),
+        session_id=_uuid(context, "session_id"),
+        verified_profile_id=UUID(str(profile_id)) if profile_id else None,
+        profile_name=_profile_name(context.get("profile_name")),
+        pending_action=(
+            PendingAction(
+                kind=str(pending.get("kind", "")),
+                action_id=str(pending.get("action_id", "")),
+                diff=_mapping_or_empty(pending.get("diff")),
+                impact=_mapping_or_empty(pending.get("impact")),
+            )
+            if isinstance(pending, Mapping)
+            else None
+        ),
+        answered_slots=tuple(
+            str(item)
+            for item in _as_list(context.get("answered_slots"))
+        ),
+        radar_filters=(
+            dict(filters) if isinstance(filters, Mapping) else {}
+        ),
+    )
+
+
+def _as_list(value: object) -> list[object]:
+    return list(value) if isinstance(value, (list, tuple)) else []
+
+
+def _profile_name(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _waiting_proposal(

@@ -9,7 +9,9 @@ from typing import Literal
 from uuid import UUID
 
 SearchProfileState = Literal["active", "paused", "archived"]
-RecommendationRunState = Literal["pending", "running", "succeeded", "failed"]
+RecommendationRunState = Literal[
+    "pending", "running", "succeeded", "failed", "superseded"
+]
 RecommendationRunTrigger = Literal["created", "edited", "resumed"]
 OperationType = Literal["rental"]
 
@@ -78,6 +80,7 @@ class RecommendationRun:
     version: int = 1
     actor_kind: str = "service"
     actor_id: str | None = None
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

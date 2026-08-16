@@ -50,6 +50,7 @@ EXPECTED_OPERATION_IDS = {
     "POST /api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/reject": "rejectLearningProposal",
     "POST /api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/undo": "undoLearningProposal",
     "GET /api/v1/search-profiles/{search_profile_id}/update-proposals": "listUpdateProposals",
+    "GET /api/v1/search-profiles/{search_profile_id}/preferences": "listSearchProfilePreferences",
     "GET /api/v1/chat/sessions": "listChatSessions",
     "GET /api/v1/chat/sessions/{session_id}": "getChatSession",
     "GET /api/v1/chat/sessions/{session_id}/messages": "listChatSessionMessages",

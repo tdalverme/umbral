@@ -14,7 +14,11 @@ from umbral.application.radar.contracts import (
     RecommendationRun,
     SearchProfile,
 )
-from umbral.application.scoring.contracts import CriterionEvaluation, PolicyVersion
+from umbral.application.scoring.contracts import (
+    CriterionEvaluation,
+    PolicyVersion,
+    SemanticSignal,
+)
 from umbral.application.silver.contracts import NormalizedListing
 
 
@@ -62,6 +66,20 @@ class ObservationReader(Protocol):
     def active_for_listings(
         self, listing_ids: tuple[UUID, ...]
     ) -> Mapping[UUID, Mapping[str, ListingObservation]]: ...
+
+
+class SemanticSignalReader(Protocol):
+    """Loads frozen semantic signals for a profile version and candidate set.
+
+    Returns zero signals when vectors or embedding versions are missing or
+    incompatible; the engine then keeps that evaluation unknown (FR-017).
+    """
+
+    def for_profile_version_and_listings(
+        self,
+        profile_version_id: UUID,
+        listing_ids: tuple[UUID, ...],
+    ) -> Mapping[UUID, tuple[SemanticSignal, ...]]: ...
 
 
 class CompilationReader(Protocol):

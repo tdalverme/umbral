@@ -142,6 +142,7 @@ class PreferenceFact(IdentityAuditMixin, Base):
         ),
         Index("ix_preference_facts_profile_concept", "profile_id", "concept_key"),
         Index("ix_preference_facts_profile_created", "profile_id", "created_at"),
+        Index("ix_preference_facts_criterion_binding", "criterion_binding_id"),
     )
 
     profile_id: Mapped[UUID] = mapped_column(
@@ -158,6 +159,11 @@ class PreferenceFact(IdentityAuditMixin, Base):
     state: Mapped[str] = mapped_column(FACT_STATE, nullable=False, default="active")
     superseded_by: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True
+    )
+    criterion_binding_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("criterion_bindings.id", ondelete="RESTRICT"),
+        nullable=True,
     )
 
 

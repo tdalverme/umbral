@@ -42,6 +42,7 @@ from umbral.application.radar.contracts import (
     SearchProfile,
     SearchProfileState,
 )
+from umbral.application.radar.diagnostics import build_diagnostics
 from umbral.application.radar.hard_filters import (
     RESIDENTIAL_PROPERTY_TYPES,
     CandidateListing,
@@ -592,8 +593,23 @@ class RadarService:
             version
         )
         profile = rehydrate_profile_version(profile, version, frozen_policy)
-        if run.state in {"succeeded", "failed"}:
+        if run.state in {"succeeded", "failed", "superseded"}:
             return self._summary(run)
+
+        current_run = self.runs.latest_succeeded_for_profile(profile_id)
+        if (
+            current_run is not None
+            and current_run.profile_version_id != profile_version_id
+        ):
+            # A newer radar version already published; this run's results would
+            # replace the current ones (FR-026/SC-012), so it is superseded.
+            superseded = self.runs.supersede(
+                run_id,
+                reason="radar.results_superseded",
+                correlation_id=run.correlation_id,
+            )
+            if superseded is not None:
+                return self._summary(superseded)
 
         if job_execution_id is not None and run.job_execution_id is None:
             run = replace(run, job_execution_id=job_execution_id)
@@ -613,6 +629,18 @@ class RadarService:
                 supported_property_types=residential_property_types,
             )
         )
+        if not passed:
+            # Zero matches: persist diagnostics and offer relaxations (FR-021).
+            diagnostics = build_diagnostics(
+                profile=profile,
+                candidates=candidates,
+                supported_neighborhoods=frozen_policy.neighborhoods,
+            )
+            run = self.runs.set_diagnostics(
+                run_id,
+                diagnostics=diagnostics,
+                correlation_id=run.correlation_id,
+            ) or run
         items: tuple[RecommendationItem, ...]
         evaluations: tuple[CriterionEvaluation, ...] = ()
         if run.score_policy_version != self.scoring.score_policy_version:

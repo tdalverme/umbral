@@ -17,11 +17,15 @@ _REPLY_KIND = "reply"
 
 @dataclass(frozen=True, slots=True)
 class ChatSession:
-    """A durable conversation tied to a user and a search profile."""
+    """A durable conversation tied to a user; radar binding is optional.
+
+    ``search_profile_id`` is None until the conversational service creates or
+    binds the durable radar of the conversation (feature 016).
+    """
 
     session_id: UUID
     user_id: UUID
-    search_profile_id: UUID
+    search_profile_id: UUID | None
     status: SessionStatus
     created_at: datetime
     correlation_id: UUID

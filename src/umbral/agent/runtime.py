@@ -23,6 +23,8 @@ from umbral.agent.graph import (
     TOPOLOGY_VERSION,
     AgentGraph,
     AgentGraphV2,
+    AgentGraphV3,
+    AgentGraphV4,
     build_input_state,
 )
 from umbral.agent.state import STATE_SCHEMA_VERSION
@@ -39,7 +41,7 @@ from umbral.application.chat.ports import ConversationGateway
 
 Clock = Callable[[], datetime]
 
-GraphLike = AgentGraph | AgentGraphV2
+GraphLike = AgentGraph | AgentGraphV2 | AgentGraphV3 | AgentGraphV4
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +156,11 @@ class ChatRuntime:
                     correlation_id=correlation_id,
                     user_message_text=text,
                     schema_version=self.state_schema_version,
-                    search_profile_id=str(session.search_profile_id),
+                    search_profile_id=(
+                        str(session.search_profile_id)
+                        if session.search_profile_id is not None
+                        else None
+                    ),
                     client_message_id=(
                         str(client_message_id) if client_message_id else None
                     ),
