@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import cast
 
 from sqlalchemy import select
+
 from tests.integration.urban.conftest import (
     observations_for_listing,
     run_urban_batch,
@@ -21,7 +22,6 @@ from tests.integration.urban.conftest import (
     seed_urban_contract,
     seed_urban_snapshot,
 )
-
 from umbral.infrastructure.db.models.urban import UrbanSnapshot
 
 _NOW = datetime(2026, 8, 1, tzinfo=timezone.utc)

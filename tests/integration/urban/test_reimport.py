@@ -11,6 +11,7 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+
 from tests.integration.urban.conftest import (
     run_urban_batch,
     seed_listing,
@@ -18,7 +19,6 @@ from tests.integration.urban.conftest import (
     seed_urban_contract,
     seed_urban_snapshot,
 )
-
 from umbral.infrastructure.db.models.urban import UrbanSignal
 
 

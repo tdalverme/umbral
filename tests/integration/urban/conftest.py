@@ -14,9 +14,9 @@ from alembic.config import Config
 from geoalchemy2.elements import WKTElement
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+
 from tests.support.criteria import build_listing
 from tests.support.silver import build_run
-
 from umbral.application.ingestion.contracts import RawListingSnapshot
 from umbral.infrastructure.db.models.urban import UrbanCategory
 from umbral.infrastructure.db.repositories.criteria import (

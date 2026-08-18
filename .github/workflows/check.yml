@@ -11,6 +11,11 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:8.6.4-alpine
+        ports:
+          - 6379:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
