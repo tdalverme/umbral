@@ -99,7 +99,7 @@ def build_radar(factory: SessionFactory, scoring: PolicyRunEngine | None = None)
         session_factory=factory,
         job_runtime=InMemoryJobRuntime(queue=RecordingJobQueue()),
         policy_engine=scoring,
-        score_policy_version="scoring-policy-v1",
+        score_policy_version="scoring-baseline-v1",
         clock=lambda: _NOW,
     )
 
