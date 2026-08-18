@@ -20,7 +20,6 @@ from umbral.infrastructure.db.models.criteria import (
     PreferenceFact,
     ProfileCriteriaCompilation,
     RecomputeRun,
-    UrbanSignal,
 )
 from umbral.infrastructure.db.models.feedback import (
     FeedbackEvent,
@@ -80,6 +79,14 @@ from umbral.infrastructure.db.models.silver import (
     ListingChange,
     SilverListing,
 )
+from umbral.infrastructure.db.models.urban import (
+    NeighborhoodSignalStats,
+    UrbanCategory,
+    UrbanContract,
+    UrbanPrimitive,
+    UrbanSignal,
+    UrbanSnapshot,
+)
 
 __all__ = [
     "AgentGraphRun",
@@ -98,6 +105,11 @@ __all__ = [
     "RecomputeRun",
     "ListingEmbedding",
     "UrbanSignal",
+    "UrbanContract",
+    "UrbanSnapshot",
+    "UrbanCategory",
+    "UrbanPrimitive",
+    "NeighborhoodSignalStats",
     "ImportRun",
     "QuarantineRecord",
     "RawListingSnapshot",

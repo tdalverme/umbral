@@ -52,9 +52,6 @@ from umbral.infrastructure.db.models.criteria import (
 from umbral.infrastructure.db.models.criteria import (
     RecomputeRun as RecomputeRunModel,
 )
-from umbral.infrastructure.db.models.criteria import (
-    UrbanSignal as UrbanSignalModel,
-)
 from umbral.infrastructure.db.models.radar import ProductEventRow
 from umbral.infrastructure.db.models.silver import (
     SilverListing as SilverListingModel,
@@ -348,6 +345,20 @@ class SqlAlchemyObservationRepository:
             session.commit()
             return int(cast(CursorResult[Any], result).rowcount or 0)
 
+    def invalidate_active_for_source(self, source: str) -> int:
+        """Invalidate active observations of a source so they can be re-published."""
+        with self.session_factory() as session:
+            result = session.execute(
+                update(ListingObservationModel)
+                .where(
+                    ListingObservationModel.source == source,
+                    ListingObservationModel.state == "active",
+                )
+                .values(state="invalidated")
+            )
+            session.commit()
+            return int(cast(CursorResult[Any], result).rowcount or 0)
+
     def invalidate_for_extraction_version(self, extraction_version_id: UUID) -> int:
         with self.session_factory() as session:
             result = session.execute(
@@ -539,55 +550,6 @@ class SqlAlchemyEmbeddingRepository:
                 )
             )
             return tuple(model.extraction_version_id for model in models)
-
-
-class SqlAlchemyUrbanSignalRepository:
-    def __init__(self, session_factory: SessionFactory) -> None:
-        self.session_factory = session_factory
-
-    def insert(self, signal: Mapping[str, object]) -> None:
-        with self.session_factory() as session:
-            model = UrbanSignalModel(
-                id=signal["signal_id"],
-                created_at=signal["created_at"],
-                updated_at=signal["created_at"],
-                actor_kind="service",
-                source="criteria.urban",
-                correlation_id=signal["correlation_id"],
-                listing_id=signal["listing_id"],
-                signal_type=signal["signal_type"],
-                signal_source=signal["signal_source"],
-                observed_at=signal["observed_at"],
-                geometry=signal.get("geometry"),
-                algorithm_version=signal["algorithm_version"],
-                payload=_as_mapping_signal(signal),
-            )
-            session.add(model)
-            session.commit()
-
-    def list_for_listing(self, listing_id: UUID) -> tuple[Mapping[str, object], ...]:
-        from sqlalchemy import func, select
-
-        with self.session_factory() as session:
-            rows = session.execute(
-                select(
-                    UrbanSignalModel,
-                    func.ST_AsText(UrbanSignalModel.geometry).label("geometry_wkt"),
-                ).where(UrbanSignalModel.listing_id == listing_id)
-            ).all()
-            return tuple(
-                {
-                    "signal_id": row[0].id,
-                    "listing_id": row[0].listing_id,
-                    "signal_type": row[0].signal_type,
-                    "signal_source": row[0].signal_source,
-                    "observed_at": row[0].observed_at,
-                    "algorithm_version": row[0].algorithm_version,
-                    "geometry": row[1],
-                    "payload": dict(row[0].payload or {}),
-                }
-                for row in rows
-            )
 
 
 class SqlAlchemyCriteriaListingReader:

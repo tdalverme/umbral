@@ -164,6 +164,10 @@ ACTION_RULES: dict[str, ActionRule] = {
         frozenset({"user", "operator", "administrator"}),
         True,
     ),
+    "product.urban.read": ActionRule(
+        "product.urban.read",
+        frozenset({"user", "operator", "administrator"}),
+    ),
     "admin.identity.user.status.change": ActionRule(
         "admin.identity.user.status.change", frozenset({"administrator"})
     ),

@@ -1393,6 +1393,46 @@ export type UpdateSearchProfileRequest = {
 };
 
 /**
+ * UrbanSignalItem
+ */
+export type UrbanSignalItem = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Normalized By
+     */
+    normalized_by: string;
+};
+
+/**
+ * UrbanSignalsResponse
+ */
+export type UrbanSignalsResponse = {
+    /**
+     * Attribution
+     */
+    attribution: string;
+    /**
+     * Contract Version
+     */
+    contract_version: string;
+    /**
+     * License
+     */
+    license: string;
+    /**
+     * Signals
+     */
+    signals: Array<UrbanSignalItem>;
+};
+
+/**
  * ValidationError
  */
 export type ValidationError = {
@@ -3331,6 +3371,39 @@ export type ListUpdateProposalsResponses = {
      */
     200: unknown;
 };
+
+export type GetUrbanSignalsData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/urban/signals';
+};
+
+export type GetUrbanSignalsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+};
+
+export type GetUrbanSignalsResponses = {
+    /**
+     * Successful Response
+     */
+    200: UrbanSignalsResponse;
+};
+
+export type GetUrbanSignalsResponse = GetUrbanSignalsResponses[keyof GetUrbanSignalsResponses];
 
 export type GetRuntimeHealthData = {
     body?: never;

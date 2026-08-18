@@ -74,7 +74,7 @@ jobs:
           RUNTIME_IMAGE: ghcr.io/${{ github.repository }}/runtime
           RUNTIME_DIGEST: ${{ steps.runtime.outputs.digest }}
         run: |
-          ./scripts/deploy/build-release.ps1 -ReleaseId "${{ github.ref_name }}" -GitSha "${{ github.sha }}" -DatabaseRevision "0015_observation_source_urban" -WebImage $env:WEB_IMAGE -WebDigest $env:WEB_DIGEST -RuntimeImage $env:RUNTIME_IMAGE -RuntimeDigest $env:RUNTIME_DIGEST
+          ./scripts/deploy/build-release.ps1 -ReleaseId "${{ github.ref_name }}" -GitSha "${{ github.sha }}" -DatabaseRevision "0017_urban_signals" -WebImage $env:WEB_IMAGE -WebDigest $env:WEB_DIGEST -RuntimeImage $env:RUNTIME_IMAGE -RuntimeDigest $env:RUNTIME_DIGEST
           New-Item -ItemType Directory -Force -Path artifacts/provenance | Out-Null
           docker buildx imagetools inspect "${env:WEB_IMAGE}@${env:WEB_DIGEST}" --raw | Set-Content -NoNewline -Encoding utf8 artifacts/provenance/web.json
           docker buildx imagetools inspect "${env:RUNTIME_IMAGE}@${env:RUNTIME_DIGEST}" --raw | Set-Content -NoNewline -Encoding utf8 artifacts/provenance/runtime.json

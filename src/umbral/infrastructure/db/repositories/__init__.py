@@ -9,6 +9,14 @@ from umbral.infrastructure.db.repositories.preferences import (
     SqlAlchemyBindingRepository,
     SqlAlchemyExpressionRepository,
 )
+from umbral.infrastructure.db.repositories.urban import (
+    SqlAlchemyNeighborhoodStatsRepository,
+    SqlAlchemyUrbanContractRepository,
+    SqlAlchemyUrbanListingReader,
+    SqlAlchemyUrbanPrimitiveRepository,
+    SqlAlchemyUrbanSignalRepository,
+    SqlAlchemyUrbanSnapshotRepository,
+)
 
 __all__ = [
     "InMemoryIdentityStore",
@@ -16,4 +24,11 @@ __all__ = [
     "SqlAlchemyObjectRepository",
     "SqlAlchemyBindingRepository",
     "SqlAlchemyExpressionRepository",
+    "SqlAlchemyUrbanContractRepository",
+    "SqlAlchemyUrbanSnapshotRepository",
+    "SqlAlchemyUrbanPrimitiveRepository",
+    "SqlAlchemyUrbanSignalRepository",
+    "SqlAlchemyUrbanListingReader",
+    "SqlAlchemyNeighborhoodStatsRepository",
 ]
+

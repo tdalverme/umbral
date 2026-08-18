@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from geoalchemy2 import Geometry
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     CheckConstraint,
@@ -45,6 +44,7 @@ EXTRACTION_KIND = ENUM(
     "schema",
     "model",
     "embedding",
+    "urban",
     name="extraction_kind",
     create_type=True,
 )
@@ -346,33 +346,3 @@ class ListingEmbedding(IdentityAuditMixin, Base):
         nullable=True,
     )
 
-
-class UrbanSignal(IdentityAuditMixin, Base):
-    __tablename__ = "urban_signals"
-    __mapper_args__ = {"version_id_col": IdentityAuditMixin.version}
-    __table_args__ = (
-        CheckConstraint(
-            "signal_type IN ('cafe', 'transport', 'green_space')",
-            name="ck_urban_signals_signal_type",
-        ),
-        Index("ix_urban_signals_listing", "listing_id"),
-        Index("ix_urban_signals_type_observed", "signal_type", "observed_at"),
-    )
-
-    listing_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("silver_listings.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
-    signal_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    signal_source: Mapped[str] = mapped_column(String(100), nullable=False)
-    observed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    geometry: Mapped[object | None] = mapped_column(
-        Geometry(geometry_type="POINT", srid=4326), nullable=True
-    )
-    algorithm_version: Mapped[str] = mapped_column(String(100), nullable=False)
-    payload: Mapped[dict[str, object]] = mapped_column(
-        JSONB, nullable=False, default=dict
-    )

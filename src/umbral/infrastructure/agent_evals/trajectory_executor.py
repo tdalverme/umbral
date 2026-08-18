@@ -219,6 +219,7 @@ def _act_payload(kind: str, text: str, act_index: int = 0) -> Mapping[str, objec
 
 _SUBJECT_MARKERS: tuple[tuple[str, str], ...] = (
     ("cocina grande", "cocina_grande"),
+    ("cerca de cafe", "proximidad_cafes"),
     ("cafe", "cafes_home_office"),
     ("luminos", "luminosidad"),
     ("subte", "subte"),

@@ -50,6 +50,8 @@ from umbral.api.routers.runtime import configure_runtime_routes
 from umbral.api.routers.runtime import router as runtime_router
 from umbral.api.routers.search_profiles import configure_search_profiles_routes
 from umbral.api.routers.search_profiles import router as search_profiles_router
+from umbral.api.routers.urban import configure_urban_routes
+from umbral.api.routers.urban import router as urban_router
 from umbral.domain.errors import ApplicationError
 from umbral.infrastructure.observability.runtime import (
     initialize_observability,
@@ -267,6 +269,7 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     configure_auth_routes(dependencies)
     configure_imports_routes(dependencies)
     configure_search_profiles_routes(dependencies)
+    configure_urban_routes(dependencies)
     configure_matches_routes(dependencies)
     configure_listings_routes(dependencies)
     configure_product_events_routes(dependencies)
@@ -288,6 +291,7 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     app.include_router(email_webhook_router)
     app.include_router(imports_router)
     app.include_router(search_profiles_router)
+    app.include_router(urban_router)
     app.include_router(matches_router)
     app.include_router(listings_router)
     app.include_router(product_events_router)

@@ -47,3 +47,28 @@ _Avoid_: Preferencia confirmada, filtro aprendido
 **Trayectoria conversacional**:
 Secuencia de estados y turnos que verifica como una conversacion modifica objetos persistentes y que comportamientos estan prohibidos.
 _Avoid_: Mensaje golden, ejemplo aislado
+
+**Contrato urbano**:
+Documento versionado que declara categorias OSM, primitivas, senales, formulas, normalizacion, atribucion y licencia de los datos de entorno.
+_Avoid_: Codigo de scoring, configuracion ad hoc
+
+**Snapshot urbano**:
+Captura inmutable de datos OSM (fuente, fecha, hash SHA-256) importada y lista para calcular senales.
+_Avoid_: Dato en vivo sin version, archivo localizado
+
+**Categoria urbana**:
+Entidad OSM clasificada por el contrato (poi o lineal) que alimenta las primitivas de distancia.
+_Avoid_: Punto de interes generico sin semantica
+
+**Señal urbana**:
+Valor factual de entorno de un anuncio (densidad, distancia) declarado en el contrato urbano y calculado a partir de un snapshot.
+_Avoid_: Opinion, preferencia del usuario
+
+**Primitiva urbana**:
+Metrica agregada por categoria y anuncio (conteo en 300m/600m, distancia al mas cercano) sobre la que se construyen las senales.
+_Avoid_: Dato crudo sin contrato, campo libre
+
+**Atribucion de OpenStreetMap**:
+Reconocimiento requerido por la licencia ODbL al usar datos de OSM; se muestra en una superficie global y via el endpoint de senales.
+_Avoid_: Omision de credito, dato sin procedencia
+

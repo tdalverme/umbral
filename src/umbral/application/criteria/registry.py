@@ -13,6 +13,7 @@ _SUPPORTED_MATCHER_TYPES: tuple[MatcherType, ...] = (
     "categorical",
     "geo_proximity",
     "semantic_feature",
+    "signal_score",
 )
 
 

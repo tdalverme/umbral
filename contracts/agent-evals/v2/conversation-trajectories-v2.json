@@ -282,6 +282,26 @@
         "forbidden_bindings_are_non_computable",
         "no_wrong_target_mutation"
       ]
+    },
+    {
+      "id": "urban-bridge-cafe-lifestyle",
+      "family": "preference_diversity",
+      "initial_state": {"profiles": [{"zones": [], "active_subjects": []}], "session": {"profile_id": "p1"}},
+      "turns": [
+        {
+          "user": "Quiero estar cerca de cafes",
+          "expected_acts": ["express_preference"],
+          "expected_effects": ["preference.remembered"],
+          "forbidden": ["closed_vocabulary_rejection"]
+        }
+      ],
+      "final_state": {"active_subjects": ["proximidad_cafes"]},
+      "invariants": [
+        "final_state_matches_expected",
+        "no_unconfirmed_material_effect",
+        "forbidden_bindings_are_non_computable",
+        "no_wrong_target_mutation"
+      ]
     }
   ]
 }

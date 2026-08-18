@@ -2462,6 +2462,62 @@
         "title": "UpdateSearchProfileRequest",
         "type": "object"
       },
+      "UrbanSignalItem": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "normalized_by": {
+            "title": "Normalized By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "normalized_by"
+        ],
+        "title": "UrbanSignalItem",
+        "type": "object"
+      },
+      "UrbanSignalsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "title": "Attribution",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "license": {
+            "title": "License",
+            "type": "string"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/UrbanSignalItem"
+            },
+            "title": "Signals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "attribution",
+          "license",
+          "signals"
+        ],
+        "title": "UrbanSignalsResponse",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -4740,6 +4796,38 @@
         "summary": "List Update Proposals",
         "tags": [
           "chat"
+        ]
+      }
+    },
+    "/api/v1/urban/signals": {
+      "get": {
+        "operationId": "getUrbanSignals",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UrbanSignalsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Get Urban Signals",
+        "tags": [
+          "Urban"
         ]
       }
     },

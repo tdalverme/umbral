@@ -180,7 +180,28 @@ def evaluate_observation_criterion(
         return evaluate_semantic_feature(
             observation_score, observation_confidence, criterion.params
         )
+    if criterion.matcher_type == "signal_score":
+        return _evaluate_signal_score(observation_score, observation_confidence)
     return evaluate_geo_proximity(False, "unknown")
+
+
+def _evaluate_signal_score(
+    observation_score: object,
+    observation_confidence: object,
+) -> EvaluationResult:
+    """Score of a normalized urban signal flows through as-is.
+
+    The observation already carries a normalized score (0-1) and a confidence
+    derived from input coverage. Missing/unknown data stays explicitly
+    unknown; a present signal is a match with its declared confidence.
+    """
+    score = _as_float(observation_score, None)
+    if score is None:
+        return EvaluationResult(0.0, 0.0, "unknown", "no_observation_data")
+    confidence = _as_float(observation_confidence, 0.0) or 0.0
+    return EvaluationResult(
+        round(score, 4), round(confidence, 4), "match", "signal_observed"
+    )
 
 
 def _as_float(value: object, default: float | None) -> float | None:

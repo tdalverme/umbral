@@ -60,6 +60,7 @@ from umbral.workers.radar import build_radar_registry
 from umbral.workers.registry import JobRegistry
 from umbral.workers.registry import build_identity_registry as build_job_registry
 from umbral.workers.silver import build_silver_registry, normalize_publisher
+from umbral.workers.urban import build_urban_registry
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +151,10 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         urban_context_enabled=active_settings.urban_context_enabled,
     )
     for handler in build_criteria_registry(criteria).as_mapping().values():
+        registry.register(handler)
+    for handler in build_urban_registry(
+        session_provider.session_factory
+    ).as_mapping().values():
         registry.register(handler)
     normalize_publish = _late_bind_publisher()
     for handler in (
