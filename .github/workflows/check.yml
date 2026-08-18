@@ -28,8 +28,19 @@ jobs:
         with:
           node-version: "24.15.0"
           cache: npm
+      - name: Ensure npm 12 (web harness requires >=12,<13)
+        run: npm install -g npm@12
       - run: uv sync --frozen --all-groups
       - run: npm ci
+      - name: Bridge venv bin to Scripts for the Windows-style harness
+        shell: bash
+        run: |
+          mkdir -p .venv/Scripts
+          for f in .venv/bin/*; do
+            [ -x "$f" ] || continue
+            name="$(basename "$f")"
+            ln -sf "../bin/$name" ".venv/Scripts/$name.exe"
+          done
       - name: Identity and provider tests
         env:
           PYTHONPATH: src
