@@ -89,6 +89,6 @@ def test_explanation_is_readable_after_run(scoring_backend: Any) -> None:
         run_id=run.run_id,
         listing_id=listing_id,
     )
-    assert explanation.score_version == "scoring-policy-v1"
+    assert explanation.score_version == run.score_policy_version
     assert explanation.reasons
     assert all(reason.evidence_refs for reason in explanation.reasons)

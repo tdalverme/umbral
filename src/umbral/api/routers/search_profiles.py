@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Literal, cast
+from typing import Literal, Protocol, cast
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, Request
@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from umbral.api.dependencies import RuntimeDependencies
 from umbral.application.identity.contracts import CurrentPrincipal, IdentityError
+from umbral.application.preferences.contracts import PreferenceView
 from umbral.application.radar.contracts import (
     RadarNotAccessible,
     RadarStateError,
@@ -26,16 +27,22 @@ router = APIRouter(prefix="/api/v1", tags=["Search Profiles"])
 _dependencies: RuntimeDependencies | None = None
 
 ProfileState = Literal["active", "paused", "archived"]
-RunState = Literal["pending", "running", "succeeded", "failed"]
+RunState = Literal["pending", "running", "succeeded", "failed", "superseded"]
+
+
+class PreferenceServiceLike(Protocol):
+    """The preference service seam the router consumes."""
+
+    def active_view(self, profile_id: UUID) -> tuple[PreferenceView, ...]: ...
 
 
 class CreateSearchProfileRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=80)
-    zones: list[str] = Field(min_length=1, max_length=15)
-    budget_max: float = Field(gt=0)
+    zones: list[str] = Field(default_factory=list, max_length=15)
+    budget_max: float | None = Field(default=None, gt=0)
     budget_min: float | None = None
-    min_rooms: int = Field(default=0, ge=0, le=200)
+    min_rooms: int | None = Field(default=None, ge=0, le=200)
     surface_min: float | None = None
     surface_max: float | None = None
     unknown_strategy: dict[str, str] | None = None
@@ -52,9 +59,32 @@ class UpdateSearchProfileRequest(BaseModel):
     surface_max: float | None = None
 
 
+def _profile_changes(body: UpdateSearchProfileRequest) -> dict[str, object]:
+    return body.model_dump(exclude_unset=True)
+
+
 class StatusRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: ProfileState
+
+
+class PreferenceViewItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expression_id: UUID
+    raw_text: str
+    subject_key: str
+    status: str
+    binding_id: UUID
+    binding_kind: str
+    mode: str
+    confidence: float
+    limitations: list[str]
+    evidence_refs: list[dict[str, object]]
+
+
+class PreferenceViewResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[PreferenceViewItem]
 
 
 class RunResponse(BaseModel):
@@ -90,9 +120,9 @@ class SearchProfileResponse(BaseModel):
     name: str
     operation: str
     zones: list[str]
-    budget_max: float
+    budget_max: float | None
     budget_min: float | None = None
-    min_rooms: int
+    min_rooms: int | None
     surface_min: float | None = None
     surface_max: float | None = None
     status: ProfileState
@@ -141,6 +171,13 @@ def _deps() -> RuntimeDependencies:
     if _dependencies is None:
         raise RuntimeError("search profiles routes were not configured")
     return _dependencies
+
+
+def _preferences() -> PreferenceServiceLike:
+    service = _deps().preferences
+    if service is None:
+        raise RuntimeError("preference service was not configured")
+    return cast(PreferenceServiceLike, service)
 
 
 def _correlation(request: Request) -> UUID | None:
@@ -338,7 +375,7 @@ async def update_search_profile(
         principal = _require(request, "product.search_profile.update")
     except IdentityError as error:
         return _problem(request, error.status, error.code, error.recovery or "")
-    changes = body.model_dump(exclude_none=True)
+    changes = _profile_changes(body)
     try:
         profile, run = _radar().update_profile(
             owner_id=principal.user_id,
@@ -386,3 +423,43 @@ async def set_search_profile_status(
         if handled is not None:
             return handled
         raise
+
+
+@router.get(
+    "/search-profiles/{search_profile_id}/preferences",
+    operation_id="listSearchProfilePreferences",
+    response_model=PreferenceViewResponse,
+    responses={401: {}, 403: {}, 404: {}},
+)
+async def list_search_profile_preferences(
+    request: Request,
+    search_profile_id: UUID,
+    x_correlation_id: UUID | None = Header(default=None),
+) -> PreferenceViewResponse | JSONResponse:
+    del x_correlation_id
+    try:
+        principal = _require(request, "product.search_profile.read")
+    except IdentityError as error:
+        return _problem(request, error.status, error.code, error.recovery or "")
+    try:
+        _radar().get_profile(principal.user_id, search_profile_id)
+    except RadarNotAccessible as error:
+        return _problem(request, 403, error.code, str(error))
+    views = _preferences().active_view(search_profile_id)
+    return PreferenceViewResponse(
+        items=[
+            PreferenceViewItem(
+                expression_id=item.expression_id,
+                raw_text=item.raw_text,
+                subject_key=item.subject_key,
+                status=item.status,
+                binding_id=item.binding_id,
+                binding_kind=item.binding_kind,
+                mode=item.mode,
+                confidence=float(item.confidence),
+                limitations=list(item.limitations),
+                evidence_refs=[dict(ref) for ref in item.evidence_refs],
+            )
+            for item in views
+        ]
+    )

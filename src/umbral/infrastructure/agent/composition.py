@@ -38,6 +38,8 @@ class ChatScopeReader:
             session = self.chat.get_session(user_id=user_id, session_id=session_id)
         except ChatSessionNotFound:
             return None
+        if session.search_profile_id is None:
+            return None
         return SessionScope(
             session_id=session.session_id,
             search_profile_id=session.search_profile_id,

@@ -33,7 +33,7 @@ def test_paging_over_run_items_has_no_repeats_or_omissions(radar_backend: Any) -
     service = build_radar_service(factory)
     handler = RecommendationRunHandler(service)
 
-    profile, _ = service.create_profile(
+    profile, run = service.create_profile(
         owner_id=user_id,
         name="Radar pagina",
         zones=("palermo",),
@@ -45,9 +45,8 @@ def test_paging_over_run_items_has_no_repeats_or_omissions(radar_backend: Any) -
         unknown_strategy=None,
         correlation_id=uuid4(),
     )
-    summary = handler.run(
-        _context(f"{profile.profile_id}:{profile.current_version_id}")
-    )
+    assert run is not None
+    summary = handler.run(_context(str(run.run_id)))
     assert summary["published_item_count"] == 6
 
     seen: list[object] = []
@@ -77,7 +76,7 @@ def test_explicit_run_id_pages_the_same_frozen_set(radar_backend: Any) -> None:
     service = build_radar_service(factory)
     handler = RecommendationRunHandler(service)
 
-    profile, _ = service.create_profile(
+    profile, run = service.create_profile(
         owner_id=user_id,
         name="Radar run",
         zones=("palermo",),
@@ -89,7 +88,8 @@ def test_explicit_run_id_pages_the_same_frozen_set(radar_backend: Any) -> None:
         unknown_strategy=None,
         correlation_id=uuid4(),
     )
-    handler.run(_context(f"{profile.profile_id}:{profile.current_version_id}"))
+    assert run is not None
+    handler.run(_context(str(run.run_id)))
     succeeded = service.runs.latest_succeeded_for_profile(profile.profile_id)
     assert succeeded is not None
 

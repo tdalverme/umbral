@@ -8,12 +8,15 @@ one transaction; unique constraints arbitrate interrupted retries.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from umbral.application.events.contracts import ProductEvent
 from umbral.application.ingestion.contracts import SourceIdentity
@@ -63,30 +66,56 @@ class SqlAlchemySearchProfileRepository:
 
     def insert(self, profile: SearchProfile) -> None:
         with self.session_factory() as session:
-            model = SearchProfileModel(
-                id=profile.profile_id,
-                created_at=profile.created_at,
-                updated_at=profile.updated_at,
-                actor_kind=profile.actor_kind,
-                actor_id=profile.actor_id,
-                source="radar.profile",
-                correlation_id=profile.correlation_id,
-                owner_id=profile.owner_id,
-                name=profile.name,
-                operation=profile.operation,
-                zones=list(profile.zones),
-                budget_max=profile.budget_max,
-                budget_min=profile.budget_min,
-                min_rooms=profile.min_rooms,
-                surface_min=profile.surface_min,
-                surface_max=profile.surface_max,
-                status=profile.status,
-                unknown_strategy=dict(profile.unknown_strategy),
-                current_version_id=profile.current_version_id,
-                latest_run_id=profile.latest_run_id,
-            )
-            session.add(model)
+            session.add(_profile_model(profile))
             session.commit()
+
+    def insert_with_version(
+        self,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        created_event: ProductEvent,
+    ) -> None:
+        with self.session_factory() as session:
+            try:
+                model = _profile_model(replace(profile, current_version_id=None))
+                session.add(model)
+                session.flush()
+                session.add(_version_model(version))
+                session.flush()
+                session.add(
+                    ProductEventRow(
+                        id=created_event.event_id,
+                        created_at=created_event.occurred_at,
+                        updated_at=created_event.occurred_at,
+                        actor_kind="service",
+                        actor_id=(
+                            str(created_event.actor_id)
+                            if created_event.actor_id is not None
+                            else None
+                        ),
+                        source="radar.events",
+                        correlation_id=created_event.correlation_id,
+                        event_type=created_event.event_type,
+                        event_version=created_event.event_version,
+                        occurred_at=created_event.occurred_at,
+                        payload=dict(created_event.payload),
+                    )
+                )
+                session.flush()
+                session.execute(
+                    update(SearchProfileModel)
+                    .where(SearchProfileModel.id == profile.profile_id)
+                    .values(current_version_id=profile.current_version_id)
+                    .execution_options(synchronize_session=False)
+                )
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                actual_version = _profile_version(session, profile.profile_id)
+                raise ConcurrencyConflict(
+                    expected_version=profile.version,
+                    actual_version=actual_version,
+                ) from error
 
     def get(self, profile_id: UUID) -> SearchProfile | None:
         with self.session_factory() as session:
@@ -115,19 +144,40 @@ class SqlAlchemySearchProfileRepository:
                 raise ConcurrencyConflict(
                     expected_version=profile.version, actual_version=model.version
                 )
-            model.name = profile.name
-            model.zones = list(profile.zones)
-            model.budget_max = profile.budget_max
-            model.budget_min = profile.budget_min
-            model.min_rooms = profile.min_rooms
-            model.surface_min = profile.surface_min
-            model.surface_max = profile.surface_max
-            model.status = profile.status
-            model.unknown_strategy = dict(profile.unknown_strategy)
-            model.current_version_id = profile.current_version_id
-            model.latest_run_id = profile.latest_run_id
-            model.updated_at = profile.updated_at
-            session.commit()
+            _update_profile_model(model, profile)
+            try:
+                session.commit()
+            except StaleDataError as error:
+                session.rollback()
+                actual_version = _profile_version(session, profile.profile_id)
+                raise ConcurrencyConflict(
+                    expected_version=profile.version,
+                    actual_version=actual_version,
+                ) from error
+
+    def save_with_version(
+        self, profile: SearchProfile, version: ProfileVersion
+    ) -> None:
+        with self.session_factory() as session:
+            model = session.get(SearchProfileModel, profile.profile_id)
+            if model is None:
+                raise KeyError(profile.profile_id)
+            if model.version != profile.version:
+                raise ConcurrencyConflict(
+                    expected_version=profile.version, actual_version=model.version
+                )
+            try:
+                session.add(_version_model(version))
+                session.flush()
+                _update_profile_model(model, profile)
+                session.commit()
+            except (IntegrityError, StaleDataError) as error:
+                session.rollback()
+                actual_version = _profile_version(session, profile.profile_id)
+                raise ConcurrencyConflict(
+                    expected_version=profile.version,
+                    actual_version=actual_version,
+                ) from error
 
 
 class SqlAlchemyProfileVersionRepository:
@@ -136,19 +186,7 @@ class SqlAlchemyProfileVersionRepository:
 
     def insert(self, version: ProfileVersion) -> None:
         with self.session_factory() as session:
-            model = SearchProfileVersionModel(
-                id=version.version_id,
-                created_at=version.created_at,
-                updated_at=version.created_at,
-                actor_kind=version.actor_kind,
-                actor_id=version.actor_id,
-                source="radar.profile",
-                correlation_id=version.correlation_id,
-                profile_id=version.profile_id,
-                profile_version=version.profile_version,
-                payload=dict(version.payload),
-            )
-            session.add(model)
+            session.add(_version_model(version))
             session.commit()
 
     def get(self, version_id: UUID) -> ProfileVersion | None:
@@ -180,6 +218,55 @@ class SqlAlchemyRunRepository:
             session.add(model)
             session.commit()
 
+    def reserve(self, run: RecommendationRun) -> RecommendationRun:
+        with self.session_factory() as session:
+            model = _run_model(run)
+            session.add(model)
+            try:
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                existing = _reserved_run(session, run)
+                if existing is None:
+                    raise ConcurrencyConflict(
+                        expected_version=run.version,
+                        actual_version=None,
+                    ) from error
+                return _to_domain_run(existing)
+            return _to_domain_run(model)
+
+    def bind_job(
+        self, run_id: UUID, job_execution_id: UUID
+    ) -> RecommendationRun:
+        with self.session_factory() as session:
+            model = session.get(RecommendationRunModel, run_id)
+            if model is None:
+                raise KeyError(run_id)
+            if model.job_execution_id is not None:
+                if model.job_execution_id == job_execution_id:
+                    return _to_domain_run(model)
+                raise ConcurrencyConflict(
+                    expected_version=model.version,
+                    actual_version=model.version,
+                )
+            expected_version = model.version
+            model.job_execution_id = job_execution_id
+            try:
+                session.commit()
+            except (IntegrityError, StaleDataError) as error:
+                session.rollback()
+                current = session.get(RecommendationRunModel, run_id)
+                if (
+                    current is not None
+                    and current.job_execution_id == job_execution_id
+                ):
+                    return _to_domain_run(current)
+                raise ConcurrencyConflict(
+                    expected_version=expected_version,
+                    actual_version=(current.version if current is not None else None),
+                ) from error
+            return _to_domain_run(model)
+
     def get(self, run_id: UUID) -> RecommendationRun | None:
         with self.session_factory() as session:
             model = session.get(RecommendationRunModel, run_id)
@@ -207,6 +294,20 @@ class SqlAlchemyRunRepository:
                 )
                 .order_by(RecommendationRunModel.created_at.desc())
                 .limit(1)
+            )
+            return _to_domain_run(model) if model is not None else None
+
+    def get_reserved(
+        self, profile_id: UUID, profile_version_id: UUID, trigger: str
+    ) -> RecommendationRun | None:
+        with self.session_factory() as session:
+            model = session.scalar(
+                select(RecommendationRunModel).where(
+                    RecommendationRunModel.profile_id == profile_id,
+                    RecommendationRunModel.profile_version_id
+                    == profile_version_id,
+                    RecommendationRunModel.trigger == trigger,
+                )
             )
             return _to_domain_run(model) if model is not None else None
 
@@ -334,6 +435,45 @@ class SqlAlchemyRunRepository:
             model.updated_at = now
             session.commit()
 
+    def supersede(
+        self,
+        run_id: UUID,
+        *,
+        reason: str,
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        now = datetime.now(timezone.utc)
+        with self.session_factory() as session:
+            model = session.get(RecommendationRunModel, run_id)
+            if model is None:
+                return None
+            if model.state in {"succeeded", "failed", "superseded"}:
+                return _to_domain_run(model)
+            model.state = "superseded"
+            model.failure_code = reason
+            model.finished_at = now
+            model.updated_at = now
+            model.correlation_id = correlation_id
+            session.commit()
+            return _to_domain_run(model)
+
+    def set_diagnostics(
+        self,
+        run_id: UUID,
+        *,
+        diagnostics: Mapping[str, object],
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        with self.session_factory() as session:
+            model = session.get(RecommendationRunModel, run_id)
+            if model is None:
+                return None
+            model.diagnostics = dict(diagnostics)
+            model.updated_at = datetime.now(timezone.utc)
+            model.correlation_id = correlation_id
+            session.commit()
+            return _to_domain_run(model)
+
 
 class SqlAlchemyItemRepository:
     def __init__(self, session_factory: SessionFactory) -> None:
@@ -419,7 +559,13 @@ class SqlAlchemyCandidateListingReader:
     def __init__(self, session_factory: SessionFactory) -> None:
         self.session_factory = session_factory
 
-    def list_candidates(self, profile: SearchProfile) -> tuple[NormalizedListing, ...]:
+    def list_candidates(
+        self,
+        profile: SearchProfile,
+        *,
+        supported_neighborhoods: tuple[str, ...],
+        supported_property_types: tuple[str, ...],
+    ) -> tuple[NormalizedListing, ...]:
         with self.session_factory() as session:
             statement = (
                 select(
@@ -429,18 +575,27 @@ class SqlAlchemyCandidateListingReader:
                 )
                 .where(
                     SilverListingModel.operation == profile.operation,
+                    SilverListingModel.property_type.in_(
+                        tuple(sorted(supported_property_types))
+                    ),
+                    func.lower(SilverListingModel.neighborhood).in_(
+                        tuple(zone.casefold() for zone in supported_neighborhoods)
+                    ),
+                )
+                .order_by(SilverListingModel.id)
+            )
+            if profile.budget_max is not None:
+                statement = statement.where(
                     SilverListingModel.total_cost.is_not(None),
                     SilverListingModel.total_cost > 0,
                     SilverListingModel.total_cost <= profile.budget_max,
                 )
-                .order_by(SilverListingModel.id)
-            )
-            if profile.unknown_strategy.get("location", "exclude") == "exclude":
+            if profile.zones:
                 zones = [zone.casefold() for zone in profile.zones]
                 statement = statement.where(
                     func.lower(SilverListingModel.neighborhood).in_(zones)
                 )
-            if profile.min_rooms > 0:
+            if profile.min_rooms is not None and profile.min_rooms > 0:
                 statement = statement.where(
                     (SilverListingModel.rooms.is_(None))
                     | (SilverListingModel.rooms >= profile.min_rooms)
@@ -481,6 +636,80 @@ class SqlAlchemyListingReader:
             )
 
 
+def _profile_model(profile: SearchProfile) -> SearchProfileModel:
+    return SearchProfileModel(
+        id=profile.profile_id,
+        created_at=profile.created_at,
+        updated_at=profile.updated_at,
+        actor_kind=profile.actor_kind,
+        actor_id=profile.actor_id,
+        source="radar.profile",
+        correlation_id=profile.correlation_id,
+        owner_id=profile.owner_id,
+        name=profile.name,
+        operation=profile.operation,
+        zones=list(profile.zones),
+        budget_max=profile.budget_max,
+        budget_min=profile.budget_min,
+        min_rooms=profile.min_rooms,
+        surface_min=profile.surface_min,
+        surface_max=profile.surface_max,
+        status=profile.status,
+        unknown_strategy=dict(profile.unknown_strategy),
+        current_version_id=profile.current_version_id,
+        latest_run_id=profile.latest_run_id,
+    )
+
+
+def _update_profile_model(
+    model: SearchProfileModel, profile: SearchProfile
+) -> None:
+    model.name = profile.name
+    model.zones = list(profile.zones)
+    model.budget_max = cast(Any, profile.budget_max)
+    model.budget_min = profile.budget_min
+    model.min_rooms = cast(Any, profile.min_rooms)
+    model.surface_min = profile.surface_min
+    model.surface_max = profile.surface_max
+    model.status = profile.status
+    model.unknown_strategy = dict(profile.unknown_strategy)
+    model.current_version_id = profile.current_version_id
+    model.latest_run_id = profile.latest_run_id
+    model.updated_at = profile.updated_at
+
+
+def _version_model(version: ProfileVersion) -> SearchProfileVersionModel:
+    return SearchProfileVersionModel(
+        id=version.version_id,
+        created_at=version.created_at,
+        updated_at=version.created_at,
+        actor_kind=version.actor_kind,
+        actor_id=version.actor_id,
+        source="radar.profile",
+        correlation_id=version.correlation_id,
+        profile_id=version.profile_id,
+        profile_version=version.profile_version,
+        payload=dict(version.payload),
+    )
+
+
+def _profile_version(session: Session, profile_id: UUID) -> int | None:
+    model = session.get(SearchProfileModel, profile_id)
+    return model.version if model is not None else None
+
+
+def _reserved_run(
+    session: Session, run: RecommendationRun
+) -> RecommendationRunModel | None:
+    return session.scalar(
+        select(RecommendationRunModel).where(
+            RecommendationRunModel.profile_id == run.profile_id,
+            RecommendationRunModel.profile_version_id == run.profile_version_id,
+            RecommendationRunModel.trigger == run.trigger,
+        )
+    )
+
+
 def _run_model(run: RecommendationRun) -> RecommendationRunModel:
     return RecommendationRunModel(
         id=run.run_id,
@@ -500,6 +729,7 @@ def _run_model(run: RecommendationRun) -> RecommendationRunModel:
         failure_code=run.failure_code,
         job_execution_id=run.job_execution_id,
         finished_at=run.finished_at,
+        diagnostics=dict(run.diagnostics or {}),
     )
 
 
@@ -510,7 +740,7 @@ def _to_domain_profile(model: SearchProfileModel) -> SearchProfile:
         name=model.name,
         operation=cast(Any, model.operation),
         zones=tuple(model.zones or ()),
-        budget_max=float(model.budget_max),
+        budget_max=float(model.budget_max) if model.budget_max is not None else None,
         budget_min=float(model.budget_min) if model.budget_min is not None else None,
         min_rooms=model.min_rooms,
         surface_min=(
@@ -563,6 +793,7 @@ def _to_domain_run(model: RecommendationRunModel) -> RecommendationRun:
         version=model.version,
         actor_kind=model.actor_kind,
         actor_id=model.actor_id,
+        diagnostics=dict(model.diagnostics or {}),
     )
 
 

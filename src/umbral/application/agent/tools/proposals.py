@@ -439,10 +439,10 @@ def _normalize_value(field: str, value: object) -> object:
 
 def _normalize_zones(value: object) -> list[str]:
     raw = value if isinstance(value, list) else [value]
-    if not raw:
-        raise ProposalInvalidChange()
     zones: list[str] = []
     for item in raw:
+        if item is None:
+            continue
         if not isinstance(item, str):
             raise ProposalInvalidChange()
         code = _zone_code(item)

@@ -26,6 +26,23 @@ class InMemoryChatSessionRepository:
             return None
         return session
 
+    def bind_profile(
+        self, session_id: UUID, search_profile_id: UUID
+    ) -> ChatSession | None:
+        session = self.sessions.get(session_id)
+        if session is None:
+            return None
+        updated = ChatSession(
+            session_id=session.session_id,
+            user_id=session.user_id,
+            search_profile_id=search_profile_id,
+            status=session.status,
+            created_at=session.created_at,
+            correlation_id=session.correlation_id,
+        )
+        self.sessions[session_id] = updated
+        return updated
+
     def list_by_user(self, user_id: UUID) -> tuple[ChatSession, ...]:
         return tuple(
             session for session in self.sessions.values() if session.user_id == user_id

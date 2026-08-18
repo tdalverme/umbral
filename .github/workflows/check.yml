@@ -11,6 +11,11 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:8.6.4-alpine
+        ports:
+          - 6379:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,7 +30,10 @@ jobs:
           cache: npm
       - run: uv sync --frozen --all-groups
       - run: npm ci
-      - run: uv run pytest tests/unit/identity tests/integration/identity tests/contract/test_identity_provider.py tests/contract/test_email_provider.py
+      - name: Identity and provider tests
+        env:
+          PYTHONPATH: src
+        run: uv run pytest tests/unit/identity tests/integration/identity tests/contract/test_identity_provider.py tests/contract/test_email_provider.py
       - run: npm run test:identity --workspace @umbral/web
       - run: ./scripts/check.ps1
         shell: pwsh

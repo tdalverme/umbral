@@ -9,11 +9,16 @@ from uuid import UUID
 
 from umbral.application.criteria.contracts import Compilation, ListingObservation
 from umbral.application.radar.contracts import (
+    ProfileVersion,
     RecommendationItem,
     RecommendationRun,
     SearchProfile,
 )
-from umbral.application.scoring.contracts import CriterionEvaluation, PolicyVersion
+from umbral.application.scoring.contracts import (
+    CriterionEvaluation,
+    PolicyVersion,
+    SemanticSignal,
+)
 from umbral.application.silver.contracts import NormalizedListing
 
 
@@ -63,6 +68,20 @@ class ObservationReader(Protocol):
     ) -> Mapping[UUID, Mapping[str, ListingObservation]]: ...
 
 
+class SemanticSignalReader(Protocol):
+    """Loads frozen semantic signals for a profile version and candidate set.
+
+    Returns zero signals when vectors or embedding versions are missing or
+    incompatible; the engine then keeps that evaluation unknown (FR-017).
+    """
+
+    def for_profile_version_and_listings(
+        self,
+        profile_version_id: UUID,
+        listing_ids: tuple[UUID, ...],
+    ) -> Mapping[UUID, tuple[SemanticSignal, ...]]: ...
+
+
 class CompilationReader(Protocol):
     def latest_for_profile_version(
         self, profile_version_id: UUID
@@ -87,6 +106,10 @@ class ItemReader(Protocol):
 
 class ProfileReader(Protocol):
     def get(self, profile_id: UUID) -> SearchProfile | None: ...
+
+
+class ProfileVersionReader(Protocol):
+    def get(self, version_id: UUID) -> ProfileVersion | None: ...
 
 
 class ListingReader(Protocol):

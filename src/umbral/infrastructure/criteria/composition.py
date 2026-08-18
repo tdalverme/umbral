@@ -28,7 +28,6 @@ from umbral.infrastructure.db.repositories.criteria import (
     SqlAlchemyObservationRepository,
     SqlAlchemyProfileSnapshotReader,
     SqlAlchemyRecomputeRunRepository,
-    SqlAlchemyUrbanSignalRepository,
 )
 from umbral.infrastructure.db.repositories.radar import SqlAlchemyEventRepository
 from umbral.infrastructure.radar.contract_loader import load_events_registry
@@ -95,11 +94,7 @@ def build_criteria_service(
             if embeddings_enabled
             else None
         ),
-        urban_signals=(
-            SqlAlchemyUrbanSignalRepository(session_factory)
-            if urban_context_enabled
-            else None
-        ),
+        urban_signals=None,
         job_runtime=job_runtime,
         extraction_job_type=extraction_job_type,
         recompute_job_type=recompute_job_type,

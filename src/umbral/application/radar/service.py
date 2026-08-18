@@ -42,7 +42,12 @@ from umbral.application.radar.contracts import (
     SearchProfile,
     SearchProfileState,
 )
-from umbral.application.radar.hard_filters import CandidateListing, apply_hard_filters
+from umbral.application.radar.diagnostics import build_diagnostics
+from umbral.application.radar.hard_filters import (
+    RESIDENTIAL_PROPERTY_TYPES,
+    CandidateListing,
+    apply_hard_filters,
+)
 from umbral.application.radar.ports import (
     CandidateListingReader,
     EventRepository,
@@ -56,6 +61,9 @@ from umbral.application.radar.profile_policy import (
     SearchProfilePolicySpec,
     can_transition,
     default_unknown_strategy,
+    freeze_search_profile_policy,
+    frozen_search_profile_policy,
+    rehydrate_profile_version,
     validate_profile,
 )
 from umbral.application.radar.scoring import (
@@ -63,7 +71,11 @@ from umbral.application.radar.scoring import (
     ScoringBaselineSpec,
     compute_score,
 )
-from umbral.application.scoring.contracts import CriterionEvaluation
+from umbral.application.scoring.contracts import (
+    CriterionEvaluation,
+    ScoringNotFound,
+    ScoringValidationError,
+)
 from umbral.application.scoring.engine import PolicyRunEngine
 from umbral.application.silver.contracts import NormalizedListing
 from umbral.domain.audit import AuditActor
@@ -133,9 +145,9 @@ class RadarService:
         owner_id: UUID,
         name: str,
         zones: tuple[str, ...],
-        budget_max: float,
+        budget_max: float | None,
         budget_min: float | None,
-        min_rooms: int,
+        min_rooms: int | None,
         surface_min: float | None,
         surface_max: float | None,
         unknown_strategy: Mapping[str, str] | None,
@@ -166,7 +178,7 @@ class RadarService:
             name=name,
             operation="rental",
             zones=zones,
-            budget_max=float(budget_max),
+            budget_max=(float(budget_max) if budget_max is not None else None),
             budget_min=(float(budget_min) if budget_min is not None else None),
             min_rooms=min_rooms,
             surface_min=(float(surface_min) if surface_min is not None else None),
@@ -182,10 +194,9 @@ class RadarService:
             actor_kind=actor_kind,
             actor_id=actor_id,
         )
-        self.profiles.insert(profile)
         version = self._snapshot(profile, payload, profile_version=1)
         profile = replace(profile, current_version_id=version.version_id)
-        self._emit_server_event(
+        created_event = self._server_event(
             event_type="radar.created.v1",
             actor_id=owner_id,
             correlation_id=correlation_id,
@@ -194,7 +205,8 @@ class RadarService:
                 "profile_version": version.profile_version,
             },
         )
-        run = self._submit_run(profile, version, trigger="created")
+        self.profiles.insert_with_version(profile, version, created_event)
+        run = self._schedule_after_commit(profile, version, trigger="created")
         return profile, run
 
     def list_profiles(
@@ -249,6 +261,29 @@ class RadarService:
         actor_kind: str = "service",
         actor_id: str | None = None,
     ) -> tuple[SearchProfile, RecommendationRun | None]:
+        profile, version = self.version_profile(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            expected_version=expected_version,
+            changes=changes,
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        run = self._schedule_after_commit(profile, version, trigger="edited")
+        return profile, run
+
+    def version_profile(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        expected_version: int,
+        changes: Mapping[str, object],
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[SearchProfile, ProfileVersion]:
         profile = self._owned(owner_id, profile_id)
         self._check_version(profile, expected_version)
         if profile.status == "archived":
@@ -266,9 +301,9 @@ class RadarService:
             if isinstance(raw_zones, list)
             else ()
         )
-        merged_budget_max = _number(merged["budget_max"])
+        merged_budget_max = _optional_number(merged.get("budget_max"))
         merged_budget_min = _optional_number(merged.get("budget_min"))
-        merged_min_rooms = _int(merged["min_rooms"])
+        merged_min_rooms = _optional_int(merged.get("min_rooms"))
         merged_surface_min = _optional_number(merged.get("surface_min"))
         merged_surface_max = _optional_number(merged.get("surface_max"))
         updated = replace(
@@ -291,25 +326,28 @@ class RadarService:
             current_version.profile_version + 1 if current_version is not None else 1
         )
         version = self._snapshot(updated, merged, profile_version=next_profile_version)
-        self.profiles.save(
+        self.profiles.save_with_version(
             replace(
-                profile,
-                name=updated.name,
-                zones=updated.zones,
-                budget_max=updated.budget_max,
-                budget_min=updated.budget_min,
-                min_rooms=updated.min_rooms,
-                surface_min=updated.surface_min,
-                surface_max=updated.surface_max,
+                updated,
                 current_version_id=version.version_id,
-                updated_at=now,
-            )
+                version=profile.version,
+            ),
+            version,
         )
-        run = None
-        if updated.status == "active":
-            run = self._submit_run(updated, version, trigger="edited")
         updated = replace(updated, current_version_id=version.version_id)
-        return updated, run
+        return updated, version
+
+    def schedule_version_run(
+        self,
+        *,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        trigger: RecommendationRunTrigger,
+    ) -> RecommendationRun | None:
+        self._check_version_owner(profile, version)
+        if profile.status != "active":
+            return None
+        return self._submit_run(profile, version, trigger)
 
     def set_status(
         self,
@@ -343,7 +381,9 @@ class RadarService:
         if status == "active" and profile.status == "paused":
             current_version = self.versions.latest_for_profile(profile_id)
             if current_version is not None:
-                run = self._submit_run(updated, current_version, trigger="resumed")
+                run = self._schedule_after_commit(
+                    updated, current_version, trigger="resumed"
+                )
         return updated, run
 
     def bump_profile_version(
@@ -363,35 +403,15 @@ class RadarService:
         """
 
         profile = self._owned(owner_id, profile_id)
-        if profile.status == "archived":
-            raise RadarStateError("archived profiles cannot be edited")
-        now = self.clock()
-        updated = replace(
-            profile,
-            version=profile.version + 1,
-            updated_at=now,
+        return self.version_profile(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            expected_version=profile.version,
+            changes={},
+            correlation_id=correlation_id,
             actor_kind=actor_kind,
             actor_id=actor_id,
-            correlation_id=correlation_id,
         )
-        current_version = self.versions.latest_for_profile(profile_id)
-        next_profile_version = (
-            current_version.profile_version + 1 if current_version is not None else 1
-        )
-        version = self._snapshot(
-            updated,
-            _payload_from_profile(updated),
-            profile_version=next_profile_version,
-        )
-        self.profiles.save(
-            replace(
-                profile,
-                current_version_id=version.version_id,
-                updated_at=now,
-            )
-        )
-        updated = replace(updated, current_version_id=version.version_id)
-        return updated, version
 
     def submit_run(
         self,
@@ -539,51 +559,116 @@ class RadarService:
     def process_run(
         self,
         *,
-        profile_id: UUID,
-        profile_version_id: UUID,
+        run_id: UUID,
         job_execution_id: UUID | None,
     ) -> Mapping[str, object]:
+        run = self.runs.get(run_id)
+        if run is None:
+            raise RadarPermanentError(
+                "radar.run_not_found", "recommendation run is not visible"
+            )
+        profile_id = run.profile_id
+        profile_version_id = run.profile_version_id
         profile = self.profiles.get(profile_id)
         if profile is None:
             raise RadarPermanentError(
                 "radar.profile_not_found", "search profile is not visible"
+            )
+        if profile.profile_id != run.profile_id:
+            raise RadarPermanentError(
+                "radar.run_profile_mismatch",
+                "recommendation run does not belong to the loaded profile",
             )
         version = self.versions.get(profile_version_id)
         if version is None:
             raise RadarPermanentError(
                 "radar.version_not_found", "profile version is not visible"
             )
-        run = self.runs.get_for_version(profile_id, profile_version_id)
-        if run is None:
+        if version.version_id != run.profile_version_id:
             raise RadarPermanentError(
-                "radar.run_not_found", "recommendation run is not visible"
+                "radar.run_version_mismatch",
+                "recommendation run does not reference the loaded profile version",
             )
-        if run.state in {"succeeded", "failed"}:
+        frozen_policy, residential_property_types = frozen_search_profile_policy(
+            version
+        )
+        profile = rehydrate_profile_version(profile, version, frozen_policy)
+        if run.state in {"succeeded", "failed", "superseded"}:
             return self._summary(run)
+
+        current_run = self.runs.latest_succeeded_for_profile(profile_id)
+        if (
+            current_run is not None
+            and current_run.profile_version_id != profile_version_id
+        ):
+            # A newer radar version already published; this run's results would
+            # replace the current ones (FR-026/SC-012), so it is superseded.
+            superseded = self.runs.supersede(
+                run_id,
+                reason="radar.results_superseded",
+                correlation_id=run.correlation_id,
+            )
+            if superseded is not None:
+                return self._summary(superseded)
 
         if job_execution_id is not None and run.job_execution_id is None:
             run = replace(run, job_execution_id=job_execution_id)
 
-        candidates = self.candidates.list_candidates(profile)
+        candidates = self.candidates.list_candidates(
+            profile,
+            supported_neighborhoods=frozen_policy.neighborhoods,
+            supported_property_types=residential_property_types,
+        )
         passed = tuple(
             listing
             for listing in candidates
-            if apply_hard_filters(cast(CandidateListing, listing), profile)
+            if apply_hard_filters(
+                cast(CandidateListing, listing),
+                profile,
+                supported_neighborhoods=frozen_policy.neighborhoods,
+                supported_property_types=residential_property_types,
+            )
         )
+        if not passed:
+            # Zero matches: persist diagnostics and offer relaxations (FR-021).
+            diagnostics = build_diagnostics(
+                profile=profile,
+                candidates=candidates,
+                supported_neighborhoods=frozen_policy.neighborhoods,
+            )
+            run = self.runs.set_diagnostics(
+                run_id,
+                diagnostics=diagnostics,
+                correlation_id=run.correlation_id,
+            ) or run
         items: tuple[RecommendationItem, ...]
         evaluations: tuple[CriterionEvaluation, ...] = ()
-        if self.policy_engine is not None:
+        if run.score_policy_version != self.scoring.score_policy_version:
+            if self.policy_engine is None:
+                raise RadarPermanentError(
+                    "radar.score_policy_not_found",
+                    "run scoring policy is not available",
+                )
             compilation = self.policy_engine.compilation_for(profile_version_id)
-        else:
-            compilation = None
-        if self.policy_engine is not None and compilation is not None:
-            scored_v1 = self.policy_engine.score_run(
-                profile=profile,
-                compilation=compilation,
-                candidates=passed,
-                run_id=run.run_id,
-                correlation_id=run.correlation_id,
-            )
+            if compilation is None:
+                raise RadarPermanentError(
+                    "radar.compilation_not_found",
+                    "run criteria compilation is not available",
+                )
+            try:
+                scored_v1 = self.policy_engine.score_run(
+                    profile=profile,
+                    compilation=compilation,
+                    candidates=passed,
+                    run_id=run.run_id,
+                    correlation_id=run.correlation_id,
+                    score_policy_version=run.score_policy_version,
+                )
+            except (ScoringNotFound, ScoringValidationError) as error:
+                raise RadarPermanentError(
+                    "radar.score_policy_not_found",
+                    "run scoring policy is not available",
+                ) from error
             items = tuple(
                 RecommendationItem(
                     item_id=uuid4(),
@@ -626,7 +711,7 @@ class RadarService:
                         "rooms": contributions["rooms"],
                         "surface": contributions["surface"],
                         "location_precision": contributions["location_precision"],
-                        "score_policy_version": self.scoring.score_policy_version,
+                        "score_policy_version": run.score_policy_version,
                     },
                 )
                 for position, (score, listing, contributions) in enumerate(scored)
@@ -644,7 +729,7 @@ class RadarService:
                 "run_id": str(run.run_id),
                 "candidate_count": len(passed),
                 "published_item_count": len(items),
-                "score_policy_version": self.scoring.score_policy_version,
+                "score_policy_version": run.score_policy_version,
             },
         )
         try:
@@ -727,29 +812,34 @@ class RadarService:
             version_id=uuid4(),
             profile_id=profile.profile_id,
             profile_version=profile_version,
-            payload=dict(payload),
+            payload={
+                **payload,
+                "unknown_strategy": dict(profile.unknown_strategy),
+                "search_profile_policy": freeze_search_profile_policy(
+                    self.policy,
+                    RESIDENTIAL_PROPERTY_TYPES,
+                ),
+            },
             created_at=self.clock(),
             correlation_id=profile.correlation_id,
             actor_kind=profile.actor_kind,
             actor_id=profile.actor_id,
         )
-        self.versions.insert(version)
         return version
 
     def _submit_run(
         self, profile: SearchProfile, version: ProfileVersion, trigger: str
     ) -> RecommendationRun | None:
+        self._check_version_owner(profile, version)
         if self.job_runtime is None:
             return None
-        if self.runs.exists(profile.profile_id, version.version_id, trigger):
-            return self.runs.get_for_version(profile.profile_id, version.version_id)
         run = RecommendationRun(
             run_id=uuid4(),
             profile_id=profile.profile_id,
             profile_version_id=version.version_id,
             state="pending",
             trigger=cast(RecommendationRunTrigger, trigger),
-            score_policy_version=self.score_policy_version,
+            score_policy_version=self._pin_score_policy_version(),
             candidate_count=0,
             published_item_count=0,
             failure_code=None,
@@ -760,20 +850,56 @@ class RadarService:
             actor_kind=profile.actor_kind,
             actor_id=profile.actor_id,
         )
+        run = self.runs.reserve(run)
+        if run.job_execution_id is not None:
+            return run
         job = self.job_runtime.submit(
             SubmitJob.create(
                 job_type=self.run_job_type,
-                logical_target=_job_target(profile.profile_id, version.version_id),
-                idempotency_key=(
-                    f"recommendation:{profile.profile_id}:{version.version_id}"
-                ),
+                logical_target=_job_target(run.run_id),
+                idempotency_key=f"recommendation:{run.run_id}",
                 correlation_id=profile.correlation_id,
                 actor=AuditActor.system(),
             )
         )
-        run = replace(run, job_execution_id=job.execution_id)
-        self.runs.insert(run)
-        return run
+        return self.runs.bind_job(run.run_id, job.execution_id)
+
+    def _pin_score_policy_version(self) -> str:
+        if self.policy_engine is not None:
+            return self.policy_engine.pin_policy_version()
+        if self.score_policy_version != self.scoring.score_policy_version:
+            raise RadarStateError("loaded baseline scoring revision does not match")
+        return self.score_policy_version
+
+    @staticmethod
+    def _check_version_owner(
+        profile: SearchProfile, version: ProfileVersion
+    ) -> None:
+        if version.profile_id != profile.profile_id:
+            raise RadarStateError("profile version does not belong to profile")
+
+    def _schedule_after_commit(
+        self,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        *,
+        trigger: RecommendationRunTrigger,
+    ) -> RecommendationRun | None:
+        try:
+            return self.schedule_version_run(
+                profile=profile,
+                version=version,
+                trigger=trigger,
+            )
+        except Exception:
+            try:
+                return self.runs.get_reserved(
+                    profile.profile_id,
+                    version.version_id,
+                    trigger,
+                )
+            except Exception:
+                return None
 
     def _emit_server_event(
         self,
@@ -783,8 +909,25 @@ class RadarService:
         correlation_id: UUID,
         payload: Mapping[str, object],
     ) -> None:
+        self.events.insert(
+            self._server_event(
+                event_type=event_type,
+                actor_id=actor_id,
+                correlation_id=correlation_id,
+                payload=payload,
+            )
+        )
+
+    def _server_event(
+        self,
+        *,
+        event_type: str,
+        actor_id: UUID | None,
+        correlation_id: UUID,
+        payload: Mapping[str, object],
+    ) -> ProductEvent:
         version = event_version(self.events_registry, event_type)
-        event = ProductEvent(
+        return ProductEvent(
             event_id=uuid4(),
             event_type=event_type,
             event_version=version or 1,
@@ -793,7 +936,6 @@ class RadarService:
             correlation_id=correlation_id,
             payload=dict(payload),
         )
-        self.events.insert(event)
 
     @staticmethod
     def _summary(run: RecommendationRun) -> Mapping[str, object]:
@@ -811,9 +953,9 @@ def _payload(
     *,
     name: str,
     zones: tuple[str, ...],
-    budget_max: float,
+    budget_max: float | None,
     budget_min: float | None,
-    min_rooms: int,
+    min_rooms: int | None,
     surface_min: float | None,
     surface_max: float | None,
     status: str,
@@ -844,12 +986,8 @@ def _payload_from_profile(profile: SearchProfile) -> dict[str, object]:
     )
 
 
-def _job_target(profile_id: UUID, version_id: UUID) -> str:
-    return f"{profile_id}:{version_id}"
-
-
-def _number(value: object) -> float:
-    return float(value) if isinstance(value, (int, float)) else 0.0
+def _job_target(run_id: UUID) -> str:
+    return str(run_id)
 
 
 def _optional_number(value: object) -> float | None:
@@ -858,11 +996,11 @@ def _optional_number(value: object) -> float | None:
     return float(value)
 
 
-def _int(value: object) -> int:
+def _optional_int(value: object) -> int | None:
     if isinstance(value, bool):
-        return 0
+        return None
     if isinstance(value, int):
         return value
     if isinstance(value, float):
         return int(value)
-    return 0
+    return None

@@ -86,20 +86,20 @@
       "key": "proximidad_cafes",
       "name": "Proximidad a cafes",
       "aliases": ["cerca de cafes", "con cafes cerca", "cerca de un cafe"],
-      "matcher_type": "numeric_range",
-      "params_schema": {"min": 1, "max": 1000},
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "cafe_lifestyle"},
       "source": "seed",
-      "defaults": {"min": 1},
+      "defaults": {"signal_ref": "cafe_lifestyle"},
       "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
     },
     {
       "key": "acceso_transporte",
       "name": "Acceso a transporte",
       "aliases": ["buen transporte", "bien conectado", "cerca del transporte"],
-      "matcher_type": "numeric_range",
-      "params_schema": {"min": 1, "max": 1000},
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "transit_access"},
       "source": "seed",
-      "defaults": {"min": 1},
+      "defaults": {"signal_ref": "transit_access"},
       "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
     }
   ]

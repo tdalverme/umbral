@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import replace
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -11,7 +14,11 @@ from umbral.application.jobs.contracts import (
     JobContext,
     PermanentJobError,
 )
-from umbral.application.radar.contracts import RadarNotAccessible, RecommendationRun
+from umbral.application.radar.contracts import (
+    RadarNotAccessible,
+    RadarPermanentError,
+    RecommendationRun,
+)
 from umbral.application.silver.contracts import NormalizedListing
 from umbral.workers.radar import RecommendationRunHandler
 
@@ -50,7 +57,7 @@ def test_handler_processes_a_run_atomically() -> None:
         attempt_number=1,
         correlation_id=uuid4(),
         release_id="test",
-        logical_target=f"{profile.profile_id}:{profile.current_version_id}",
+        logical_target=str(run.run_id) if run is not None else None,
     )
     summary = handler.run(context)
 
@@ -75,13 +82,45 @@ def test_handler_processes_a_run_atomically() -> None:
     assert published_events[0].payload["candidate_count"] == 2
 
 
+def test_handler_processes_an_open_partial_profile() -> None:
+    ctx = _ctx_with_candidates(build_listing())
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Nueva búsqueda",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    handler = RecommendationRunHandler(ctx.service)
+    context = JobContext(
+        execution_id=uuid4(),
+        attempt_number=1,
+        correlation_id=uuid4(),
+        release_id="test",
+        logical_target=str(run.run_id) if run is not None else None,
+    )
+
+    summary = handler.run(context)
+
+    assert summary["candidate_count"] == 1
+    assert run is not None
+    items = ctx.items.list_for_run(run.run_id, None, 100)
+    assert items[0].contributions["budget"] == 0.0
+    assert items[0].contributions["rooms"] == 0.0
+
+
 def test_hard_filters_exclude_unknown_price_and_out_of_zones() -> None:
     ctx = _ctx_with_candidates(
         build_listing(total_cost=700.0),
         build_listing(neighborhood="recoleta"),
         build_listing(total_cost=1500.0),
     )
-    profile, _ = ctx.service.create_profile(
+    _, run = ctx.service.create_profile(
         owner_id=uuid4(),
         name="Radar",
         zones=("palermo",),
@@ -99,7 +138,7 @@ def test_hard_filters_exclude_unknown_price_and_out_of_zones() -> None:
         attempt_number=1,
         correlation_id=uuid4(),
         release_id="test",
-        logical_target=f"{profile.profile_id}:{profile.current_version_id}",
+        logical_target=str(run.run_id) if run is not None else None,
     )
     summary = handler.run(context)
     assert summary["candidate_count"] == 1
@@ -125,12 +164,280 @@ def test_terminal_replay_returns_the_existing_result() -> None:
         attempt_number=1,
         correlation_id=uuid4(),
         release_id="test",
-        logical_target=f"{profile.profile_id}:{profile.current_version_id}",
+        logical_target=str(run.run_id) if run is not None else None,
     )
     first = handler.run(context)
     second = handler.run(context)
     assert first["run_id"] == second["run_id"]
     assert len(ctx.runs.events) == 1
+
+
+def test_handler_processes_the_exact_run_when_one_version_has_two_triggers() -> None:
+    ctx = _ctx_with_candidates(build_listing(total_cost=700.0))
+    owner = uuid4()
+    profile, created_run = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=0,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    paused, _ = ctx.service.set_status(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        status="paused",
+        correlation_id=uuid4(),
+    )
+    _, resumed_run = ctx.service.set_status(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=paused.version,
+        status="active",
+        correlation_id=uuid4(),
+    )
+    assert created_run is not None
+    assert resumed_run is not None
+    handler = RecommendationRunHandler(ctx.service)
+
+    created_summary = handler.run(
+        JobContext(
+            execution_id=created_run.job_execution_id or uuid4(),
+            attempt_number=1,
+            correlation_id=uuid4(),
+            release_id="test",
+            logical_target=str(created_run.run_id),
+        )
+    )
+
+    assert created_summary["run_id"] == str(created_run.run_id)
+    persisted_resumed = ctx.runs.get(resumed_run.run_id)
+    assert persisted_resumed is not None
+    assert persisted_resumed.state == "pending"
+
+
+def test_handler_executes_the_immutable_profile_version_after_a_later_edit() -> None:
+    ctx = _ctx_with_candidates(build_listing(total_cost=700.0))
+    owner = uuid4()
+    profile, created_run = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=0,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    ctx.service.update_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={"budget_max": 500.0},
+        correlation_id=uuid4(),
+    )
+    assert created_run is not None
+
+    summary = RecommendationRunHandler(ctx.service).run(
+        JobContext(
+            execution_id=created_run.job_execution_id or uuid4(),
+            attempt_number=1,
+            correlation_id=uuid4(),
+            release_id="test",
+            logical_target=str(created_run.run_id),
+        )
+    )
+
+    assert summary["candidate_count"] == 1
+    items = ctx.items.list_for_run(created_run.run_id, None, 10)
+    assert len(items) == 1
+    assert items[0].contributions["budget"] == 0.3
+
+
+def test_handler_executes_the_search_policy_revision_frozen_with_the_run() -> None:
+    ctx = _ctx_with_candidates(build_listing(neighborhood="palermo"))
+    ctx.service.policy = replace(
+        ctx.service.policy,
+        policy_version="search-profile-policy-v1",
+        neighborhoods=("palermo",),
+    )
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert profile.current_version_id is not None
+    assert run is not None
+    ctx.service.policy = replace(
+        ctx.service.policy,
+        policy_version="search-profile-policy-v2",
+        neighborhoods=("recoleta",),
+    )
+
+    summary = ctx.service.process_run(
+        run_id=run.run_id,
+        job_execution_id=run.job_execution_id,
+    )
+
+    assert summary["candidate_count"] == 1
+
+
+def test_handler_uses_the_frozen_residential_property_scope() -> None:
+    ctx = _ctx_with_candidates(build_listing(property_type="apartment"))
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert profile.current_version_id is not None
+    assert run is not None
+    version = ctx.versions.rows[profile.current_version_id]
+    payload = dict(version.payload)
+    policy = dict(
+        cast(Mapping[str, object], payload["search_profile_policy"])
+    )
+    policy["residential_property_types"] = ["house"]
+    payload["search_profile_policy"] = policy
+    ctx.versions.rows[version.version_id] = replace(version, payload=payload)
+
+    summary = ctx.service.process_run(
+        run_id=run.run_id,
+        job_execution_id=run.job_execution_id,
+    )
+
+    assert summary["candidate_count"] == 0
+
+
+def test_handler_fails_closed_without_a_frozen_search_policy() -> None:
+    ctx = _ctx_with_candidates(build_listing())
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert profile.current_version_id is not None
+    assert run is not None
+    version = ctx.versions.rows[profile.current_version_id]
+    payload = dict(version.payload)
+    del payload["search_profile_policy"]
+    ctx.versions.rows[version.version_id] = replace(version, payload=payload)
+
+    with pytest.raises(RadarPermanentError) as excinfo:
+        ctx.service.process_run(
+            run_id=run.run_id,
+            job_execution_id=run.job_execution_id,
+        )
+
+    assert excinfo.value.code == "radar.search_policy_snapshot_missing"
+
+
+def test_handler_fails_closed_when_frozen_strategy_metadata_is_missing() -> None:
+    ctx = _ctx_with_candidates(build_listing())
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert profile.current_version_id is not None
+    assert run is not None
+    version = ctx.versions.rows[profile.current_version_id]
+    payload = dict(version.payload)
+    policy = dict(
+        cast(Mapping[str, object], payload["search_profile_policy"])
+    )
+    del policy["unknown_strategies"]
+    payload["search_profile_policy"] = policy
+    ctx.versions.rows[version.version_id] = replace(version, payload=payload)
+
+    with pytest.raises(RadarPermanentError) as excinfo:
+        ctx.service.process_run(
+            run_id=run.run_id,
+            job_execution_id=run.job_execution_id,
+        )
+
+    assert excinfo.value.code == "radar.search_policy_snapshot_invalid"
+
+
+def test_run_processing_rejects_a_profile_returned_under_the_wrong_identity() -> None:
+    ctx = RadarTestContext()
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert run is not None
+    ctx.profiles.rows[profile.profile_id] = replace(profile, profile_id=uuid4())
+
+    with pytest.raises(RadarPermanentError) as excinfo:
+        ctx.service.process_run(run_id=run.run_id, job_execution_id=uuid4())
+
+    assert excinfo.value.code == "radar.run_profile_mismatch"
+
+
+def test_run_processing_rejects_a_version_returned_under_the_wrong_identity() -> None:
+    ctx = RadarTestContext()
+    profile, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert run is not None
+    version = ctx.versions.rows[run.profile_version_id]
+    ctx.versions.rows[run.profile_version_id] = replace(version, version_id=uuid4())
+
+    with pytest.raises(RadarPermanentError) as excinfo:
+        ctx.service.process_run(run_id=run.run_id, job_execution_id=uuid4())
+
+    assert excinfo.value.code == "radar.run_version_mismatch"
 
 
 def test_invalid_target_is_a_permanent_failure() -> None:
@@ -169,3 +476,106 @@ def test_matches_page_of_a_profile_requires_ownership() -> None:
             after_position=None,
             limit=25,
         )
+
+
+def test_stale_pending_run_is_superseded_when_newer_results_exist() -> None:
+    ctx = _ctx_with_candidates(build_listing(total_cost=700.0))
+    owner = uuid4()
+    profile, first_run = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=0,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert first_run is not None
+    # A newer radar version edits and its run publishes first.
+    edited, _ = ctx.service.update_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={"budget_max": 1200.0},
+        correlation_id=uuid4(),
+    )
+    ctx.service.schedule_version_run(
+        profile=edited,
+        version=ctx.versions.latest_for_profile(profile.profile_id),  # type: ignore[arg-type]
+        trigger="edited",
+    )
+    newer_run = ctx.runs.latest_for_profile(profile.profile_id)
+    assert newer_run is not None
+    handler = RecommendationRunHandler(ctx.service)
+    handler.run(
+        JobContext(
+            execution_id=newer_run.job_execution_id or uuid4(),
+            attempt_number=1,
+            correlation_id=uuid4(),
+            release_id="test",
+            logical_target=str(newer_run.run_id),
+        )
+    )
+
+    # The stale first run, processed later, must not replace newer results.
+    summary = handler.run(
+        JobContext(
+            execution_id=first_run.job_execution_id or uuid4(),
+            attempt_number=1,
+            correlation_id=uuid4(),
+            release_id="test",
+            logical_target=str(first_run.run_id),
+        )
+    )
+
+    assert summary["state"] == "superseded"
+    persisted = _run_for(ctx, first_run)
+    assert persisted is not None
+    assert persisted.state == "superseded"
+    assert persisted.failure_code == "radar.results_superseded"
+
+
+def test_zero_match_run_persists_diagnostics_and_relaxations() -> None:
+    ctx = _ctx_with_candidates(
+        build_listing(total_cost=900.0, neighborhood="palermo", rooms=1),
+        build_listing(total_cost=2000.0, neighborhood="palermo", rooms=1),
+    )
+    _, run = ctx.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=("palermo",),
+        budget_max=500.0,
+        budget_min=None,
+        min_rooms=3,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    handler = RecommendationRunHandler(ctx.service)
+    context = JobContext(
+        execution_id=uuid4(),
+        attempt_number=1,
+        correlation_id=uuid4(),
+        release_id="test",
+        logical_target=str(run.run_id) if run is not None else None,
+    )
+
+    summary = handler.run(context)
+
+    assert summary["state"] == "succeeded"
+    assert summary["candidate_count"] == 0
+    persisted = _run_for(ctx, run) if run is not None else None
+    assert persisted is not None
+    diagnostics = persisted.diagnostics
+    assert diagnostics.get("passed_count") == 0
+    exclusion_counts = diagnostics.get("exclusion_counts", {})
+    assert isinstance(exclusion_counts, Mapping)
+    assert exclusion_counts.get("budget_max") == 2
+    proposals = diagnostics.get("relaxation_proposals", [])
+    assert isinstance(proposals, list) and proposals
+    proposed_keys = {item.get("criterion") for item in proposals}
+    assert {"budget_max", "min_rooms"} <= proposed_keys

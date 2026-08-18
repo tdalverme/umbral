@@ -7,12 +7,14 @@ from uuid import uuid4
 import pytest
 from tests.support.radar import RadarTestContext
 
+from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.application.radar.contracts import (
     RadarNotAccessible,
     RadarStateError,
     SearchProfile,
 )
 from umbral.domain.errors import ConcurrencyConflict
+from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 
 OWNER = uuid4()
 
@@ -50,8 +52,20 @@ def test_list_distinguishes_statuses_and_ownership() -> None:
 
 
 def test_pause_resume_and_archive_transitions() -> None:
-    ctx = RadarTestContext()
-    profile = _create(ctx)
+    runtime = InMemoryJobRuntime(queue=RecordingJobQueue())
+    ctx = RadarTestContext(job_runtime=runtime, default_runtime=False)
+    profile, created_run = ctx.service.create_profile(
+        owner_id=OWNER,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=2,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
     paused, _ = ctx.service.set_status(
         owner_id=OWNER,
         profile_id=profile.profile_id,
@@ -69,6 +83,11 @@ def test_pause_resume_and_archive_transitions() -> None:
     )
     assert resumed.status == "active"
     assert run is not None and run.trigger == "resumed"
+    assert created_run is not None
+    assert run.job_execution_id != created_run.job_execution_id
+    assert len(runtime.submissions) == 2
+    assert runtime.submissions[0].identity.logical_target == str(created_run.run_id)
+    assert runtime.submissions[1].identity.logical_target == str(run.run_id)
     archived, _ = ctx.service.set_status(
         owner_id=OWNER,
         profile_id=profile.profile_id,
@@ -125,6 +144,28 @@ def test_edit_active_creates_version_and_triggers_edited_run() -> None:
     assert old_version_id is not None
     old_version = ctx.versions.rows[old_version_id]
     assert old_version.payload["name"] == "Radar"
+
+
+def test_concurrent_edit_rolls_back_profile_pointer_and_snapshot() -> None:
+    ctx = RadarTestContext()
+    profile = _create(ctx)
+    original_snapshot_ids = set(ctx.versions.rows)
+    ctx.profiles.fail_next_atomic_save = True
+
+    with pytest.raises(ConcurrencyConflict):
+        ctx.service.version_profile(
+            owner_id=OWNER,
+            profile_id=profile.profile_id,
+            expected_version=profile.version,
+            changes={"name": "Debe fallar"},
+            correlation_id=uuid4(),
+        )
+
+    persisted = ctx.profiles.get(profile.profile_id)
+    assert persisted is not None
+    assert persisted.name == profile.name
+    assert persisted.current_version_id == profile.current_version_id
+    assert set(ctx.versions.rows) == original_snapshot_ids
 
 
 def test_edit_paused_does_not_trigger_a_run() -> None:

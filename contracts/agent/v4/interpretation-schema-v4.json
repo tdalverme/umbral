@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "interpretation-schema-v4.json",
+  "title": "ConversationInterpretationV4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "interpretation_version", "acts", "ambiguity"],
+  "properties": {
+    "contract_version": {"const": "4"},
+    "interpretation_version": {"const": "conversation-interpretation-v4"},
+    "acts": {"type": "array", "items": {"$ref": "#/$defs/act"}},
+    "ambiguity": {"type": ["object", "null"]}
+  },
+  "$defs": {
+    "act": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["act_id", "kind", "target", "payload", "confidence"],
+      "properties": {
+        "act_id": {"type": "string", "minLength": 1},
+        "kind": {
+          "type": "string",
+          "enum": [
+            "resolve_pending",
+            "create_radar",
+            "set_filter",
+            "clear_filter",
+            "express_preference",
+            "revise_preference",
+            "withdraw_preference",
+            "record_feedback",
+            "query"
+          ]
+        },
+        "target": {"type": "object", "additionalProperties": {"type": "string"}},
+        "payload": {"type": "object"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    }
+  }
+}

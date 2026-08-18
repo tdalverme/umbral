@@ -259,7 +259,7 @@ def _build() -> tuple[ChatRuntime, _Repo, _ScriptedGateway]:
         reply_max_refs=10,
     )
     runtime = ChatRuntime(
-        graph=graph,  # type: ignore[arg-type]
+        graph=graph,
         conversation=_SessionConversation(),
         runs=InMemoryGraphRunRepository(),
         recorder=recorder,

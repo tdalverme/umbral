@@ -56,11 +56,15 @@ class ChatService:
         self,
         *,
         user_id: UUID,
-        search_profile_id: UUID,
+        search_profile_id: UUID | None,
         correlation_id: UUID,
         now: datetime | None = None,
     ) -> ChatSession:
-        status = self._profile_status(search_profile_id)
+        status = (
+            self._profile_status(search_profile_id)
+            if search_profile_id is not None
+            else "active"
+        )
         session = ChatSession(
             session_id=uuid4(),
             user_id=user_id,
@@ -76,7 +80,9 @@ class ChatService:
             actor_id=user_id,
             payload={
                 "session_id": str(session.session_id),
-                "search_profile_id": str(search_profile_id),
+                "search_profile_id": (
+                    str(search_profile_id) if search_profile_id else None
+                ),
             },
         )
         return session
@@ -86,6 +92,32 @@ class ChatService:
         if session is None:
             raise ChatSessionNotFound()
         return session
+
+    def bind_profile(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        search_profile_id: UUID,
+        correlation_id: UUID,
+    ) -> ChatSession:
+        """Bind a radar to an unbound session (copilot first turn, FR-003)."""
+        session = self.get_session(user_id=user_id, session_id=session_id)
+        if session.search_profile_id is not None:
+            return session
+        updated = self.sessions.bind_profile(session_id, search_profile_id)
+        if updated is None:
+            raise ChatSessionNotFound()
+        self._emit_server_event(
+            event_type="chat.session_created.v1",
+            correlation_id=correlation_id,
+            actor_id=user_id,
+            payload={
+                "session_id": str(session.session_id),
+                "search_profile_id": str(search_profile_id),
+            },
+        )
+        return updated
 
     def list_history(
         self, *, user_id: UUID, session_id: UUID

@@ -181,6 +181,14 @@ class FakeObservationRepository:
                 count += 1
         return count
 
+    def invalidate_active_for_source(self, source: str) -> int:
+        count = 0
+        for index, observation in enumerate(self.rows):
+            if observation.source == source and observation.state == "active":
+                self.rows[index] = replace(observation, state="invalidated")
+                count += 1
+        return count
+
     def ids_for_scope(self, scope: RecomputeScope) -> tuple[UUID, ...]:
         return tuple(
             observation.observation_id

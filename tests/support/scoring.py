@@ -14,6 +14,7 @@ from tests.fakes.scoring import (
     FakeObservationReader,
     FakePolicyRepository,
     FakeProfileReader,
+    FakeProfileVersionReader,
     FakeRunReader,
     FakeShortlistRepository,
 )
@@ -44,6 +45,7 @@ class ScoringTestContext:
         self.runs = FakeRunReader()
         self.items = FakeItemReader()
         self.profiles = FakeProfileReader()
+        self.versions = FakeProfileVersionReader()
         self.listings = FakeListingReader()
         self.shortlists = FakeShortlistRepository() if comparator_enabled else None
         self.service = ScoringService(
@@ -54,6 +56,7 @@ class ScoringTestContext:
             runs=self.runs,
             items=self.items,
             profiles=self.profiles,
+            versions=self.versions,
             listings=self.listings,
             shortlists=self.shortlists,
             matcher_types=MATCHER_TYPES,

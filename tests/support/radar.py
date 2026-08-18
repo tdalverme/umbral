@@ -14,18 +14,23 @@ from tests.fakes.radar import (
     FakeRunRepository,
     FakeSearchProfileRepository,
 )
+from umbral.application.events.contracts import ProductEvent
 from umbral.application.jobs.ports import JobRuntime
 from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.application.radar.contracts import (
+    ProfileVersion,
     RecommendationItem,
     SearchProfile,
     SearchProfileState,
 )
+from umbral.application.radar.hard_filters import RESIDENTIAL_PROPERTY_TYPES
+from umbral.application.radar.profile_policy import freeze_search_profile_policy
 from umbral.application.radar.service import RadarService
 from umbral.application.silver.contracts import (
     GeoPrecision,
     NormalizedListing,
     OperationType,
+    PropertyType,
 )
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.infrastructure.radar.contract_loader import (
@@ -46,12 +51,17 @@ class RadarTestContext:
     def __init__(
         self, job_runtime: JobRuntime | None = None, default_runtime: bool = True
     ) -> None:
-        self.profiles = FakeSearchProfileRepository()
-        self.versions = FakeProfileVersionRepository()
+        shared_versions: dict[UUID, ProfileVersion] = {}
+        shared_events: list[ProductEvent] = []
+        self.profiles = FakeSearchProfileRepository(
+            version_rows=shared_versions,
+            event_rows=shared_events,
+        )
+        self.versions = FakeProfileVersionRepository(rows=shared_versions)
         shared_items: dict[UUID, list[RecommendationItem]] = {}
         self.runs = FakeRunRepository(items_by_run=shared_items)
         self.items = FakeItemRepository(items_by_run=shared_items)
-        self.events = FakeEventRepository()
+        self.events = FakeEventRepository(events=shared_events)
         self.candidates = FakeCandidateListingReader()
         self.listings = FakeListingReader()
         runtime = job_runtime
@@ -79,9 +89,9 @@ def build_profile(
     owner_id: UUID | None = None,
     name: str = "Mi radar",
     zones: tuple[str, ...] = ("palermo",),
-    budget_max: float = 1000.0,
+    budget_max: float | None = 1000.0,
     budget_min: float | None = None,
-    min_rooms: int = 2,
+    min_rooms: int | None = 2,
     surface_min: float | None = None,
     surface_max: float | None = None,
     status: SearchProfileState = "active",
@@ -126,6 +136,7 @@ def build_listing(
     surface_m2: float | None = 50.0,
     geo_precision: GeoPrecision = "neighborhood",
     operation: OperationType = "rental",
+    property_type: PropertyType = "apartment",
 ) -> NormalizedListing:
     return NormalizedListing(
         listing_id=listing_id or uuid4(),
@@ -145,7 +156,7 @@ def build_listing(
         last_observed_at=datetime.now(timezone.utc),
         normalizer_version="silver-schema-v1",
         operation=operation,
-        property_type="apartment",
+        property_type=property_type,
         price_value=total_cost,
         price_currency="ARS",
         expenses_value=None,
@@ -165,3 +176,24 @@ def build_listing(
         geo_source=None,
         normalization_errors=(),
     )
+
+
+def profile_version_payload(profile: SearchProfile) -> dict[str, object]:
+    """Complete immutable payload used by manually seeded profile versions."""
+
+    return {
+        "name": profile.name,
+        "operation": profile.operation,
+        "zones": list(profile.zones),
+        "budget_max": profile.budget_max,
+        "budget_min": profile.budget_min,
+        "min_rooms": profile.min_rooms,
+        "surface_min": profile.surface_min,
+        "surface_max": profile.surface_max,
+        "status": profile.status,
+        "unknown_strategy": dict(profile.unknown_strategy),
+        "search_profile_policy": freeze_search_profile_policy(
+            load_search_profile_policy(),
+            RESIDENTIAL_PROPERTY_TYPES,
+        ),
+    }

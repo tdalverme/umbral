@@ -219,7 +219,7 @@ def _build_runtime(factory, url: str) -> ChatRuntime:
         reply_max_refs=10,
     )
     return ChatRuntime(
-        graph=graph,  # type: ignore[arg-type]
+        graph=graph,
         conversation=chat,
         runs=runs,
         recorder=recorder,

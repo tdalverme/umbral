@@ -42,6 +42,9 @@ def test_create_persists_profile_version_event_and_run() -> None:
     assert profile.version == 1
     assert profile.status == "active"
     assert profile.current_version_id is not None
+    persisted_profile = ctx.profiles.get(profile.profile_id)
+    assert persisted_profile is not None
+    assert persisted_profile.current_version_id == profile.current_version_id
 
     version = ctx.versions.get(profile.current_version_id)
     assert version is not None
@@ -70,14 +73,57 @@ def test_create_without_job_runtime_submits_no_run() -> None:
     assert profile.version == 1
 
 
+def test_create_partial_profile_is_active_without_constraints() -> None:
+    ctx = RadarTestContext()
+
+    profile, run = _create(
+        ctx,
+        name="Nueva búsqueda",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+    )
+
+    assert profile.status == "active"
+    assert profile.zones == ()
+    assert profile.budget_max is None
+    assert profile.min_rooms is None
+    assert run is not None
+    assert run.trigger == "created"
+
+
 def test_create_with_invalid_profile_is_rejected_without_persistence() -> None:
     ctx = RadarTestContext()
     with pytest.raises(RadarValidationError) as excinfo:
-        _create(ctx, zones=(), budget_min=2000.0)
-    assert "radar.zones_required" in excinfo.value.error_codes
+        _create(ctx, zones=("fuera_de_caba",), budget_min=2000.0)
+    assert "radar.zone_unknown" in excinfo.value.error_codes
     assert ctx.profiles.rows == {}
     assert ctx.versions.rows == {}
     assert ctx.events.events == []
+
+
+def test_create_audit_failure_rolls_back_profile_snapshot_and_event() -> None:
+    ctx = RadarTestContext()
+    ctx.profiles.fail_next_atomic_insert = True
+
+    with pytest.raises(RuntimeError, match="atomic create unavailable"):
+        _create(ctx)
+
+    assert ctx.profiles.rows == {}
+    assert ctx.versions.rows == {}
+    assert ctx.events.events == []
+
+
+def test_partial_profile_rejects_non_positive_budget_with_v2_error() -> None:
+    ctx = RadarTestContext()
+
+    with pytest.raises(RadarValidationError) as excinfo:
+        _create(ctx, budget_max=0)
+
+    assert excinfo.value.error_codes == ("radar.budget_range",)
 
 
 def test_create_uses_versioned_default_unknown_strategy() -> None:

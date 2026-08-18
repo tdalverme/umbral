@@ -100,6 +100,14 @@ try {
         Invoke-ChildCheck -Name "Criterios" -Path (Join-Path $PSScriptRoot "check-criteria.ps1")
     }
 
+    $urbanSurface = @(
+        (Join-Path $repoRoot "src\umbral\application\urban"),
+        (Join-Path $repoRoot "tests\integration\urban")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($urbanSurface) {
+        Invoke-ChildCheck -Name "Urban" -Path (Join-Path $PSScriptRoot "check-urban.ps1")
+    }
+
     $scoringSurface = @(
         (Join-Path $repoRoot "src\umbral\application\scoring"),
         (Join-Path $repoRoot "tests\integration\scoring")

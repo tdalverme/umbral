@@ -22,6 +22,12 @@ class ChatSessionRepository(Protocol):
         self, user_id: UUID, search_profile_id: UUID
     ) -> tuple[ChatSession, ...]: ...
 
+    def bind_profile(
+        self, session_id: UUID, search_profile_id: UUID
+    ) -> ChatSession | None:
+        """Bind a radar to a session created without one (copilot, FR-003)."""
+        ...
+
 
 class ChatMessageRepository(Protocol):
     def append(self, message: ChatMessage) -> ChatMessage: ...

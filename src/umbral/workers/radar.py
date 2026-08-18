@@ -32,18 +32,13 @@ class RecommendationRunHandler:
     def run(self, context: JobContext) -> Mapping[str, JsonScalar]:
         if context.logical_target is None:
             raise PermanentJobError("radar.target_missing")
-        profile_id, separator, version_id = context.logical_target.partition(":")
-        if not separator:
-            raise PermanentJobError("radar.target_invalid")
         try:
-            parsed_profile_id = UUID(profile_id)
-            parsed_version_id = UUID(version_id)
+            run_id = UUID(context.logical_target)
         except ValueError:
             raise PermanentJobError("radar.target_invalid") from None
         try:
             summary = self.service.process_run(
-                profile_id=parsed_profile_id,
-                profile_version_id=parsed_version_id,
+                run_id=run_id,
                 job_execution_id=context.execution_id,
             )
         except RadarTransientError as error:

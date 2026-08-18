@@ -31,7 +31,13 @@ def _context_with_run() -> tuple[
     run_id = uuid4()
     first = build_listing(total_cost=450000)
     second = build_listing(total_cost=480000)
-    run = build_run(profile_id=profile_id, profile_version_id=uuid4(), run_id=run_id)
+    score_policy_version = context.service.pin_policy_version()
+    run = build_run(
+        profile_id=profile_id,
+        profile_version_id=uuid4(),
+        run_id=run_id,
+        score_policy_version=score_policy_version,
+    )
     context.runs.rows[run_id] = run
     context.items.items_by_run[run_id] = [
         build_item(run_id, first.listing_id, position=0),
@@ -48,7 +54,7 @@ def _context_with_run() -> tuple[
                 run_id=run_id,
                 listing_id=listing.listing_id,
                 criterion_key="presupuesto",
-                criterion_version="policy:scoring-policy-v1",
+                criterion_version=f"policy:{score_policy_version}",
                 matcher_type="numeric_range",
                 params={},
                 input_refs=(),

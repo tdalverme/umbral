@@ -40,6 +40,7 @@ def _service_with_observations(
         candidates=(listing,),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     return context, scored
 
@@ -50,7 +51,7 @@ def test_allowed_value_produces_match_evaluation() -> None:
     candidate = scored[0]
     assert candidate.score > 0.0
     evaluations = candidate.evaluations
-    assert len(evaluations) == 7  # the seed policy criteria
+    assert len(evaluations) == 6  # surface is absent from this profile
     balcon = next(item for item in evaluations if item.criterion_key == "balcon")
     assert balcon.state == "match"
     assert balcon.score == 1.0
@@ -74,6 +75,7 @@ def test_missing_observation_produces_unknown() -> None:
         candidates=(listing,),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     luminosidad = next(
         item for item in scored[0].evaluations if item.criterion_key == "luminosidad"
@@ -91,3 +93,29 @@ def test_fixed_criteria_are_evaluated_from_profile_and_listing() -> None:
     assert presupuesto.state == "match"
     assert presupuesto.evidence_refs[0]["kind"] == "listing_field"
     assert presupuesto.evidence_refs[0]["ref"] == "total_cost"
+
+
+def test_open_profile_omits_undeclared_fixed_criteria() -> None:
+    context = ScoringTestContext()
+    profile = build_profile(zones=(), budget_max=None, min_rooms=None)
+    listing = build_listing()
+    compilation = build_compilation(
+        profile_id=profile.profile_id,
+        profile_version_id=uuid4(),
+        criteria=(),
+    )
+
+    scored = context.service.score_run(
+        profile=profile,
+        compilation=compilation,
+        candidates=(listing,),
+        run_id=uuid4(),
+        correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
+    )
+
+    fixed_keys = {"presupuesto", "ambientes", "superficie", "ubicacion"}
+    assert fixed_keys.isdisjoint(
+        evaluation.criterion_key for evaluation in scored[0].evaluations
+    )
+    assert all(scored[0].contributions[key] == 0.0 for key in fixed_keys)

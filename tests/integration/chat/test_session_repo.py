@@ -13,6 +13,7 @@ from tests.integration.chat.conftest import build_chat, seed_profile, seed_user
 
 from umbral.application.chat.contracts import ChatMessageTooLong
 from umbral.infrastructure.db.models.chat import ChatMessage as ChatMessageModel
+from umbral.infrastructure.db.models.chat import ChatSession as ChatSessionModel
 from umbral.infrastructure.db.models.radar import SearchProfile
 
 SessionFactory = Callable[[], Session]
@@ -121,3 +122,31 @@ def test_status_mirrors_search_profile(chat_backend: SessionFactory) -> None:
         correlation_id=uuid4(),
     )
     assert session.status == "paused"
+
+
+def test_database_accepts_an_unbound_chat_session(
+    chat_backend: SessionFactory,
+) -> None:
+    owner_id = seed_user(chat_backend)
+    session_id = uuid4()
+    with chat_backend() as current:
+        current.add(
+            ChatSessionModel(
+                id=session_id,
+                created_at=_NOW,
+                updated_at=_NOW,
+                actor_kind="service",
+                actor_id=str(owner_id),
+                source="chat.session",
+                correlation_id=uuid4(),
+                user_id=owner_id,
+                search_profile_id=None,
+                status="active",
+            )
+        )
+        current.commit()
+
+    with chat_backend() as current:
+        stored = current.get(ChatSessionModel, session_id)
+        assert stored is not None
+        assert stored.search_profile_id is None

@@ -9,7 +9,9 @@ from typing import Literal
 from uuid import UUID
 
 SearchProfileState = Literal["active", "paused", "archived"]
-RecommendationRunState = Literal["pending", "running", "succeeded", "failed"]
+RecommendationRunState = Literal[
+    "pending", "running", "succeeded", "failed", "superseded"
+]
 RecommendationRunTrigger = Literal["created", "edited", "resumed"]
 OperationType = Literal["rental"]
 
@@ -23,9 +25,9 @@ class SearchProfile:
     name: str
     operation: OperationType
     zones: tuple[str, ...]
-    budget_max: float
+    budget_max: float | None
     budget_min: float | None
-    min_rooms: int
+    min_rooms: int | None
     surface_min: float | None
     surface_max: float | None
     status: SearchProfileState
@@ -40,7 +42,7 @@ class SearchProfile:
     actor_id: str | None = None
 
     @property
-    def budget_bound(self) -> float:
+    def budget_bound(self) -> float | None:
         return self.budget_max
 
 
@@ -78,6 +80,7 @@ class RecommendationRun:
     version: int = 1
     actor_kind: str = "service"
     actor_id: str | None = None
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

@@ -105,14 +105,18 @@ def sort_key(spec: ScoringBaselineSpec) -> tuple[str, ...]:
     return spec.tie_break
 
 
-def _budget_fit(budget_max: float, total_cost: float) -> float:
-    if budget_max <= 0 or total_cost is None:
+def _budget_fit(budget_max: float | None, total_cost: float) -> float:
+    if budget_max is None or budget_max <= 0 or total_cost is None:
         return 0.0
     ratio = (budget_max - total_cost) / budget_max
     return max(0.0, min(1.0, ratio))
 
 
-def _rooms_fit(min_rooms: int, rooms: int | None, spec: ScoringBaselineSpec) -> float:
+def _rooms_fit(
+    min_rooms: int | None, rooms: int | None, spec: ScoringBaselineSpec
+) -> float:
+    if min_rooms is None:
+        return 0.0
     if min_rooms == 0:
         return spec.rooms_fit.get("no_min", 1.0)
     if rooms is None:

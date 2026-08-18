@@ -58,6 +58,7 @@ def test_contract_documents_parse_and_match_the_published_contracts() -> None:
         "categorical",
         "geo_proximity",
         "semantic_feature",
+        "signal_score",
     }
 
 

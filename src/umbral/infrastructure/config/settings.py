@@ -346,6 +346,9 @@ class Settings(BaseSettings):
     agent_graph_release_id: str = Field(
         default="graph-release-001", validation_alias="AGENT_GRAPH_RELEASE_ID"
     )
+    copilot_enabled: bool = Field(
+        default=False, validation_alias="COPILOT_ENABLED"
+    )
     agent_budget_window_hours: int = Field(
         default=24, validation_alias="AGENT_BUDGET_WINDOW_HOURS"
     )

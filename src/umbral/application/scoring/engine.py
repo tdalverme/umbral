@@ -10,12 +10,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
 from umbral.application.criteria.contracts import Compilation, ListingObservation
 from umbral.application.radar.contracts import SearchProfile
-from umbral.application.scoring.contracts import CriterionEvaluation
+from umbral.application.scoring.contracts import (
+    CriterionEvaluation,
+    SemanticSignal,
+)
 from umbral.application.scoring.evaluators import (
     EvaluationResult,
     evaluate_fixed_criterion,
@@ -30,6 +33,7 @@ from umbral.application.silver.contracts import NormalizedListing
 
 ObservationsByConcept = Mapping[str, ListingObservation]
 ObservationsByListing = Mapping[UUID, ObservationsByConcept]
+SemanticSignalsByListing = Mapping[UUID, tuple[SemanticSignal, ...]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +52,8 @@ class PolicyRunEngine(Protocol):
 
     def compilation_for(self, profile_version_id: UUID) -> Compilation | None: ...
 
+    def pin_policy_version(self) -> str: ...
+
     def score_run(
         self,
         *,
@@ -56,6 +62,7 @@ class PolicyRunEngine(Protocol):
         candidates: tuple[NormalizedListing, ...],
         run_id: UUID,
         correlation_id: UUID,
+        score_policy_version: str,
     ) -> tuple[ScoredCandidate, ...]: ...
 
 
@@ -69,9 +76,11 @@ def score_candidates(
     run_id: UUID,
     correlation_id: UUID,
     now: datetime,
+    semantic_signals: SemanticSignalsByListing | None = None,
 ) -> tuple[ScoredCandidate, ...]:
     """Score every candidate against the policy; returns frozen candidates."""
 
+    signals = semantic_signals or {}
     scored: list[ScoredCandidate] = []
     for listing in candidates:
         candidate = _score_candidate(
@@ -83,6 +92,7 @@ def score_candidates(
             run_id=run_id,
             correlation_id=correlation_id,
             now=now,
+            semantic_signals=signals.get(listing.listing_id, ()),
         )
         if candidate is not None:
             scored.append(candidate)
@@ -109,6 +119,7 @@ def _score_candidate(
     run_id: UUID,
     correlation_id: UUID,
     now: datetime,
+    semantic_signals: tuple[SemanticSignal, ...] = (),
 ) -> ScoredCandidate | None:
     version_key = f"policy:{policy.score_policy_version}"
     evaluations: list[CriterionEvaluation] = []
@@ -118,6 +129,10 @@ def _score_candidate(
         compiled.concept_key: compiled for compiled in compilation.criteria
     }
     for criterion in policy.criteria:
+        if is_fixed_criterion(criterion.key) and not _fixed_criterion_declared(
+            criterion.key, profile
+        ):
+            continue
         if criterion.concept in fact_params:
             # The compiled preference params (polarity, preferred value) and
             # weight of a fact override the static policy entry of the same
@@ -189,6 +204,8 @@ def _score_candidate(
             )
         )
     frozen_evaluations = tuple(evaluations)
+    semantic_contribution = _semantic_contribution(policy, semantic_signals)
+    contribution_sum += semantic_contribution
     total = _apply_deltas(contribution_sum, policy, frozen_evaluations)
     if any(
         criterion.gate == "cap_0.6_on_mismatch"
@@ -220,6 +237,36 @@ def _score_candidate(
     )
 
 
+def _fixed_criterion_declared(key: str, profile: SearchProfile) -> bool:
+    if key == "presupuesto":
+        return profile.budget_max is not None
+    if key == "ambientes":
+        return profile.min_rooms is not None
+    if key == "superficie":
+        return profile.surface_min is not None or profile.surface_max is not None
+    if key == "ubicacion":
+        return bool(profile.zones)
+    return True
+
+
+def _semantic_contribution(
+    policy: ScoringPolicyDoc,
+    signals: tuple[SemanticSignal, ...],
+) -> float:
+    """Soft-only bounded contribution of semantic evidence (FR-018, FR-022).
+
+    Semantic signals never become hard filters: they add at most the policy
+    ``semantic.max_weight`` per candidate, weighted by signal confidence, and
+    zero when the policy has no semantic block or no signal is available.
+    """
+    if not signals or policy.semantic is None:
+        return 0.0
+    cap = policy.semantic.max_weight
+    raw = sum(signal.score * signal.confidence for signal in signals)
+    normalized = raw / len(signals)
+    return round(min(cap, cap * normalized), 6)
+
+
 def _evaluate_criterion(
     criterion: PolicyCriterion,
     profile: SearchProfile,
@@ -229,9 +276,9 @@ def _evaluate_criterion(
     if is_fixed_criterion(criterion.key):
         result = evaluate_fixed_criterion(
             criterion.key,
-            budget_max=profile.budget_max,
+            budget_max=cast(float, profile.budget_max),
             total_cost=listing.total_cost,
-            min_rooms=profile.min_rooms,
+            min_rooms=cast(int, profile.min_rooms),
             rooms=listing.rooms,
             surface_min=profile.surface_min,
             surface_max=profile.surface_max,

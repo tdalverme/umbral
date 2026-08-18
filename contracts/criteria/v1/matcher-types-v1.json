@@ -13,6 +13,9 @@
     },
     "semantic_feature": {
       "allowed_params": ["concept", "threshold"]
+    },
+    "signal_score": {
+      "allowed_params": ["signal_ref"]
     }
   }
 }

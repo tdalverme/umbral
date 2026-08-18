@@ -5,9 +5,30 @@ from umbral.infrastructure.db.repositories.identity import (
     PostgresIdentityRepository,
 )
 from umbral.infrastructure.db.repositories.objects import SqlAlchemyObjectRepository
+from umbral.infrastructure.db.repositories.preferences import (
+    SqlAlchemyBindingRepository,
+    SqlAlchemyExpressionRepository,
+)
+from umbral.infrastructure.db.repositories.urban import (
+    SqlAlchemyNeighborhoodStatsRepository,
+    SqlAlchemyUrbanContractRepository,
+    SqlAlchemyUrbanListingReader,
+    SqlAlchemyUrbanPrimitiveRepository,
+    SqlAlchemyUrbanSignalRepository,
+    SqlAlchemyUrbanSnapshotRepository,
+)
 
 __all__ = [
     "InMemoryIdentityStore",
     "PostgresIdentityRepository",
     "SqlAlchemyObjectRepository",
+    "SqlAlchemyBindingRepository",
+    "SqlAlchemyExpressionRepository",
+    "SqlAlchemyUrbanContractRepository",
+    "SqlAlchemyUrbanSnapshotRepository",
+    "SqlAlchemyUrbanPrimitiveRepository",
+    "SqlAlchemyUrbanSignalRepository",
+    "SqlAlchemyUrbanListingReader",
+    "SqlAlchemyNeighborhoodStatsRepository",
 ]
+

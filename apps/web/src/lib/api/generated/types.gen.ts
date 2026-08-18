@@ -148,7 +148,7 @@ export type CreateSearchProfileRequest = {
     /**
      * Budget Max
      */
-    budget_max: number;
+    budget_max?: number | null;
     /**
      * Budget Min
      */
@@ -156,7 +156,7 @@ export type CreateSearchProfileRequest = {
     /**
      * Min Rooms
      */
-    min_rooms?: number;
+    min_rooms?: number | null;
     /**
      * Name
      */
@@ -178,7 +178,7 @@ export type CreateSearchProfileRequest = {
     /**
      * Zones
      */
-    zones: Array<string>;
+    zones?: Array<string>;
 };
 
 /**
@@ -723,6 +723,64 @@ export type MatchesResponse = {
 };
 
 /**
+ * PreferenceViewItem
+ */
+export type PreferenceViewItem = {
+    /**
+     * Binding Id
+     */
+    binding_id: string;
+    /**
+     * Binding Kind
+     */
+    binding_kind: string;
+    /**
+     * Confidence
+     */
+    confidence: number;
+    /**
+     * Evidence Refs
+     */
+    evidence_refs: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Expression Id
+     */
+    expression_id: string;
+    /**
+     * Limitations
+     */
+    limitations: Array<string>;
+    /**
+     * Mode
+     */
+    mode: string;
+    /**
+     * Raw Text
+     */
+    raw_text: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Subject Key
+     */
+    subject_key: string;
+};
+
+/**
+ * PreferenceViewResponse
+ */
+export type PreferenceViewResponse = {
+    /**
+     * Items
+     */
+    items: Array<PreferenceViewItem>;
+};
+
+/**
  * PreferencesBody
  */
 export type PreferencesBody = {
@@ -1198,7 +1256,7 @@ export type SearchProfileResponse = {
     /**
      * Budget Max
      */
-    budget_max: number;
+    budget_max: number | null;
     /**
      * Budget Min
      */
@@ -1211,7 +1269,7 @@ export type SearchProfileResponse = {
     /**
      * Min Rooms
      */
-    min_rooms: number;
+    min_rooms: number | null;
     /**
      * Name
      */
@@ -1332,6 +1390,46 @@ export type UpdateSearchProfileRequest = {
      * Zones
      */
     zones?: Array<string> | null;
+};
+
+/**
+ * UrbanSignalItem
+ */
+export type UrbanSignalItem = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Normalized By
+     */
+    normalized_by: string;
+};
+
+/**
+ * UrbanSignalsResponse
+ */
+export type UrbanSignalsResponse = {
+    /**
+     * Attribution
+     */
+    attribution: string;
+    /**
+     * Contract Version
+     */
+    contract_version: string;
+    /**
+     * License
+     */
+    license: string;
+    /**
+     * Signals
+     */
+    signals: Array<UrbanSignalItem>;
 };
 
 /**
@@ -1491,7 +1589,7 @@ export type UmbralApiRoutersSearchProfilesRunResponse = {
     /**
      * State
      */
-    state: 'pending' | 'running' | 'succeeded' | 'failed';
+    state: 'pending' | 'running' | 'succeeded' | 'failed' | 'superseded';
     /**
      * Trigger
      */
@@ -3151,6 +3249,49 @@ export type ListMatchesResponses = {
 
 export type ListMatchesResponse = ListMatchesResponses[keyof ListMatchesResponses];
 
+export type ListSearchProfilePreferencesData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/search-profiles/{search_profile_id}/preferences';
+};
+
+export type ListSearchProfilePreferencesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+    /**
+     * Not Found
+     */
+    404: unknown;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListSearchProfilePreferencesError = ListSearchProfilePreferencesErrors[keyof ListSearchProfilePreferencesErrors];
+
+export type ListSearchProfilePreferencesResponses = {
+    /**
+     * Successful Response
+     */
+    200: PreferenceViewResponse;
+};
+
+export type ListSearchProfilePreferencesResponse = ListSearchProfilePreferencesResponses[keyof ListSearchProfilePreferencesResponses];
+
 export type SetSearchProfileStatusData = {
     body: StatusRequest;
     headers?: {
@@ -3230,6 +3371,39 @@ export type ListUpdateProposalsResponses = {
      */
     200: unknown;
 };
+
+export type GetUrbanSignalsData = {
+    body?: never;
+    headers?: {
+        /**
+         * UUID for a multi-step operation. A valid value is preserved; when absent the runtime generates one.
+         */
+        'X-Correlation-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/urban/signals';
+};
+
+export type GetUrbanSignalsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden
+     */
+    403: unknown;
+};
+
+export type GetUrbanSignalsResponses = {
+    /**
+     * Successful Response
+     */
+    200: UrbanSignalsResponse;
+};
+
+export type GetUrbanSignalsResponse = GetUrbanSignalsResponses[keyof GetUrbanSignalsResponses];
 
 export type GetRuntimeHealthData = {
     body?: never;

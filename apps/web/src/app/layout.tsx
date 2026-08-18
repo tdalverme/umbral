@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { GlobalAttribution } from "@/components/global-attribution";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +16,8 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <a className="skip-link" href="#main-content">
           Saltar al contenido principal
         </a>
-        {children}
+        <div id="main-content">{children}</div>
+        <GlobalAttribution />
       </body>
     </html>
   );

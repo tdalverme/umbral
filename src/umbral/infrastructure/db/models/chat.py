@@ -35,10 +35,10 @@ class ChatSession(IdentityAuditMixin, Base):
         ForeignKey("product_users.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    search_profile_id: Mapped[UUID] = mapped_column(
+    search_profile_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("search_profiles.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(CHAT_SESSION_STATE, nullable=False)
 

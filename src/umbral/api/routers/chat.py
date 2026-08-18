@@ -328,14 +328,18 @@ def _stream_turn(
 @dataclass(frozen=True, slots=True)
 class _SessionResponse:
     session_id: UUID
-    search_profile_id: UUID
+    search_profile_id: UUID | None
     status: str
 
 
 def _session_payload(session: Any) -> dict[str, object]:
     return {
         "session_id": str(session.session_id),
-        "search_profile_id": str(session.search_profile_id),
+        "search_profile_id": (
+            str(session.search_profile_id)
+            if session.search_profile_id is not None
+            else None
+        ),
         "status": session.status,
     }
 
@@ -343,7 +347,8 @@ def _session_payload(session: Any) -> dict[str, object]:
 @router.post("/chat/sessions", operation_id="createSession")
 def create_session(request: Request, body: dict[str, Any]) -> JSONResponse:
     principal = _require(request, "product.chat.session.create")
-    search_profile_id = UUID(str(body.get("search_profile_id", "")))
+    raw_profile_id = body.get("search_profile_id")
+    search_profile_id = UUID(str(raw_profile_id)) if raw_profile_id else None
     session = _chat().create_session(
         user_id=principal.user_id,
         search_profile_id=search_profile_id,

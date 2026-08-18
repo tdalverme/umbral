@@ -22,8 +22,8 @@ _SEARCH_PROFILE_POLICY_PATH = (
     Path(__file__).resolve().parents[4]
     / "contracts"
     / "search-profiles"
-    / "v1"
-    / "search-profile-policy.json"
+    / "v2"
+    / "search-profile-policy-v2.json"
 )
 _SCORING_BASELINE_PATH = (
     Path(__file__).resolve().parents[4]

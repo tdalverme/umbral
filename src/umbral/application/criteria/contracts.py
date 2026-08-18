@@ -9,12 +9,12 @@ from typing import Literal
 from uuid import UUID
 
 MatcherType = Literal[
-    "numeric_range", "categorical", "geo_proximity", "semantic_feature"
+    "numeric_range", "categorical", "geo_proximity", "semantic_feature", "signal_score"
 ]
 ObservationSource = Literal["rule", "model", "urban"]
 ObservationState = Literal["active", "invalidated", "superseded", "failed"]
 FactState = Literal["active", "superseded"]
-ExtractionKind = Literal["rule", "prompt", "schema", "model", "embedding"]
+ExtractionKind = Literal["rule", "prompt", "schema", "model", "embedding", "urban"]
 RecomputeScopeKind = Literal["concept", "extraction", "parser", "full"]
 RecomputeRunState = Literal["pending", "running", "succeeded", "failed"]
 

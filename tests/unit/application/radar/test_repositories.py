@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timezone
+from threading import Barrier
+from types import SimpleNamespace
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 from tests.fakes.radar import (
     FakeProfileVersionRepository,
     FakeRunRepository,
@@ -20,6 +27,10 @@ from umbral.application.radar.contracts import (
     RecommendationRun,
 )
 from umbral.domain.errors import ConcurrencyConflict
+from umbral.infrastructure.db.repositories.radar import (
+    SqlAlchemyCandidateListingReader,
+    SqlAlchemySearchProfileRepository,
+)
 
 NOW = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
@@ -60,6 +71,42 @@ def test_save_guards_the_optimistic_version() -> None:
     assert repository.rows[profile.profile_id].version == 2
 
 
+def test_sql_status_save_translates_a_commit_time_stale_write() -> None:
+    profile = build_profile()
+
+    class StaleCommitSession:
+        rolled_back = False
+        model = SimpleNamespace(version=profile.version)
+
+        def __enter__(self) -> "StaleCommitSession":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            del args
+
+        def get(self, model_type: object, profile_id: UUID) -> object:
+            del model_type, profile_id
+            if self.rolled_back:
+                return SimpleNamespace(version=profile.version + 1)
+            return self.model
+
+        def commit(self) -> None:
+            raise StaleDataError("concurrent update")
+
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+    session = StaleCommitSession()
+    repository = SqlAlchemySearchProfileRepository(lambda: cast(Session, session))
+
+    with pytest.raises(ConcurrencyConflict) as excinfo:
+        repository.save(replace(profile, status="paused"))
+
+    assert session.rolled_back
+    assert excinfo.value.expected_version == profile.version
+    assert excinfo.value.actual_version == profile.version + 1
+
+
 def test_version_repository_returns_latest_by_number() -> None:
     repository = FakeProfileVersionRepository()
     profile_id = uuid4()
@@ -69,6 +116,39 @@ def test_version_repository_returns_latest_by_number() -> None:
     repository.insert(second)
     assert repository.latest_for_profile(profile_id) == second
     assert repository.get(first.version_id) == first
+
+
+def test_open_profile_candidate_query_omits_unset_predicates() -> None:
+    class EmptyRows:
+        def all(self) -> list[object]:
+            return []
+
+    class RecordingSession:
+        statement: object | None = None
+
+        def __enter__(self) -> "RecordingSession":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            del args
+
+        def execute(self, statement: object) -> EmptyRows:
+            self.statement = statement
+            return EmptyRows()
+
+    session = RecordingSession()
+    reader = SqlAlchemyCandidateListingReader(lambda: cast(Session, session))
+
+    assert reader.list_candidates(
+        build_profile(zones=(), budget_max=None, min_rooms=None),
+        supported_neighborhoods=("palermo", "recoleta"),
+        supported_property_types=("apartment", "house", "room", "studio"),
+    ) == ()
+    sql = str(session.statement)
+    assert "total_cost <=" not in sql
+    assert "property_type IN" in sql
+    assert "lower(silver_listings.neighborhood)" in sql
+    assert "silver_listings.rooms >=" not in sql
 
 
 def test_run_repository_publishes_items_and_event_atomically() -> None:
@@ -114,6 +194,25 @@ def test_run_repository_fail_records_code() -> None:
     assert failed is not None
     assert failed.state == "failed"
     assert failed.failure_code == "radar.test_failure"
+
+
+def test_concurrent_run_reservations_return_one_durable_run() -> None:
+    repository = FakeRunRepository()
+    profile_id = uuid4()
+    version_id = uuid4()
+    first = build_run(profile_id, version_id)
+    second = replace(first, run_id=uuid4())
+    barrier = Barrier(2)
+
+    def reserve(run: RecommendationRun) -> RecommendationRun:
+        barrier.wait()
+        return repository.reserve(run)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = tuple(executor.map(reserve, (first, second)))
+
+    assert results[0].run_id == results[1].run_id
+    assert len(repository.rows) == 1
 
 
 def build_run(profile_id: UUID, version_id: UUID) -> RecommendationRun:

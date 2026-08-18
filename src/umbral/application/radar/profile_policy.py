@@ -1,7 +1,7 @@
 """Pure loader and validator for the published search profile contract.
 
-The rule set is loaded from ``contracts/search-profiles/v1/search-profile-policy.json``
-by an infrastructure loader and passed in as a :class:`SearchProfilePolicySpec`.
+The versioned rule set is loaded from ``contracts/search-profiles`` by an
+infrastructure loader and passed in as a :class:`SearchProfilePolicySpec`.
 Validation is deterministic and versioned; unknown-value strategies are explicit
 per filter and never silently defaulted.
 """
@@ -9,9 +9,18 @@ per filter and never silently defaulted.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import cast
+
+from umbral.application.radar.contracts import (
+    ProfileVersion,
+    RadarPermanentError,
+    SearchProfile,
+    SearchProfileState,
+)
 
 _KNOWN_STATES = ("active", "paused", "archived")
+SEARCH_POLICY_SNAPSHOT_KEY = "search_profile_policy"
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +37,7 @@ class SearchProfilePolicySpec:
 
 
 def parse_search_profile_policy(data: Mapping[str, object]) -> SearchProfilePolicySpec:
-    if data.get("contract_version") != "1":
+    if data.get("contract_version") not in {"1", "2"}:
         raise ValueError("unsupported search profile policy document version")
     policy_version = data.get("policy_version")
     if not isinstance(policy_version, str) or not policy_version:
@@ -94,7 +103,7 @@ def validate_profile(
         errors.append("radar.name_required")
 
     raw_zones = payload.get("zones")
-    if not isinstance(raw_zones, list) or not raw_zones:
+    if not isinstance(raw_zones, list):
         errors.append("radar.zones_required")
     else:
         zones_min = _limit_int(spec, "zones_min", 1)
@@ -106,14 +115,24 @@ def validate_profile(
                 errors.append("radar.zone_unknown")
 
     budget_max = payload.get("budget_max")
-    if not isinstance(budget_max, (int, float)) or isinstance(budget_max, bool):
+    if budget_max is None and spec.contract_version == "1":
         errors.append("radar.budget_required")
-    elif budget_max <= 0:
-        errors.append("radar.budget_required")
+    elif budget_max is not None and (
+        not isinstance(budget_max, (int, float))
+        or isinstance(budget_max, bool)
+        or budget_max <= 0
+    ):
+        errors.append(
+            "radar.budget_range"
+            if spec.contract_version == "2"
+            else "radar.budget_required"
+        )
     budget_min = payload.get("budget_min")
     if budget_min is not None and (
         not isinstance(budget_min, (int, float)) or isinstance(budget_min, bool)
     ):
+        errors.append("radar.budget_range")
+    elif budget_min is not None and budget_min < 0:
         errors.append("radar.budget_range")
     elif (
         budget_min is not None
@@ -123,7 +142,9 @@ def validate_profile(
         errors.append("radar.budget_range")
 
     min_rooms = payload.get("min_rooms")
-    if not isinstance(min_rooms, int) or isinstance(min_rooms, bool):
+    if min_rooms is None and spec.contract_version == "2":
+        pass
+    elif not isinstance(min_rooms, int) or isinstance(min_rooms, bool):
         errors.append("radar.rooms_range")
     else:
         rooms_min = _limit_int(spec, "min_rooms_min", 0)
@@ -166,6 +187,135 @@ def default_unknown_strategy(spec: SearchProfilePolicySpec) -> Mapping[str, str]
     return dict(spec.unknown_strategies)
 
 
+def freeze_search_profile_policy(
+    spec: SearchProfilePolicySpec,
+    residential_property_types: frozenset[str],
+) -> Mapping[str, object]:
+    """Serialize the exact executable search-policy revision into a snapshot."""
+
+    return {
+        "contract_version": spec.contract_version,
+        "policy_version": spec.policy_version,
+        "operation": list(spec.operation),
+        "caba_neighborhoods": list(spec.neighborhoods),
+        "limits": dict(spec.limits),
+        "states": list(spec.states),
+        "transitions": {
+            name: list(targets) for name, targets in spec.transitions.items()
+        },
+        "unknown_strategies": dict(spec.unknown_strategies),
+        "error_codes": dict(spec.error_codes),
+        "residential_property_types": sorted(residential_property_types),
+    }
+
+
+def frozen_search_profile_policy(
+    version: ProfileVersion,
+) -> tuple[SearchProfilePolicySpec, tuple[str, ...]]:
+    raw_policy = version.payload.get(SEARCH_POLICY_SNAPSHOT_KEY)
+    if not isinstance(raw_policy, Mapping):
+        raise RadarPermanentError(
+            "radar.search_policy_snapshot_missing",
+            "profile version has no executable search policy snapshot",
+        )
+    required_lists = ("operation", "caba_neighborhoods", "states")
+    required_mappings = (
+        "limits",
+        "transitions",
+        "unknown_strategies",
+        "error_codes",
+    )
+    if any(
+        not isinstance(raw_policy.get(name), list) for name in required_lists
+    ) or any(
+        not isinstance(raw_policy.get(name), Mapping)
+        for name in required_mappings
+    ):
+        raise RadarPermanentError(
+            "radar.search_policy_snapshot_invalid",
+            "profile version search policy snapshot is invalid",
+        )
+    raw_property_types = raw_policy.get("residential_property_types")
+    if (
+        not isinstance(raw_property_types, list)
+        or not raw_property_types
+        or any(not isinstance(item, str) or not item for item in raw_property_types)
+    ):
+        raise RadarPermanentError(
+            "radar.search_policy_snapshot_invalid",
+            "profile version search policy snapshot is invalid",
+        )
+    try:
+        policy = parse_search_profile_policy(raw_policy)
+    except ValueError as error:
+        raise RadarPermanentError(
+            "radar.search_policy_snapshot_invalid",
+            "profile version search policy snapshot is invalid",
+        ) from error
+    if (
+        "rental" not in policy.operation
+        or not policy.neighborhoods
+        or not policy.states
+        or not policy.unknown_strategies
+    ):
+        raise RadarPermanentError(
+            "radar.search_policy_snapshot_invalid",
+            "profile version search policy snapshot is invalid",
+        )
+    return policy, tuple(raw_property_types)
+
+
+def rehydrate_profile_version(
+    profile: SearchProfile,
+    version: ProfileVersion,
+    policy: SearchProfilePolicySpec,
+) -> SearchProfile:
+    """Validate and restore the immutable profile inputs used by one run."""
+
+    if version.profile_id != profile.profile_id:
+        raise RadarPermanentError(
+            "radar.version_profile_mismatch",
+            "profile version does not belong to the recommendation run profile",
+        )
+    errors = validate_profile(version.payload, policy)
+    raw_strategy = version.payload.get("unknown_strategy")
+    if errors or version.payload.get("operation") != "rental" or not isinstance(
+        raw_strategy, Mapping
+    ):
+        raise RadarPermanentError(
+            "radar.version_payload_invalid",
+            "profile version payload is invalid",
+        )
+    if any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in raw_strategy.items()
+    ):
+        raise RadarPermanentError(
+            "radar.version_payload_invalid",
+            "profile version payload is invalid",
+        )
+    raw_zones = version.payload["zones"]
+    if not isinstance(raw_zones, list):
+        raise RadarPermanentError(
+            "radar.version_payload_invalid",
+            "profile version payload is invalid",
+        )
+    return replace(
+        profile,
+        name=cast(str, version.payload["name"]),
+        operation="rental",
+        zones=tuple(cast(list[str], raw_zones)),
+        budget_max=_optional_number(version.payload.get("budget_max")),
+        budget_min=_optional_number(version.payload.get("budget_min")),
+        min_rooms=_optional_int(version.payload.get("min_rooms")),
+        surface_min=_optional_number(version.payload.get("surface_min")),
+        surface_max=_optional_number(version.payload.get("surface_max")),
+        status=cast(SearchProfileState, version.payload.get("status", "active")),
+        unknown_strategy=dict(raw_strategy),
+        current_version_id=version.version_id,
+    )
+
+
 def can_transition(spec: SearchProfilePolicySpec, current: str, target: str) -> bool:
     if current not in spec.states or target not in spec.states:
         return False
@@ -177,3 +327,19 @@ def _limit_int(spec: SearchProfilePolicySpec, name: str, default: int) -> int:
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     return default
+
+
+def _optional_number(value: object) -> float | None:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return float(value)
+
+
+def _optional_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    return None

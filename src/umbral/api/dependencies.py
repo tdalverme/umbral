@@ -61,10 +61,18 @@ def _build_agent_stack(
     if getattr(settings, "agent_model_provider", None) is None:
         return {}
     session_provider = SessionProvider(settings.database_url)
-    from umbral.infrastructure.agent.production import build_production_agent_stack
+    from umbral.infrastructure.agent.production import (
+        build_production_agent_stack,
+        build_production_copilot_stack,
+    )
 
     try:
-        stack = build_production_agent_stack(
+        builder = (
+            build_production_copilot_stack
+            if getattr(settings, "copilot_enabled", False)
+            else build_production_agent_stack
+        )
+        stack = builder(
             settings=settings,
             session_factory=session_provider.session_factory,
             database_url=settings.database_url,
@@ -84,6 +92,49 @@ def _build_agent_stack(
         "graph_runs": stack.graph_runs,
         "ops_overview": _build_ops_overview(settings),
     }
+
+
+def _build_preference_service(settings: Settings) -> dict[str, object]:
+    """Compose the durable preference service over the real repositories."""
+    session_provider = SessionProvider(settings.database_url)
+    from umbral.application.preferences.contracts import (
+        PreferenceConcept,
+        PreferencePolicySpec,
+    )
+    from umbral.application.preferences.service import PreferenceService
+    from umbral.infrastructure.db.repositories.criteria import (
+        SqlAlchemyConceptRepository,
+    )
+    from umbral.infrastructure.db.repositories.preferences import (
+        SqlAlchemyBindingRepository,
+        SqlAlchemyExpressionRepository,
+    )
+
+    expressions = SqlAlchemyExpressionRepository(session_provider.session_factory)
+    bindings = SqlAlchemyBindingRepository(session_provider.session_factory)
+    concepts = SqlAlchemyConceptRepository(session_provider.session_factory)
+
+    class _ConceptReader:
+        def get(self, key: str) -> PreferenceConcept | None:
+            concept = concepts.get(key)
+            if concept is None:
+                return None
+            return PreferenceConcept(
+                key=concept.key,
+                matcher_type=concept.matcher_type,
+                computable=bool(
+                    (concept.compute_policy or {}).get("computable", False)
+                ),
+            )
+
+    service = PreferenceService(
+        expressions=expressions,
+        bindings=bindings,
+        mutations=expressions,
+        concepts=_ConceptReader(),
+        policy=PreferencePolicySpec.v1(),
+    )
+    return {"preferences": service}
 
 
 def _build_ops_overview(settings: Settings) -> object:
@@ -134,6 +185,7 @@ class RuntimeDependencies:
     graph_runs: object | None = None
     ops_overview: object | None = None
     notifications: object | None = None
+    preferences: object | None = None
 
 
 def build_runtime_dependencies(
@@ -173,6 +225,7 @@ def build_runtime_dependencies(
         job_runtime=composition.job_runtime,
         notifications=_build_notifications(settings),
         **_build_agent_stack(settings, composition),
+        **_build_preference_service(settings),
     )
 
 

@@ -50,6 +50,7 @@ EXPECTED_OPERATION_IDS = {
     "POST /api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/reject": "rejectLearningProposal",
     "POST /api/v1/search-profiles/{search_profile_id}/learning-proposals/{proposal_id}/undo": "undoLearningProposal",
     "GET /api/v1/search-profiles/{search_profile_id}/update-proposals": "listUpdateProposals",
+    "GET /api/v1/search-profiles/{search_profile_id}/preferences": "listSearchProfilePreferences",
     "GET /api/v1/chat/sessions": "listChatSessions",
     "GET /api/v1/chat/sessions/{session_id}": "getChatSession",
     "GET /api/v1/chat/sessions/{session_id}/messages": "listChatSessionMessages",
@@ -64,6 +65,7 @@ EXPECTED_OPERATION_IDS = {
     "GET /api/v1/notifications/preferences": "get_preferences_api_v1_notifications_preferences_get",
     "PUT /api/v1/notifications/preferences": "put_preferences_api_v1_notifications_preferences_put",
     "POST /api/v1/notifications/unsubscribe": "unsubscribe_api_v1_notifications_unsubscribe_post",
+    "GET /api/v1/urban/signals": "getUrbanSignals",
 }
 EXPECTED_GET_OPERATION_IDS = EXPECTED_OPERATION_IDS
 

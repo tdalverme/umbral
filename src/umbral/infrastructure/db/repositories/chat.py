@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import cast
 from uuid import UUID
 
@@ -22,6 +23,10 @@ from umbral.infrastructure.db.models.chat import ChatSession as ChatSessionModel
 from umbral.infrastructure.db.models.radar import SearchProfile
 
 SessionFactory = Callable[[], Session]
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class SqlAlchemyChatSessionRepository:
@@ -79,6 +84,18 @@ class SqlAlchemyChatSessionRepository:
                 .order_by(ChatSessionModel.created_at.desc())
             )
             return tuple(_to_session(model) for model in models)
+
+    def bind_profile(
+        self, session_id: UUID, search_profile_id: UUID
+    ) -> ChatSession | None:
+        with self.session_factory() as current:
+            model = current.get(ChatSessionModel, session_id)
+            if model is None:
+                return None
+            model.search_profile_id = search_profile_id
+            model.updated_at = _now()
+            current.commit()
+            return _to_session(model)
 
 
 class SqlAlchemyChatMessageRepository:

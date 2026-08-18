@@ -52,6 +52,7 @@ def test_unknown_lowers_run_confidence_without_counting_as_mismatch() -> None:
         candidates=(with_unknown, without_unknown),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     by_listing = {candidate.listing_id: candidate for candidate in scored}
     first = by_listing[with_unknown.listing_id]
@@ -91,6 +92,7 @@ def test_negative_evidence_is_never_confused_with_unknown() -> None:
         candidates=(listing,),
         run_id=uuid4(),
         correlation_id=uuid4(),
+        score_policy_version=context.service.pin_policy_version(),
     )
     balcon = next(
         item for item in scored[0].evaluations if item.criterion_key == "balcon"

@@ -15,8 +15,10 @@ secretos ni hosts privados.
 | PATCH | `/api/v1/search-profiles/{id}` | Busquedas | Actualizar criterios con `expected_version` (409 tipado en concurrencia). | Implementado |
 | POST | `/api/v1/search-profiles/{id}/status` | Busquedas | Pausar, reanudar o archivar una busqueda. | Implementado |
 | GET | `/api/v1/search-profiles/{id}/matches` | Recomendaciones | Listar matches persistentes del run (score, contribuciones, punto autorizado, resumen del listing). | Implementado |
+| GET | `/api/v1/search-profiles/{id}/preferences` | Preferencias | Inspeccionar deseos expresados, vinculaciones, confianza y limitaciones del radar (feature 016). | Implementado |
 | GET | `/api/v1/listings/{listing_id}` | Listings | Obtener detalle, atributos, faltantes, cambios conocidos y fuente (autorizado via runs del usuario). | Implementado |
 | POST | `/api/v1/product-events` | Eventos | Registrar eventos versionados de producto emitidos por el cliente (impresion, vista, fuente abierta). | Implementado |
+| GET | `/api/v1/urban/signals` | Urban | Listar las senales urbanas disponibles, atribucion y licencia del contrato activo. | Implementado |
 | POST | `/api/v1/search-profiles/{id}/feedback` | Feedback | Registrar like, dislike, save, dismiss u otra senal del usuario. | Futuro (H3) |
 | GET | `/api/v1/listings/{id}/explanation` | Explicaciones | Explicar por que un listing matchea o no con una busqueda. | Futuro (H3) |
 | POST | `/api/v1/listings/compare` | Comparacion | Comparar varios listings dentro de una busqueda activa. | Futuro (H3) |

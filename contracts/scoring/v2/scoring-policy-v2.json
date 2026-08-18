@@ -1,0 +1,20 @@
+{
+  "contract_version": "2",
+  "score_policy_version": "scoring-policy-v2",
+  "normalization": "weighted_sum",
+  "score_round": 4,
+  "semantic": {"mode": "soft", "max_weight": 0.10, "missing_evidence_contribution": 0.0},
+  "confidence": {"unknown_penalty": 0.2, "strong_threshold": 0.8, "medium_threshold": 0.5},
+  "criteria": [
+    {"key": "presupuesto", "concept": "presupuesto", "matcher_type": "numeric_range", "weight": 0.25, "params": {"min": 0, "max": 1, "unit": "ars"}, "gate": null},
+    {"key": "ambientes", "concept": "ambientes", "matcher_type": "numeric_range", "weight": 0.15, "params": {"min": 0, "max": 200, "unit": "rooms"}, "gate": null},
+    {"key": "superficie", "concept": "superficie", "matcher_type": "numeric_range", "weight": 0.15, "params": {"min": 0, "max": 2000, "unit": "m2"}, "gate": null},
+    {"key": "ubicacion", "concept": "ubicacion", "matcher_type": "geo_proximity", "weight": 0.2, "params": {"radius_m": 1500}, "gate": null},
+    {"key": "balcon", "concept": "balcon", "matcher_type": "categorical", "weight": 0.1, "params": {"allowed_values": ["si"]}, "gate": "cap_0.6_on_mismatch"},
+    {"key": "luminosidad", "concept": "luminosidad", "matcher_type": "semantic_feature", "weight": 0.1, "params": {"concept": "luminosidad", "threshold": 0.5}, "gate": null},
+    {"key": "estado_general", "concept": "estado_general", "matcher_type": "semantic_feature", "weight": 0.05, "params": {"concept": "estado_general", "threshold": 0.5}, "gate": null}
+  ],
+  "bonuses": [{"criterion": "balcon", "state": "match", "delta": 0.03}],
+  "penalties": [{"criterion": "presupuesto", "state": "mismatch", "delta": 0.1}],
+  "tie_break": ["score", "total_cost_asc", "listing_id_asc"]
+}

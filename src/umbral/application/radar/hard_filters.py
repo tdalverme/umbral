@@ -15,12 +15,17 @@ from typing import Literal, Protocol
 
 from umbral.application.radar.contracts import SearchProfile
 
+RESIDENTIAL_PROPERTY_TYPES = frozenset({"apartment", "house", "room", "studio"})
+
 
 class CandidateListing(Protocol):
     """The minimal listing surface the filters consume."""
 
     @property
     def operation(self) -> Literal["rental"]: ...
+
+    @property
+    def property_type(self) -> str: ...
 
     @property
     def total_cost(self) -> float: ...
@@ -32,24 +37,37 @@ class CandidateListing(Protocol):
     def rooms(self) -> int | None: ...
 
 
-def apply_hard_filters(listing: CandidateListing, profile: SearchProfile) -> bool:
+def apply_hard_filters(
+    listing: CandidateListing,
+    profile: SearchProfile,
+    *,
+    supported_neighborhoods: tuple[str, ...],
+    supported_property_types: tuple[str, ...],
+) -> bool:
     """True when the listing passes every hard filter of the profile."""
     if listing.operation != profile.operation:
         return False
+    if listing.property_type not in supported_property_types:
+        return False
 
-    if _strategy(profile, "price") == "exclude":
+    if listing.neighborhood is None:
+        return False
+    neighborhood = listing.neighborhood.casefold()
+    supported = frozenset(zone.casefold() for zone in supported_neighborhoods)
+    if neighborhood not in supported:
+        return False
+
+    if profile.budget_max is not None:
         if listing.total_cost is None or listing.total_cost <= 0:
             return False
         if listing.total_cost > profile.budget_max:
             return False
 
-    if _strategy(profile, "location") == "exclude":
-        if listing.neighborhood is None:
-            return False
-        if listing.neighborhood.casefold() not in _zones_casefold(profile):
+    if profile.zones:
+        if neighborhood not in _zones_casefold(profile):
             return False
 
-    if profile.min_rooms > 0:
+    if profile.min_rooms is not None and profile.min_rooms > 0:
         if listing.rooms is None:
             if _strategy(profile, "rooms") == "exclude":
                 return False

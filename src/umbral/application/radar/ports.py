@@ -22,6 +22,15 @@ from umbral.application.silver.contracts import NormalizedListing
 class SearchProfileRepository(Protocol):
     def insert(self, profile: SearchProfile) -> None: ...
 
+    def insert_with_version(
+        self,
+        profile: SearchProfile,
+        version: ProfileVersion,
+        created_event: ProductEvent,
+    ) -> None:
+        """Atomically insert profile, snapshot, current pointer and audit event."""
+        ...
+
     def get(self, profile_id: UUID) -> SearchProfile | None: ...
 
     def list_by_owner(
@@ -29,6 +38,12 @@ class SearchProfileRepository(Protocol):
     ) -> tuple[SearchProfile, ...]: ...
 
     def save(self, profile: SearchProfile) -> None: ...
+
+    def save_with_version(
+        self, profile: SearchProfile, version: ProfileVersion
+    ) -> None:
+        """Atomically apply an optimistic profile update and its snapshot."""
+        ...
 
 
 class ProfileVersionRepository(Protocol):
@@ -42,10 +57,24 @@ class ProfileVersionRepository(Protocol):
 class RunRepository(Protocol):
     def insert(self, run: RecommendationRun) -> None: ...
 
+    def reserve(self, run: RecommendationRun) -> RecommendationRun:
+        """Insert one durable intent or return the existing unique run."""
+        ...
+
+    def bind_job(
+        self, run_id: UUID, job_execution_id: UUID
+    ) -> RecommendationRun:
+        """Bind a durable reservation to its idempotent job execution."""
+        ...
+
     def get(self, run_id: UUID) -> RecommendationRun | None: ...
 
     def get_for_version(
         self, profile_id: UUID, profile_version_id: UUID
+    ) -> RecommendationRun | None: ...
+
+    def get_reserved(
+        self, profile_id: UUID, profile_version_id: UUID, trigger: str
     ) -> RecommendationRun | None: ...
 
     def latest_for_profile(self, profile_id: UUID) -> RecommendationRun | None: ...
@@ -68,6 +97,26 @@ class RunRepository(Protocol):
 
     def fail(self, run: RecommendationRun, failure_code: str) -> None: ...
 
+    def supersede(
+        self,
+        run_id: UUID,
+        *,
+        reason: str,
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        """Atomically mark a stale non-terminal run as superseded."""
+        ...
+
+    def set_diagnostics(
+        self,
+        run_id: UUID,
+        *,
+        diagnostics: Mapping[str, object],
+        correlation_id: UUID,
+    ) -> RecommendationRun | None:
+        """Persist deterministic diagnostics on a run without changing state."""
+        ...
+
 
 class ItemRepository(Protocol):
     def list_for_run(
@@ -87,7 +136,11 @@ class CandidateListingReader(Protocol):
     """Reads Silver listings that can pass the profile's hard filters."""
 
     def list_candidates(
-        self, profile: SearchProfile
+        self,
+        profile: SearchProfile,
+        *,
+        supported_neighborhoods: tuple[str, ...],
+        supported_property_types: tuple[str, ...],
     ) -> tuple[NormalizedListing, ...]: ...
 
 

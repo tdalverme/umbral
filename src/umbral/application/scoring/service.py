@@ -10,14 +10,20 @@ over frozen run data; nothing is invented beyond the persisted breakdown.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from umbral.application.criteria.contracts import Compilation
 from umbral.application.criteria.registry import MatcherTypesSpec
 from umbral.application.radar.contracts import (
+    RadarPermanentError,
     RecommendationRun,
     SearchProfile,
+)
+from umbral.application.radar.profile_policy import (
+    frozen_search_profile_policy,
+    rehydrate_profile_version,
 )
 from umbral.application.scoring.comparison import EvaluationsByListing, build_comparison
 from umbral.application.scoring.contracts import (
@@ -32,6 +38,7 @@ from umbral.application.scoring.contracts import (
     ScoringNotAccessible,
     ScoringNotFound,
     ScoringStateError,
+    SemanticSignal,
 )
 from umbral.application.scoring.engine import (
     ScoredCandidate,
@@ -47,7 +54,9 @@ from umbral.application.scoring.ports import (
     ObservationReader,
     PolicyRepository,
     ProfileReader,
+    ProfileVersionReader,
     RunReader,
+    SemanticSignalReader,
     ShortlistRepository,
 )
 from umbral.application.silver.contracts import NormalizedListing
@@ -68,6 +77,7 @@ class ScoringService:
         runs: RunReader,
         items: ItemReader,
         profiles: ProfileReader,
+        versions: ProfileVersionReader,
         listings: ListingReader,
         shortlists: ShortlistRepository | None,
         matcher_types: MatcherTypesSpec,
@@ -77,6 +87,7 @@ class ScoringService:
         legacy_score_policy_version: str = _LEGACY_POLICY,
         comparison_max_listings: int = 6,
         comparator_enabled: bool = False,
+        semantic_signals: SemanticSignalReader | None = None,
         clock: Clock | None = None,
     ) -> None:
         self.policies = policies
@@ -86,6 +97,7 @@ class ScoringService:
         self.runs = runs
         self.items = items
         self.profiles = profiles
+        self.versions = versions
         self.listings = listings
         self.shortlists = shortlists
         self.matcher_types = matcher_types
@@ -95,6 +107,7 @@ class ScoringService:
         self.legacy_score_policy_version = legacy_score_policy_version
         self.comparison_max_listings = comparison_max_listings
         self.comparator_enabled = comparator_enabled
+        self.semantic_signals = semantic_signals
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     # ------------------------------------------------------------------
@@ -133,15 +146,13 @@ class ScoringService:
         )
 
     def latest_policy_document(self) -> ScoringPolicyDoc:
-        version = self.policies.latest_version(self.policy_seed_version)
-        if version is None:
-            self.seed_registry(uuid4())
-            version = self.policies.latest_version(self.policy_seed_version)
-        if version is None:
-            raise ScoringNotFound(
-                f"no scoring policy registered: {self.policy_seed_version}"
-            )
+        version = self._latest_policy_version()
         return parse_policy_document(version.payload, self.matcher_types)
+
+    def pin_policy_version(self) -> str:
+        version = self._latest_policy_version()
+        parse_policy_document(version.payload, self.matcher_types)
+        return str(version.version_id)
 
     # ------------------------------------------------------------------
     # Run scoring hook (US2, US3, US4)
@@ -158,11 +169,18 @@ class ScoringService:
         candidates: tuple[NormalizedListing, ...],
         run_id: UUID,
         correlation_id: UUID,
+        score_policy_version: str,
     ) -> tuple[ScoredCandidate, ...]:
-        policy = self.latest_policy_document()
+        policy = self._policy_document_for_reference(score_policy_version)
         observations = self.observations.active_for_listings(
             tuple(candidate.listing_id for candidate in candidates)
         )
+        semantic_signals: Mapping[UUID, tuple[SemanticSignal, ...]] = {}
+        if self.semantic_signals is not None:
+            semantic_signals = self.semantic_signals.for_profile_version_and_listings(
+                compilation.profile_version_id,
+                tuple(candidate.listing_id for candidate in candidates),
+            )
         return score_candidates(
             profile=profile,
             compilation=compilation,
@@ -172,6 +190,7 @@ class ScoringService:
             run_id=run_id,
             correlation_id=correlation_id,
             now=self.clock(),
+            semantic_signals=semantic_signals,
         )
 
     # ------------------------------------------------------------------
@@ -205,8 +224,8 @@ class ScoringService:
         )
         if item is None:
             raise ScoringNotFound(f"listing not in run: {listing_id}")
-        policy = self.latest_policy_document()
-        profile = self._profile(profile_id)
+        policy = self._policy_document_for_reference(run.score_policy_version)
+        profile = self._profile_for_run(run)
         return build_explanation(
             search_profile_id=profile_id,
             run_id=run.run_id,
@@ -237,8 +256,8 @@ class ScoringService:
         evaluations_by_listing = self.evaluations.for_run_and_listings(
             run.run_id, listing_ids
         )
-        policy = self.latest_policy_document()
-        profile = self._profile(profile_id)
+        policy = self._policy_document_for_reference(run.score_policy_version)
+        profile = self._profile_for_run(run)
         return tuple(
             build_explanation(
                 search_profile_id=profile_id,
@@ -296,7 +315,7 @@ class ScoringService:
             listing.listing_id: listing
             for listing in self.listings.list_by_ids(listing_ids)
         }
-        policy = self.latest_policy_document()
+        policy = self._policy_document_for_reference(run.score_policy_version)
         profile = self._profile(profile_id)
         return build_comparison(
             profile=profile,
@@ -381,6 +400,51 @@ class ScoringService:
             raise ScoringNotFound(f"profile not found: {profile_id}")
         return profile
 
+    def _profile_for_run(self, run: RecommendationRun) -> SearchProfile:
+        profile = self._profile(run.profile_id)
+        version = self.versions.get(run.profile_version_id)
+        if version is None or version.version_id != run.profile_version_id:
+            raise ScoringNotFound(
+                f"profile version not found: {run.profile_version_id}"
+            )
+        if version.profile_id != run.profile_id:
+            raise ScoringStateError("profile version does not belong to run profile")
+        try:
+            frozen_policy, _ = frozen_search_profile_policy(version)
+            return rehydrate_profile_version(
+                profile,
+                version,
+                frozen_policy,
+            )
+        except RadarPermanentError as error:
+            raise ScoringStateError(error.detail) from error
+
+    def _latest_policy_version(self) -> PolicyVersion:
+        version = self.policies.latest_version(self.policy_seed_version)
+        if version is None:
+            self.seed_registry(uuid4())
+            version = self.policies.latest_version(self.policy_seed_version)
+        if version is None:
+            raise ScoringNotFound(
+                f"no scoring policy registered: {self.policy_seed_version}"
+            )
+        return version
+
+    def _policy_document_for_reference(self, reference: str) -> ScoringPolicyDoc:
+        try:
+            version_id = UUID(reference)
+        except ValueError:
+            raise ScoringNotFound(
+                f"scoring policy version not found: {reference}"
+            ) from None
+        version = self.policies.get_version(version_id)
+        if version is None:
+            raise ScoringNotFound(
+                f"scoring policy version not found: {reference}"
+            )
+        policy = parse_policy_document(version.payload, self.matcher_types)
+        return replace(policy, score_policy_version=reference)
+
 
 def _item_confidence(
     evaluations: tuple[CriterionEvaluation, ...], policy: ScoringPolicyDoc
@@ -395,11 +459,11 @@ def _item_confidence(
 
 def _satisfied_filters(profile: SearchProfile) -> tuple[str, ...]:
     filters: list[str] = []
-    if profile.budget_max > 0:
+    if profile.budget_max is not None and profile.budget_max > 0:
         filters.append("budget_max")
     if profile.zones:
         filters.append("zones")
-    if profile.min_rooms > 0:
+    if profile.min_rooms is not None and profile.min_rooms > 0:
         filters.append("min_rooms")
     if profile.surface_min is not None or profile.surface_max is not None:
         filters.append("surface")

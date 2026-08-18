@@ -30,7 +30,6 @@ from umbral.infrastructure.db.repositories.criteria import (
     SqlAlchemyObservationRepository,
     SqlAlchemyProfileSnapshotReader,
     SqlAlchemyRecomputeRunRepository,
-    SqlAlchemyUrbanSignalRepository,
 )
 from umbral.infrastructure.db.repositories.imports import (
     SqlAlchemyImportRunRepository,
@@ -189,9 +188,7 @@ def build_criteria_service(
             SqlAlchemyEmbeddingRepository(factory) if embeddings_enabled else None
         ),
         embedding_model=embedding_model,  # type: ignore[arg-type]
-        urban_signals=(
-            SqlAlchemyUrbanSignalRepository(factory) if urban_context_enabled else None
-        ),
+        urban_signals=None,
         urban_source=urban_source,  # type: ignore[arg-type]
         embeddings_enabled=embeddings_enabled,
         urban_context_enabled=urban_context_enabled,

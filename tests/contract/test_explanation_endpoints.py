@@ -18,7 +18,7 @@ from tests.fakes.radar import (
     FakeRunRepository,
     FakeSearchProfileRepository,
 )
-from tests.support.radar import build_listing, build_profile
+from tests.support.radar import build_listing, build_profile, profile_version_payload
 from tests.support.scoring import (
     ScoringTestContext,
     build_item,
@@ -30,6 +30,7 @@ from umbral.api.routers.explanations import router as explanations_router
 from umbral.application.identity.authorization import AccessControl
 from umbral.application.identity.contracts import CurrentPrincipal, IdentityError
 from umbral.application.radar.contracts import (
+    ProfileVersion,
     RecommendationItem,
     RecommendationRun,
     SearchProfile,
@@ -89,7 +90,14 @@ def _scoring_context(
     profile_id = uuid4()
     listing_id = uuid4()
     run_id = uuid4()
-    run = build_run(profile_id=profile_id, profile_version_id=uuid4(), run_id=run_id)
+    profile_version_id = uuid4()
+    score_policy_version = context.service.pin_policy_version()
+    run = build_run(
+        profile_id=profile_id,
+        profile_version_id=profile_version_id,
+        run_id=run_id,
+        score_policy_version=score_policy_version,
+    )
     context.runs.rows[run_id] = run
     context.items.items_by_run[run_id] = [
         build_item(run_id, listing_id, position=0),
@@ -98,6 +106,14 @@ def _scoring_context(
     context.listings.rows[listing_id] = build_listing(listing_id=listing_id)
     profile = build_profile(owner_id=owner_id, profile_id=profile_id)
     context.profiles.rows[profile_id] = profile
+    context.versions.rows[profile_version_id] = ProfileVersion(
+        version_id=profile_version_id,
+        profile_id=profile_id,
+        profile_version=1,
+        payload=profile_version_payload(profile),
+        created_at=profile.created_at,
+        correlation_id=profile.correlation_id,
+    )
     from umbral.application.scoring.contracts import CriterionEvaluation
 
     context.evaluations.rows.append(
@@ -106,7 +122,7 @@ def _scoring_context(
             run_id=run_id,
             listing_id=listing_id,
             criterion_key="presupuesto",
-            criterion_version="policy:scoring-policy-v1",
+            criterion_version=f"policy:{score_policy_version}",
             matcher_type="numeric_range",
             params={},
             input_refs=(),
@@ -209,7 +225,7 @@ def test_explanation_by_listing_returns_breakdown() -> None:
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["score_version"] == "scoring-policy-v1"
+    assert body["score_version"] == context.runs.rows[run_id].score_policy_version
     assert body["listing_id"] == str(listing_id)
     assert body["reasons"][0]["criterion_key"] == "presupuesto"
     assert body["reasons"][0]["evidence_refs"][0]["kind"] == "listing_field"
