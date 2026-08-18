@@ -5,9 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-# osmium builds from source (no cp313 wheel) and needs native build deps.
+# osmium builds from source (no cp313 wheel) and needs its native build deps
+# (boost, bzip2, expat, zlib, lz4, zstd headers + a C++ toolchain).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential cmake libbz2-dev libexpat1-dev zlib1g-dev liblz4-dev libzstd-dev \
+    && apt-get install -y --no-install-recommends build-essential cmake libboost-dev libbz2-dev libexpat1-dev zlib1g-dev liblz4-dev libzstd-dev \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv \
     && uv sync --frozen --no-dev --extra urban
@@ -27,6 +28,11 @@ COPY --from=builder /app/src /app/src
 COPY --from=builder /app/alembic.ini /app/alembic.ini
 COPY --from=builder /app/alembic /app/alembic
 COPY --from=builder /app/contracts /app/contracts
+# osmium is a native extension that links the shared bzip2/zlib/expat/lz4/zstd
+# libraries at runtime; install the runtime libs (dev headers stay in builder).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libbz2-1.0 libexpat1 liblz4-1 libzstd1 zlib1g \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 10001 umbral
 USER 10001
 CMD ["python", "-m", "umbral.workers", "--help"]
