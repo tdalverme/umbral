@@ -296,6 +296,76 @@ def test_built_graph_v3_recovers_a_missing_preference_tool_call() -> None:
     assert interrupted[0]["proposal_id"] == proposal_id
 
 
+def test_built_graph_v3_llm_preference_without_proposal_id_skips_hitl() -> None:
+    """The LLM preference interpreter records its durable binding at once and
+    returns no ``proposal_id``; the graph must not route it to the HITL
+    confirmation interrupt (which would try to confirm a non-existent
+    proposal)."""
+    calls: list[Mapping[str, object]] = []
+
+    def propose_preference(_ctx, _args):
+        calls.append(_args)
+        return {
+            "outcome": "proposed",
+            "preserved": False,
+            "kind": "structured",
+            "concept_key": "luminosidad",
+            "polarity": "positive",
+            "value": None,
+            "confidence": 0.9,
+            "matcher_type": "semantic_feature",
+            "proposal_id": None,
+            "expires_at": None,
+        }
+
+    graph = _build(
+        {
+            "intent": "refinamiento",
+            "parameters": [
+                type(
+                    "Parameter",
+                    (),
+                    {"key": "preferencia", "value": "luminoso", "confidence": 0.9},
+                )()
+            ],
+            "allowed_tools": ["propose_search_preference_update"],
+        },
+        gateway=_Gateway(
+            [
+                {
+                    "reply_text": "Listo, agregue la preferencia de luminosidad.",
+                    "refs": [],
+                    "tool_calls": [],
+                }
+            ]
+        ),
+        implementations={
+            "propose_search_preference_update": propose_preference,
+        },
+    )
+    run_id = UUID(int=16)
+    config = {"configurable": {"thread_id": str(run_id)}}
+
+    interrupted: list[object] = []
+    for chunk in graph.compiled.stream(
+        _run_state(run_id, "Quiero un depto luminoso"),
+        config,
+        stream_mode="updates",
+    ):
+        value = _interrupt_value(chunk)
+        if value is not None:
+            interrupted.append(value)
+
+    assert interrupted == []
+    final = graph.compiled.get_state(config).values
+    assert final["errors"] == []
+    assert final["context"].get("proposal_created") is None
+    assert len(calls) == 1
+    reply = final["context"].get("generated_reply")
+    assert isinstance(reply, Mapping)
+    assert reply["text"] == "Listo, agregue la preferencia de luminosidad."
+
+
 def test_built_graph_v3_injects_idempotency_key_for_feedback() -> None:
     received: dict[str, object] = {}
 

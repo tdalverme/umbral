@@ -87,12 +87,65 @@
       "concept_key": "acceso_transporte",
       "polarity": "positive",
       "value": null
+    },
+    {
+      "aliases": ["cerca de parques", "cerca de un parque", "cerca de parque", "cerca de espacios verdes", "parque", "plaza"],
+      "concept_key": "proximidad_parque",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["cerca de supermercados", "cerca de supermercado", "cerca de compras", "con supermercado cerca", "cerca de farmacia"],
+      "concept_key": "proximidad_compras",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["vida nocturna", "cerca de bares", "con bares cerca", "cerca de un bar"],
+      "concept_key": "vida_nocturna",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["zona comercial", "cerca de restaurantes", "cerca de comercios", "con vida comercial"],
+      "concept_key": "zona_comercial",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["bien caminable", "caminable", "a pie de todo"],
+      "concept_key": "caminabilidad",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["barrio tranquilo", "zona tranquila", "sin ruido", "tranquilo", "tranquilidad"],
+      "concept_key": "calma_residencial",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["lejos de las avenidas", "lejos de avenidas", "lejos de la avenida", "lejos de autopistas", "lejos del transito"],
+      "concept_key": "ruido_transito",
+      "polarity": "negative",
+      "value": null
+    },
+    {
+      "aliases": ["lejos de las vias del tren", "lejos de vias", "lejos del ferrocarril"],
+      "concept_key": "ruido_tren",
+      "polarity": "negative",
+      "value": null
+    },
+    {
+      "aliases": ["zona ruidosa", "mucho ruido", "lejos del ruido"],
+      "concept_key": "ruido_ambiental",
+      "polarity": "negative",
+      "value": null
     }
   ],
   "unsupported_notes": {
     "ambientes": "Se atiende por el perfil duro (ambientes) via el refinamiento clasico del chat.",
     "piso": "Se atiende por el perfil duro (piso) o queda pendiente de concepto con value numerico.",
-    "radio": "No existe en el perfil ni en el catalogo.",
-    "transporte": "Pendiente de Fase 3 (concepto desde urban signals)."
+    "radio": "No existe en el perfil ni en el catalogo."
   }
 }

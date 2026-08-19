@@ -19,6 +19,17 @@ def _criterion() -> PolicyCriterion:
     )
 
 
+def _negative_criterion() -> PolicyCriterion:
+    return PolicyCriterion(
+        key="ruido_transito",
+        concept="ruido_transito",
+        matcher_type="signal_score",
+        weight=0.1,
+        params={"signal_ref": "road_noise", "polarity": "negative"},
+        gate=None,
+    )
+
+
 def test_high_signal_score_is_a_match_with_full_confidence() -> None:
     criterion = _criterion()
     result = evaluate_observation_criterion(criterion, None, 0.87, 0.95)
@@ -51,3 +62,28 @@ def test_confidence_is_carried_through() -> None:
 
     assert result.confidence == 0.4
     assert result.score == 0.5
+
+
+def test_negative_polarity_inverts_the_signal_score() -> None:
+    result = evaluate_observation_criterion(_negative_criterion(), None, 0.87, 0.95)
+
+    assert result.state == "match"
+    assert result.score == round(1.0 - 0.87, 4)
+    assert result.confidence == 0.95
+    assert result.reason_code == "signal_observed"
+
+
+def test_negative_polarity_low_noise_scores_high() -> None:
+    result = evaluate_observation_criterion(_negative_criterion(), None, 0.1, 0.9)
+
+    assert result.state == "match"
+    assert result.score == round(1.0 - 0.1, 4)
+
+
+def test_negative_polarity_missing_stays_unknown() -> None:
+    result = evaluate_observation_criterion(_negative_criterion(), None, None, None)
+
+    assert result.state == "unknown"
+    assert result.score == 0.0
+    assert result.confidence == 0.0
+    assert result.reason_code == "no_observation_data"

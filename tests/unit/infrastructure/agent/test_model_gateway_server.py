@@ -109,6 +109,61 @@ def test_valid_request_returns_content_and_usage() -> None:
     assert provider_body["messages"][0]["role"] == "system"
 
 
+def test_preference_interpreter_schema_with_meta_keys_is_not_crashing() -> None:
+    """The LLM preference interpreter catalogs resolve without 500ing.
+
+    The interpreter passes the concept catalog and behavior rules as
+    ``_catalog``/``_instructions`` schema siblings (its system-message
+    contract). Every underscore-prefixed key is meta: it never reaches the
+    provider JSON schema (which would force the model to echo it) and never
+    crashes the translator the way ``_catalog`` used to.
+    """
+    payload = {
+        "model": "gpt-4.1-mini",
+        "model_version": "gpt-4.1-mini",
+        "prompt_version": "agent-preference-interpret-v1",
+        "schema_version": "preference-interpret-v1",
+        "schema": {
+            "resolution": "string",
+            "reason": "string",
+            "concept_key": "string",
+            "polarity": "string",
+            "value": "string",
+            "confidence": "number",
+            "matcher_type": "string",
+            "params": [
+                {"key": "string", "value": "string"}
+            ],
+            "_catalog": [
+                {
+                    "key": "balcon",
+                    "description": "Balcon",
+                    "matchers": ["categorical"],
+                }
+            ],
+            "_instructions": "elige UNA resolucion: structured o unresolved",
+        },
+        "messages": [
+            {
+                "role": "system",
+                "content": "Catalogo de conceptos disponibles...",
+            },
+            {"role": "user", "content": "quiero un depto luminoso"},
+        ],
+    }
+    client, requests = _client()
+    response = client.post("/v1/structured", json=payload)
+    assert response.status_code == 200
+    provider_schema = json.loads(requests[0].content)["response_format"]["json_schema"][
+        "schema"
+    ]
+    assert "params" in provider_schema["properties"]
+    assert "_catalog" not in provider_schema["properties"]
+    assert "_instructions" not in provider_schema["properties"]
+    roles = [item["role"] for item in json.loads(requests[0].content)["messages"]]
+    assert roles[:2] == ["system", "system"]
+
+
 def test_invalid_json_from_provider_is_corrected_once() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from umbral.application.agent.ports import ModelGateway
 
@@ -84,24 +85,17 @@ def resolve_concept(
             "item": {"key": "string", "value": "string"},
         },
     }
-    prompt_schema = dict(schema)
-    prompt_schema["_catalog"] = catalog
-    prompt_schema["_instructions"] = (
-        "Dado el mensaje del usuario, elige UNA resolucion:\n"
-        "- 'structured': la frase expresa una preferencia clara sobre UN "
-        "concepto del catalogo. Rellena concept_key (exacto del catalogo), "
-        "polarity (positive/negative), value opcional, confidence 0..1, "
-        "matcher_type (uno de los matchers validos del concepto) y params "
-        "con el valor.\n"
-        "- 'unresolved': la frase NO corresponde a ningun concepto del "
-        "catalogo (o es vaga, o pide algo no evaluable). Rellena reason "
-        "explicando la limitacion y deja concept_key vacio.\n"
-        "Nunca inventes concept_key fuera del catalogo ni fuerces una "
-        "preferencia que no este explicitamente pedida."
-    )
     result = gateway.generate_structured(
-        messages=({"role": "user", "content": phrase},),
-        schema=prompt_schema,
+        messages=(
+            {
+                "role": "system",
+                "content": _interpreter_system_prompt_and_catalog(
+                    catalog=catalog, instructions=_INSTRUCTIONS
+                ),
+            },
+            {"role": "user", "content": phrase},
+        ),
+        schema=schema,
         schema_version=schema_version,
         prompt_version=prompt_version,
         model_version=model_version,
@@ -109,6 +103,49 @@ def resolve_concept(
     if result.status != "success" or result.content is None:
         return None
     return _interpretation_from_data(result.content, catalog)
+
+
+_INSTRUCTIONS = (
+    "Dado el mensaje del usuario, elige UNA resolucion:\n"
+    "- 'structured': la frase expresa una preferencia clara sobre UN "
+    "concepto del catalogo. Rellena concept_key (exacto del catalogo), "
+    "polarity (positive/negative), value opcional, confidence 0..1, "
+    "matcher_type (uno de los matchers validos del concepto) y params "
+    "con el valor.\n"
+    "- 'unresolved': la frase NO corresponde a ningun concepto del "
+    "catalogo (o es vaga, o pide algo no evaluable). Rellena reason "
+    "explicando la limitacion y deja concept_key vacio.\n"
+    "Nunca inventes concept_key fuera del catalogo ni fuerces una "
+    "preferencia que no este explicitamente pedida."
+)
+
+
+def _interpreter_system_prompt_and_catalog(
+    *,
+    catalog: Sequence[Mapping[str, Any]],
+    instructions: str,
+) -> str:
+    """Render the catalog and behavior rules as a system message.
+
+    The catalog must reach the model, but it is context, not part of the
+    structured output schema: embedding it as ``_catalog``/``_instructions``
+    inside the schema breaks the managed model gateway (its schema translator
+    only knows ``_intents`` as a meta key). Passing them as a system message
+    keeps the schema a pure output contract (FR-004 structured outputs).
+    """
+    catalog_lines = (
+        f"- {concept.get('key')}: "
+        f"{concept.get('description')} (matchers: "
+        f"{', '.join(str(item) for item in concept.get('matchers') or [])})"
+        for concept in catalog
+        if isinstance(concept.get("key"), str)
+    )
+    return (
+        "Catalogo de conceptos disponibles (elegi concept_key EXACTO):\n"
+        + "\n".join(catalog_lines)
+        + "\n\nInstrucciones:\n"
+        + instructions
+    )
 
 
 def _interpretation_from_data(

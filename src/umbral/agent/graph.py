@@ -1189,6 +1189,7 @@ def build_topology_v3(
             item.get("tool") in _PROPOSE_TOOLS
             and item.get("status") == "ok"
             and isinstance(item.get("result"), Mapping)
+            and _has_real_proposal_id(item)
             for item in results
         ):
             context["proposal_created"] = True
@@ -2350,6 +2351,20 @@ def _learning_proposal_id(item: Mapping[str, object]) -> str | None:
         return None
     value = result.get("learning_proposal_id")
     return str(value) if value else None
+
+
+def _has_real_proposal_id(item: Mapping[str, object]) -> bool:
+    """True when an ok propose result carries a durable proposal to confirm.
+
+    The LLM preference interpreter registers the binding durably at once and
+    returns ``proposal_id: None`` (option 2 contract); routing that to the HITL
+    interrupt would try to confirm a non-existent proposal. Only proposals that
+    actually created a pending decision wait for confirmation.
+    """
+    result = item.get("result")
+    if not isinstance(result, Mapping):
+        return False
+    return bool(str(result.get("proposal_id") or "").strip())
 
 
 def _with_normalized_reason_keys(

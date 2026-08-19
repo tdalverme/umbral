@@ -113,7 +113,7 @@ def _translate_schema(schema: dict[str, Any]) -> dict[str, Any]:
         properties: dict[str, Any] = {}
         required: list[str] = []
         for key, item in obj.items():
-            if key == "_intents":
+            if key.startswith("_"):
                 continue
             properties[key] = translate_value(item)
             required.append(key)

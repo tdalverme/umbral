@@ -52,6 +52,15 @@ def test_contract_documents_parse_and_match_the_published_contracts() -> None:
         "moderno",
         "proximidad_cafes",
         "acceso_transporte",
+        "proximidad_parque",
+        "proximidad_compras",
+        "vida_nocturna",
+        "zona_comercial",
+        "caminabilidad",
+        "calma_residencial",
+        "ruido_transito",
+        "ruido_tren",
+        "ruido_ambiental",
     }
     assert set(parsed_types.matcher_types) == {
         "numeric_range",
@@ -97,6 +106,51 @@ def test_alias_collisions_are_reported_as_warnings() -> None:
     assert len(warnings) == 1
     assert "alias_collision" in warnings[0]
     assert detect_alias_collisions({seed.key: seed for seed in SEED.concepts}) == ()
+
+
+def test_signal_score_concepts_reference_known_urban_signals() -> None:
+    """Every seed signal_score concept must point at a signal the urban
+    contract actually computes; a typo here would silently produce unknown
+    observations for the concept."""
+    from umbral.infrastructure.urban.contract_loader import (
+        load_urban_contract_published,
+    )
+
+    contract = load_urban_contract_published()
+    known = {signal.name for signal in contract.signals} | {
+        composite.name for composite in contract.composite_signals
+    }
+    signal_score = [
+        seed for seed in SEED.concepts if seed.matcher_type == "signal_score"
+    ]
+    assert signal_score, "seed must declare at least one signal_score concept"
+    for seed in signal_score:
+        signal_ref = seed.params_schema.get("signal_ref")
+        assert isinstance(signal_ref, str), f"{seed.key} must declare a signal_ref"
+        assert signal_ref in known, (
+            f"{seed.key} references unknown urban signal {signal_ref}"
+        )
+
+
+def test_urban_batch_wires_every_signal_ref_concept() -> None:
+    """The urban batch derives its concept->signal map from the seed; adding a
+    signal_score concept must be reflected here or the batch never produces its
+    observations."""
+    from umbral.infrastructure.urban.composition import _signal_ref_concepts
+
+    assert _signal_ref_concepts() == {
+        "proximidad_cafes": "cafe_lifestyle",
+        "acceso_transporte": "transit_access",
+        "proximidad_parque": "green_access",
+        "proximidad_compras": "daily_convenience",
+        "vida_nocturna": "nightlife_intensity",
+        "zona_comercial": "commercial_intensity",
+        "caminabilidad": "walkability",
+        "calma_residencial": "residential_calm",
+        "ruido_transito": "road_noise",
+        "ruido_tren": "rail_noise",
+        "ruido_ambiental": "noise_risk",
+    }
 
 
 def test_golden_invalid_concept_is_rejected() -> None:

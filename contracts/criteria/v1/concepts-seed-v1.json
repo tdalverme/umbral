@@ -101,6 +101,96 @@
       "source": "seed",
       "defaults": {"signal_ref": "transit_access"},
       "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "proximidad_parque",
+      "name": "Proximidad a parques",
+      "aliases": ["cerca de parques", "cerca de un parque", "cerca de parque", "cerca de espacios verdes", "parque", "plaza"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "green_access"},
+      "source": "seed",
+      "defaults": {"signal_ref": "green_access"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "proximidad_compras",
+      "name": "Proximidad a compras diarias",
+      "aliases": ["cerca de supermercados", "cerca de supermercado", "cerca de compras", "con supermercado cerca", "cerca de farmacia", "cerca de almacen"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "daily_convenience"},
+      "source": "seed",
+      "defaults": {"signal_ref": "daily_convenience"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "vida_nocturna",
+      "name": "Vida nocturna",
+      "aliases": ["vida nocturna", "cerca de bares", "con bares cerca", "cerca de un bar"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "nightlife_intensity"},
+      "source": "seed",
+      "defaults": {"signal_ref": "nightlife_intensity"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "zona_comercial",
+      "name": "Zona comercial",
+      "aliases": ["zona comercial", "cerca de restaurantes", "cerca de comercios", "con vida comercial"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "commercial_intensity"},
+      "source": "seed",
+      "defaults": {"signal_ref": "commercial_intensity"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "caminabilidad",
+      "name": "Caminabilidad",
+      "aliases": ["bien caminable", "caminable", "a pie de todo"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "walkability"},
+      "source": "seed",
+      "defaults": {"signal_ref": "walkability"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "calma_residencial",
+      "name": "Calma residencial",
+      "aliases": ["barrio tranquilo", "zona tranquila", "sin ruido", "tranquilo", "tranquilidad", "zona silenciosa"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "residential_calm"},
+      "source": "seed",
+      "defaults": {"signal_ref": "residential_calm"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "ruido_transito",
+      "name": "Ruido de transito",
+      "aliases": ["ruido de transito", "lejos de las avenidas", "lejos de avenidas", "lejos de la avenida", "lejos de autopistas", "lejos del transito"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "road_noise"},
+      "source": "seed",
+      "defaults": {"signal_ref": "road_noise"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "ruido_tren",
+      "name": "Ruido de tren",
+      "aliases": ["ruido de tren", "lejos de las vias del tren", "lejos de vias", "lejos del ferrocarril"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "rail_noise"},
+      "source": "seed",
+      "defaults": {"signal_ref": "rail_noise"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "ruido_ambiental",
+      "name": "Ruido ambiental",
+      "aliases": ["ruido ambiental", "lejos del ruido", "lejos del ruido del barrio", "zona ruidosa"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "noise_risk"},
+      "source": "seed",
+      "defaults": {"signal_ref": "noise_risk"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
     }
   ]
 }

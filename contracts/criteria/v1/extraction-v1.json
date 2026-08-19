@@ -96,6 +96,42 @@
     "acceso_transporte": {
       "source": "urban",
       "signal_ref": "transit_access"
+    },
+    "proximidad_parque": {
+      "source": "urban",
+      "signal_ref": "green_access"
+    },
+    "proximidad_compras": {
+      "source": "urban",
+      "signal_ref": "daily_convenience"
+    },
+    "vida_nocturna": {
+      "source": "urban",
+      "signal_ref": "nightlife_intensity"
+    },
+    "zona_comercial": {
+      "source": "urban",
+      "signal_ref": "commercial_intensity"
+    },
+    "caminabilidad": {
+      "source": "urban",
+      "signal_ref": "walkability"
+    },
+    "calma_residencial": {
+      "source": "urban",
+      "signal_ref": "residential_calm"
+    },
+    "ruido_transito": {
+      "source": "urban",
+      "signal_ref": "road_noise"
+    },
+    "ruido_tren": {
+      "source": "urban",
+      "signal_ref": "rail_noise"
+    },
+    "ruido_ambiental": {
+      "source": "urban",
+      "signal_ref": "noise_risk"
     }
   }
 }

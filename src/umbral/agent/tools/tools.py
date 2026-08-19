@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from umbral.agent.tools.contracts import ToolError, ToolRunContext
@@ -308,10 +308,12 @@ def _propose_preference_llm(
     binding, and only surface a computable preference when a canonical concept
     was resolved (unresolved phrases are preserved, never rejected).
     """
-    from umbral.application.preferences.contracts import BindingDraft
+    from umbral.application.preferences.contracts import (
+        BindingDraft,
+        PreferenceError,
+    )
 
-    interpret = services.interpret_preference
-    interpretation = interpret(phrase) if callable(interpret) else None
+    interpretation = _interpret_phrase(services, phrase)
     if interpretation is None or interpretation.kind != "structured":
         reason = (
             getattr(interpretation, "reason", None)
@@ -343,12 +345,33 @@ def _propose_preference_llm(
         evidence_refs=({"pipeline": "agent.preference_interpreter", "version": "v1"},),
         limitations=(),
     )
-    _record_expression(
-        services,
-        context,
-        phrase,
-        binding_drafts=(binding,),
-    )
+    try:
+        _record_expression(
+            services,
+            context,
+            phrase,
+            binding_drafts=(binding,),
+        )
+    except PreferenceError as error:
+        # The phrase resolved to a canonical concept, but persisting the
+        # structured binding was rejected by deterministic policy or registry
+        # state (e.g. unseeded concept). Preserve the phrase as unresolved
+        # instead of surfacing an opaque technical error to the user.
+        reason = str(error)
+        _record_expression(
+            services,
+            context,
+            phrase,
+            binding_drafts=(BindingDraft.unresolved(reason),),
+        )
+        return {
+            "outcome": "preserved",
+            "preserved": True,
+            "kind": "unresolved",
+            "reason": reason,
+            "expires_at": None,
+            "proposal_id": None,
+        }
     return {
         "outcome": "proposed",
         "preserved": False,
@@ -361,6 +384,22 @@ def _propose_preference_llm(
         "proposal_id": None,
         "expires_at": None,
     }
+
+
+def _interpret_phrase(services: ToolServices, phrase: str) -> Any:
+    """Run the LLM interpreter, or a raw phrase with a safe default on failure.
+
+    Interpreter failures (gateway, network, unexpected provider output) never
+    raise into the tool: the phrase is preserved as unresolved (FR-010), never
+    surfaced as a generic technical error.
+    """
+    interpret = services.interpret_preference
+    if not callable(interpret):
+        return None
+    try:
+        return interpret(phrase)
+    except Exception:  # noqa: BLE001 - interpreter failure preserves the phrase
+        return None
 
 
 def _record_expression(

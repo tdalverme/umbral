@@ -28,6 +28,7 @@ _CATALOG = (
 class _Gateway:
     def __init__(self, content: Mapping[str, object] | None) -> None:
         self.received_schema: dict[str, object] = {}
+        self.received_messages: tuple[Mapping[str, object], ...] = ()
         self._content = content
 
     def generate_structured(
@@ -40,8 +41,9 @@ class _Gateway:
         model_version: str,
         tools: Sequence[Mapping[str, object]] | None = None,
     ) -> ModelResult:
-        del messages, schema_version, prompt_version, model_version, tools
+        del schema_version, prompt_version, model_version, tools
         self.received_schema = dict(schema)
+        self.received_messages = messages
         content = (
             dict(self._content)
             if isinstance(self._content, Mapping)
@@ -135,13 +137,7 @@ def test_invalid_matcher_becomes_unresolved() -> None:
     assert interpretation.kind == "unresolved"
 
 
-def test_schema_includes_published_catalog() -> None:
-    _resolve(
-        {
-            "resolution": "unresolved",
-            "reason": "test",
-        }
-    )
+def test_schema_is_output_only_and_catalog_rides_the_system_message() -> None:
     gateway = _Gateway({"resolution": "unresolved", "reason": "test"})
     resolve_concept(
         phrase="x",
@@ -150,16 +146,27 @@ def test_schema_includes_published_catalog() -> None:
         prompt_version="v1",
         model_version="m",
     )
-    assert "_catalog" in gateway.received_schema
-    assert gateway.received_schema["_catalog"] == [
-        {
-            "key": "luminosidad",
-            "description": "Luminosidad",
-            "matchers": ["semantic_feature"],
-        },
-        {
-            "key": "proximidad_cafes",
-            "description": "Proximidad a cafes",
-            "matchers": ["signal_score"],
-        },
+    assert "_catalog" not in gateway.received_schema
+    assert "_instructions" not in gateway.received_schema
+    assert set(gateway.received_schema) >= {
+        "resolution",
+        "reason",
+        "concept_key",
+        "polarity",
+        "value",
+        "confidence",
+        "matcher_type",
+        "params",
+    }
+    system = next(
+        item.get("content", "")
+        for item in gateway.received_messages
+        if item.get("role") == "system"
+    )
+    assert "luminosidad: Luminosidad" in system
+    assert "proximidad_cafes: Proximidad a cafes" in system
+    assert "matcher_type (uno de los matchers validos" in system
+    assert [item.get("role") for item in gateway.received_messages] == [
+        "system",
+        "user",
     ]
