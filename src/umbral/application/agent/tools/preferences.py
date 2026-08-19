@@ -42,15 +42,31 @@ class PreferenceVocabularySpec:
     def resolve(self, phrase: str) -> PreferenceIntent:
         """Resolve a natural phrase to its canonical preference.
 
-        Matching is case-insensitive, whitespace-normalized and alias-exact
-        (the intent compiler already extracts the canonical phrase); unknown
-        phrases are rejected, never guessed.
+        Matching is case-insensitive and whitespace-normalized. An exact alias
+        match wins; otherwise the longest alias embedded in the phrase is used
+        (the intent compiler often passes the whole predicate, e.g. "depto
+        luminoso" or "quiero un depto cerca de un cafe"). Unknown phrases are
+        still rejected, never guessed.
         """
         key = _alias_key(phrase)
         intent = self._alias_to_intent.get(key)
         if intent is None:
+            intent = self._resolve_embedded(key)
+        if intent is None:
             raise PreferenceUnknownConcept(phrase)
         return intent
+
+    def _resolve_embedded(self, key: str) -> PreferenceIntent | None:
+        """Return the intent for the longest alias that appears in ``key``."""
+        if not key:
+            return None
+        for alias, intent in sorted(
+            self._alias_to_intent.items(),
+            key=lambda item: (-len(item[0]), item[0]),
+        ):
+            if len(alias) >= 2 and alias in key:
+                return intent
+        return None
 
 
 class PreferenceVocabularyError(Exception):

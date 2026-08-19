@@ -9,9 +9,11 @@ builder composes the v4 copilot stack (feature 016) for the same surface.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import cast
 
 from sqlalchemy.orm import Session
@@ -169,6 +171,10 @@ def build_production_agent_stack(
                 criteria=criteria,  # type: ignore[arg-type]
                 proposals=proposals,
                 vocabulary=load_preference_vocabulary(),
+                preferences=_build_preference_service(session_factory),
+                interpret_preference=_interpret_preference(
+                    gateway, settings, session_factory
+                ),
             )
         ),
         recorder=recorder,
@@ -364,6 +370,53 @@ def _build_preference_service(session_factory: SessionFactory) -> PreferenceServ
         concepts=_ConceptReader(),
         policy=PreferencePolicySpec.v1(),
     )
+
+
+def _interpret_preference(
+    gateway: ModelGateway,
+    settings: Settings,
+    _session_factory: SessionFactory,
+) -> object:
+    """Build a phrase→PreferenceInterpretation callable for the preference tool.
+
+    The catalog is derived deterministically from the published concepts seed
+    (never from the DB), so the LLM only ever resolves to known concepts. Any
+    gateway failure or non-canonical resolution yields ``unresolved``, which
+    the tool persists as a durable, non-evaluable expression instead of
+    rejecting the user.
+    """
+    from umbral.application.agent.tools.preference_interpreter import (
+        ConceptOption,
+        resolve_concept,
+    )
+
+    seed_path = (
+        Path(__file__).resolve().parents[4]
+        / "contracts"
+        / "criteria"
+        / "v1"
+        / "concepts-seed-v1.json"
+    )
+    raw = json.loads(seed_path.read_text(encoding="utf-8"))
+    options = tuple(
+        ConceptOption(
+            key=str(concept["key"]),
+            description=str(concept.get("name") or concept["key"]),
+            matchers=(str(concept["matcher_type"]),),
+        )
+        for concept in raw.get("concepts", [])
+    )
+
+    def interpret(phrase: str) -> object:
+        return resolve_concept(
+            phrase=phrase,
+            concepts=options,
+            gateway=gateway,
+            prompt_version=settings.agent_intent_prompt_version,
+            model_version=settings.agent_model_name,
+        )
+
+    return interpret
 
 
 _COPILOT_REPLY_SCHEMA: dict[str, object] = {
