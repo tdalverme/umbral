@@ -78,6 +78,42 @@ def test_resolve_normalizes_whitespace() -> None:
     assert spec.resolve("  con   balcon ").concept_key == "balcon"
 
 
+def test_resolves_alias_embedded_in_a_longer_phrase() -> None:
+    spec = _spec()
+    assert spec.resolve("quiero un depto luminoso").concept_key == "luminosidad"
+    assert spec.resolve("depto luminoso").concept_key == "luminosidad"
+    assert spec.resolve("quisiera un depto con luz natural").concept_key == (
+        "luminosidad"
+    )
+
+
+def test_resolves_compound_alias_embedded_in_a_phrase() -> None:
+    spec = parse_preference_vocabulary(
+        {
+            "registry_version": "preferences-vocabulary-v1",
+            "schema_version": "preferences-v1",
+            "entries": [
+                {
+                    "aliases": ["cerca de cafes", "cerca de un cafe"],
+                    "concept_key": "proximidad_cafes",
+                    "polarity": "positive",
+                    "value": None,
+                }
+            ],
+        }
+    )
+    assert (
+        spec.resolve("quiero un depto cerca de un cafe").concept_key
+        == "proximidad_cafes"
+    )
+    assert spec.resolve("cerca de cafes").concept_key == "proximidad_cafes"
+
+
+def test_embedded_match_prefers_the_longest_alias() -> None:
+    spec = _spec()
+    assert spec.resolve("cocina separada y luminosa").concept_key == "tipo_cocina"
+
+
 def test_resolve_keeps_value_for_categorical() -> None:
     spec = _spec()
     assert spec.resolve("cocina separada").value == "separada"
