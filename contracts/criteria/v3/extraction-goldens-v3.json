@@ -1,0 +1,63 @@
+{
+  "contract_version": "3",
+  "registry_version": "extraction-goldens-v3",
+  "description": "Casos etiquetados por concepto para la extracción activa sobre Silver schema v2.",
+  "threshold": {"accuracy": 1.0},
+  "goldens": [
+    {"concept_key": "balcon", "source": "rule", "cases": [
+      {"input": {"description_text": "Departamento con balcon."}, "expected": "true"},
+      {"input": {"description_text": "Sin balcon."}, "expected": "false"},
+      {"input": {"description_text": "Monoambiente sin balcon."}, "expected": "false"}
+    ]},
+    {"concept_key": "moderno", "source": "model", "cases": [
+      {"input": {"description_text": "Departamento moderno, cocina integrada."}, "expected": "moderno"},
+      {"input": {"description_text": "Renovado, pisos de porcelanato."}, "expected": "renovado"},
+      {"input": {"description_text": "Edificio clasico de los 40."}, "expected": "clasico"}
+    ]},
+    {"concept_key": "proximidad_cafes", "source": "urban", "cases": [
+      {"input": {"signal_count": 3}, "expected": {"min": 1}},
+      {"input": {"signal_count": 0}, "expected": {"min": 0}}
+    ]},
+    {"concept_key": "dormitorios", "source": "rule", "cases": [
+      {"input": {"bedrooms": 2, "description_text": "2 dormitorios."}, "expected": 2},
+      {"input": {"bedrooms": 3, "description_text": "3 ambientes."}, "expected": 3},
+      {"input": {"bedrooms": 1, "description_text": "Departamento."}, "expected": 1},
+      {"input": {"bedrooms": 0, "description_text": "Monoambiente."}, "expected": 0}
+    ]},
+    {"concept_key": "mascotas", "source": "rule", "cases": [
+      {"input": {"description_text": "Se aceptan mascotas."}, "expected": "true"},
+      {"input": {"description_text": "No se aceptan mascotas."}, "expected": "false"},
+      {"input": {"description_text": "Departamento luminoso."}, "expected": null},
+      {"input": {"amenities": ["acepta mascotas"]}, "expected": "true"}
+    ]},
+    {"concept_key": "ascensor", "source": "rule", "cases": [
+      {"input": {"amenities": ["ascensor"], "description_text": "Edificio con ascensor."}, "expected": "true"},
+      {"input": {"amenities": [], "description_text": "Edificio de planta baja."}, "expected": null},
+      {"input": {"amenities": [], "description_text": "Sin informacion de ascensor."}, "expected": null}
+    ]},
+    {"concept_key": "cochera", "source": "rule", "cases": [
+      {"input": {"parking_spaces": 1, "amenities": [], "description_text": "Departamento."}, "expected": "true"},
+      {"input": {"parking_spaces": 0, "amenities": ["cochera"], "description_text": ""}, "expected": "false"},
+      {"input": {"amenities": ["cochera cubierta"], "description_text": "Con cochera."}, "expected": "true"},
+      {"input": {"amenities": [], "description_text": "Sin cochera."}, "expected": "false"},
+      {"input": {"amenities": ["lavadero"], "description_text": "Departamento."}, "expected": null}
+    ]},
+    {"concept_key": "piscina", "source": "rule", "cases": [
+      {"input": {"amenities": ["piscina"], "description_text": "Edificio con pileta."}, "expected": "true"},
+      {"input": {"amenities": [], "description_text": "Antesualo sin pileta."}, "expected": "false"},
+      {"input": {"amenities": ["parrilla"], "description_text": "Con parrilla."}, "expected": null}
+    ]},
+    {"concept_key": "precio_m2", "source": "rule", "cases": [
+      {"input": {"price_value": 500000, "price_currency": "ARS", "surface_m2": 50}, "expected": 10000.0},
+      {"input": {"price_value": 1500, "price_currency": "USD", "surface_m2": 30}, "expected": 50.0},
+      {"input": {"price_value": 500000, "price_currency": "ARS", "surface_m2": null}, "expected": null},
+      {"input": {"price_value": 0, "price_currency": "ARS", "surface_m2": 50}, "expected": null}
+    ]},
+    {"concept_key": "variacion_precio", "source": "rule", "cases": [
+      {"input": {"price_changes": [{"field": "price_value", "before": 500000, "after": 480000}]}, "expected": -20000.0},
+      {"input": {"price_changes": [{"field": "price_value", "before": 480000, "after": 500000}]}, "expected": 20000.0},
+      {"input": {"price_changes": [{"field": "price_value", "before": null, "after": 480000}]}, "expected": null},
+      {"input": {"price_changes": []}, "expected": null}
+    ]}
+  ]
+}

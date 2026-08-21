@@ -17,12 +17,12 @@ from umbral.application.silver.silver_schema import (
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-SCHEMA_PATH = ROOT / "contracts" / "silver" / "v1" / "silver-schema.json"
+SCHEMA_PATH = ROOT / "contracts" / "silver" / "v2" / "silver-schema.json"
 
 
 def _beta_schema() -> SilverSchemaSpec:
     published = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-    published["normalizer_version"] = "silver-schema-v1.beta"
+    published["normalizer_version"] = "silver-schema-v2.beta"
     return parse_silver_schema(published)
 
 
@@ -70,5 +70,5 @@ def test_new_normalizer_version_preserves_previous_rows(
     chain = beta.chain("source-a", "sil-0001")
     assert len(chain) == 2
     versions = {listing.normalizer_version for listing in chain}
-    assert versions == {"silver-schema-v1", "silver-schema-v1.beta"}
+    assert versions == {"silver-schema-v2", "silver-schema-v2.beta"}
     assert chain[0].price_value == chain[1].price_value

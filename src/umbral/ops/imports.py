@@ -75,7 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     submit.add_argument("--file", required=True, help="path to the batch JSON")
     submit.add_argument("--source-id", default="zonaprop")
     submit.add_argument("--source-version", default="manual-v1")
-    submit.add_argument("--contract-version", default="1")
+    submit.add_argument("--contract-version", default="2")
     submit.add_argument("--batch-key", default=None, help="opaque idempotency key")
     run_parser = sub.add_parser("get-run", help="print an import run snapshot")
     run_parser.add_argument("--run-id", required=True)

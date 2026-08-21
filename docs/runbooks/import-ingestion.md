@@ -8,7 +8,9 @@ Convierte un lote CSV/JSON controlado en snapshots crudos inmutables en Bronze,
 cuarentena consultable y un reporte de calidad. La normalización Silver (H2.2)
 es otro incremento.
 
-- Contrato de importación v1: `contracts/import/v1/import-contract.json`
+- Contrato de importación activo v2: `contracts/import/v2/import-contract.json`
+- La v2 agrega atributos estructurados opcionales: título, superficie cubierta,
+  baños, toilette, cocheras, antigüedad, disposición y orientación.
 - Contrato operativo: `specs/002-bronze-ingestion/contracts/import-operations.md`
 - Esquema: `specs/002-bronze-ingestion/data-model.md`
 
@@ -26,6 +28,10 @@ es otro incremento.
    en `succeeded` (o `failed` con un código accionable).
 4. El operador consulta `GET /api/v1/imports/runs/{run_id}` para progreso y
    `GET .../quality` (más `.../quality/download` en CSV) para calidad.
+
+Los lotes de la v1 no se aceptan en el runtime activo. Después de desplegar la
+ampliación, generar una ingesta nueva con `contract_version: "2"`; los datos
+históricos v1 quedan auditables, pero no son candidatos activos de Silver.
 
 ## Permisos
 

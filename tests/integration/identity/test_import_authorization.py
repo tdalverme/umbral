@@ -67,9 +67,9 @@ def _client(
     store: InMemoryIdentityStore, access: IdentityAccess | None = None
 ) -> TestClient:
     from tests.fakes.imports import make_import_service
-    from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
+    from umbral.infrastructure.ingestion.contract_loader import load_contract_v2
 
-    service, _ = make_import_service(contract=load_contract_v1())
+    service, _ = make_import_service(contract=load_contract_v2())
     deps = RuntimeDependencies(
         settings=_settings(),
         release=None,  # type: ignore[arg-type]
@@ -94,7 +94,7 @@ def _payload() -> dict[str, Any]:
         "data": {
             "source_id": "source-a",
             "source_version": "v1",
-            "contract_version": "1",
+            "contract_version": "2",
         },
     }
 

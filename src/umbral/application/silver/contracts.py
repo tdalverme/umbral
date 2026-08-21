@@ -23,6 +23,8 @@ DedupeMethod = Literal["deterministic", "proposal"]
 DedupeLinkState = Literal["pending", "confirmed", "rejected"]
 ChangeType = Literal["price", "text", "attribute", "status"]
 
+ACTIVE_NORMALIZER_VERSION = "silver-schema-v2"
+
 
 @dataclass(frozen=True, slots=True)
 class NormalizedFields:
@@ -49,6 +51,15 @@ class NormalizedFields:
     geo_source: str | None
     url: str | None
     normalization_errors: tuple[str, ...]
+    title_text: str | None = None
+    surface_covered_m2: float | None = None
+    bathrooms: float | None = None
+    toilettes: float | None = None
+    parking_spaces: float | None = None
+    age_years: float | None = None
+    disposition: str | None = None
+    orientation: str | None = None
+    media_urls: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +95,15 @@ class NormalizedListing:
     geo_source: str | None
     normalization_errors: tuple[str, ...]
     price_changes: tuple[Mapping[str, object], ...] = ()
+    title_text: str | None = None
+    surface_covered_m2: float | None = None
+    bathrooms: float | None = None
+    toilettes: float | None = None
+    parking_spaces: float | None = None
+    age_years: float | None = None
+    disposition: str | None = None
+    orientation: str | None = None
+    media_urls: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)

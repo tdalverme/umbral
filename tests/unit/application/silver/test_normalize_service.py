@@ -76,7 +76,7 @@ def test_reference_run_normalizes_all_valid_snapshots() -> None:
     assert summary.skipped == 0
     listings = service.listings.list_chain("source-a", "sil-0001")
     assert len(listings) == 1
-    assert listings[0].normalizer_version == "silver-schema-v1"
+    assert listings[0].normalizer_version == "silver-schema-v2"
     assert listings[0].geo_precision == "exact"
 
 
@@ -86,6 +86,54 @@ def test_reprocess_is_idempotent() -> None:
     summary = service.process(run.run_id)
     assert summary.listings_inserted == 0
     assert summary.skipped == 9
+
+
+def test_normalize_service_propagates_new_listing_attributes() -> None:
+    schema = load_silver_schema()
+    dedupe = load_dedupe_policy()
+    snapshots = InMemoryRawSnapshotRepository()
+    runs = InMemoryImportRunRepository()
+    run = build_run()
+    store_succeeded_run(runs, run)
+    snapshots.insert(
+        snapshot_from_payload(
+            {
+                "external_id": "attributes-1",
+                "operation": "rental",
+                "property_type": "apartment",
+                "price": 1000,
+                "currency": "USD",
+                "address_text": "Avenida del Libertador 100",
+                "title": "Departamento",
+                "surface_covered_m2": 72,
+                "bathrooms": 1,
+                "toilettes": 1,
+                "parking_spaces": 1,
+                "age_years": 3,
+                "disposition": "Frente",
+                "orientation": "SE",
+                "media_urls": ["https://img.example.com/one.jpg"],
+            },
+            run_id=run.run_id,
+            contract_version="2",
+        )
+    )
+    service = make_normalize_service(
+        snapshots=snapshots, runs=runs, schema=schema, dedupe=dedupe
+    )
+
+    service.process(run.run_id)
+    listing = service.listings.list_chain("source-a", "attributes-1")[0]
+
+    assert listing.title_text == "Departamento"
+    assert listing.surface_covered_m2 == 72.0
+    assert listing.bathrooms == 1.0
+    assert listing.toilettes == 1.0
+    assert listing.parking_spaces == 1.0
+    assert listing.age_years == 3.0
+    assert listing.disposition == "Frente"
+    assert listing.orientation == "SE"
+    assert listing.media_urls == ("https://img.example.com/one.jpg",)
 
 
 def test_chain_versions_share_canonical_and_emit_changes() -> None:
@@ -127,7 +175,7 @@ def test_chain_versions_share_canonical_and_emit_changes() -> None:
     assert by_field["price_value"].change_type == "price"
     assert by_field["price_value"].before == 850000.0
     assert by_field["price_value"].after == 900000.0
-    assert by_field["total_cost"].origin["normalizer_version"] == "silver-schema-v1"
+    assert by_field["total_cost"].origin["normalizer_version"] == "silver-schema-v2"
 
 
 def test_run_must_be_succeeded() -> None:

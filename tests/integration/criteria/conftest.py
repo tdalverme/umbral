@@ -68,7 +68,7 @@ def seed_silver_listings(
     factory: SessionFactory,
     *,
     texts: list[str] | None = None,
-    normalizer_version: str = "silver-v1",
+    normalizer_version: str = "silver-schema-v2",
     count: int = 3,
 ) -> list[UUID]:
     """Insert one import run + canonical properties + silver listings."""

@@ -23,7 +23,7 @@ FIXTURES = ROOT / "tests" / "fixtures" / "imports"
 
 def _request(batch_key: str) -> ImportBatchRequest:
     return ImportBatchRequest(
-        source=SourceIdentity("source-a", "v1", "1"),
+        source=SourceIdentity("source-a", "v1", "2"),
         batch_key=batch_key,
         file_format="json",
         file_name="reference-batch.json",

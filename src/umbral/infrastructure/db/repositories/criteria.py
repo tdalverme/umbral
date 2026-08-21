@@ -27,7 +27,10 @@ from umbral.application.criteria.contracts import (
     RecomputeScope,
 )
 from umbral.application.events.contracts import ProductEvent
-from umbral.application.silver.contracts import NormalizedListing
+from umbral.application.silver.contracts import (
+    ACTIVE_NORMALIZER_VERSION,
+    NormalizedListing,
+)
 from umbral.infrastructure.db.models.criteria import (
     Concept as ConceptModel,
 )
@@ -615,7 +618,11 @@ class SqlAlchemyCriteriaListingReader:
     def get(self, listing_id: UUID) -> NormalizedListing | None:
         with self.session_factory() as session:
             row = session.execute(
-                self._select().where(SilverListingModel.id == listing_id)
+                self._select().where(
+                    SilverListingModel.id == listing_id,
+                    SilverListingModel.normalizer_version
+                    == ACTIVE_NORMALIZER_VERSION,
+                )
             ).first()
             if row is None:
                 return None
@@ -624,12 +631,21 @@ class SqlAlchemyCriteriaListingReader:
 
     def list_all(self) -> tuple[NormalizedListing, ...]:
         with self.session_factory() as session:
-            rows = session.execute(self._select().order_by(SilverListingModel.id))
+            rows = session.execute(
+                self._select()
+                .where(
+                    SilverListingModel.normalizer_version
+                    == ACTIVE_NORMALIZER_VERSION
+                )
+                .order_by(SilverListingModel.id)
+            )
             return self._hydrate(session, rows.all())
 
     def list_by_normalizer_version(
         self, normalizer_version: str
     ) -> tuple[NormalizedListing, ...]:
+        if normalizer_version != ACTIVE_NORMALIZER_VERSION:
+            return ()
         with self.session_factory() as session:
             rows = session.execute(
                 self._select().where(
@@ -848,12 +864,27 @@ def _to_domain_listing(row: tuple[object, ...]) -> NormalizedListing:
         expenses_currency=model.expenses_currency,  # type: ignore[arg-type]
         total_cost=float(model.total_cost),
         price_assumptions=dict(model.price_assumptions or {}),
+        title_text=model.title_text,
         surface_m2=(float(model.surface_m2) if model.surface_m2 is not None else None),
+        surface_covered_m2=(
+            float(model.surface_covered_m2)
+            if model.surface_covered_m2 is not None
+            else None
+        ),
         rooms=model.rooms,
         bedrooms=model.bedrooms,
+        bathrooms=(float(model.bathrooms) if model.bathrooms is not None else None),
+        toilettes=(float(model.toilettes) if model.toilettes is not None else None),
+        parking_spaces=(
+            float(model.parking_spaces) if model.parking_spaces is not None else None
+        ),
         floor=model.floor,
+        age_years=(float(model.age_years) if model.age_years is not None else None),
+        disposition=model.disposition,
+        orientation=model.orientation,
         amenities=tuple(model.amenities or []),
         description_text=model.description_text,
+        media_urls=tuple(model.media_urls or []),
         location_text=model.location_text,
         neighborhood=model.neighborhood,
         geo_precision=model.geo_precision,  # type: ignore[arg-type]

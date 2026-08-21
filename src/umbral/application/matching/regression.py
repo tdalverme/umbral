@@ -303,7 +303,7 @@ def _listings_from(case: GoldenCase) -> tuple[NormalizedListing, ...]:
                 run_id=uuid4(),
                 snapshot_id=uuid4(),
                 source=SourceIdentity(
-                    source_id="golden", source_version="1", contract_version="1"
+                    source_id="golden", source_version="1", contract_version="2"
                 ),
                 external_id=golden.listing_id,
                 url=None,

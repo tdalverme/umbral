@@ -37,7 +37,7 @@ def normalize_source_version(value: str) -> str:
 
 def normalize_contract_version(value: str) -> str:
     normalized = value.strip()
-    if normalized != "1":
+    if normalized != "2":
         raise ValueError("unsupported contract_version")
     return normalized
 

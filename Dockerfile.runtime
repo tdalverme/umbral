@@ -11,7 +11,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential cmake libboost-dev libbz2-dev libexpat1-dev zlib1g-dev liblz4-dev libzstd-dev \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv \
-    && uv sync --frozen --no-dev --extra urban
+    && uv sync --frozen --no-dev --extra urban --extra scraping
 COPY src ./src
 COPY alembic.ini ./
 COPY alembic ./alembic
@@ -21,7 +21,8 @@ FROM python:3.13-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
-    PYTHONPATH=/app/src
+    PYTHONPATH=/app/src \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
@@ -32,6 +33,8 @@ COPY --from=builder /app/contracts /app/contracts
 # libraries at runtime; install the runtime libs (dev headers stay in builder).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libbz2-1.0 libexpat1 liblz4-1 libzstd1 zlib1g \
+    && python -m playwright install --with-deps chromium \
+    && chmod -R a+rX /ms-playwright \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 10001 umbral
 USER 10001

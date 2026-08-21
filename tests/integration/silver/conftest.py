@@ -36,7 +36,7 @@ from umbral.infrastructure.db.repositories.silver import (
     SqlAlchemyDedupeLinkRepository,
     SqlAlchemySilverListingRepository,
 )
-from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
+from umbral.infrastructure.ingestion.contract_loader import load_contract_v2
 from umbral.infrastructure.object_store.filesystem import FilesystemObjectStore
 from umbral.infrastructure.silver.contract_loader import (
     load_dedupe_policy,
@@ -88,7 +88,7 @@ def import_batch(
     del _object_store
     _seed_counter += 1
     captured_at = _NOW + timedelta(minutes=_seed_counter)
-    contract = load_contract_v1()
+    contract = load_contract_v2()
     raw_records = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
     records = [
         dict(item)

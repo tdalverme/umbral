@@ -85,9 +85,9 @@ def _app(
     principal: CurrentPrincipal | None = None,
     error: IdentityError | None = None,
 ) -> TestClient:
-    from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
+    from umbral.infrastructure.ingestion.contract_loader import load_contract_v2
 
-    service, _ = make_import_service(contract=load_contract_v1())
+    service, _ = make_import_service(contract=load_contract_v2())
     deps = RuntimeDependencies(
         settings=_settings(),
         release=None,  # type: ignore[arg-type]
@@ -117,7 +117,7 @@ def _batch_payload() -> dict[str, Any]:
         "data": {
             "source_id": "source-a",
             "source_version": "v1",
-            "contract_version": "1",
+            "contract_version": "2",
         },
     }
 
@@ -170,7 +170,7 @@ def test_url_is_not_accepted_instead_of_a_file() -> None:
         data={
             "source_id": "source-a",
             "source_version": "v1",
-            "contract_version": "1",
+            "contract_version": "2",
         },
     )
     assert response.status_code in {400, 422}

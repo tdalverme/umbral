@@ -33,7 +33,7 @@ class StructuredExtractor(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ExtractionContractSpec:
-    """Parsed extraction-v1 contract: allowed fields and per-concept schemas."""
+    """Parsed extraction contract: allowed fields and per-concept schemas."""
 
     contract_version: str
     registry_version: str
@@ -44,7 +44,7 @@ class ExtractionContractSpec:
 
 
 def parse_extraction_contract(data: Mapping[str, object]) -> ExtractionContractSpec:
-    if data.get("contract_version") not in {"1", "2"}:
+    if data.get("contract_version") not in {"1", "2", "3"}:
         raise ValueError("unsupported extraction contract document version")
     allowed = data.get("allowed_input_fields")
     if not isinstance(allowed, list) or not all(

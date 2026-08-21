@@ -368,6 +368,15 @@ class NormalizeRunService:
             geo_source=result.source,
             url=fields.url,
             normalization_errors=fields.normalization_errors,
+            title_text=fields.title_text,
+            surface_covered_m2=fields.surface_covered_m2,
+            bathrooms=fields.bathrooms,
+            toilettes=fields.toilettes,
+            parking_spaces=fields.parking_spaces,
+            age_years=fields.age_years,
+            disposition=fields.disposition,
+            orientation=fields.orientation,
+            media_urls=fields.media_urls,
         )
 
 
@@ -416,6 +425,15 @@ def _build_listing(
         geometry=fields.geometry,
         geo_source=fields.geo_source,
         normalization_errors=fields.normalization_errors,
+        title_text=fields.title_text,
+        surface_covered_m2=fields.surface_covered_m2,
+        bathrooms=fields.bathrooms,
+        toilettes=fields.toilettes,
+        parking_spaces=fields.parking_spaces,
+        age_years=fields.age_years,
+        disposition=fields.disposition,
+        orientation=fields.orientation,
+        media_urls=fields.media_urls,
     )
 
 
@@ -462,6 +480,15 @@ def _listing_from_fields(
         geometry=fields.geometry,
         geo_source=fields.geo_source,
         normalization_errors=fields.normalization_errors,
+        title_text=fields.title_text,
+        surface_covered_m2=fields.surface_covered_m2,
+        bathrooms=fields.bathrooms,
+        toilettes=fields.toilettes,
+        parking_spaces=fields.parking_spaces,
+        age_years=fields.age_years,
+        disposition=fields.disposition,
+        orientation=fields.orientation,
+        media_urls=fields.media_urls,
     )
 
 

@@ -89,6 +89,20 @@ def test_cochera_from_amenity_and_negative() -> None:
     assert unknown.value is None
 
 
+def test_cochera_prefers_structured_parking_spaces() -> None:
+    positive = run_cochera(
+        {"parking_spaces": 1, "amenities": [], "description_text": "Departamento."}
+    )
+    assert positive.value == "true"
+    assert positive.matched_on == ("parking_spaces",)
+
+    negative = run_cochera(
+        {"parking_spaces": 0, "amenities": ["cochera"], "description_text": ""}
+    )
+    assert negative.value == "false"
+    assert negative.matched_on == ("parking_spaces",)
+
+
 def test_piscina_from_amenity_and_negative() -> None:
     positive = run_piscina({"amenities": ["piscina"], "description_text": ""})
     assert positive.value == "true"

@@ -14,14 +14,14 @@ from umbral.application.ingestion.import_contract import (
     parse_contract,
     validate_record,
 )
-from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
+from umbral.infrastructure.ingestion.contract_loader import load_contract_v2
 from umbral.infrastructure.sources.file_source import FileImportSource
 
 ROOT = Path(__file__).resolve().parents[2]
-CONTRACT_PATH = ROOT / "contracts" / "import" / "v1" / "import-contract.json"
+CONTRACT_PATH = ROOT / "contracts" / "import" / "v2" / "import-contract.json"
 FIXTURES = ROOT / "tests" / "fixtures" / "imports"
 
-CONTRACT = load_contract_v1(CONTRACT_PATH)
+CONTRACT = load_contract_v2(CONTRACT_PATH)
 SOURCE = FileImportSource()
 
 
@@ -46,7 +46,7 @@ def test_reference_json_yields_expected_acceptance_profile() -> None:
     invalid = [result for result in results if not result.valid]
     assert len(valid) == 10
     assert len(invalid) == 2
-    assert sum(result.missing_optional for result in valid) == 3
+    assert sum(result.missing_optional for result in valid) == 83
 
     codes = sorted({result.issues[0].code for result in invalid})
     assert codes == ["contract.enum_invalid", "contract.range_invalid"]
@@ -60,7 +60,7 @@ def test_reference_csv_yields_same_acceptance_profile() -> None:
     invalid = [result for result in results if not result.valid]
     assert len(valid) == 10
     assert len(invalid) == 2
-    assert sum(result.missing_optional for result in valid) == 3
+    assert sum(result.missing_optional for result in valid) == 83
 
 
 def test_required_field_missing_is_actionable() -> None:
@@ -152,13 +152,13 @@ def test_file_level_rules_reject_the_whole_batch() -> None:
     raw = _batch("reference-batch.json")
     assert (
         check_file(
-            CONTRACT, raw=raw, file_format="json", declared_contract_version="1"
+            CONTRACT, raw=raw, file_format="json", declared_contract_version="2"
         ).valid
         is True
     )
     assert (
         check_file(
-            CONTRACT, raw=raw, file_format="xml", declared_contract_version="1"
+            CONTRACT, raw=raw, file_format="xml", declared_contract_version="2"
         ).code
         == "file.format_unsupported"
     )
@@ -173,7 +173,7 @@ def test_file_level_rules_reject_the_whole_batch() -> None:
             CONTRACT,
             raw=b"\xff\xfe\x00",
             file_format="json",
-            declared_contract_version="1",
+            declared_contract_version="2",
         ).code
         == "file.encoding_invalid"
     )
@@ -182,7 +182,7 @@ def test_file_level_rules_reject_the_whole_batch() -> None:
             CONTRACT,
             raw=b"x" * (CONTRACT.file.max_file_size_bytes + 1),
             file_format="json",
-            declared_contract_version="1",
+            declared_contract_version="2",
         ).code
         == "file.size_exceeded"
     )
@@ -191,7 +191,7 @@ def test_file_level_rules_reject_the_whole_batch() -> None:
 def test_contract_document_matches_the_published_json() -> None:
     published = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     parsed = parse_contract(published)
-    assert parsed.contract_version == "1"
+    assert parsed.contract_version == "2"
     external_id = parsed.field("external_id")
     assert external_id is not None
     assert external_id.required is True
@@ -203,6 +203,35 @@ def test_duplicate_record_is_not_an_error_but_a_repeat() -> None:
         (FIXTURES / "reference-batch.json").read_text(encoding="utf-8")
     )["records"][0]
     assert validate_record(payload, CONTRACT).valid is True
+
+
+def test_v2_contract_accepts_listing_attributes() -> None:
+    data = json.loads(
+        (ROOT / "contracts" / "import" / "v2" / "import-contract.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    spec = parse_contract(data)
+
+    assert spec.contract_version == "2"
+    assert spec.field("title") is not None
+    assert spec.field("surface_covered_m2") is not None
+    assert spec.field("bathrooms") is not None
+    assert spec.field("toilettes") is not None
+    assert spec.field("parking_spaces") is not None
+    assert spec.field("age_years") is not None
+    assert spec.field("disposition") is not None
+    assert spec.field("orientation") is not None
+
+
+def test_v1_import_contract_is_not_accepted_anymore() -> None:
+    data = json.loads(
+        (ROOT / "contracts" / "import" / "v1" / "import-contract.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    with pytest.raises(ValueError, match="unsupported contract document version"):
+        parse_contract(data)
 
 
 @pytest.mark.parametrize(

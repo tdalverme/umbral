@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from uuid import uuid4
 
 import pytest
@@ -38,6 +39,16 @@ def test_permitted_input_never_includes_forbidden_keys() -> None:
     assert "url" not in projection
     assert "snapshot_id" not in projection
     assert set(projection) <= set(contract.allowed_input_fields)
+
+
+def test_permitted_input_includes_structured_listing_attributes_for_cochera() -> None:
+    contract = load_extraction_contract()
+    context = CriteriaTestContext()
+    listing = replace(
+        context.add_listing(description_text="Departamento."), parking_spaces=1.0
+    )
+    projection = build_permitted_input(listing, contract, "cochera")
+    assert projection["parking_spaces"] == 1.0
 
 
 def test_validate_model_output_accepts_and_rejects_schemas() -> None:

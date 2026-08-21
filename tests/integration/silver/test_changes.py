@@ -45,7 +45,7 @@ def test_price_and_text_changes_are_recorded_with_before_after_origin(
     assert by_field["price_value"].before == 850000.0
     assert by_field["price_value"].after == 900000.0
     assert by_field["description_text"].change_type == "text"
-    assert by_field["price_value"].origin["normalizer_version"] == "silver-schema-v1"
+    assert by_field["price_value"].origin["normalizer_version"] == "silver-schema-v2"
     assert by_field["price_value"].previous_listing_id == chain[0].listing_id
 
 

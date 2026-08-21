@@ -281,6 +281,19 @@ def run_ascensor(projection: Mapping[str, object]) -> RuleOutcome:
 
 
 def run_cochera(projection: Mapping[str, object]) -> RuleOutcome:
+    parking_spaces = projection.get("parking_spaces")
+    if (
+        isinstance(parking_spaces, (int, float))
+        and not isinstance(parking_spaces, bool)
+        and parking_spaces >= 0
+    ):
+        value = "true" if parking_spaces > 0 else "false"
+        return RuleOutcome(
+            value,
+            f"parking_spaces={parking_spaces:g}",
+            None,
+            ("parking_spaces",),
+        )
     return _boolean_amenity_rule(
         positive=_COCHERA,
         negative=_NO_COCHERA,

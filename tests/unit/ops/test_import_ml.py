@@ -34,6 +34,13 @@ def _item(**overrides: object) -> dict[str, object]:
             {"id": "ROOMS", "name": "Ambientes", "value_name": "3"},
             {"id": "BEDROOMS", "name": "Dormitorios", "value_name": "2"},
             {"id": "COVERED_AREA", "name": "Cubiertos", "value_name": "65 m²"},
+            {"id": "TOTAL_AREA", "name": "Totales", "value_name": "80 m²"},
+            {"id": "BATHROOMS", "name": "Baños", "value_name": "2"},
+            {"id": "TOILETS", "name": "Toilettes", "value_name": "1"},
+            {"id": "PARKING_LOTS", "name": "Cocheras", "value_name": "1"},
+            {"id": "AGE", "name": "Antigüedad", "value_name": "10 años"},
+            {"id": "DISPOSITION", "name": "Disposición", "value_name": "Frente"},
+            {"id": "ORIENTATION", "name": "Orientación", "value_name": "Norte"},
             {
                 "id": "EXPENSES",
                 "name": "Expensas",
@@ -59,12 +66,20 @@ def test_map_item_full_record() -> None:
     assert record["price"] == 450000.0
     assert record["currency"] == "ARS"
     assert record["address_text"] == "Av. Santa Fe 3000"
+    assert record["title"] == "Departamento en Palermo 2 ambientes"
     assert record["neighborhood"] == "Palermo"
     assert record["latitude"] == -34.588
     assert record["longitude"] == -58.409
-    assert record["surface_m2"] == 65.0
+    assert record["surface_m2"] == 80.0
+    assert record["surface_covered_m2"] == 65.0
     assert record["rooms"] == 3
     assert record["bedrooms"] == 2
+    assert record["bathrooms"] == 2.0
+    assert record["toilettes"] == 1.0
+    assert record["parking_spaces"] == 1.0
+    assert record["age_years"] == 10.0
+    assert record["disposition"] == "Frente"
+    assert record["orientation"] == "Norte"
     assert record["expenses"] == 10000.0
     assert record["url"] == "https://articulo.mercadolibre.com.ar/MLA-1234567890"
     assert record["media_urls"] == ["https://http2.mlstatic.com/1.jpg"]

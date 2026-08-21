@@ -34,7 +34,7 @@ def test_run_lifecycle_and_identity_lookup(
 ) -> None:
     factory, _, _ = ingestion_backend
     runs = SqlAlchemyImportRunRepository(factory)
-    source = SourceIdentity("source-a", "v1", "1")
+    source = SourceIdentity("source-a", "v1", "2")
     execution = _seed_execution(factory, "test.import", "batch-key-1")
     run = runs.create(
         run_id=uuid4(),
@@ -63,7 +63,7 @@ def test_run_state_transitions_are_saved(
 ) -> None:
     factory, _, _ = ingestion_backend
     runs = SqlAlchemyImportRunRepository(factory)
-    source = SourceIdentity("source-a", "v1", "1")
+    source = SourceIdentity("source-a", "v1", "2")
     execution = _seed_execution(factory, "test.import", "batch-key-2")
     run = runs.create(
         run_id=uuid4(),
@@ -107,7 +107,7 @@ def test_snapshot_and_quarantine_repositories(
     runs = SqlAlchemyImportRunRepository(factory)
     snapshots = SqlAlchemyRawSnapshotRepository(factory)
     quarantine = SqlAlchemyQuarantineRepository(factory)
-    source = SourceIdentity("source-a", "v1", "1")
+    source = SourceIdentity("source-a", "v1", "2")
     execution = _seed_execution(factory, "test.import", "batch-key-3")
     run = runs.create(
         run_id=uuid4(),

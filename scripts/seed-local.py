@@ -39,7 +39,7 @@ from umbral.infrastructure.db.repositories.silver import (
     SqlAlchemyCanonicalPropertyRepository,
     SqlAlchemySilverListingRepository,
 )
-from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
+from umbral.infrastructure.ingestion.contract_loader import load_contract_v2
 from umbral.infrastructure.silver.contract_loader import load_silver_schema
 
 NOW = datetime.now(timezone.utc)
@@ -269,7 +269,7 @@ def _seed_silver(factory) -> None:
 
     run = run_repo.create(
         run_id=uuid4(),
-        source=SourceIdentity("demo-source", "v1", "1"),
+        source=SourceIdentity("demo-source", "v1", "2"),
         batch_key=f"demo-seed-{uuid4().hex[:8]}",
         file_format="json",
         file_name="demo-seed.json",
@@ -282,7 +282,7 @@ def _seed_silver(factory) -> None:
         actor_id=None,
         now=NOW,
     )
-    contract = load_contract_v1()
+    contract = load_contract_v2()
     schema = load_silver_schema()
 
     sample = [

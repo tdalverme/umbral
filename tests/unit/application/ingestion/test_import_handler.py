@@ -20,13 +20,13 @@ from umbral.application.jobs.contracts import (
 )
 from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.domain.audit import AuditActor
-from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
+from umbral.infrastructure.ingestion.contract_loader import load_contract_v2
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.workers.imports import IngestionImportHandler
 
 ROOT = Path(__file__).resolve().parents[4]
 FIXTURES = ROOT / "tests" / "fixtures" / "imports"
-CONTRACT = load_contract_v1()
+CONTRACT = load_contract_v2()
 NOW = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
 
@@ -66,7 +66,7 @@ def test_handler_captures_a_batch_through_the_job_runtime() -> None:
     service, handler, runtime = _runtime_with_handler()
     service.submit(
         ImportBatchRequest(
-            source=SourceIdentity("source-a", "v1", "1"),
+            source=SourceIdentity("source-a", "v1", "2"),
             batch_key="batch-key-1",
             file_format="json",
             file_name="reference-batch.json",

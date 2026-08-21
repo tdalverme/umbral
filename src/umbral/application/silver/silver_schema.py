@@ -1,6 +1,6 @@
 """Pure loader and normalizer for the published Silver schema contract.
 
-The rule set is loaded from ``contracts/silver/v1/silver-schema.json`` by an
+    The rule set is loaded from ``contracts/silver/v2/silver-schema.json`` by an
 infrastructure loader and passed in as a :class:`SilverSchemaSpec`. Normalization
 is deterministic, preserves original values and never invents data; geocoding is
 a separate application seam and is not part of this module.
@@ -47,7 +47,7 @@ class SilverSchemaSpec:
 
 def parse_silver_schema(data: Mapping[str, object]) -> SilverSchemaSpec:
     version = data.get("contract_version")
-    if version != "1":
+    if version != "2":
         raise ValueError("unsupported silver schema document version")
     normalizer_version = data.get("normalizer_version")
     if not isinstance(normalizer_version, str) or not normalizer_version:
@@ -173,6 +173,56 @@ def normalize_snapshot(
         errors.append("silver.floor_range")
         floor = None
 
+    title_text = _bounded_text(
+        payload.get("title"),
+        spec.ranges.get("title_text"),
+        "silver.title_too_long",
+        errors,
+    )
+    surface_covered = _as_number(payload.get("surface_covered_m2"))
+    if surface_covered is not None and not _in_range(
+        surface_covered, spec.ranges.get("surface_covered_m2")
+    ):
+        errors.append("silver.surface_covered_range")
+        surface_covered = None
+    bathrooms = _as_number(payload.get("bathrooms"))
+    if bathrooms is not None and not _in_range(
+        bathrooms, spec.ranges.get("bathrooms")
+    ):
+        errors.append("silver.bathrooms_range")
+        bathrooms = None
+    toilettes = _as_number(payload.get("toilettes"))
+    if toilettes is not None and not _in_range(
+        toilettes, spec.ranges.get("toilettes")
+    ):
+        errors.append("silver.toilettes_range")
+        toilettes = None
+    parking_spaces = _as_number(payload.get("parking_spaces"))
+    if parking_spaces is not None and not _in_range(
+        parking_spaces, spec.ranges.get("parking_spaces")
+    ):
+        errors.append("silver.parking_spaces_range")
+        parking_spaces = None
+    age_years = _as_number(payload.get("age_years"))
+    if age_years is not None and not _in_range(
+        age_years, spec.ranges.get("age_years")
+    ):
+        errors.append("silver.age_years_range")
+        age_years = None
+    disposition = _bounded_text(
+        payload.get("disposition"),
+        spec.ranges.get("disposition"),
+        "silver.disposition_too_long",
+        errors,
+    )
+    orientation = _bounded_text(
+        payload.get("orientation"),
+        spec.ranges.get("orientation"),
+        "silver.orientation_too_long",
+        errors,
+    )
+    media_urls = _media_urls(payload.get("media_urls"), spec, errors)
+
     raw_amenities = payload.get("amenities")
     amenities: tuple[str, ...] = ()
     if isinstance(raw_amenities, list):
@@ -247,6 +297,19 @@ def normalize_snapshot(
         geo_source=geo_source,
         url=url,
         normalization_errors=tuple(errors),
+        title_text=title_text,
+        surface_covered_m2=(
+            float(surface_covered) if surface_covered is not None else None
+        ),
+        bathrooms=float(bathrooms) if bathrooms is not None else None,
+        toilettes=float(toilettes) if toilettes is not None else None,
+        parking_spaces=(
+            float(parking_spaces) if parking_spaces is not None else None
+        ),
+        age_years=float(age_years) if age_years is not None else None,
+        disposition=disposition,
+        orientation=orientation,
+        media_urls=media_urls,
     )
 
 
@@ -349,6 +412,39 @@ def _as_string(value: object) -> str | None:
     if isinstance(value, (int, float)):
         return str(value)
     return None
+
+
+def _bounded_text(
+    value: object,
+    range_spec: RangeSpec | None,
+    error_code: str,
+    errors: list[str],
+) -> str | None:
+    text = _as_string(value)
+    if text is None or not text.strip():
+        return None
+    normalized = text.strip()
+    if range_spec is not None and range_spec.max_length is not None:
+        if len(normalized) > range_spec.max_length:
+            errors.append(error_code)
+            return None
+    return normalized
+
+
+def _media_urls(
+    value: object, spec: SilverSchemaSpec, errors: list[str]
+) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    range_spec = spec.ranges.get("media_urls")
+    limit = range_spec.max_items if range_spec is not None else 50
+    urls: list[str] = []
+    for item in value[:limit]:
+        if not isinstance(item, str) or not _URL_RE.fullmatch(item.strip()):
+            errors.append("silver.media_url_invalid")
+            continue
+        urls.append(item.strip())
+    return tuple(urls)
 
 
 def _in_range(value: float, range_spec: RangeSpec | None) -> bool:

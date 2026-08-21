@@ -36,7 +36,7 @@ def test_reference_batch_normalizes_to_silver_end_to_end(
     sil_0001 = service.chain("source-a", "sil-0001")
     assert len(sil_0001) == 1
     listing = sil_0001[0]
-    assert listing.normalizer_version == "silver-schema-v1"
+    assert listing.normalizer_version == "silver-schema-v2"
     assert listing.price_currency == "ARS"
     assert listing.total_cost == 850000.0 + 65000.0
     assert listing.geo_precision == "exact"

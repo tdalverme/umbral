@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from umbral.application.ingestion.contracts import SourceIdentity
 from umbral.application.silver.contracts import (
+    ACTIVE_NORMALIZER_VERSION,
     CanonicalProperty,
     CanonicalState,
     ChangeType,
@@ -113,12 +114,21 @@ class SqlAlchemySilverListingRepository:
                 expenses_currency=listing.expenses_currency,
                 total_cost=listing.total_cost,
                 price_assumptions=dict(listing.price_assumptions),
+                title_text=listing.title_text,
                 surface_m2=listing.surface_m2,
+                surface_covered_m2=listing.surface_covered_m2,
                 rooms=listing.rooms,
                 bedrooms=listing.bedrooms,
+                bathrooms=listing.bathrooms,
+                toilettes=listing.toilettes,
+                parking_spaces=listing.parking_spaces,
                 floor=listing.floor,
+                age_years=listing.age_years,
+                disposition=listing.disposition,
+                orientation=listing.orientation,
                 amenities=list(listing.amenities),
                 description_text=listing.description_text,
+                media_urls=list(listing.media_urls),
                 location_text=listing.location_text,
                 neighborhood=listing.neighborhood,
                 geo_precision=listing.geo_precision,
@@ -183,6 +193,7 @@ class SqlAlchemySilverListingRepository:
                 session,
                 SilverListingModel.operation == operation,
                 func.lower(SilverListingModel.neighborhood) == neighborhood.casefold(),
+                SilverListingModel.normalizer_version == ACTIVE_NORMALIZER_VERSION,
                 or_(
                     SilverListingModel.source_id != source_id,
                     SilverListingModel.external_id != external_id,
@@ -392,12 +403,27 @@ def _to_domain_listing(row: ListingRow) -> NormalizedListing:
         expenses_currency=cast(CurrencyType, model.expenses_currency),
         total_cost=float(model.total_cost),
         price_assumptions=dict(model.price_assumptions or {}),
+        title_text=model.title_text,
         surface_m2=float(model.surface_m2) if model.surface_m2 is not None else None,
+        surface_covered_m2=(
+            float(model.surface_covered_m2)
+            if model.surface_covered_m2 is not None
+            else None
+        ),
         rooms=model.rooms,
         bedrooms=model.bedrooms,
+        bathrooms=(float(model.bathrooms) if model.bathrooms is not None else None),
+        toilettes=(float(model.toilettes) if model.toilettes is not None else None),
+        parking_spaces=(
+            float(model.parking_spaces) if model.parking_spaces is not None else None
+        ),
         floor=model.floor,
+        age_years=(float(model.age_years) if model.age_years is not None else None),
+        disposition=model.disposition,
+        orientation=model.orientation,
         amenities=tuple(model.amenities or ()),
         description_text=model.description_text,
+        media_urls=tuple(model.media_urls or ()),
         location_text=model.location_text,
         neighborhood=model.neighborhood,
         geo_precision=cast(GeoPrecision, model.geo_precision),

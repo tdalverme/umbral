@@ -18,7 +18,7 @@ _SILVER_SCHEMA_PATH = (
     Path(__file__).resolve().parents[4]
     / "contracts"
     / "silver"
-    / "v1"
+    / "v2"
     / "silver-schema.json"
 )
 _DEDUPE_POLICY_PATH = (

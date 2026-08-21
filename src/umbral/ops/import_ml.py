@@ -5,7 +5,7 @@ Two subcommands:
            redirect URL for tokens, and stores them under .data/.
   fetch  - pages the official /sites/MLA/search API (rental category),
            maps items to import-contract records, validates them against
-           contracts/import/v1/import-contract.json and writes the JSON
+           contracts/import/v2/import-contract.json and writes the JSON
            batch for POST /imports/batches.
 
 Credentials come from the environment (ML_CLIENT_ID, ML_CLIENT_SECRET,
@@ -39,7 +39,7 @@ _AUTH_BASE = "https://auth.mercadolibre.com.ar/authorization"
 _RENTAL_CATEGORY = "MLA1459"
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _TOKEN_PATH = _REPO_ROOT / ".data" / "ml-token.json"
-_CONTRACT_PATH = _REPO_ROOT / "contracts" / "import" / "v1" / "import-contract.json"
+_CONTRACT_PATH = _REPO_ROOT / "contracts" / "import" / "v2" / "import-contract.json"
 
 _PROPERTY_TYPES = {
     "apartamento": "apartment",
@@ -175,6 +175,9 @@ def map_item(item: Mapping[str, Any]) -> dict[str, object] | None:
         "currency": currency,
         "address_text": address_text,
     }
+    title = item.get("title")
+    if isinstance(title, str) and title.strip():
+        record["title"] = title.strip()
 
     neighborhood = None
     address = item.get("address")
@@ -195,11 +198,14 @@ def map_item(item: Mapping[str, Any]) -> dict[str, object] | None:
 
     covered = _attribute(item, "COVERED_AREA")
     total = _attribute(item, "TOTAL_AREA")
-    surface = _attr_number(covered) if covered else None
-    if surface is None and total:
-        surface = _attr_number(total)
-    if surface is not None:
-        record["surface_m2"] = surface
+    covered_surface = _attr_number(covered) if covered else None
+    total_surface = _attr_number(total) if total else None
+    if total_surface is not None:
+        record["surface_m2"] = total_surface
+    if covered_surface is not None:
+        record["surface_covered_m2"] = covered_surface
+        if total_surface is None:
+            record["surface_m2"] = covered_surface
 
     rooms_attr = _attribute(item, "ROOMS") or _attribute(item, "AMBIENTES")
     rooms = _attr_number(rooms_attr) if rooms_attr else None
@@ -210,6 +216,26 @@ def map_item(item: Mapping[str, Any]) -> dict[str, object] | None:
     beds = _attr_number(beds_attr) if beds_attr else None
     if beds is not None:
         record["bedrooms"] = int(beds)
+
+    for attr_id, field in (
+        ("BATHROOMS", "bathrooms"),
+        ("TOILETS", "toilettes"),
+        ("PARKING_LOTS", "parking_spaces"),
+        ("AGE", "age_years"),
+    ):
+        attr = _attribute(item, attr_id)
+        number_value = _attr_number(attr) if attr else None
+        if number_value is not None:
+            record[field] = number_value
+
+    for attr_id, field in (
+        ("DISPOSITION", "disposition"),
+        ("ORIENTATION", "orientation"),
+    ):
+        attr = _attribute(item, attr_id)
+        text_value = _attr_text(attr) if attr else None
+        if text_value:
+            record[field] = text_value
 
     expenses_attr = _attribute(item, "EXPENSES")
     expenses = _attr_number(expenses_attr) if expenses_attr else None
@@ -411,7 +437,7 @@ def command_fetch(args: argparse.Namespace) -> int:
             max_items=args.max_items,
         )
     envelope: dict[str, object] = {
-        "contract_version": "1",
+        "contract_version": "2",
         "records": result.records,
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)

@@ -62,7 +62,7 @@ def _listing(case: Mapping[str, Any]) -> NormalizedListing:
         run_id=uuid4(),
         snapshot_id=uuid4(),
         source=SourceIdentity(
-            source_id="source-a", source_version="v1", contract_version="1"
+            source_id="source-a", source_version="v1", contract_version="2"
         ),
         external_id=str(case["listing_id"]),
         url=None,

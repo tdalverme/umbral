@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from tests.support.containers import ServiceConnection
 
 from umbral.application.ingestion.import_contract import ContractSpec
-from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
+from umbral.infrastructure.ingestion.contract_loader import load_contract_v2
 from umbral.infrastructure.object_store.filesystem import FilesystemObjectStore
 
 SessionFactory = Callable[[], Session]
@@ -22,7 +22,7 @@ IngestionBackend = tuple[SessionFactory, FilesystemObjectStore, ServiceConnectio
 
 @pytest.fixture
 def ingestion_contract() -> ContractSpec:
-    return load_contract_v1()
+    return load_contract_v2()
 
 
 @pytest.fixture

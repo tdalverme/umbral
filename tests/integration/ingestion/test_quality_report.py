@@ -18,11 +18,11 @@ from umbral.application.ingestion.contracts import (
 from umbral.application.ingestion.service import ImportRunService
 from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.domain.audit import AuditActor
-from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
+from umbral.infrastructure.ingestion.contract_loader import load_contract_v2
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "tests" / "fixtures" / "imports"
-CONTRACT = load_contract_v1()
+CONTRACT = load_contract_v2()
 NOW = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
 
@@ -30,7 +30,7 @@ def _request(
     batch_key: str = "q-key", file_format: Literal["csv", "json"] = "json"
 ) -> ImportBatchRequest:
     return ImportBatchRequest(
-        source=SourceIdentity("source-a", "v1", "1"),
+        source=SourceIdentity("source-a", "v1", "2"),
         batch_key=batch_key,
         file_format="json",
         file_name="reference-batch.json",

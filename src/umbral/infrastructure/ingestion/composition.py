@@ -15,7 +15,7 @@ from umbral.infrastructure.db.repositories.imports import (
     SqlAlchemyQuarantineRepository,
     SqlAlchemyRawSnapshotRepository,
 )
-from umbral.infrastructure.ingestion.contract_loader import load_contract_v1
+from umbral.infrastructure.ingestion.contract_loader import load_contract_v2
 from umbral.infrastructure.sources.file_source import FileImportSource
 
 SessionFactory = Callable[[], Any]
@@ -34,7 +34,7 @@ def build_ingestion_service(
         snapshots=SqlAlchemyRawSnapshotRepository(session_factory),
         quarantine=SqlAlchemyQuarantineRepository(session_factory),
         source=FileImportSource(),
-        contract=contract or load_contract_v1(),
+        contract=contract or load_contract_v2(),
         objects=object_store,
         job_runtime=job_runtime,
         clock=clock or (lambda: datetime.now(timezone.utc)),

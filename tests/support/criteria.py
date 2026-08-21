@@ -36,7 +36,7 @@ def build_listing(
     rooms: int | None = None,
     floor: int | None = None,
     amenities: tuple[str, ...] = (),
-    normalizer_version: str = "silver-v1",
+    normalizer_version: str = "silver-schema-v2",
     listing_id: UUID | None = None,
     geometry: tuple[float, float] | None = None,
     geo_precision: Literal[
@@ -49,7 +49,7 @@ def build_listing(
         run_id=uuid4(),
         snapshot_id=uuid4(),
         source=SourceIdentity(
-            source_id="source-a", source_version="v1", contract_version="1"
+            source_id="source-a", source_version="v1", contract_version="2"
         ),
         external_id=f"ext-{uuid4()}",
         url=None,
@@ -160,7 +160,7 @@ class CriteriaTestContext:
         rooms: int | None = None,
         floor: int | None = None,
         amenities: tuple[str, ...] = (),
-        normalizer_version: str = "silver-v1",
+        normalizer_version: str = "silver-schema-v2",
         geometry: tuple[float, float] | None = None,
         geo_precision: Literal[
             "exact", "block", "neighborhood", "approximate", "unknown"

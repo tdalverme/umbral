@@ -42,8 +42,8 @@ def test_every_reference_entity_walks_back_to_snapshot_and_run(
         assert info.snapshot.source.source_id == "source-a"
         assert info.run is not None
         assert info.run.run_id == finished.run_id
-        assert info.run.source.contract_version == "1"
-        assert info.listing.normalizer_version == "silver-schema-v1"
+        assert info.run.source.contract_version == "2"
+        assert info.listing.normalizer_version == "silver-schema-v2"
 
 
 def test_lineage_run_reports_parser_version_surrogate(
@@ -62,4 +62,4 @@ def test_lineage_run_reports_parser_version_surrogate(
     listing = service.chain("source-a", "sil-0001")[0]
     info = service.lineage(listing.listing_id)
     assert info.run is not None
-    assert info.run.source.contract_version == "1"
+    assert info.run.source.contract_version == "2"

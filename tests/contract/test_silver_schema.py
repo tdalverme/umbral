@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from tests.support.silver import load_records, snapshot_from_payload
 from umbral.application.silver.silver_schema import (
     normalize_snapshot,
@@ -13,7 +15,7 @@ from umbral.application.silver.silver_schema import (
 from umbral.infrastructure.silver.contract_loader import load_silver_schema
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_PATH = ROOT / "contracts" / "silver" / "v1" / "silver-schema.json"
+SCHEMA_PATH = ROOT / "contracts" / "silver" / "v2" / "silver-schema.json"
 
 SCHEMA = load_silver_schema(SCHEMA_PATH)
 
@@ -25,8 +27,8 @@ def _first(records: list[dict[str, object]], external_id: str) -> dict[str, obje
 def test_contract_document_matches_the_published_json() -> None:
     published = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     parsed = parse_silver_schema(published)
-    assert parsed.contract_version == "1"
-    assert parsed.normalizer_version == "silver-schema-v1"
+    assert parsed.contract_version == "2"
+    assert parsed.normalizer_version == "silver-schema-v2"
     assert "price_value" in parsed.ranges
     assert "exact" in parsed.enums["geo_precision"]
 
@@ -85,6 +87,119 @@ def test_no_invented_coordinates_or_addresses() -> None:
     assert fields.location_text == record["address_text"]
 
 
+def test_new_listing_attributes_normalize_with_source_values() -> None:
+    record = {
+        "external_id": "attributes",
+        "operation": "rental",
+        "property_type": "apartment",
+        "price": 1000,
+        "currency": "USD",
+        "address_text": "Avenida del Libertador 100",
+        "title": "Departamento en Puerto Madero",
+        "surface_m2": 82,
+        "surface_covered_m2": 72,
+        "rooms": 2,
+        "bedrooms": 1,
+        "bathrooms": 1,
+        "toilettes": 1,
+        "parking_spaces": 1,
+        "age_years": 3,
+        "disposition": "Frente",
+        "orientation": "SE",
+        "amenities": ["Gimnasio", "Parrilla"],
+        "description": "Departamento luminoso.",
+        "media_urls": ["https://img.example.com/one.jpg"],
+    }
+
+    fields = normalize_snapshot(
+        snapshot_from_payload(record, contract_version="2"), SCHEMA
+    )
+
+    assert fields.title_text == "Departamento en Puerto Madero"
+    assert fields.surface_covered_m2 == 72.0
+    assert fields.bathrooms == 1.0
+    assert fields.toilettes == 1.0
+    assert fields.parking_spaces == 1.0
+    assert fields.age_years == 3.0
+    assert fields.disposition == "Frente"
+    assert fields.orientation == "SE"
+    assert fields.media_urls == ("https://img.example.com/one.jpg",)
+
+
+def test_new_listing_attributes_reject_invalid_values_without_inventing() -> None:
+    record = {
+        "external_id": "invalid-attributes",
+        "operation": "rental",
+        "property_type": "apartment",
+        "price": 1000,
+        "currency": "USD",
+        "address_text": "Avenida del Libertador 100",
+        "surface_covered_m2": 0,
+        "bathrooms": -1,
+        "toilettes": 101,
+        "parking_spaces": 101,
+        "age_years": -1,
+        "disposition": "x" * 101,
+        "orientation": "y" * 101,
+        "media_urls": ["ftp://invalid.example.com/image.jpg"],
+    }
+
+    fields = normalize_snapshot(
+        snapshot_from_payload(record, contract_version="2"), SCHEMA
+    )
+    codes = set(fields.normalization_errors)
+
+    assert "silver.surface_covered_range" in codes
+    assert "silver.bathrooms_range" in codes
+    assert "silver.toilettes_range" in codes
+    assert "silver.parking_spaces_range" in codes
+    assert "silver.age_years_range" in codes
+    assert "silver.disposition_too_long" in codes
+    assert "silver.orientation_too_long" in codes
+    assert "silver.media_url_invalid" in codes
+    assert fields.surface_covered_m2 is None
+    assert fields.bathrooms is None
+    assert fields.toilettes is None
+    assert fields.parking_spaces is None
+    assert fields.age_years is None
+    assert fields.disposition is None
+    assert fields.orientation is None
+    assert fields.media_urls == ()
+
+
+def test_new_listing_attributes_are_change_tracked() -> None:
+    base = {
+        "external_id": "changing-attributes",
+        "operation": "rental",
+        "property_type": "apartment",
+        "price": 1000,
+        "currency": "USD",
+        "address_text": "Avenida del Libertador 100",
+        "title": "Departamento",
+        "surface_covered_m2": 70,
+        "bathrooms": 1,
+        "media_urls": ["https://img.example.com/one.jpg"],
+    }
+    changed = dict(base)
+    changed["surface_covered_m2"] = 72
+    changed["bathrooms"] = 2
+    changed["title"] = "Departamento amplio"
+    changed["media_urls"] = ["https://img.example.com/two.jpg"]
+
+    previous = normalize_snapshot(
+        snapshot_from_payload(base, contract_version="2"), SCHEMA
+    )
+    current = normalize_snapshot(
+        snapshot_from_payload(changed, contract_version="2"), SCHEMA
+    )
+    diffs = _compare(previous, current)
+
+    assert diffs["surface_covered_m2"][0] == "attribute"
+    assert diffs["bathrooms"][0] == "attribute"
+    assert diffs["title_text"][0] == "text"
+    assert diffs["media_urls"][0] == "text"
+
+
 def test_out_of_range_attributes_are_recorded_not_coerced() -> None:
     record = {
         "external_id": "bad",
@@ -139,8 +254,39 @@ def test_compare_listings_detects_price_and_text_changes_only() -> None:
     assert diffs["price_value"][0] == "price"
 
 
-def test_status_field_has_no_change_fields_in_v1() -> None:
+def test_status_field_has_no_change_fields_in_v2() -> None:
     assert SCHEMA.change_fields["status"] == ()
+
+
+def test_v2_schema_declares_listing_attributes() -> None:
+    path = ROOT / "contracts" / "silver" / "v2" / "silver-schema.json"
+    published = json.loads(path.read_text(encoding="utf-8"))
+    parsed = parse_silver_schema(published)
+
+    assert parsed.contract_version == "2"
+    assert parsed.normalizer_version == "silver-schema-v2"
+    for field in (
+        "title_text",
+        "surface_covered_m2",
+        "bathrooms",
+        "toilettes",
+        "parking_spaces",
+        "age_years",
+        "disposition",
+        "orientation",
+        "media_urls",
+    ):
+        assert field in parsed.ranges
+
+
+def test_v1_silver_schema_is_not_accepted_anymore() -> None:
+    data = json.loads(
+        (ROOT / "contracts" / "silver" / "v1" / "silver-schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    with pytest.raises(ValueError, match="unsupported silver schema document version"):
+        parse_silver_schema(data)
 
 
 def _is_valid(record: dict[str, object]) -> bool:

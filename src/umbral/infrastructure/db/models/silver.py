@@ -104,6 +104,11 @@ class SilverListing(IdentityAuditMixin, Base):
             name="ck_silver_listings_surface",
         ),
         CheckConstraint(
+            "surface_covered_m2 IS NULL OR "
+            "(surface_covered_m2 > 0 AND surface_covered_m2 <= 1000000)",
+            name="ck_silver_listings_surface_covered",
+        ),
+        CheckConstraint(
             "rooms IS NULL OR (rooms >= 0 AND rooms <= 200)",
             name="ck_silver_listings_rooms",
         ),
@@ -112,8 +117,24 @@ class SilverListing(IdentityAuditMixin, Base):
             name="ck_silver_listings_bedrooms",
         ),
         CheckConstraint(
+            "bathrooms IS NULL OR (bathrooms >= 0 AND bathrooms <= 100)",
+            name="ck_silver_listings_bathrooms",
+        ),
+        CheckConstraint(
+            "toilettes IS NULL OR (toilettes >= 0 AND toilettes <= 100)",
+            name="ck_silver_listings_toilettes",
+        ),
+        CheckConstraint(
+            "parking_spaces IS NULL OR (parking_spaces >= 0 AND parking_spaces <= 100)",
+            name="ck_silver_listings_parking_spaces",
+        ),
+        CheckConstraint(
             "floor IS NULL OR (floor >= -10 AND floor <= 1000)",
             name="ck_silver_listings_floor",
+        ),
+        CheckConstraint(
+            "age_years IS NULL OR (age_years >= 0 AND age_years <= 1000)",
+            name="ck_silver_listings_age_years",
         ),
         Index(
             "ix_silver_listings_canonical_captured",
@@ -172,12 +193,25 @@ class SilverListing(IdentityAuditMixin, Base):
     price_assumptions: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
+    title_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
     surface_m2: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    surface_covered_m2: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
     rooms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bedrooms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bathrooms: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    toilettes: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    parking_spaces: Mapped[float | None] = mapped_column(
+        Numeric(8, 2), nullable=True
+    )
     floor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    age_years: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    disposition: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    orientation: Mapped[str | None] = mapped_column(String(100), nullable=True)
     amenities: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     description_text: Mapped[str | None] = mapped_column(String(20000), nullable=True)
+    media_urls: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     location_text: Mapped[str] = mapped_column(String(500), nullable=False)
     neighborhood: Mapped[str | None] = mapped_column(String(200), nullable=True)
     geo_precision: Mapped[str] = mapped_column(GEO_PRECISION, nullable=False)

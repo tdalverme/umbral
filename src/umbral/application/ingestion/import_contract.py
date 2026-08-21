@@ -83,7 +83,7 @@ class FileCheck:
 def parse_contract(data: Mapping[str, object]) -> ContractSpec:
     """Build the immutable contract from the published JSON document."""
     version = data.get("contract_version")
-    if version != "1":
+    if version != "2":
         raise ValueError("unsupported contract document version")
     file_data = data.get("file")
     if not isinstance(file_data, Mapping):

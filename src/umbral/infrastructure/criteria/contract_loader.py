@@ -39,15 +39,15 @@ _EXTRACTION_PATH = (
     Path(__file__).resolve().parents[4]
     / "contracts"
     / "criteria"
-    / "v2"
-    / "extraction-v2.json"
+    / "v3"
+    / "extraction-v3.json"
 )
 _EXTRACTION_GOLDENS_PATH = (
     Path(__file__).resolve().parents[4]
     / "contracts"
     / "criteria"
-    / "v2"
-    / "extraction-goldens-v2.json"
+    / "v3"
+    / "extraction-goldens-v3.json"
 )
 
 

@@ -35,6 +35,9 @@ dependencies = [
 urban = [
     "osmium>=3.6,<4",
 ]
+scraping = [
+    "playwright>=1.50,<2",
+]
 
 [dependency-groups]
 pytest = [

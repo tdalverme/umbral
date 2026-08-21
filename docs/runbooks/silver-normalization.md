@@ -12,8 +12,11 @@ reproceso. Complementa [import-ingestion.md](./import-ingestion.md).
    `ingestion.normalize_batch` (outbox, idempotente por identidad
    `logical_target=<run_id>`).
 3. El worker `SilverNormalizeHandler` procesa los snapshots del run:
-   - cada snapshot se normaliza contra `silver-schema-v1` (sin conversión de
-     moneda, sin inventar datos, precisión declarada);
+   - cada snapshot se normaliza contra `silver-schema-v2` (sin conversión de
+     moneda, sin inventar datos, precisión declarada) y conserva título,
+     superficies total/cubierta, ambientes, dormitorios, baños, toilette,
+     cocheras, piso, antigüedad, disposición, orientación, amenities,
+     descripción y media URLs cuando existen;
    - se inserta una fila inmutable `silver_listings` por
      `(snapshot_id, normalizer_version)`;
    - se resuelve la property canónica (cadena `(source_id, external_id)` y
@@ -30,10 +33,10 @@ nuevas: el unique `(snapshot_id, normalizer_version)` arbitra (SC-008). No hay
 acción manual necesaria; el reintento del runtime es idempotente.
 
 ### Reprocesar con una nueva versión del normalizador
-Cargar la nueva `silver-schema-v1` (ej. `silver-schema-v1.beta`) y disparar el
-job sobre los snapshots seleccionados: crea filas nuevas y conserva las
-anteriores (UM-H6-004). La revisión visual de propuestas de dedupe es posterior
-a este incremento; aquí los links son consultables por estado.
+La versión activa es `silver-schema-v2`. La aplicación no lee filas históricas
+de `silver-schema-v1`; para obtener datos útiles se debe ejecutar una ingesta
+nueva con el contrato de importación v2 y luego normalizarla. Las filas v1 se
+conservan para auditoría, pero no participan en radar, criterios ni scoring.
 
 ### Confirmar / rechazar una propuesta de dedupe
 Operación de servicio `confirm_link`/`reject_link` con lock optimista

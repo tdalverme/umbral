@@ -48,7 +48,7 @@ def snapshot_from_payload(
     run_id: UUID | None = None,
     source_id: str = "source-a",
     source_version: str = "v1",
-    contract_version: str = "1",
+    contract_version: str = "2",
     captured_at: datetime | None = None,
     snapshot_id: UUID | None = None,
 ) -> RawListingSnapshot:
@@ -78,7 +78,7 @@ def build_run(
     identifier = run_id or uuid4()
     return ImportRun(
         run_id=identifier,
-        source=SourceIdentity(source_id, "v1", "1"),
+        source=SourceIdentity(source_id, "v1", "2"),
         batch_key=f"batch-{identifier}",
         file_format="json",
         file_name="reference-batch.json",
