@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -36,6 +37,11 @@ FEEDBACK_EVENT_STATE = ENUM(
 FEEDBACK_POLARITY = ENUM(
     "positive", "negative", "neutral",
     name="feedback_polarity",
+    create_type=True,
+)
+FEEDBACK_STRENGTH = ENUM(
+    "low", "medium", "strong",
+    name="feedback_strength",
     create_type=True,
 )
 LEARNING_PROPOSAL_STATE = ENUM(
@@ -124,6 +130,10 @@ class FeedbackEventReason(IdentityAuditMixin, Base):
         nullable=True,
     )
     polarity: Mapped[str] = mapped_column(FEEDBACK_POLARITY, nullable=False)
+    strength: Mapped[str | None] = mapped_column(
+        FEEDBACK_STRENGTH, nullable=True
+    )
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class LearningPolicy(IdentityAuditMixin, Base):

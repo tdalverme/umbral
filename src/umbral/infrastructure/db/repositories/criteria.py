@@ -8,7 +8,7 @@ indexes arbitrate interrupted retries.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -565,17 +565,67 @@ class SqlAlchemyCriteriaListingReader:
             func.ST_X(SilverListingModel.geometry).label("geo_lon"),
         )
 
+    def _price_changes(
+        self, session: Session, listing_ids: tuple[UUID, ...]
+    ) -> dict[UUID, tuple[Mapping[str, object], ...]]:
+        from umbral.infrastructure.db.models.silver import ListingChange
+
+        if not listing_ids:
+            return {}
+        models = session.scalars(
+            select(ListingChange)
+            .where(
+                ListingChange.listing_id.in_(listing_ids),
+                ListingChange.change_type == "price",
+            )
+            .order_by(ListingChange.created_at.desc())
+        )
+        grouped: dict[UUID, list[Mapping[str, object]]] = {}
+        for model in models:
+            grouped.setdefault(model.listing_id, []).append(
+                {
+                    "field": model.field,
+                    "before": model.before,
+                    "after": model.after,
+                }
+            )
+        return {
+            listing_id: tuple(entries)
+            for listing_id, entries in grouped.items()
+        }
+
+    def _hydrate(
+        self, session: Session, rows: Sequence[Any]
+    ) -> tuple[NormalizedListing, ...]:
+        from dataclasses import replace
+
+        listings = tuple(_to_domain_listing(tuple(row)) for row in rows)
+        if not listings:
+            return ()
+        price_changes = self._price_changes(
+            session, tuple(item.listing_id for item in listings)
+        )
+        return tuple(
+            replace(item, price_changes=price_changes.get(item.listing_id, ()))
+            if price_changes.get(item.listing_id)
+            else item
+            for item in listings
+        )
+
     def get(self, listing_id: UUID) -> NormalizedListing | None:
         with self.session_factory() as session:
             row = session.execute(
                 self._select().where(SilverListingModel.id == listing_id)
             ).first()
-            return _to_domain_listing(tuple(row)) if row is not None else None
+            if row is None:
+                return None
+            listings = self._hydrate(session, (row,))
+            return listings[0] if listings else None
 
     def list_all(self) -> tuple[NormalizedListing, ...]:
         with self.session_factory() as session:
             rows = session.execute(self._select().order_by(SilverListingModel.id))
-            return tuple(_to_domain_listing(tuple(row)) for row in rows)
+            return self._hydrate(session, rows.all())
 
     def list_by_normalizer_version(
         self, normalizer_version: str
@@ -586,7 +636,7 @@ class SqlAlchemyCriteriaListingReader:
                     SilverListingModel.normalizer_version == normalizer_version
                 )
             )
-            return tuple(_to_domain_listing(tuple(row)) for row in rows)
+            return self._hydrate(session, rows.all())
 
 
 class SqlAlchemyProfileSnapshotReader:

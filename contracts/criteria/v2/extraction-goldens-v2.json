@@ -76,6 +76,26 @@
         {"input": {"amenities": [], "description_text": "Antesualo sin pileta."}, "expected": "false"},
         {"input": {"amenities": ["parrilla"], "description_text": "Con parrilla."}, "expected": null}
       ]
+    },
+    {
+      "concept_key": "precio_m2",
+      "source": "rule",
+      "cases": [
+        {"input": {"price_value": 500000, "price_currency": "ARS", "surface_m2": 50}, "expected": 10000.0},
+        {"input": {"price_value": 1500, "price_currency": "USD", "surface_m2": 30}, "expected": 50.0},
+        {"input": {"price_value": 500000, "price_currency": "ARS", "surface_m2": null}, "expected": null},
+        {"input": {"price_value": 0, "price_currency": "ARS", "surface_m2": 50}, "expected": null}
+      ]
+    },
+    {
+      "concept_key": "variacion_precio",
+      "source": "rule",
+      "cases": [
+        {"input": {"price_changes": [{"field": "price_value", "before": 500000, "after": 480000}]}, "expected": -20000.0},
+        {"input": {"price_changes": [{"field": "price_value", "before": 480000, "after": 500000}]}, "expected": 20000.0},
+        {"input": {"price_changes": [{"field": "price_value", "before": null, "after": 480000}]}, "expected": null},
+        {"input": {"price_changes": []}, "expected": null}
+      ]
     }
   ]
 }

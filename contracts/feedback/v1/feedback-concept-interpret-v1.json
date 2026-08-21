@@ -1,0 +1,33 @@
+{
+  "contract_version": "1",
+  "schema_version": "feedback-concept-interpret-v1",
+  "description": "Esquema de salida estructurada de la interpretacion del feedback libre en senales por concepto. El LLM interpreta el significado; un servicio controlado decide cuanto cambia el modelo de preferencia. Los conceptos deben pertenecer al catalogo activo y ser computables; nunca se inventan conceptos.",
+  "max_items": 5,
+  "items": {
+    "type": "object",
+    "required": ["concept_key", "polarity", "strength", "confidence"],
+    "properties": {
+      "concept_key": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120,
+        "description": "Clave canonica de un concepto del catalogo activo."
+      },
+      "polarity": {
+        "type": "string",
+        "enum": ["positive", "negative"]
+      },
+      "strength": {
+        "type": "string",
+        "enum": ["low", "medium", "strong"]
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Confianza del LLM en esta senal especifica; no modula el conteo del learning policy."
+      }
+    }
+  },
+  "forbidden_keys": ["fragment", "value", "geometry", "url", "email", "token"]
+}

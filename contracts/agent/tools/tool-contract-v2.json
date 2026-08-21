@@ -198,7 +198,7 @@
     },
     {
       "name": "record_feedback",
-      "description": "Registra like/dislike con razones opcionales, idempotente; devuelve la propuesta de aprendizaje cuando aplica.",
+      "description": "Registra like/dislike con razones opcionales y feedback estructurado por concepto (ADR 0003); idempotente; devuelve la propuesta de aprendizaje cuando aplica. El LLM interpreta el lenguaje libre en concept_feedback (nunca elige conceptos ni pesos finales).",
       "mutating": true,
       "requires_confirmation": false,
       "idempotent": true,
@@ -217,6 +217,24 @@
           "kind": "array",
           "enum": ["price_too_high", "price_fits", "expensas_high", "location_no", "location_yes", "rooms_wrong", "surface_wrong", "building_state", "lighting_bad", "balcony_wanted", "access_ok", "other"],
           "description": "Razones validas del radar; vacio si el usuario no dio razones. Mapea lo que dice el usuario: 'cocina chica' o superficie -> surface_wrong, 'poca luz' -> lighting_bad, 'no me sirve la ubicacion' -> location_no, 'otra razon' -> other."
+        },
+        "concept_feedback": {
+          "kind": "array",
+          "item": {
+            "concept_key": {"kind": "string"},
+            "polarity": {"kind": "string", "enum": ["positive", "negative"]},
+            "strength": {"kind": "string", "enum": ["low", "medium", "strong"]},
+            "confidence": {"kind": "number", "minimum": 0, "maximum": 1}
+          },
+          "max_items": 5,
+          "optional": true,
+          "description": "Senales estructuradas por concepto interpretadas del lenguaje libre (p.ej. 'la cocina es chica e integrada' -> tipo_cocina negative/strong). Solo conceptos del catalogo; el servicio descarta o valida. Vacio/ausente si el usuario no dio feedback por concepto."
+        },
+        "free_feedback": {
+          "kind": "string",
+          "max_length": 500,
+          "optional": true,
+          "description": "Frase libre del usuario que motivo el feedback; se conserva como evidencia textual cuando esta habilitado."
         },
         "idempotency_key": {
           "kind": "string",

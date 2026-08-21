@@ -234,10 +234,22 @@
       "polarity": "positive",
       "value": null
     },
-    {
-      "aliases": ["cerca de un hospital", "hospital cerca", "cerca de una clinica", "clinica cerca"],
+{
+      "aliases": ["cerca de un hospital", "hospital cerca", "cerca de una clinica", "clinica cerca", "centro de salud cerca", "cerca de un centro de salud"],
       "concept_key": "acceso_salud",
       "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["precio por metro", "buen precio por m2", "precio por m2", "no caro el m2", "buen precio el m2"],
+      "concept_key": "precio_m2",
+      "polarity": "negative",
+      "value": null
+    },
+    {
+      "aliases": ["bajo de precio", "baja de precio", "bajo de alquiler", "menos caro que antes", "precio bajado", "precio reducido"],
+      "concept_key": "variacion_precio",
+      "polarity": "negative",
       "value": null
     }
   ],

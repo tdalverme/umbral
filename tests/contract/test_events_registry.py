@@ -176,6 +176,7 @@ def test_feedback_server_events_validate_with_ids_and_counts_only() -> None:
                 "decision_state": "like",
                 "superseded": False,
                 "reason_count": 1,
+                "concept_reason_count": 0,
                 "has_free_feedback": False,
             },
         )
@@ -229,6 +230,7 @@ def test_feedback_events_reject_free_text_and_values() -> None:
             "decision_state": "like",
             "superseded": False,
             "reason_count": 0,
+            "concept_reason_count": 0,
             "has_free_feedback": True,
             "free_feedback": "me gusta",
         },

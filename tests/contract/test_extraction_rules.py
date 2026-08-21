@@ -17,6 +17,8 @@ def test_rule_runners_exist_for_the_seed_rule_concepts() -> None:
         "ascensor",
         "cochera",
         "piscina",
+        "precio_m2",
+        "variacion_precio",
     }
     for concept in RULE_RUNNERS:
         assert rule_version(concept).startswith(f"{concept}.rule-")

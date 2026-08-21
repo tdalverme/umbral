@@ -298,6 +298,62 @@ def run_piscina(projection: Mapping[str, object]) -> RuleOutcome:
     )
 
 
+def run_precio_m2(projection: Mapping[str, object]) -> RuleOutcome:
+    """Deterministic price-per-area from the normalized price and surface.
+
+    The price keeps its declared currency (no unversioned conversion); without
+    a surface or with a non-positive price the outcome is unknown and never
+    invents a value (FR-008).
+    """
+    price = projection.get("price_value")
+    surface = projection.get("surface_m2")
+    if (
+        isinstance(price, bool)
+        or not isinstance(price, (int, float))
+        or isinstance(surface, bool)
+        or not isinstance(surface, (int, float))
+        or price <= 0
+        or surface <= 0
+    ):
+        return RuleOutcome(None, None, None)
+    currency = str(projection.get("price_currency") or "ARS")
+    value = round(float(price) / float(surface), 2)
+    fragment = f"precio {price} {currency} / superficie {surface:.1f} m2"
+    return RuleOutcome(value, fragment, None, ("price_value", "surface_m2"))
+
+
+def run_variacion_precio(projection: Mapping[str, object]) -> RuleOutcome:
+    """Deterministic price-change signal from the listing's price history.
+
+    Reads the most recent ``price`` change row of the listing (the reader
+    orders by created_at desc). Value = after - before, so a drop is negative
+    and a rise positive. No prior price change is unknown, never an implicit
+    "sin cambio" (FR-009).
+    """
+    changes = projection.get("price_changes")
+    if not isinstance(changes, list):
+        return RuleOutcome(None, None, None)
+    for raw in changes:
+        if not isinstance(raw, Mapping):
+            continue
+        field = str(raw.get("field") or "")
+        if field and field not in {"price_value", "total_cost", "expenses_value"}:
+            continue
+        before = raw.get("before")
+        after = raw.get("after")
+        if (
+            isinstance(before, bool)
+            or not isinstance(before, (int, float))
+            or isinstance(after, bool)
+            or not isinstance(after, (int, float))
+        ):
+            continue
+        delta = round(float(after) - float(before), 2)
+        fragment = f"precio {before} -> {after}"
+        return RuleOutcome(delta, fragment, None, ("price_changes",))
+    return RuleOutcome(None, None, None)
+
+
 RULE_RUNNERS = {
     "balcon": run_balcon,
     "ambientes": run_ambientes,
@@ -308,6 +364,8 @@ RULE_RUNNERS = {
     "ascensor": run_ascensor,
     "cochera": run_cochera,
     "piscina": run_piscina,
+    "precio_m2": run_precio_m2,
+    "variacion_precio": run_variacion_precio,
 }
 
 

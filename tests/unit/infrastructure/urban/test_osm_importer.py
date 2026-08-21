@@ -7,7 +7,11 @@ fake tag dicts without needing a real planet file or the osmium binary.
 from __future__ import annotations
 
 from umbral.application.urban.contract import TagMapping
-from umbral.infrastructure.urban.osm_importer import OsmiumUnavailable, classify
+from umbral.infrastructure.urban.osm_importer import (
+    OsmiumUnavailable,
+    _tags,
+    classify,
+)
 
 _POI = [
     TagMapping(
@@ -59,6 +63,13 @@ def test_classify_applies_to_linear_mappings() -> None:
     assert classify({"railway": "subway"}, _LINEAR) == "subway_line"
     assert classify({"highway": "secondary"}, _LINEAR) == "major_road"
     assert classify({"highway": "service"}, _LINEAR) is None
+
+
+def test_pyosmium_tag_list_is_converted_before_classification() -> None:
+    tags = _tags((("amenity", "cafe"), ("name", "Cafe Central")))
+
+    assert tags == {"amenity": "cafe", "name": "Cafe Central"}
+    assert classify(tags, _POI) == "cafe"
 
 
 def test_osmium_unavailable_is_a_runtime_error() -> None:

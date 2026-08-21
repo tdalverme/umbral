@@ -22,11 +22,25 @@ def test_goldens_load_and_reference_published_concepts() -> None:
     assert "balcon" in goldens
     assert "moderno" in goldens
     assert "proximidad_cafes" in goldens
+    assert "precio_m2" in goldens
+    assert "variacion_precio" in goldens
     for concept_key, golden in goldens.items():
         assert concept_key in contract.concepts, (
             f"golden {concept_key} without extraction contract entry"
         )
         assert golden.cases
+
+
+def test_economic_rule_goldens_run_the_real_rules() -> None:
+    goldens = load_extraction_goldens()
+    for concept_key in ("precio_m2", "variacion_precio"):
+        golden = goldens[concept_key]
+        evaluation = evaluate_extraction_golden(
+            golden,
+            extract=lambda case_input: run_rule(concept_key, case_input).value,
+        )
+        assert evaluation.accuracy == 1.0, evaluation.detail
+        assert evaluation.passed
 
 
 def test_rule_golden_runs_the_real_rule() -> None:

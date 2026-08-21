@@ -195,6 +195,7 @@ def test_recording_emits_feedback_recorded_event_without_text() -> None:
     ]
     assert len(recorded) == 1
     assert recorded[0].payload["reason_count"] == 1
+    assert recorded[0].payload["concept_reason_count"] == 0
     assert recorded[0].payload["has_free_feedback"] is False
     assert "free_feedback" not in recorded[0].payload
 

@@ -89,6 +89,14 @@ class _ConceptReaderAdapter:
             return None
         return concept.concept_id, cast(ConceptLike, concept).key
 
+    def is_computable(self, concept_key: str) -> bool:
+        concept = self._inner.get(concept_key)
+        if concept is None:
+            return False
+        from umbral.application.criteria.registry import is_computable
+
+        return is_computable(concept.compute_policy)
+
 
 class _FactReaderAdapter:
     """Exposes the criteria fact repository as the feedback fact port."""

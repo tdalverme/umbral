@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from umbral.application.feedback.contracts import (
+    ConceptFeedback,
     FeedbackEvent,
     LearningPolicyVersion,
     LearningProposal,
@@ -76,6 +77,25 @@ class SqlAlchemyFeedbackEventRepository:
                         reason_key=reason.reason_key,
                         concept_id=concept_id,
                         polarity=reason.polarity,
+                    )
+                )
+            for feedback in event.concept_feedback:
+                concept_id = _concept_id(session, feedback.concept_key)
+                session.add(
+                    FeedbackEventReasonModel(
+                        id=uuid4(),
+                        created_at=event.created_at,
+                        updated_at=event.created_at,
+                        actor_kind=event.actor_kind,
+                        actor_id=event.actor_id,
+                        source="feedback.event",
+                        correlation_id=event.correlation_id,
+                        event_id=event.event_id,
+                        reason_key=f"concept:{feedback.concept_key}",
+                        concept_id=concept_id,
+                        polarity=feedback.polarity,
+                        strength=feedback.strength,
+                        confidence=feedback.confidence,
                     )
                 )
             session.commit()
@@ -366,7 +386,34 @@ def _reasons(session: Session, event_id: UUID) -> tuple[ReasonRef, ...]:
             concept_key=_concept_key_of(session, model.concept_id),
         )
         for model in models
+        if not model.reason_key.startswith("concept:")
     )
+
+
+def _concept_feedback(
+    session: Session, event_id: UUID
+) -> tuple[ConceptFeedback, ...]:
+    models = session.scalars(
+        select(FeedbackEventReasonModel).where(
+            FeedbackEventReasonModel.event_id == event_id
+        )
+    )
+    refs: list[ConceptFeedback] = []
+    for model in models:
+        if not model.reason_key.startswith("concept:"):
+            continue
+        concept_key = _concept_key_of(session, model.concept_id)
+        if concept_key is None:
+            continue
+        refs.append(
+            ConceptFeedback(
+                concept_key=concept_key,
+                polarity=model.polarity,  # type: ignore[arg-type]
+                strength=(model.strength or "medium"),  # type: ignore[arg-type]
+                confidence=float(model.confidence) if model.confidence is not None else 0.0,
+            )
+        )
+    return tuple(refs)
 
 
 def _concept_key_of(session: Session, concept_id: UUID | None) -> str | None:
@@ -391,6 +438,7 @@ def _to_domain_event(
         superseded_by=model.superseded_by,
         idempotency_key=model.idempotency_key,
         reasons=_reasons(session, model.id),
+        concept_feedback=_concept_feedback(session, model.id),
         free_feedback=model.free_feedback,
         created_at=model.created_at,
         correlation_id=model.correlation_id,

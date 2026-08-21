@@ -311,6 +311,26 @@
       "source": "seed",
       "defaults": {"signal_ref": "health_access"},
       "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "precio_m2",
+      "name": "Precio por metro cuadrado",
+      "aliases": ["precio por metro", "buen precio por m2", "precio por m2", "no caro el m2", "caro el metro"],
+      "matcher_type": "numeric_range",
+      "params_schema": {"min": 0, "max": 10000000, "unit": "ARS/m2"},
+      "source": "seed",
+      "defaults": {"min": 0},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "variacion_precio",
+      "name": "Variacion de precio",
+      "aliases": ["bajo de precio", "baja de precio", "bajo de alquiler", "menos caro que antes", "precio bajado", "subio de precio", "mas caro que antes"],
+      "matcher_type": "numeric_range",
+      "params_schema": {"min": -10000000, "max": 10000000},
+      "source": "seed",
+      "defaults": {"min": -10000000},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
     }
   ]
 }

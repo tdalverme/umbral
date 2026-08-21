@@ -100,6 +100,8 @@ class FeedbackPort(Protocol):
         reason_keys: tuple[str, ...],
         idempotency_key: str,
         correlation_id: UUID,
+        concept_feedback: tuple[Mapping[str, object], ...] = (),
+        free_feedback: str | None = None,
         actor_kind: str = "service",
         actor_id: str | None = None,
     ) -> FeedbackRecord: ...
@@ -719,6 +721,43 @@ def _normalize_reason_keys(raw_reasons: object) -> tuple[str, ...]:
     return tuple(keys)
 
 
+def _normalize_concept_feedback(raw: object) -> tuple[Mapping[str, object], ...]:
+    """Normalize interpreted concept-feedback entries to plain mappings.
+
+    Shapes mirror the published contract (concept_key, polarity, strength,
+    confidence). Unknown shapes are dropped; the application service is the
+    authority on catalog/range validation (ADR 0003).
+    """
+    if not isinstance(raw, list):
+        return ()
+    items: list[Mapping[str, object]] = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            continue
+        concept_key = item.get("concept_key")
+        polarity = item.get("polarity")
+        strength = item.get("strength")
+        confidence = item.get("confidence")
+        if (
+            not isinstance(concept_key, str)
+            or not concept_key
+            or not isinstance(polarity, str)
+            or not isinstance(strength, str)
+            or not isinstance(confidence, (int, float))
+            or isinstance(confidence, bool)
+        ):
+            continue
+        items.append(
+            {
+                "concept_key": concept_key,
+                "polarity": polarity,
+                "strength": strength,
+                "confidence": float(confidence),
+            }
+        )
+    return tuple(items)
+
+
 def _record_feedback(services: ToolServices) -> ToolImplementation:
     def run(
         context: ToolRunContext, args: Mapping[str, object]
@@ -734,6 +773,8 @@ def _record_feedback(services: ToolServices) -> ToolImplementation:
             )
         )
         reason_keys = _normalize_reason_keys(args.get("reason_keys"))
+        concept_feedback = _normalize_concept_feedback(args.get("concept_feedback"))
+        free_feedback = args.get("free_feedback")
         record = services.feedback.record_feedback(
             owner_id=context.user_id,
             profile_id=context.search_profile_id,
@@ -741,8 +782,14 @@ def _record_feedback(services: ToolServices) -> ToolImplementation:
             run_id=run_obj.run_id if run_obj is not None else None,
             event_type=decision,
             reason_keys=reason_keys,
+            concept_feedback=concept_feedback,
             idempotency_key=str(args.get("idempotency_key", "")),
             correlation_id=context.correlation_id,
+            free_feedback=(
+                free_feedback
+                if isinstance(free_feedback, str) and free_feedback.strip()
+                else None
+            ),
             actor_kind="user",
             actor_id=str(context.user_id),
         )

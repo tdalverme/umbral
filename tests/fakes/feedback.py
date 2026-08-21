@@ -246,10 +246,16 @@ class FakeListingReader:
 @dataclass
 class FakeConceptReader:
     rows: dict[str, UUID] = field(default_factory=dict)
+    computable: set[str] | None = None
 
     def get(self, concept_key: str) -> tuple[UUID, str] | None:
         concept_id = self.rows.get(concept_key)
         return (concept_id, concept_key) if concept_id is not None else None
+
+    def is_computable(self, concept_key: str) -> bool:
+        if self.computable is not None:
+            return concept_key in self.computable and concept_key in self.rows
+        return concept_key in self.rows
 
 
 @dataclass

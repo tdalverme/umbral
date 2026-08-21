@@ -124,6 +124,11 @@ try {
         Invoke-ChildCheck -Name "Feedback" -Path (Join-Path $PSScriptRoot "check-feedback.ps1")
     }
 
+    $spec019Surface = Join-Path $repoRoot "specs\019-spec-alignment\tasks.md"
+    if (Test-Path -LiteralPath $spec019Surface) {
+        Invoke-ChildCheck -Name "Spec 019" -Path (Join-Path $PSScriptRoot "check-019.ps1")
+    }
+
     $matchingSurface = @(
         (Join-Path $repoRoot "src\umbral\application\matching"),
         (Join-Path $repoRoot "tests\contract\test_matching_golden.py")

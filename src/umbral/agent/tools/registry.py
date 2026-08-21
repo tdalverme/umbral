@@ -41,6 +41,8 @@ class ToolRegistry:
         expected = spec.input_schema
         for field, raw_kind in expected.items():
             if field not in args:
+                if _is_optional(raw_kind):
+                    continue
                 raise ToolArgsInvalid(f"{spec.name}:{field}")
             kind = _kind_of(raw_kind)
             _validate_kind(field, kind, args[field])
@@ -71,6 +73,11 @@ def _kind_of(value: object) -> object:
             return kind
         return None
     return value
+
+
+def _is_optional(value: object) -> bool:
+    """A schema entry may be omitted when it declares ``optional: true``."""
+    return isinstance(value, Mapping) and value.get("optional") is True
 
 
 def _validate_kind(field: str, kind: object, value: object) -> None:

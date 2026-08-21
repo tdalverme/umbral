@@ -75,6 +75,18 @@ def test_tool_contract_v2_enriches_record_feedback_args() -> None:
     assert "idempotency_key" in tools["record_feedback"].input_schema
 
 
+def test_tool_contract_v2_record_feedback_exposes_concept_feedback() -> None:
+    tools = {tool.name: tool for tool in load_tool_contract()}
+    concept_feedback = tools["record_feedback"].input_schema["concept_feedback"]
+    assert isinstance(concept_feedback, dict)
+    assert concept_feedback["kind"] == "array"
+    assert concept_feedback["max_items"] == 5
+    item = concept_feedback["item"]
+    assert item["polarity"]["enum"] == ["positive", "negative"]
+    assert item["strength"]["enum"] == ["low", "medium", "strong"]
+    assert item["confidence"]["kind"] == "number"
+
+
 def test_tool_contract_v1_still_parses() -> None:
     v1 = json.loads(
         (ROOT / "contracts" / "agent" / "tools" / "tool-contract-v1.json").read_text(

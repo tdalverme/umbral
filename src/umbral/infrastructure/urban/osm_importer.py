@@ -11,11 +11,11 @@ can be unit-tested against small tag dicts without a real planet file.
 from __future__ import annotations
 
 import importlib
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from geoalchemy2.elements import WKTElement
@@ -163,6 +163,12 @@ def _classifier(mappings: Sequence[TagMapping]) -> Classifier:
 
 
 def _tags(raw: object) -> dict[str, str]:
-    if not isinstance(raw, Mapping):
+    if isinstance(raw, Mapping):
+        return {str(key): str(value) for key, value in raw.items()}
+    if not isinstance(raw, Iterable):
         return {}
-    return {str(key): str(value) for key, value in raw.items()}
+    items = cast(Iterable[tuple[object, object]], raw)
+    try:
+        return {str(key): str(value) for key, value in items}
+    except (TypeError, ValueError):
+        return {}

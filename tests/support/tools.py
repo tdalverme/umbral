@@ -225,6 +225,8 @@ class FakeFeedback:
         reason_keys: tuple[str, ...],
         idempotency_key: str,
         correlation_id: UUID,
+        concept_feedback: tuple[Mapping[str, object], ...] = (),
+        free_feedback: str | None = None,
         actor_kind: str = "service",
         actor_id: str | None = None,
     ) -> FeedbackRecord:
@@ -233,6 +235,8 @@ class FakeFeedback:
                 "event_type": event_type,
                 "reason_keys": reason_keys,
                 "idempotency_key": idempotency_key,
+                "concept_feedback": concept_feedback,
+                "free_feedback": free_feedback,
             }
         )
         event = FeedbackEvent(

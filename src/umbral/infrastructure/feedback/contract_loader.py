@@ -13,6 +13,13 @@ _QUICK_REASONS_PATH = (
     / "v1"
     / "quick-reasons-v1.json"
 )
+_CONCEPT_FEEDBACK_PATH = (
+    Path(__file__).resolve().parents[4]
+    / "contracts"
+    / "feedback"
+    / "v1"
+    / "feedback-concept-interpret-v1.json"
+)
 _LEARNING_POLICY_PATH = (
     Path(__file__).resolve().parents[4]
     / "contracts"
@@ -20,6 +27,16 @@ _LEARNING_POLICY_PATH = (
     / "v1"
     / "learning-policy-v1.json"
 )
+
+
+def load_concept_feedback_contract(
+    path: Path | None = None,
+) -> Mapping[str, object]:
+    source = path or _CONCEPT_FEEDBACK_PATH
+    data = json.loads(source.read_text(encoding="utf-8"))
+    if not isinstance(data, Mapping):
+        raise ValueError("concept feedback contract must be an object")
+    return dict(data)
 
 
 def load_quick_reasons_seed(path: Path | None = None) -> Mapping[str, object]:

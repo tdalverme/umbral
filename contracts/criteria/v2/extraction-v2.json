@@ -10,7 +10,11 @@
     "bedrooms",
     "floor",
     "surface_m2",
-    "neighborhood"
+    "neighborhood",
+    "price_value",
+    "price_currency",
+    "expenses_value",
+    "price_changes"
   ],
   "forbidden_input_keys": [
     "url",
@@ -205,6 +209,16 @@
     "acceso_salud": {
       "source": "urban",
       "signal_ref": "health_access"
+    },
+    "precio_m2": {
+      "source": "rule",
+      "rule": "precio_m2",
+      "input_fields": ["price_value", "price_currency", "surface_m2"]
+    },
+    "variacion_precio": {
+      "source": "rule",
+      "rule": "variacion_precio",
+      "input_fields": ["price_changes"]
     }
   }
 }

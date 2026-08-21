@@ -105,6 +105,7 @@
         "decision_state",
         "superseded",
         "reason_count",
+        "concept_reason_count",
         "has_free_feedback"
       ]
     },

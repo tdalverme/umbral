@@ -14,11 +14,29 @@ FeedbackEventType = Literal["like", "dislike", "save", "dismiss", "contacted"]
 FeedbackEventState = Literal["active", "superseded"]
 DecisionState = Literal["like", "dislike", "save", "dismiss", "contacted", "none"]
 Polarity = Literal["positive", "negative", "neutral"]
+FeedbackStrength = Literal["low", "medium", "strong"]
 ProposalState = Literal["pending", "confirmed", "rejected", "expired", "superseded"]
 
 _EVENT_TYPES = {"like", "dislike", "save", "dismiss", "contacted"}
 _POLARITIES = {"positive", "negative", "neutral"}
+_STRENGTHS = {"low", "medium", "strong"}
 _PROPOSAL_STATES = {"pending", "confirmed", "rejected", "expired", "superseded"}
+
+
+@dataclass(frozen=True, slots=True)
+class ConceptFeedback:
+    """One concept-level structured signal from interpreted free feedback.
+
+    The interpreter (agent) fills the meaning; a controlled service decides
+    how much the preference model changes. Strength and confidence are
+    persisted as evidence and never modulate the deterministic learning
+    policy counting in v1 (ADR 0003, FR-004).
+    """
+
+    concept_key: str
+    polarity: Polarity
+    strength: FeedbackStrength
+    confidence: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +66,7 @@ class FeedbackEvent:
     correlation_id: UUID
     actor_kind: str = "service"
     actor_id: str | None = None
+    concept_feedback: tuple[ConceptFeedback, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,6 +333,10 @@ def is_event_type(value: str) -> bool:
 
 def is_polarity(value: str) -> bool:
     return value in _POLARITIES
+
+
+def is_strength(value: str) -> bool:
+    return value in _STRENGTHS
 
 
 def is_proposal_state(value: str) -> bool:

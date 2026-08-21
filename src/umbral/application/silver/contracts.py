@@ -83,6 +83,7 @@ class NormalizedListing:
     geometry: tuple[float, float] | None
     geo_source: str | None
     normalization_errors: tuple[str, ...]
+    price_changes: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(slots=True)

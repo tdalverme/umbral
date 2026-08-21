@@ -18,6 +18,9 @@ from umbral.application.criteria.contracts import PreferenceFact
 from umbral.application.criteria.service import CriteriaService
 from umbral.application.events.contracts import ProductEvent
 from umbral.application.events.registry import EventsRegistrySpec, event_version
+from umbral.application.feedback.concept_feedback import (
+    validate_concept_feedback,
+)
 from umbral.application.feedback.contracts import (
     ConfirmationResult,
     DecisionItem,
@@ -124,6 +127,7 @@ class FeedbackService:
         reason_keys: tuple[str, ...],
         idempotency_key: str,
         correlation_id: UUID,
+        concept_feedback: tuple[Mapping[str, object], ...] = (),
         free_feedback: str | None = None,
         actor_kind: str = "service",
         actor_id: str | None = None,
@@ -142,6 +146,9 @@ class FeedbackService:
                 noop=True,
             )
         reason_refs = self._validate_reasons(event_type, reason_keys)
+        concept_refs = validate_concept_feedback(
+            concept_feedback, self.concepts
+        )
         free_feedback = self._validate_free_feedback(free_feedback)
         active = self.events.active_state(profile_id, listing_id)
         superseded_event: FeedbackEvent | None = active
@@ -170,6 +177,7 @@ class FeedbackService:
             correlation_id=correlation_id,
             actor_kind=actor_kind,
             actor_id=actor_id,
+            concept_feedback=concept_refs,
         )
         stored = self.events.record(event, superseded=superseded_event)
         self._apply_shortlist(event_type, superseded_event, profile_id, listing_id, now)
@@ -186,6 +194,7 @@ class FeedbackService:
                 "decision_state": stored.event_type,
                 "superseded": superseded,
                 "reason_count": len(reason_refs),
+                "concept_reason_count": len(concept_refs),
                 "has_free_feedback": free_feedback is not None,
             },
         )
@@ -955,10 +964,11 @@ class FeedbackService:
         window_start = self.clock() - timedelta(days=policy.window_days)
         cooldown_start = self.clock() - timedelta(days=policy.cooldown_days)
         created: UUID | None = None
-        for reason in event.reasons:
-            if reason.concept_key is None:
-                continue
-            resolved = self.concepts.get(reason.concept_key)
+        concept_keys = tuple(
+            reason.concept_key for reason in event.reasons if reason.concept_key is not None
+        ) + tuple(feedback.concept_key for feedback in event.concept_feedback)
+        for concept_key in dict.fromkeys(concept_keys):
+            resolved = self.concepts.get(concept_key)
             if resolved is None:
                 continue
             concept_id, concept_key = resolved

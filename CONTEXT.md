@@ -16,6 +16,18 @@ _Avoid_: Alias, campo libre, concepto del usuario
 Caracteristica compartida de una vivienda o su entorno que Umbral puede observar y evaluar con una semantica versionada.
 _Avoid_: Deseo, preferencia personal, alias
 
+**Conceptos economicos**:
+`precio_m2` es el cociente determinista entre `price_value` y `surface_m2`,
+conservando la moneda declarada por el listing. `variacion_precio` es el delta
+`after - before` de un cambio historico de precio. Ambos quedan en `unknown`
+cuando faltan datos y nunca usan conversiones o promedios no versionados.
+
+**Fuerza de feedback**:
+`strength` y `confidence` describen la evidencia de una interpretacion de
+feedback por concepto. En V1 se persisten y se muestran como evidencia, pero
+no alteran el conteo determinista del learning policy ni pueden crear fuerza
+hard.
+
 **Vinculacion de criterio**:
 Interpretacion versionada que relaciona un deseo expresado con cero, una o varias capacidades evaluables y declara confianza, evidencia y limitaciones.
 _Avoid_: Mapeo magico, clasificacion final
