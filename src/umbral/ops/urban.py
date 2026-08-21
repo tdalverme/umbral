@@ -93,10 +93,16 @@ def import_snapshot(
     data_date: datetime | None,
     correlation_id: UUID,
     job_runtime: JobRuntimeLike,
+    source_file: str | None = None,
 ) -> tuple[int, int, UUID]:
     """Parse the snapshot into categories, mark it ready and trigger the batch.
 
     Returns ``(poi_count, linear_count)`` of the imported category rows.
+
+    ``source_path`` is the durable reference recorded on the snapshot (the
+    object-store key); ``source_file`` is the local file osmium parses. When
+    ``source_file`` is omitted the importer falls back to ``source_path``, so
+    callers that hold the file locally can pass it directly.
     """
     contract = load_urban_contract_published()
     snapshot = snapshots.create(
@@ -108,7 +114,7 @@ def import_snapshot(
     poi_count, linear_count = osm_importer.import_snapshot(
         session_factory,
         snapshot_id=snapshot.id,
-        source_path=source_path,
+        source_path=source_file or source_path,
         contract=contract,
     )
     snapshots.mark_ready(
@@ -150,6 +156,7 @@ def _cli_import(
         data_date=date,
         correlation_id=correlation_id,
         job_runtime=job_runtime,
+        source_file=str(dest),
     )
 
 

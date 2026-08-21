@@ -142,9 +142,11 @@ def test_import_snapshot_marks_ready_and_triggers_batch() -> None:
             data_date=None,
             correlation_id=correlation_id,
             job_runtime=runtime,
+            source_file="local/argentina.osm.pbf",
         )
 
     assert (poi_count, linear_count) == (3, 2)
+    assert snapshots.created["source_path"] == "objects/urban/x.pbf"
     assert snapshots.created["source_hash"] == "a" * 64
     assert len(snapshots.ready) == 1
     assert snapshots.ready[0][0] == snapshot_id
@@ -153,4 +155,28 @@ def test_import_snapshot_marks_ready_and_triggers_batch() -> None:
     command = runtime.submitted[0]
     assert command.identity.job_type == "urban.batch"
     assert command.correlation_id == correlation_id
+    # osmitum parses the LOCAL file, not the object-store key: without this
+    # the importer would try to open "objects/urban/x.pbf" on disk and crash.
     importer.assert_called_once()
+    assert importer.call_args.kwargs["source_path"] == "local/argentina.osm.pbf"
+
+
+def test_import_snapshot_falls_back_to_source_path_for_parsing() -> None:
+    snapshots = _FakeSnapshots()
+    runtime = _FakeJobRuntime()
+
+    with mock.patch(
+        "umbral.ops.urban.osm_importer.import_snapshot", return_value=(0, 0)
+    ) as importer:
+        import_snapshot(
+            snapshots,
+            session_factory=object(),
+            source_path="local/argentina.osm.pbf",
+            source_hash="b" * 64,
+            data_date=None,
+            correlation_id=uuid4(),
+            job_runtime=runtime,
+        )
+
+    assert snapshots.created["source_path"] == "local/argentina.osm.pbf"
+    assert importer.call_args.kwargs["source_path"] == "local/argentina.osm.pbf"
