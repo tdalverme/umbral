@@ -55,9 +55,10 @@ class ExtractionGoldenInvalid(ValueError):
 def parse_extraction_goldens(
     data: Mapping[str, object],
 ) -> Mapping[str, ExtractionGolden]:
-    if data.get("contract_version") != "1":
+    if data.get("contract_version") not in {"1", "2"}:
         raise ExtractionGoldenInvalid("contract_version")
-    if data.get("registry_version") != "extraction-goldens-v1":
+    registry_version = data.get("registry_version")
+    if registry_version not in {"extraction-goldens-v1", "extraction-goldens-v2"}:
         raise ExtractionGoldenInvalid("registry_version")
     threshold_raw = data.get("threshold")
     threshold_map: Mapping[str, object] = (

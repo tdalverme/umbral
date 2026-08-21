@@ -44,7 +44,7 @@ class ExtractionContractSpec:
 
 
 def parse_extraction_contract(data: Mapping[str, object]) -> ExtractionContractSpec:
-    if data.get("contract_version") != "1":
+    if data.get("contract_version") not in {"1", "2"}:
         raise ValueError("unsupported extraction contract document version")
     allowed = data.get("allowed_input_fields")
     if not isinstance(allowed, list) or not all(

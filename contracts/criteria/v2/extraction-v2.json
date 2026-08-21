@@ -1,0 +1,210 @@
+{
+  "contract_version": "2",
+  "registry_version": "extraction-v2",
+  "allowed_input_fields": [
+    "description_text",
+    "location_text",
+    "amenities",
+    "property_type",
+    "rooms",
+    "bedrooms",
+    "floor",
+    "surface_m2",
+    "neighborhood"
+  ],
+  "forbidden_input_keys": [
+    "url",
+    "source_id",
+    "external_id",
+    "snapshot_id",
+    "normalizer_version",
+    "correlation_id",
+    "actor_id"
+  ],
+  "evidence": {
+    "fragment": "string|null",
+    "span": "[start,end]|null",
+    "matched_on": "[field]"
+  },
+  "qualitative_max_attempts": 2,
+  "concepts": {
+    "balcon": {
+      "source": "rule",
+      "rule": "balcon",
+      "input_fields": ["description_text", "amenities"]
+    },
+    "ambientes": {
+      "source": "rule",
+      "rule": "ambientes",
+      "input_fields": ["description_text", "rooms"]
+    },
+    "piso": {
+      "source": "rule",
+      "rule": "piso",
+      "input_fields": ["description_text", "floor"]
+    },
+    "tipo_cocina": {
+      "source": "rule",
+      "rule": "tipo_cocina",
+      "input_fields": ["description_text"]
+    },
+    "luminosidad": {
+      "source": "model",
+      "schema": {
+        "type": "object",
+        "required": ["value", "evidence", "confidence"],
+        "properties": {
+          "value": {"type": "string", "enum": ["baja", "media", "alta"]},
+          "evidence": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "estado_general": {
+      "source": "model",
+      "schema": {
+        "type": "object",
+        "required": ["value", "evidence", "confidence"],
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": ["malo", "regular", "bueno", "muy_bueno"]
+          },
+          "evidence": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "moderno": {
+      "source": "model",
+      "schema": {
+        "type": "object",
+        "required": ["value", "evidence", "confidence"],
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": ["clasico", "renovado", "moderno"]
+          },
+          "evidence": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "dormitorios": {
+      "source": "rule",
+      "rule": "dormitorios",
+      "input_fields": ["bedrooms", "description_text"]
+    },
+    "banos": {
+      "source": "model",
+      "schema": {
+        "type": "object",
+        "required": ["value", "evidence", "confidence"],
+        "properties": {
+          "value": {"type": "number", "minimum": 0, "maximum": 20},
+          "evidence": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "mascotas": {
+      "source": "rule",
+      "rule": "mascotas",
+      "input_fields": ["description_text", "amenities"]
+    },
+    "amoblado": {
+      "source": "model",
+      "schema": {
+        "type": "object",
+        "required": ["value", "evidence", "confidence"],
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": ["amoblado", "semiamoblado", "vacio"]
+          },
+          "evidence": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "ascensor": {
+      "source": "rule",
+      "rule": "ascensor",
+      "input_fields": ["amenities", "description_text"]
+    },
+    "cochera": {
+      "source": "rule",
+      "rule": "cochera",
+      "input_fields": ["amenities", "description_text"]
+    },
+    "piscina": {
+      "source": "rule",
+      "rule": "piscina",
+      "input_fields": ["amenities", "description_text"]
+    },
+    "proximidad_cafes": {
+      "source": "urban",
+      "signal_ref": "cafe_lifestyle"
+    },
+    "acceso_transporte": {
+      "source": "urban",
+      "signal_ref": "transit_access"
+    },
+    "proximidad_parque": {
+      "source": "urban",
+      "signal_ref": "green_access"
+    },
+    "proximidad_compras": {
+      "source": "urban",
+      "signal_ref": "daily_convenience"
+    },
+    "vida_nocturna": {
+      "source": "urban",
+      "signal_ref": "nightlife_intensity"
+    },
+    "zona_comercial": {
+      "source": "urban",
+      "signal_ref": "commercial_intensity"
+    },
+    "caminabilidad": {
+      "source": "urban",
+      "signal_ref": "walkability"
+    },
+    "calma_residencial": {
+      "source": "urban",
+      "signal_ref": "residential_calm"
+    },
+    "ruido_transito": {
+      "source": "urban",
+      "signal_ref": "road_noise"
+    },
+    "ruido_tren": {
+      "source": "urban",
+      "signal_ref": "rail_noise"
+    },
+    "ruido_ambiental": {
+      "source": "urban",
+      "signal_ref": "noise_risk"
+    },
+    "acceso_escuela": {
+      "source": "urban",
+      "signal_ref": "school_access"
+    },
+    "acceso_deporte": {
+      "source": "urban",
+      "signal_ref": "sport_access"
+    },
+    "acceso_cultura": {
+      "source": "urban",
+      "signal_ref": "culture_access"
+    },
+    "acceso_bici": {
+      "source": "urban",
+      "signal_ref": "bike_access"
+    },
+    "acceso_salud": {
+      "source": "urban",
+      "signal_ref": "health_access"
+    }
+  }
+}

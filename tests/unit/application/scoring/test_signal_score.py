@@ -87,3 +87,53 @@ def test_negative_polarity_missing_stays_unknown() -> None:
     assert result.score == 0.0
     assert result.confidence == 0.0
     assert result.reason_code == "no_observation_data"
+
+
+def _threshold_criterion(threshold: float) -> PolicyCriterion:
+    return PolicyCriterion(
+        key="acceso_escuela",
+        concept="acceso_escuela",
+        matcher_type="signal_score",
+        weight=0.1,
+        params={"signal_ref": "school_access", "threshold": threshold},
+        gate=None,
+    )
+
+
+def test_hard_signal_below_threshold_is_a_mismatch() -> None:
+    result = evaluate_observation_criterion(_threshold_criterion(0.60), None, 0.3, 0.9)
+
+    assert result.state == "mismatch"
+    assert result.reason_code == "signal_below_threshold"
+
+
+def test_hard_signal_at_threshold_is_a_match() -> None:
+    result = evaluate_observation_criterion(_threshold_criterion(0.60), None, 0.60, 0.9)
+
+    assert result.state == "match"
+    assert result.reason_code == "signal_observed"
+
+
+def test_hard_negative_signal_mismarks_noisy_listing_as_mismatch() -> None:
+    criterion = PolicyCriterion(
+        key="ruido_ambiental",
+        concept="ruido_ambiental",
+        matcher_type="signal_score",
+        weight=0.1,
+        params={"signal_ref": "noise_risk", "polarity": "negative", "threshold": 0.6},
+        gate=None,
+    )
+    # High noise: degree = 1.0 - 0.85 = 0.15 < 0.6 threshold -> mismatch.
+    result = evaluate_observation_criterion(criterion, None, 0.85, 0.9)
+
+    assert result.state == "mismatch"
+    assert result.reason_code == "signal_below_threshold"
+
+
+def test_threshold_missing_signal_stays_unknown() -> None:
+    result = evaluate_observation_criterion(
+        _threshold_criterion(0.60), None, None, None
+    )
+
+    assert result.state == "unknown"
+    assert result.reason_code == "no_observation_data"

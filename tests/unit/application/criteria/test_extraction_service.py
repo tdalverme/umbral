@@ -78,7 +78,7 @@ def test_full_scope_extracts_all_seed_concepts() -> None:
     summary = context.service.process_extraction(
         RecomputeScope("full", None), job_execution_id=uuid4()
     )
-    assert summary["concept_count"] == 18
+    assert summary["concept_count"] == 30
     concept_keys = {item.concept_key for item in context.observations.rows}
     assert concept_keys == {
         "balcon",
@@ -88,6 +88,13 @@ def test_full_scope_extracts_all_seed_concepts() -> None:
         "luminosidad",
         "estado_general",
         "moderno",
+        "dormitorios",
+        "banos",
+        "mascotas",
+        "amoblado",
+        "ascensor",
+        "cochera",
+        "piscina",
         "proximidad_cafes",
         "acceso_transporte",
         "proximidad_parque",
@@ -99,4 +106,9 @@ def test_full_scope_extracts_all_seed_concepts() -> None:
         "ruido_transito",
         "ruido_tren",
         "ruido_ambiental",
+        "acceso_escuela",
+        "acceso_deporte",
+        "acceso_cultura",
+        "acceso_bici",
+        "acceso_salud",
     }

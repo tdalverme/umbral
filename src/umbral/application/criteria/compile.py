@@ -97,7 +97,7 @@ def compile_criteria(
             )
         )
 
-    fact_criteria = _facts_to_criteria(by_key, facts, warnings)
+    fact_criteria = _facts_to_criteria(by_key, facts, warnings, confirmations)
     compiled.extend(fact_criteria)
     return CompilationDraft(
         criteria=tuple(compiled),
@@ -110,6 +110,7 @@ def _facts_to_criteria(
     by_key: Mapping[str, ConceptLike],
     facts: tuple[PreferenceFact, ...],
     warnings: list[str],
+    confirmations: tuple[str, ...],
 ) -> list[CompiledCriterion]:
     ordered = sorted(
         facts,
@@ -121,6 +122,14 @@ def _facts_to_criteria(
         if concept is None:
             warnings.append(f"fact_concept_not_found:{fact.concept_key}")
             continue
+        if fact.soft_to_hard:
+            # Semantic concepts are never hard (FR-009): a semantic fact that
+            # was marked hard is not compiled and surfaces a warning.
+            if concept.matcher_type == "semantic_feature":
+                warnings.append(f"semantic_cannot_be_hard:{fact.concept_key}")
+                continue
+            if fact.concept_key not in confirmations:
+                raise SoftToHardRequiresConfirmation(fact.concept_key)
         params = dict(concept.params_schema)
         params["polarity"] = fact.polarity
         if fact.value is not None:
@@ -131,7 +140,7 @@ def _facts_to_criteria(
                 matcher_type=cast(MatcherType, concept.matcher_type),
                 params=params,
                 source_ref=f"fact:{fact.fact_id}",
-                soft_to_hard=False,
+                soft_to_hard=fact.soft_to_hard,
                 weight=float(fact.weight),
             )
         )

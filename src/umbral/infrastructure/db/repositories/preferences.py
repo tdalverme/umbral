@@ -399,6 +399,7 @@ def _fact_model(
         state="active",
         superseded_by=None,
         criterion_binding_id=binding.binding_id,
+        soft_to_hard=binding.mode == "hard",
     )
 
 

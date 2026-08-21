@@ -25,8 +25,8 @@ _CONCEPTS_SEED_PATH = (
     Path(__file__).resolve().parents[4]
     / "contracts"
     / "criteria"
-    / "v1"
-    / "concepts-seed-v1.json"
+    / "v2"
+    / "concepts-seed-v2.json"
 )
 _MATCHER_TYPES_PATH = (
     Path(__file__).resolve().parents[4]
@@ -39,15 +39,15 @@ _EXTRACTION_PATH = (
     Path(__file__).resolve().parents[4]
     / "contracts"
     / "criteria"
-    / "v1"
-    / "extraction-v1.json"
+    / "v2"
+    / "extraction-v2.json"
 )
 _EXTRACTION_GOLDENS_PATH = (
     Path(__file__).resolve().parents[4]
     / "contracts"
     / "criteria"
-    / "v1"
-    / "extraction-goldens-v1.json"
+    / "v2"
+    / "extraction-goldens-v2.json"
 )
 
 

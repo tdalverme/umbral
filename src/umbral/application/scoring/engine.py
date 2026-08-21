@@ -133,6 +133,7 @@ def _score_candidate(
             criterion.key, profile
         ):
             continue
+        compiled_soft_to_hard = False
         if criterion.concept in fact_params:
             # The compiled preference params (polarity, preferred value) and
             # weight of a fact override the static policy entry of the same
@@ -143,6 +144,7 @@ def _score_candidate(
                 if compiled.weight is not None
                 else criterion.weight
             )
+            compiled_soft_to_hard = compiled.soft_to_hard
             criterion = replace(
                 criterion,
                 params={**criterion.params, **compiled.params},
@@ -152,6 +154,9 @@ def _score_candidate(
             criterion, profile, listing, observations
         )
         if criterion.gate == "exclude_on_mismatch" and result.state == "mismatch":
+            excluded = True
+            break
+        if compiled_soft_to_hard and result.state == "mismatch":
             excluded = True
             break
         contribution = round(criterion.weight * result.score, 6)
@@ -176,7 +181,8 @@ def _score_candidate(
         if compiled.concept_key in policy_keys or compiled.weight is None:
             continue
         # Facts of concepts outside the static policy contribute with their
-        # own weight (fase 3, US3); no gates apply to them.
+        # own weight (fase 3, US3); a confirmed hard criterion excludes the
+        # candidate on mismatch (soft_to_hard, US3).
         criterion = PolicyCriterion(
             key=compiled.concept_key,
             concept=compiled.concept_key,
@@ -188,6 +194,9 @@ def _score_candidate(
         result, input_refs = _evaluate_criterion(
             criterion, profile, listing, observations
         )
+        if compiled.soft_to_hard and result.state == "mismatch":
+            excluded = True
+            break
         contribution = round(criterion.weight * result.score, 6)
         contribution_sum += contribution
         evaluations.append(
@@ -203,6 +212,8 @@ def _score_candidate(
                 correlation_id=correlation_id,
             )
         )
+    if excluded:
+        return None
     frozen_evaluations = tuple(evaluations)
     semantic_contribution = _semantic_contribution(policy, semantic_signals)
     contribution_sum += semantic_contribution

@@ -1,0 +1,316 @@
+{
+  "contract_version": "2",
+  "seed_version": "concepts-v2",
+  "concepts": [
+    {
+      "key": "balcon",
+      "name": "Balcon",
+      "aliases": ["balcon", "balcones"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["true", "false"]},
+      "source": "seed",
+      "defaults": {"value": "false"},
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "ambientes",
+      "name": "Ambientes",
+      "aliases": ["ambientes", "ambiente"],
+      "matcher_type": "numeric_range",
+      "params_schema": {"min": 0, "max": 200},
+      "source": "seed",
+      "defaults": {"min": 1},
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "piso",
+      "name": "Piso",
+      "aliases": ["piso", "planta"],
+      "matcher_type": "numeric_range",
+      "params_schema": {"min": -10, "max": 1000},
+      "source": "seed",
+      "defaults": {"min": 1},
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "tipo_cocina",
+      "name": "Tipo de cocina",
+      "aliases": ["cocina"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["none", "separada", "integrada", "otra"]},
+      "source": "seed",
+      "defaults": {"value": "otra"},
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "luminosidad",
+      "name": "Luminosidad",
+      "aliases": ["luz", "iluminacion"],
+      "matcher_type": "semantic_feature",
+      "params_schema": {"concept": "luminosidad"},
+      "source": "seed",
+      "defaults": {},
+      "compute_policy": {"unknown": "exclude", "qualitative": true, "computable": true}
+    },
+    {
+      "key": "estado_general",
+      "name": "Estado general",
+      "aliases": ["estado", "conservacion"],
+      "matcher_type": "semantic_feature",
+      "params_schema": {"concept": "estado_general"},
+      "source": "seed",
+      "defaults": {},
+      "compute_policy": {"unknown": "exclude", "qualitative": true, "computable": true}
+    },
+    {
+      "key": "barrio_seguro",
+      "name": "Seguridad del barrio",
+      "aliases": ["barrio seguro"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["true", "false"]},
+      "source": "seed",
+      "defaults": {},
+      "compute_policy": {"unknown": "exclude", "qualitative": true, "computable": false}
+    },
+    {
+      "key": "moderno",
+      "name": "Estilo moderno",
+      "aliases": ["moderno", "renovado", "actual"],
+      "matcher_type": "semantic_feature",
+      "params_schema": {"concept": "moderno"},
+      "source": "seed",
+      "defaults": {},
+      "compute_policy": {"unknown": "exclude", "qualitative": true, "computable": true}
+    },
+    {
+      "key": "proximidad_cafes",
+      "name": "Proximidad a cafes",
+      "aliases": ["cerca de cafes", "con cafes cerca", "cerca de un cafe"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "cafe_lifestyle"},
+      "source": "seed",
+      "defaults": {"signal_ref": "cafe_lifestyle"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "acceso_transporte",
+      "name": "Acceso a transporte",
+      "aliases": ["buen transporte", "bien conectado", "cerca del transporte"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "transit_access"},
+      "source": "seed",
+      "defaults": {"signal_ref": "transit_access"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "proximidad_parque",
+      "name": "Proximidad a parques",
+      "aliases": ["cerca de parques", "cerca de un parque", "cerca de parque", "cerca de espacios verdes", "parque", "plaza"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "green_access"},
+      "source": "seed",
+      "defaults": {"signal_ref": "green_access"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "proximidad_compras",
+      "name": "Proximidad a compras diarias",
+      "aliases": ["cerca de supermercados", "cerca de supermercado", "cerca de compras", "con supermercado cerca", "cerca de farmacia", "cerca de almacen"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "daily_convenience"},
+      "source": "seed",
+      "defaults": {"signal_ref": "daily_convenience"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "vida_nocturna",
+      "name": "Vida nocturna",
+      "aliases": ["vida nocturna", "cerca de bares", "con bares cerca", "cerca de un bar"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "nightlife_intensity"},
+      "source": "seed",
+      "defaults": {"signal_ref": "nightlife_intensity"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "zona_comercial",
+      "name": "Zona comercial",
+      "aliases": ["zona comercial", "cerca de restaurantes", "cerca de comercios", "con vida comercial"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "commercial_intensity"},
+      "source": "seed",
+      "defaults": {"signal_ref": "commercial_intensity"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "caminabilidad",
+      "name": "Caminabilidad",
+      "aliases": ["bien caminable", "caminable", "a pie de todo"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "walkability"},
+      "source": "seed",
+      "defaults": {"signal_ref": "walkability"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "calma_residencial",
+      "name": "Calma residencial",
+      "aliases": ["barrio tranquilo", "zona tranquila", "sin ruido", "tranquilo", "tranquilidad", "zona silenciosa"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "residential_calm"},
+      "source": "seed",
+      "defaults": {"signal_ref": "residential_calm"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "ruido_transito",
+      "name": "Ruido de transito",
+      "aliases": ["ruido de transito", "lejos de las avenidas", "lejos de avenidas", "lejos de la avenida", "lejos de autopistas", "lejos del transito"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "road_noise"},
+      "source": "seed",
+      "defaults": {"signal_ref": "road_noise"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "ruido_tren",
+      "name": "Ruido de tren",
+      "aliases": ["ruido de tren", "lejos de las vias del tren", "lejos de vias", "lejos del ferrocarril"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "rail_noise"},
+      "source": "seed",
+      "defaults": {"signal_ref": "rail_noise"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "ruido_ambiental",
+      "name": "Ruido ambiental",
+      "aliases": ["ruido ambiental", "lejos del ruido", "lejos del ruido del barrio", "zona ruidosa"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "noise_risk"},
+      "source": "seed",
+      "defaults": {"signal_ref": "noise_risk"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "dormitorios",
+      "name": "Dormitorios",
+      "aliases": ["dormitorios", "dormitorio", "dormis", "habitaciones", "cuartos"],
+      "matcher_type": "numeric_range",
+      "params_schema": {"min": 0, "max": 100},
+      "source": "seed",
+      "defaults": {"min": 1},
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "banos",
+      "name": "Banos",
+      "aliases": ["banos", "bano", "banio", "toilette", "toilete"],
+      "matcher_type": "numeric_range",
+      "params_schema": {"min": 0, "max": 20},
+      "source": "seed",
+      "defaults": {"min": 1},
+      "compute_policy": {"unknown": "penalize", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "mascotas",
+      "name": "Mascotas permitidas",
+      "aliases": ["acepta mascotas", "aceptan mascotas", "con mascotas", "mascotas permitidas", "pet friendly", "admiten mascotas", "acepto mascotas"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["true", "false"]},
+      "source": "seed",
+      "defaults": {"value": "false"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "amoblado",
+      "name": "Amoblado",
+      "aliases": ["amoblado", "amueblado", "semiamoblado", "sin amoblar", "con muebles", "equipado"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["amoblado", "semiamoblado", "vacio"]},
+      "source": "seed",
+      "defaults": {"value": "vacio"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "ascensor",
+      "name": "Ascensor",
+      "aliases": ["ascensor", "con ascensor", "elevador"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["true", "false"]},
+      "source": "seed",
+      "defaults": {"value": "false"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "cochera",
+      "name": "Cochera",
+      "aliases": ["cochera", "garage", "garaje", "parking", "cobertura"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["true", "false"]},
+      "source": "seed",
+      "defaults": {"value": "false"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "piscina",
+      "name": "Piscina",
+      "aliases": ["piscina", "pileta", "con piscina", "con pileta"],
+      "matcher_type": "categorical",
+      "params_schema": {"allowed_values": ["true", "false"]},
+      "source": "seed",
+      "defaults": {"value": "false"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "acceso_escuela",
+      "name": "Acceso a escuelas",
+      "aliases": ["cerca de una escuela", "cerca de escuela", "cerca de un colegio", "colegio cerca", "escuela cerca", "con escuelas cerca"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "school_access"},
+      "source": "seed",
+      "defaults": {"signal_ref": "school_access"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "acceso_deporte",
+      "name": "Acceso a deporte",
+      "aliases": ["cerca de un gimnasio", "gimnasio cerca", "cerca de una cancha", "cancha cerca", "club cerca", "cerca de un club"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "sport_access"},
+      "source": "seed",
+      "defaults": {"signal_ref": "sport_access"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "acceso_cultura",
+      "name": "Acceso a cultura",
+      "aliases": ["cerca de un cine", "cine cerca", "cerca de un museo", "museo cerca", "cerca de una biblioteca", "biblioteca cerca", "cerca de un teatro"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "culture_access"},
+      "source": "seed",
+      "defaults": {"signal_ref": "culture_access"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "acceso_bici",
+      "name": "Acceso en bici",
+      "aliases": ["para andar en bici", "ciclovia cerca", "cerca de ciclovia", "bici cerca", "estacionamiento de bicis"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "bike_access"},
+      "source": "seed",
+      "defaults": {"signal_ref": "bike_access"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    },
+    {
+      "key": "acceso_salud",
+      "name": "Acceso a salud",
+      "aliases": ["cerca de un hospital", "hospital cerca", "cerca de una clinica", "clinica cerca", "centro de salud cerca", "cerca de un centro de salud"],
+      "matcher_type": "signal_score",
+      "params_schema": {"signal_ref": "health_access"},
+      "source": "seed",
+      "defaults": {"signal_ref": "health_access"},
+      "compute_policy": {"unknown": "exclude", "qualitative": false, "computable": true}
+    }
+  ]
+}

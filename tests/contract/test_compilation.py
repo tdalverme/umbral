@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -39,6 +40,101 @@ def _fact(concept_key: str, weight: float = 0.8) -> PreferenceFact:
         created_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
         correlation_id=uuid4(),
     )
+
+
+def test_fact_born_hard_requires_confirmation() -> None:
+    fact = dataclasses.replace(_fact("mascotas"), soft_to_hard=True)
+    try:
+        compile_criteria(
+            concepts=BY_KEY,
+            matcher_types=MATCHER_TYPES,
+            facts=(fact,),
+            edits=(),
+            confirmations=(),
+        )
+    except SoftToHardRequiresConfirmation:
+        pass
+    else:
+        raise AssertionError(
+            "expected fact hard->compiled rejection without confirmation"
+        )
+
+
+def test_fact_born_hard_compiles_with_confirmation() -> None:
+    fact = dataclasses.replace(_fact("mascotas"), value="true", soft_to_hard=True)
+    draft = compile_criteria(
+        concepts=BY_KEY,
+        matcher_types=MATCHER_TYPES,
+        facts=(fact,),
+        edits=(),
+        confirmations=("mascotas",),
+    )
+    assert draft.criteria[0].concept_key == "mascotas"
+    assert draft.criteria[0].soft_to_hard is True
+
+
+def test_semantic_fact_never_compiles_hard() -> None:
+    fact = dataclasses.replace(
+        _fact("moderno"), value="moderno", soft_to_hard=True
+    )
+    draft = compile_criteria(
+        concepts=BY_KEY,
+        matcher_types=MATCHER_TYPES,
+        facts=(fact,),
+        edits=(),
+        confirmations=("moderno",),
+    )
+    assert all(criterion.concept_key != "moderno" for criterion in draft.criteria)
+    assert any(
+        "semantic_cannot_be_hard" in warning for warning in draft.warnings
+    )
+
+
+def test_signal_fact_threshold_is_propagated() -> None:
+    fact = dataclasses.replace(
+        _fact("acceso_escuela"),
+        value="signal",
+        weight=0.8,
+        soft_to_hard=True,
+    )
+    draft = compile_criteria(
+        concepts=BY_KEY,
+        matcher_types=MATCHER_TYPES,
+        facts=(
+            PreferenceFact(
+                fact_id=fact.fact_id,
+                profile_id=fact.profile_id,
+                concept_key=fact.concept_key,
+                value="signal",
+                weight=0.8,
+                polarity="positive",
+                confidence=0.9,
+                fact_source="harness",
+                state="active",
+                superseded_by=None,
+                created_at=fact.created_at,
+                correlation_id=fact.correlation_id,
+                soft_to_hard=True,
+            ),
+        ),
+        edits=(
+            {
+                "concept_key": "acceso_escuela",
+                "matcher_type": "signal_score",
+                "params": {"signal_ref": "school_access", "threshold": 0.6},
+                "source_ref": "fact:h",
+                "soft_to_hard": True,
+            },
+        ),
+        confirmations=("acceso_escuela",),
+    )
+    signal = next(
+        criterion
+        for criterion in draft.criteria
+        if criterion.concept_key == "acceso_escuela"
+    )
+    assert signal.soft_to_hard is True
+    assert signal.params.get("threshold") == 0.6
 
 
 def test_golden_ordered_criteria_with_warnings() -> None:

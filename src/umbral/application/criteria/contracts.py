@@ -87,6 +87,7 @@ class PreferenceFact:
     correlation_id: UUID
     actor_kind: str = "service"
     actor_id: str | None = None
+    soft_to_hard: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -141,6 +141,104 @@
       "concept_key": "ruido_ambiental",
       "polarity": "negative",
       "value": null
+    },
+    {
+      "aliases": ["dormitorios", "2 dormitorios", "3 dormitorios", "dormitorio"],
+      "concept_key": "dormitorios",
+      "polarity": "positive",
+      "value": null,
+      "requires_value": true
+    },
+    {
+      "aliases": ["banos", "1 bano", "2 banos", "bano"],
+      "concept_key": "banos",
+      "polarity": "positive",
+      "value": null,
+      "requires_value": true
+    },
+    {
+      "aliases": ["que acepten mascotas", "aceptan mascotas", "con mascotas", "pet friendly"],
+      "concept_key": "mascotas",
+      "polarity": "positive",
+      "value": "true"
+    },
+    {
+      "aliases": ["sin mascotas", "no aceptan mascotas", "sin mascotas permitidas"],
+      "concept_key": "mascotas",
+      "polarity": "negative",
+      "value": "true"
+    },
+    {
+      "aliases": ["amoblado", "amueblado", "con muebles", "equipado"],
+      "concept_key": "amoblado",
+      "polarity": "positive",
+      "value": "amoblado"
+    },
+    {
+      "aliases": ["sin amoblar", "vacio"],
+      "concept_key": "amoblado",
+      "polarity": "positive",
+      "value": "vacio"
+    },
+    {
+      "aliases": ["con ascensor", "ascensor"],
+      "concept_key": "ascensor",
+      "polarity": "positive",
+      "value": "true"
+    },
+    {
+      "aliases": ["sin ascensor", "no tiene ascensor"],
+      "concept_key": "ascensor",
+      "polarity": "negative",
+      "value": "true"
+    },
+    {
+      "aliases": ["con cochera", "cochera", "con garage", "garage"],
+      "concept_key": "cochera",
+      "polarity": "positive",
+      "value": "true"
+    },
+    {
+      "aliases": ["sin cochera", "sin garage"],
+      "concept_key": "cochera",
+      "polarity": "negative",
+      "value": "true"
+    },
+    {
+      "aliases": ["con piscina", "piscina", "con pileta", "pileta"],
+      "concept_key": "piscina",
+      "polarity": "positive",
+      "value": "true"
+    },
+    {
+      "aliases": ["cerca de una escuela", "cerca de escuela", "cerca de un colegio", "colegio cerca"],
+      "concept_key": "acceso_escuela",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["cerca de un gimnasio", "gimnasio cerca", "cerca de una cancha", "cancha cerca"],
+      "concept_key": "acceso_deporte",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["cerca de un cine", "cine cerca", "cerca de un museo", "museo cerca"],
+      "concept_key": "acceso_cultura",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["para andar en bici", "ciclovia cerca", "cerca de ciclovia"],
+      "concept_key": "acceso_bici",
+      "polarity": "positive",
+      "value": null
+    },
+    {
+      "aliases": ["cerca de un hospital", "hospital cerca", "cerca de una clinica", "clinica cerca"],
+      "concept_key": "acceso_salud",
+      "polarity": "positive",
+      "value": null
     }
   ],
   "unsupported_notes": {

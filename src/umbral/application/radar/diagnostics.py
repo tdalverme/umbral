@@ -40,11 +40,13 @@ def build_diagnostics(
     profile: SearchProfile,
     candidates: tuple[CandidateListing, ...],
     supported_neighborhoods: tuple[str, ...],
+    hard_criteria: tuple[str, ...] = (),
 ) -> Mapping[str, object]:
     """Count exclusions per hard filter and propose non-mutating relaxations.
 
     Returns a JSON-safe mapping with ``exclusion_counts`` (per-filter counts),
-    ``active_criteria`` (the hard filters currently declared) and
+    ``active_criteria`` (the hard filters currently declared, including
+    confirmed concept-level criteria from the compilation) and
     ``relaxation_proposals`` (deterministic hints; never applied here).
     """
     counts: dict[str, int] = {
@@ -79,12 +81,22 @@ def build_diagnostics(
         for key in ("budget_max", "zones", "min_rooms")
         if _is_active(profile, key)
     )
-    proposals = _relaxation_proposals(profile)
+    # Concept-level hard criteria (confirmed soft_to_hard from the compilation)
+    # are declared as active and reported so the empty-run isn't silent
+    # (FR-014, SC-008). Their exclusion count depends on observations, which
+    # diagnostics cannot see; the declaration is what makes the empty state
+    # explainable and auditable.
+    concept_hard = tuple(
+        f"criterion:{key}" for key in hard_criteria if key not in active
+    )
+    for key in concept_hard:
+        counts[key] = 0
+    proposals = _relaxation_proposals(profile, hard_criteria)
     return {
         "candidate_count": total,
         "passed_count": passed,
         "exclusion_counts": counts,
-        "active_criteria": list(active),
+        "active_criteria": list(active) + list(concept_hard),
         "relaxation_proposals": proposals,
     }
 
@@ -99,7 +111,9 @@ def _is_active(profile: SearchProfile, key: str) -> bool:
     return False
 
 
-def _relaxation_proposals(profile: SearchProfile) -> list[dict[str, object]]:
+def _relaxation_proposals(
+    profile: SearchProfile, hard_criteria: tuple[str, ...] = ()
+) -> list[dict[str, object]]:
     proposals: list[dict[str, object]] = []
     if profile.budget_max is not None:
         proposals.append(
@@ -126,6 +140,15 @@ def _relaxation_proposals(profile: SearchProfile) -> list[dict[str, object]]:
                 "kind": "lower_rooms",
                 "suggested_value": max(1, profile.min_rooms - 1),
                 "reason": "rooms_filter_excludes_all_candidates",
+            }
+        )
+    for key in hard_criteria:
+        proposals.append(
+            {
+                "criterion": key,
+                "kind": "relax_criterion",
+                "suggested_value": "soft",
+                "reason": "concept_hard_excludes_all_candidates",
             }
         )
     return proposals

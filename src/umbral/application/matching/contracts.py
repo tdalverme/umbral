@@ -23,6 +23,7 @@ HardFilterOutcome = Literal[
     "excluded_budget",
     "excluded_zone",
     "excluded_rooms",
+    "excluded_criterion",
 ]
 
 CaseVerdict = Literal[
@@ -44,7 +45,13 @@ _KNOWN_TAGS: frozenset[str] = frozenset(
     }
 )
 _KNOWN_HARD_FILTERS: frozenset[str] = frozenset(
-    {"pass", "excluded_budget", "excluded_zone", "excluded_rooms"}
+    {
+        "pass",
+        "excluded_budget",
+        "excluded_zone",
+        "excluded_rooms",
+        "excluded_criterion",
+    }
 )
 
 

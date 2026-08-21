@@ -1,0 +1,81 @@
+{
+  "contract_version": "2",
+  "registry_version": "extraction-goldens-v2",
+  "description": "Casos etiquetados por concepto que gatean la publicacion de la extraccion. Para reglas, el gate corre la regla real sobre los inputs; para modelos, el gate es estructural (el schema cubre los valores esperados) porque el harness no llama al proveedor.",
+  "threshold": {"accuracy": 1.0},
+  "goldens": [
+    {
+      "concept_key": "balcon",
+      "source": "rule",
+      "cases": [
+        {"input": {"description_text": "Departamento con balcon."}, "expected": "true"},
+        {"input": {"description_text": "Sin balcon."}, "expected": "false"},
+        {"input": {"description_text": "Monoambiente sin balcon."}, "expected": "false"}
+      ]
+    },
+    {
+      "concept_key": "moderno",
+      "source": "model",
+      "cases": [
+        {"input": {"description_text": "Departamento moderno, cocina integrada."}, "expected": "moderno"},
+        {"input": {"description_text": "Renovado, pisos de porcelanato."}, "expected": "renovado"},
+        {"input": {"description_text": "Edificio clasico de los 40."}, "expected": "clasico"}
+      ]
+    },
+    {
+      "concept_key": "proximidad_cafes",
+      "source": "urban",
+      "cases": [
+        {"input": {"signal_count": 3}, "expected": {"min": 1}},
+        {"input": {"signal_count": 0}, "expected": {"min": 0}}
+      ]
+    },
+    {
+      "concept_key": "dormitorios",
+      "source": "rule",
+      "cases": [
+        {"input": {"bedrooms": 2, "description_text": "2 dormitorios."}, "expected": 2},
+        {"input": {"bedrooms": 3, "description_text": "3 ambientes."}, "expected": 3},
+        {"input": {"bedrooms": 1, "description_text": "Departamento."}, "expected": 1},
+        {"input": {"bedrooms": 0, "description_text": "Monoambiente."}, "expected": 0}
+      ]
+    },
+    {
+      "concept_key": "mascotas",
+      "source": "rule",
+      "cases": [
+        {"input": {"description_text": "Se aceptan mascotas."}, "expected": "true"},
+        {"input": {"description_text": "No se aceptan mascotas."}, "expected": "false"},
+        {"input": {"description_text": "Departamento luminoso."}, "expected": null},
+        {"input": {"amenities": ["acepta mascotas"]}, "expected": "true"}
+      ]
+    },
+    {
+      "concept_key": "ascensor",
+      "source": "rule",
+      "cases": [
+        {"input": {"amenities": ["ascensor"], "description_text": "Edificio con ascensor."}, "expected": "true"},
+        {"input": {"amenities": [], "description_text": "Edificio de planta baja."}, "expected": null},
+        {"input": {"amenities": [], "description_text": "Sin informacion de ascensor."}, "expected": null}
+      ]
+    },
+    {
+      "concept_key": "cochera",
+      "source": "rule",
+      "cases": [
+        {"input": {"amenities": ["cochera cubierta"], "description_text": "Con cochera."}, "expected": "true"},
+        {"input": {"amenities": [], "description_text": "Sin cochera."}, "expected": "false"},
+        {"input": {"amenities": ["lavadero"], "description_text": "Departamento."}, "expected": null}
+      ]
+    },
+    {
+      "concept_key": "piscina",
+      "source": "rule",
+      "cases": [
+        {"input": {"amenities": ["piscina"], "description_text": "Edificio con pileta."}, "expected": "true"},
+        {"input": {"amenities": [], "description_text": "Antesualo sin pileta."}, "expected": "false"},
+        {"input": {"amenities": ["parrilla"], "description_text": "Con parrilla."}, "expected": null}
+      ]
+    }
+  ]
+}

@@ -635,6 +635,7 @@ def _to_domain_fact(model: PreferenceFactModel) -> PreferenceFact:
         correlation_id=model.correlation_id,
         actor_kind=model.actor_kind,
         actor_id=model.actor_id,
+        soft_to_hard=bool(model.soft_to_hard),
     )
 
 

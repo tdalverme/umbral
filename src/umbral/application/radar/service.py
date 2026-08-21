@@ -631,10 +631,12 @@ class RadarService:
         )
         if not passed:
             # Zero matches: persist diagnostics and offer relaxations (FR-021).
+            hard_criteria = self._hard_criteria_from_compilation(profile_version_id)
             diagnostics = build_diagnostics(
                 profile=profile,
                 candidates=candidates,
                 supported_neighborhoods=frozen_policy.neighborhoods,
+                hard_criteria=hard_criteria,
             )
             run = self.runs.set_diagnostics(
                 run_id,
@@ -947,6 +949,21 @@ class RadarService:
             "failure_code": run.failure_code,
             "score_policy_version": run.score_policy_version,
         }
+
+    def _hard_criteria_from_compilation(
+        self, profile_version_id: UUID
+    ) -> tuple[str, ...]:
+        """Collect the confirmed concept-level hard criteria of a compilation."""
+        if self.policy_engine is None:
+            return ()
+        compilation = self.policy_engine.compilation_for(profile_version_id)
+        if compilation is None:
+            return ()
+        return tuple(
+            criterion.concept_key
+            for criterion in compilation.criteria
+            if criterion.soft_to_hard
+        )
 
 
 def _payload(

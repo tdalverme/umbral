@@ -198,7 +198,9 @@ def _evaluate_signal_score(
     derived from input coverage. Missing/unknown data stays explicitly
     unknown; a present signal is a match with its declared confidence. A
     negative polarity preference (e.g. "lejos del ruido") inverts the degree
-    so a high observed signal stops rewarding the listing.
+    so a high observed signal stops rewarding the listing. A hard signal
+    (confirmed by the user, FR-011) carries an explicit percentile ``threshold``;
+    a score below it is a mismatch so the engine can exclude the candidate.
     """
     score = _as_float(observation_score, None)
     if score is None:
@@ -206,6 +208,16 @@ def _evaluate_signal_score(
     confidence = _as_float(observation_confidence, 0.0) or 0.0
     polarity = str(params.get("polarity", "positive"))
     degree = round(1.0 - score, 4) if polarity == "negative" else round(score, 4)
+    threshold_raw = _as_float(params.get("threshold"), None)
+    if threshold_raw is not None:
+        below = degree < threshold_raw
+        state: EvaluationState = "mismatch" if below else "match"
+        return EvaluationResult(
+            round(degree, 4),
+            round(confidence, 4),
+            state,
+            "signal_below_threshold" if below else "signal_observed",
+        )
     return EvaluationResult(
         round(degree, 4), round(confidence, 4), "match", "signal_observed"
     )

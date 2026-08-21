@@ -27,6 +27,44 @@ _COCINA_NONE = re.compile(
     r"\bsin\s+cocina\b|\bno\s+tiene\s+cocina\b|\bsin\s+espacio\s+para\s+cocina\b",
     re.IGNORECASE,
 )
+_DORMITORIOS = re.compile(
+    r"(\d{1,2})\s*dormitorios?\b|\b(\d{1,2})\s*habitaciones?\b|\b(\d{1,2})\s*cuartos?\b",
+    re.IGNORECASE,
+)
+_MASCOTAS_POSITIVE = re.compile(
+    r"\b(?:aceptan|acepta|admiten|admite|permiten|permite|se aceptan|se admiten|"
+    r"se permiten)\s*mascotas\b|\bpet\s+friendly\b|\bcon\s+mascotas\b",
+    re.IGNORECASE,
+)
+_MASCOTAS_NEGATIVE = re.compile(
+    r"\b(?:no aceptan|no acepta|no admiten|no admite|no permiten|no permite)"
+    r"\s*mascotas\b|\b(?:sin mascotas|no se aceptan mascotas|no se admiten"
+    r"\s*mascotas|no se reciben mascotas)\b",
+    re.IGNORECASE,
+)
+_ASCENSOR = re.compile(r"\bascensor(?:es)?\b|\belevador(?:es)?\b", re.IGNORECASE)
+_COCHERA = re.compile(
+    r"\bcochera\b|\bgarage\b|\bgaraje\b|\bparking\b|\bstacionamiento\b", re.IGNORECASE
+)
+_PISCINA = re.compile(r"\bpiscina\b|\bpileta\b", re.IGNORECASE)
+_NO_ASCENSOR = re.compile(
+    r"\bsin\s+ascensor\b|\bno\s+tiene\s+ascensor\b", re.IGNORECASE
+)
+_NO_COCHERA = re.compile(
+    r"\bsin\s+cochera\b|\bsin\s+garage\b|\bno\s+tiene\s+cochera\b", re.IGNORECASE
+)
+_NO_PISCINA = re.compile(
+    r"\bsin\s+piscina\b|\bsin\s+pileta\b|\bno\s+tiene\s+piscina\b", re.IGNORECASE
+)
+_CON_ASCENSOR = re.compile(
+    r"\bcon\s+ascensor\b|\btiene\s+ascensor\b", re.IGNORECASE
+)
+_CON_COCHERA = re.compile(
+    r"\bcon\s+cochera\b|\btiene\s+cochera\b", re.IGNORECASE
+)
+_CON_PISCINA = re.compile(
+    r"\bcon\s+piscina\b|\bcon\s+pileta\b|\btiene\s+piscina\b", re.IGNORECASE
+)
 
 
 def _match(regex: re.Pattern[str], text: str) -> re.Match[str] | None:
@@ -127,11 +165,149 @@ def run_tipo_cocina(projection: Mapping[str, object]) -> RuleOutcome:
     return RuleOutcome(None, None, None)
 
 
+def run_dormitorios(projection: Mapping[str, object]) -> RuleOutcome:
+    """Deterministic bedrooms extraction: the structured ``bedrooms`` field of
+    the NormalizedListing wins; falling back to free text keeps evidence only
+    when the phrasing declares a count."""
+    bedrooms = projection.get("bedrooms")
+    if isinstance(bedrooms, int):
+        return RuleOutcome(bedrooms, None, None)
+    text = str(projection.get("description_text") or "")
+    match = _DORMITORIOS.search(text)
+    if match:
+        value = next(group for group in match.groups() if group is not None)
+        return RuleOutcome(
+            int(value),
+            _fragment(text, match),
+            (match.start(), match.end()),
+            ("description_text",),
+        )
+    return RuleOutcome(None, None, None)
+
+
+def run_mascotas(projection: Mapping[str, object]) -> RuleOutcome:
+    """Pets allowed detection: adjective-free positive/negative wording over
+    description and amenities; ambiguous text stays unknown instead of
+    inventing a value (FR-003)."""
+    text = str(projection.get("description_text") or "")
+    amenities = projection.get("amenities")
+    amenities_text = (
+        " ".join(str(item) for item in amenities)
+        if isinstance(amenities, list)
+        else ""
+    )
+
+    negative_text = _MASCOTAS_NEGATIVE.search(text)
+    if negative_text:
+        return RuleOutcome(
+            "false",
+            _fragment(text, negative_text),
+            (negative_text.start(), negative_text.end()),
+            ("description_text",),
+        )
+    negative_amenity = _MASCOTAS_NEGATIVE.search(amenities_text)
+    if negative_amenity:
+        return RuleOutcome(
+            "false",
+            _fragment(amenities_text, negative_amenity),
+            (negative_amenity.start(), negative_amenity.end()),
+            ("amenities",),
+        )
+    positive_text = _MASCOTAS_POSITIVE.search(text)
+    if positive_text:
+        return RuleOutcome(
+            "true",
+            _fragment(text, positive_text),
+            (positive_text.start(), positive_text.end()),
+            ("description_text",),
+        )
+    positive_amenity = _MASCOTAS_POSITIVE.search(amenities_text)
+    if positive_amenity:
+        return RuleOutcome(
+            "true",
+            _fragment(amenities_text, positive_amenity),
+            (positive_amenity.start(), positive_amenity.end()),
+            ("amenities",),
+        )
+    return RuleOutcome(None, None, None)
+
+
+def _boolean_amenity_rule(
+    *,
+    positive: re.Pattern[str],
+    negative: re.Pattern[str],
+    declarative: re.Pattern[str],
+    projection: Mapping[str, object],
+) -> RuleOutcome:
+    """Shared deterministic boolean-amenity rule: amenities list wins with the
+    amenity as evidence; description only declares ``true`` with explicit
+    declarative wording (``con``/``tiene``) and ``false`` with an explicit
+    negative. A bare mention never confirms, so free-text like "sin informacion
+    de ascensor" stays unknown instead of a false positive."""
+    amenities = projection.get("amenities")
+    if isinstance(amenities, list):
+        for amenity in amenities:
+            if positive.search(str(amenity)):
+                return RuleOutcome("true", str(amenity), None, ("amenities",))
+            if negative.search(str(amenity)):
+                return RuleOutcome("false", str(amenity), None, ("amenities",))
+    text = str(projection.get("description_text") or "")
+    neg = negative.search(text)
+    if neg:
+        return RuleOutcome(
+            "false",
+            _fragment(text, neg),
+            (neg.start(), neg.end()),
+            ("description_text",),
+        )
+    pos = declarative.search(text)
+    if pos:
+        return RuleOutcome(
+            "true",
+            _fragment(text, pos),
+            (pos.start(), pos.end()),
+            ("description_text",),
+        )
+    return RuleOutcome(None, None, None)
+
+
+def run_ascensor(projection: Mapping[str, object]) -> RuleOutcome:
+    return _boolean_amenity_rule(
+        positive=_ASCENSOR,
+        negative=_NO_ASCENSOR,
+        declarative=_CON_ASCENSOR,
+        projection=projection,
+    )
+
+
+def run_cochera(projection: Mapping[str, object]) -> RuleOutcome:
+    return _boolean_amenity_rule(
+        positive=_COCHERA,
+        negative=_NO_COCHERA,
+        declarative=_CON_COCHERA,
+        projection=projection,
+    )
+
+
+def run_piscina(projection: Mapping[str, object]) -> RuleOutcome:
+    return _boolean_amenity_rule(
+        positive=_PISCINA,
+        negative=_NO_PISCINA,
+        declarative=_CON_PISCINA,
+        projection=projection,
+    )
+
+
 RULE_RUNNERS = {
     "balcon": run_balcon,
     "ambientes": run_ambientes,
     "piso": run_piso,
     "tipo_cocina": run_tipo_cocina,
+    "dormitorios": run_dormitorios,
+    "mascotas": run_mascotas,
+    "ascensor": run_ascensor,
+    "cochera": run_cochera,
+    "piscina": run_piscina,
 }
 
 

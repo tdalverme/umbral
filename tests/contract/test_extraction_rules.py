@@ -7,7 +7,17 @@ from umbral.application.criteria.rules import RULE_RUNNERS, rule_version, run_ru
 
 
 def test_rule_runners_exist_for_the_seed_rule_concepts() -> None:
-    assert set(RULE_RUNNERS) == {"balcon", "ambientes", "piso", "tipo_cocina"}
+    assert set(RULE_RUNNERS) == {
+        "balcon",
+        "ambientes",
+        "piso",
+        "tipo_cocina",
+        "dormitorios",
+        "mascotas",
+        "ascensor",
+        "cochera",
+        "piscina",
+    }
     for concept in RULE_RUNNERS:
         assert rule_version(concept).startswith(f"{concept}.rule-")
 

@@ -6,6 +6,10 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
 $testPaths = @(
     "tests\unit\application\criteria",
+    "tests\unit\application\scoring\test_hard_soft.py",
+    "tests\unit\application\scoring\test_signal_score.py",
+    "tests\unit\application\feedback\test_hard_elevation.py",
+    "tests\unit\application\radar\test_diagnostics_v2.py",
     "tests\unit\infrastructure\criteria",
     "tests\contract\test_concept_registry.py",
     "tests\contract\test_extraction_rules.py",
@@ -14,7 +18,8 @@ $testPaths = @(
     "tests\contract\test_extraction_goldens.py",
     "tests\contract\test_events_registry.py",
     "tests\integration\criteria",
-    "tests\migrations\test_0006_criteria_observations.py"
+    "tests\migrations\test_0006_criteria_observations.py",
+    "tests\migrations\test_0018_hard_soft_catalog.py"
 )
 foreach ($path in $testPaths) {
     if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $path))) {

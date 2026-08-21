@@ -44,6 +44,14 @@ _Avoid_: Prompt, respuesta generativa
 Inferencia de baja autoridad nacida de comportamiento pasivo o patrones entre radares; no modifica criterios por si sola.
 _Avoid_: Preferencia confirmada, filtro aprendido
 
+**Modo de fuerza (soft/hard)**:
+Atributo por radar de un criterio estructurado que decide si reordena (`soft`) o excluye (`hard`) candidatos. Nace de una declaracion explicita confirmada; los conceptos semanticos/cualitativos son siempre soft.
+_Avoid_: Filtro global, preferencia aprendida que excluye
+
+**Elevacion a hard**:
+Transicion auditable de un criterio de soft a hard para un radar, con confirmacion y supersesion de hipotesis del mismo concepto; el learning nunca genera ni supera hard.
+_Avoid_: Cambio silencioso de fuerza, requisito sin trazabilidad
+
 **Trayectoria conversacional**:
 Secuencia de estados y turnos que verifica como una conversacion modifica objetos persistentes y que comportamientos estan prohibidos.
 _Avoid_: Mensaje golden, ejemplo aislado
@@ -71,4 +79,12 @@ _Avoid_: Dato crudo sin contrato, campo libre
 **Atribucion de OpenStreetMap**:
 Reconocimiento requerido por la licencia ODbL al usar datos de OSM; se muestra en una superficie global y via el endpoint de senales.
 _Avoid_: Omision de credito, dato sin procedencia
+
+**Catalogo de vivienda**:
+Conjunto versionado de caracteristicas de la vivienda evaluables (dormitorios, banos, mascotas, amoblado, ascensor, cochera, piscina) que amplia el catalogo compartido mas alla de balcon/ambientes/piso/cocina.
+_Avoid_: Campo por usuario, lista cerrada sin version
+
+**Senales de entorno nuevas**:
+Signals urbanas de acceso escolar, deportivo, cultural, en bici y de salud; extienden las de transporte/cafes/parques y se declaran en el contrato v2 sin tocar el ranking.
+_Avoid_: Nueva categoria sin contrato, senal sin signal_ref
 

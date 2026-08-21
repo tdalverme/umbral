@@ -15,7 +15,7 @@
       "allowed_params": ["concept", "threshold"]
     },
     "signal_score": {
-      "allowed_params": ["signal_ref"]
+      "allowed_params": ["signal_ref", "threshold"]
     }
   }
 }

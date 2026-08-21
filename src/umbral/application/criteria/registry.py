@@ -79,7 +79,7 @@ class ConceptsSeedSpec:
 
 
 def parse_matcher_types(data: Mapping[str, object]) -> MatcherTypesSpec:
-    if data.get("contract_version") != "1":
+    if data.get("contract_version") not in {"1", "2"}:
         raise ValueError("unsupported matcher types document version")
     registry_version = data.get("registry_version")
     if not isinstance(registry_version, str) or not registry_version:
@@ -110,7 +110,7 @@ def parse_matcher_types(data: Mapping[str, object]) -> MatcherTypesSpec:
 
 
 def parse_concepts_seed(data: Mapping[str, object]) -> ConceptsSeedSpec:
-    if data.get("contract_version") != "1":
+    if data.get("contract_version") not in {"1", "2"}:
         raise ValueError("unsupported concepts seed document version")
     seed_version = data.get("seed_version")
     if not isinstance(seed_version, str) or not seed_version:

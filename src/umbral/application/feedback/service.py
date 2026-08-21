@@ -331,6 +331,59 @@ class FeedbackService:
             proposal = self._expire_if_overdue(proposal)
         return proposal
 
+    def supersede_learning_for_concept(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        concept_key: str,
+        confirmation_ref: UUID,
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> int:
+        """Retire hypotheses/proposals of a concept when it is elevated to hard.
+
+        A hard elevation is an explicit confirmed declaration; learned soft
+        hypotheses of the same concept would silently re-order against it, so
+        they are superseded with traceability (FR-012, FR-013). Learning never
+        creates hard facts; this only retires learned candidates before the
+        hard fact lands.
+        """
+        self._owned(owner_id, profile_id)
+        resolved = self.concepts.get(concept_key)
+        if resolved is None:
+            raise FeedbackValidationError(("preference.unknown_concept",))
+        concept_id, _ = resolved
+        superseded = 0
+        after: int | None = None
+        while True:
+            proposals, after = self.proposals.list_for_profile(
+                profile_id, state=None, after=after, limit=100
+            )
+            for proposal in proposals:
+                if (
+                    proposal.concept_id != concept_id
+                    or proposal.state not in {"pending", "confirmed"}
+                ):
+                    continue
+                self.proposals.update(_with_state(proposal, state="superseded"))
+                superseded += 1
+            if after is None:
+                break
+        self._emit_server_event(
+            event_type="preference.hard_elevated.v1",
+            correlation_id=correlation_id,
+            actor_id=actor_id,
+            payload={
+                "search_profile_id": str(profile_id),
+                "concept_key": concept_key,
+                "confirmation_ref": str(confirmation_ref),
+                "superseded_hypothesis_count": superseded,
+            },
+        )
+        return superseded
+
     def propose_preference(
         self,
         *,

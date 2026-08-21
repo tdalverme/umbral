@@ -68,7 +68,13 @@
         "expected_hard_filter": {
           "type": "object",
           "additionalProperties": {
-            "enum": ["pass", "excluded_budget", "excluded_zone", "excluded_rooms"]
+            "enum": [
+              "pass",
+              "excluded_budget",
+              "excluded_zone",
+              "excluded_rooms",
+              "excluded_criterion"
+            ]
           }
         },
         "notes": { "type": "string" }

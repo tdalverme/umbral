@@ -1,0 +1,266 @@
+{
+  "contract_version": "urban-contract-v2",
+  "schema_version": 2,
+  "source": {
+    "name": "geofabrik",
+    "url": "https://download.geofabrik.de/south-america/argentina-latest.osm.pbf",
+    "license": "odbl-1.0",
+    "attribution": "© OpenStreetMap contributors"
+  },
+  "tags_mapping": [
+    {"category": "supermarket", "osm_tags": [["shop", "supermarket"]]},
+    {"category": "convenience", "osm_tags": [["shop", "convenience"], ["shop", "greengrocer"], ["shop", "bakery"]]},
+    {"category": "pharmacy", "osm_tags": [["amenity", "pharmacy"]]},
+    {"category": "health", "osm_tags": [["amenity", "hospital"], ["amenity", "clinic"], ["amenity", "doctors"]]},
+    {"category": "cafe", "osm_tags": [["amenity", "cafe"]]},
+    {"category": "nightlife", "osm_tags": [["amenity", "bar"], ["amenity", "pub"], ["amenity", "nightclub"]]},
+    {"category": "restaurant", "osm_tags": [["amenity", "restaurant"], ["amenity", "fast_food"]]},
+    {"category": "bus_stop", "osm_tags": [["highway", "bus_stop"], ["amenity", "bus_station"]]},
+    {"category": "subway_station", "osm_tags": [["station", "subway"], ["railway", "subway_entrance"]]},
+    {"category": "train_station", "osm_tags": [["railway", "station"], ["railway", "halt"]]},
+    {"category": "green_space", "osm_tags": [["leisure", "park"], ["leisure", "garden"], ["landuse", "grass"], ["natural", "wood"]]},
+    {"category": "shopping_mall", "osm_tags": [["shop", "mall"]]},
+    {"category": "gym", "osm_tags": [["amenity", "gym"], ["leisure", "fitness_centre"]]},
+    {"category": "cinema", "osm_tags": [["amenity", "cinema"]]},
+    {"category": "library", "osm_tags": [["amenity", "library"]]},
+    {"category": "theatre", "osm_tags": [["amenity", "theatre"]]},
+    {"category": "bicycle_parking", "osm_tags": [["amenity", "bicycle_parking"]]}
+  ],
+  "linear_tags_mapping": [
+    {"category": "highway", "osm_tags": [["highway", "motorway"], ["highway", "trunk"]]},
+    {"category": "major_road", "osm_tags": [["highway", "primary"], ["highway", "secondary"]]},
+    {"category": "railway", "osm_tags": [["railway", "rail"]]},
+    {"category": "subway_line", "osm_tags": [["railway", "subway"]]},
+    {"category": "school", "osm_tags": [["amenity", "kindergarten"], ["amenity", "school"], ["amenity", "college"]]},
+    {"category": "sports_facility", "osm_tags": [["leisure", "pitch"], ["leisure", "sports_centre"]]},
+    {"category": "museum", "osm_tags": [["tourism", "museum"]]},
+    {"category": "cycleway", "osm_tags": [["highway", "cycleway"]]}
+  ],
+  "primitives": {
+    "supermarket": [{"name": "count_300m", "kind": "count", "radius_m": 300}, {"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "convenience": [{"name": "count_300m", "kind": "count", "radius_m": 300}, {"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "pharmacy": [{"name": "count_300m", "kind": "count", "radius_m": 300}, {"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "health": [{"name": "count_300m", "kind": "count", "radius_m": 300}, {"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "cafe": [{"name": "count_300m", "kind": "count", "radius_m": 300}, {"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "nightlife": [{"name": "count_300m", "kind": "count", "radius_m": 300}, {"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "restaurant": [{"name": "count_300m", "kind": "count", "radius_m": 300}, {"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "bus_stop": [{"name": "count_300m", "kind": "count", "radius_m": 300}, {"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "subway_station": [{"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "train_station": [{"name": "nearest_m", "kind": "nearest"}],
+    "green_space": [{"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "shopping_mall": [{"name": "nearest_m", "kind": "nearest"}],
+    "gym": [{"name": "count_300m", "kind": "count", "radius_m": 300}, {"name": "nearest_m", "kind": "nearest"}],
+    "cinema": [{"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "library": [{"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "theatre": [{"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}],
+    "bicycle_parking": [{"name": "count_600m", "kind": "count", "radius_m": 600}, {"name": "nearest_m", "kind": "nearest"}]
+  },
+  "linear_primitives": {
+    "highway": [{"name": "nearest_m", "kind": "nearest"}],
+    "major_road": [{"name": "nearest_m", "kind": "nearest"}],
+    "railway": [{"name": "nearest_m", "kind": "nearest"}],
+    "subway_line": [{"name": "nearest_m", "kind": "nearest"}],
+    "school": [{"name": "nearest_m", "kind": "nearest"}, {"name": "count_600m", "kind": "count", "radius_m": 600}],
+    "sports_facility": [{"name": "nearest_m", "kind": "nearest"}],
+    "museum": [{"name": "nearest_m", "kind": "nearest"}],
+    "cycleway": [{"name": "nearest_m", "kind": "nearest"}]
+  },
+  "signals": [
+    {
+      "name": "daily_convenience",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "supermarket.count_600m", "weight": 0.35, "op": "count", "target": 6},
+          {"primitive": "pharmacy.count_600m", "weight": 0.20, "op": "count", "target": 6},
+          {"primitive": "convenience.count_600m", "weight": 0.25, "op": "count", "target": 6},
+          {"primitive": "health.count_600m", "weight": 0.20, "op": "count", "target": 6}
+        ]
+      }
+    },
+    {
+      "name": "cafe_lifestyle",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "cafe.count_300m", "weight": 0.60, "op": "count", "target": 5},
+          {"primitive": "cafe.nearest_m", "weight": 0.40, "op": "distance", "near": 100, "far": 650}
+        ]
+      }
+    },
+    {
+      "name": "nightlife_intensity",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "nightlife.count_300m", "weight": 0.60, "op": "count", "target": 5},
+          {"primitive": "nightlife.nearest_m", "weight": 0.40, "op": "distance", "near": 80, "far": 450}
+        ]
+      }
+    },
+    {
+      "name": "commercial_intensity",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "restaurant.count_300m", "weight": 0.30, "op": "count", "target": 8},
+          {"primitive": "cafe.count_300m", "weight": 0.25, "op": "count", "target": 5},
+          {"primitive": "supermarket.count_600m", "weight": 0.25, "op": "count", "target": 6},
+          {"primitive": "shopping_mall.nearest_m", "weight": 0.20, "op": "distance", "near": 250, "far": 1200}
+        ]
+      }
+    },
+    {
+      "name": "transit_access",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "bus_stop.count_300m", "weight": 0.45, "op": "count", "target": 3},
+          {"primitive": "subway_station.nearest_m", "weight": 0.40, "op": "distance", "near": 250, "far": 1000},
+          {"primitive": "train_station.nearest_m", "weight": 0.15, "op": "distance", "near": 300, "far": 1200}
+        ]
+      }
+    },
+    {
+      "name": "green_access",
+      "kind": "distance",
+      "normalized_by": "absolute",
+      "formula": {
+        "terms": [
+          {"primitive": "green_space.nearest_m", "weight": 0.70, "op": "distance", "near": 150, "far": 900},
+          {"primitive": "green_space.count_600m", "weight": 0.30, "op": "count", "target": 3}
+        ]
+      }
+    },
+    {
+      "name": "road_noise",
+      "kind": "distance",
+      "normalized_by": "absolute",
+      "formula": {
+        "terms": [
+          {"primitive": "major_road.nearest_m", "weight": 0.60, "op": "distance", "near": 40, "far": 300},
+          {"primitive": "highway.nearest_m", "weight": 0.40, "op": "distance", "near": 40, "far": 300}
+        ]
+      }
+    },
+    {
+      "name": "rail_noise",
+      "kind": "distance",
+      "normalized_by": "absolute",
+      "formula": {
+        "terms": [
+          {"primitive": "railway.nearest_m", "weight": 0.60, "op": "distance", "near": 80, "far": 650},
+          {"primitive": "subway_line.nearest_m", "weight": 0.40, "op": "distance", "near": 80, "far": 650}
+        ]
+      }
+    },
+    {
+      "name": "school_access",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "school.nearest_m", "weight": 0.60, "op": "distance", "near": 150, "far": 900},
+          {"primitive": "school.count_600m", "weight": 0.40, "op": "count", "target": 3}
+        ]
+      }
+    },
+    {
+      "name": "sport_access",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "gym.count_300m", "weight": 0.35, "op": "count", "target": 2},
+          {"primitive": "sports_facility.nearest_m", "weight": 0.35, "op": "distance", "near": 150, "far": 900},
+          {"primitive": "gym.nearest_m", "weight": 0.30, "op": "distance", "near": 200, "far": 1000}
+        ]
+      }
+    },
+    {
+      "name": "culture_access",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "cinema.count_600m", "weight": 0.30, "op": "count", "target": 2},
+          {"primitive": "library.count_600m", "weight": 0.25, "op": "count", "target": 2},
+          {"primitive": "theatre.count_600m", "weight": 0.25, "op": "count", "target": 2},
+          {"primitive": "museum.nearest_m", "weight": 0.20, "op": "distance", "near": 300, "far": 1200}
+        ]
+      }
+    },
+    {
+      "name": "bike_access",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "cycleway.nearest_m", "weight": 0.60, "op": "distance", "near": 100, "far": 800},
+          {"primitive": "bicycle_parking.count_600m", "weight": 0.40, "op": "count", "target": 3}
+        ]
+      }
+    },
+    {
+      "name": "health_access",
+      "kind": "density",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"primitive": "health.count_600m", "weight": 0.60, "op": "count", "target": 6},
+          {"primitive": "health.nearest_m", "weight": 0.40, "op": "distance", "near": 200, "far": 1000}
+        ]
+      }
+    }
+  ],
+  "composite_signals": [
+    {
+      "name": "walkability",
+      "normalized_by": "barrio",
+      "formula": {
+        "terms": [
+          {"signal": "daily_convenience", "weight": 0.45},
+          {"signal": "commercial_intensity", "weight": 0.30},
+          {"signal": "green_access", "weight": 0.25}
+        ]
+      }
+    },
+    {
+      "name": "noise_risk",
+      "normalized_by": "absolute",
+      "formula": {
+        "terms": [
+          {"signal": "nightlife_intensity", "weight": 0.45},
+          {"signal": "road_noise", "weight": 0.35},
+          {"signal": "rail_noise", "weight": 0.20}
+        ]
+      }
+    },
+    {
+      "name": "residential_calm",
+      "normalized_by": "absolute",
+      "formula": {
+        "terms": [
+          {"signal": "noise_risk", "weight": 0.70, "invert": true},
+          {"signal": "commercial_intensity", "weight": 0.30, "invert": true}
+        ]
+      }
+    }
+  ],
+  "normalization": {
+    "method": "percentile",
+    "min_sample_per_barrio": 10,
+    "fallback": {"scope": "caba", "confidence_penalty": 0.3}
+  },
+  "confidence": {
+    "method": "weighted_input_coverage",
+    "missing_penalty": 0.3
+  },
+  "missing": {"default": {"value": null, "confidence": 0.0}},
+  "distance_radius_m": 1200
+}

@@ -150,6 +150,11 @@ def test_urban_batch_wires_every_signal_ref_concept() -> None:
         "ruido_transito": "road_noise",
         "ruido_tren": "rail_noise",
         "ruido_ambiental": "noise_risk",
+        "acceso_escuela": "school_access",
+        "acceso_deporte": "sport_access",
+        "acceso_cultura": "culture_access",
+        "acceso_bici": "bike_access",
+        "acceso_salud": "health_access",
     }
 
 

@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -164,6 +165,9 @@ class PreferenceFact(IdentityAuditMixin, Base):
         Uuid(as_uuid=True),
         ForeignKey("criterion_bindings.id", ondelete="RESTRICT"),
         nullable=True,
+    )
+    soft_to_hard: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
 
 

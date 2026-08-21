@@ -14,8 +14,8 @@ _URBAN_CONTRACT_PATH = (
     Path(__file__).resolve().parents[4]
     / "contracts"
     / "urban"
-    / "v1"
-    / "urban-contract-v1.json"
+    / "v2"
+    / "urban-contract-v2.json"
 )
 
 

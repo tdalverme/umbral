@@ -17,7 +17,7 @@ from umbral.infrastructure.agent.tools.preferences_loader import (
 
 ROOT = Path(__file__).resolve().parents[2]
 CONCEPTS = json.loads(
-    (ROOT / "contracts" / "criteria" / "v1" / "concepts-seed-v1.json").read_text(
+    (ROOT / "contracts" / "criteria" / "v2" / "concepts-seed-v2.json").read_text(
         encoding="utf-8"
     )
 )

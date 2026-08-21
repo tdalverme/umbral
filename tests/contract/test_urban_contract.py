@@ -17,6 +17,7 @@ from umbral.application.urban.contract import (
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = ROOT / "contracts" / "urban" / "v1" / "urban-contract-v1.json"
+CONTRACT_V2_PATH = ROOT / "contracts" / "urban" / "v2" / "urban-contract-v2.json"
 
 
 def _load() -> dict[str, Any]:
@@ -26,6 +27,41 @@ def _load() -> dict[str, Any]:
 
 def _contract() -> UrbanContract:
     return load_urban_contract(CONTRACT_PATH)
+
+
+def test_contract_v2_is_a_superset_and_keeps_v1_signals() -> None:
+    """The catalog contract v2 keeps every v1 category and signal and adds the
+    environment signals (018-ideal-property-catalog)."""
+    data = cast(
+        dict[str, Any],
+        json.loads(CONTRACT_V2_PATH.read_text(encoding="utf-8")),
+    )
+    parsed = parse_urban_contract(data)
+
+    assert parsed.contract_version == "urban-contract-v2"
+    v1 = _contract()
+    v1_categories = {m.category for m in v1.tags_mapping} | {
+        m.category for m in v1.linear_tags_mapping
+    }
+    v2_categories = {m.category for m in parsed.tags_mapping} | {
+        m.category for m in parsed.linear_tags_mapping
+    }
+    assert v1_categories <= v2_categories
+    v1_signals = {s.name for s in v1.signals}
+    v2_signals = {s.name for s in parsed.signals}
+    assert v1_signals <= v2_signals
+    assert {
+        "school_access",
+        "sport_access",
+        "culture_access",
+        "bike_access",
+        "health_access",
+    } <= v2_signals
+    for signal in parsed.signals:
+        for term in signal.formula:
+            assert term.primitive_ref is not None
+            category, _metric = term.primitive_ref.split(".", 1)
+            assert category in parsed.primitive_names()
 
 
 def test_contract_document_matches_the_published_json() -> None:
