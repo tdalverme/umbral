@@ -14,6 +14,8 @@ def test_playground_launcher_invokes_hoisted_next_directly() -> None:
     assert '$expectRealSnapshot' in launcher
     assert 'respondió demo-only' in launcher
     assert 'El API del playground no respondió 200' in launcher
+    assert '$nextExitCode = $LASTEXITCODE' in launcher
+    assert 'No se pudo iniciar Next' in launcher
     assert '$next = Join-Path $repoRoot "node_modules\\.bin\\next.cmd"' in launcher
     assert "& $next dev --port $WebPort" in launcher
     assert "npm run dev -- --port" not in launcher

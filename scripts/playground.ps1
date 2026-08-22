@@ -96,6 +96,10 @@ try {
     Push-Location (Join-Path $repoRoot "apps\web")
     try {
         & $next dev --port $WebPort
+        $nextExitCode = $LASTEXITCODE
+        if ($nextExitCode -ne 0) {
+            throw "No se pudo iniciar Next (exit code $nextExitCode). Puede haber otro next dev corriendo en esta app; cerralo antes de reintentar."
+        }
     } finally {
         Pop-Location
     }
