@@ -6,14 +6,17 @@ the unit test runs without external services.
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 from unittest import mock
 from uuid import UUID, uuid4
 
 from umbral.application.jobs.contracts import SubmitJob
+from umbral.infrastructure.urban.osm_importer import ImportResult
 from umbral.ops.urban import (
     fetch_snapshot,
     import_snapshot,
+    rebuild_active_snapshot,
     sha256_of,
     upload_snapshot,
 )
@@ -61,8 +64,11 @@ class _FakeObjectStore:
 
 
 class _FakeSnapshotModel:
-    def __init__(self, snapshot_id: UUID) -> None:
+    def __init__(
+        self, snapshot_id: UUID, source_path: str = "objects/urban/x.pbf"
+    ) -> None:
         self.id = snapshot_id
+        self.source_path = source_path
 
 
 class _FakeSnapshots:
@@ -79,6 +85,14 @@ class _FakeSnapshots:
         self.ready.append((snapshot_id, kwargs))
         return _FakeSnapshotModel(snapshot_id)
 
+    def active(self) -> _FakeSnapshotModel:
+        return _FakeSnapshotModel(uuid4())
+
+    def replace_snapshot_derived(
+        self, snapshot_id: UUID, rows: object, **kwargs: object
+    ) -> None:
+        raise AssertionError("rebuild replacement was not expected in this fake")
+
 
 class _FakeJobRuntime:
     def __init__(self) -> None:
@@ -87,6 +101,39 @@ class _FakeJobRuntime:
     def submit(self, command: SubmitJob) -> object:
         self.submitted.append(command)
         return "snapshot"
+
+
+class _FakeRebuildSnapshots(_FakeSnapshots):
+    def __init__(self) -> None:
+        super().__init__()
+        self.snapshot = _FakeSnapshotModel(uuid4(), "objects/urban/current.pbf")
+        self.replaced: dict[str, object] = {}
+
+    def active(self) -> _FakeSnapshotModel:
+        return self.snapshot
+
+    def replace_snapshot_derived(
+        self, snapshot_id: UUID, rows: object, **kwargs: object
+    ) -> None:
+        self.replaced = {
+            "snapshot_id": snapshot_id,
+            "rows": rows,
+            **kwargs,
+        }
+
+
+class _FakeReadableObjectStore(_FakeObjectStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ref_keys: list[str] = []
+
+    def ref_for_key(self, storage_key: str) -> str:
+        self.ref_keys.append(storage_key)
+        return "object-ref"
+
+    def open(self, provider_ref: str) -> BytesIO:
+        assert provider_ref == "object-ref"
+        return BytesIO(b"stored pbf")
 
 
 def test_sha256_of_computes_digest(tmp_path: Path) -> None:
@@ -180,3 +227,40 @@ def test_import_snapshot_falls_back_to_source_path_for_parsing() -> None:
 
     assert snapshots.created["source_path"] == "local/argentina.osm.pbf"
     assert importer.call_args.kwargs["source_path"] == "local/argentina.osm.pbf"
+
+
+def test_rebuild_active_snapshot_reuses_object_store_and_submits_batch() -> None:
+    snapshots = _FakeRebuildSnapshots()
+    object_store = _FakeReadableObjectStore()
+    runtime = _FakeJobRuntime()
+    correlation_id = uuid4()
+    staged = ImportResult(rows=(), poi_count=4, linear_count=5)
+
+    with (
+        mock.patch(
+            "umbral.ops.urban.osm_importer.parse_snapshot", return_value=staged
+        ) as parser,
+        mock.patch(
+            "umbral.ops.urban.SqlAlchemyObservationRepository"
+        ) as observations,
+    ):
+        result = rebuild_active_snapshot(
+            snapshots,
+            object_store,
+            session_factory=object(),
+            job_runtime=runtime,
+            correlation_id=correlation_id,
+        )
+
+    assert result == (4, 5, snapshots.snapshot.id)
+    assert object_store.ref_keys == ["objects/urban/current.pbf"]
+    parser.assert_called_once()
+    source_path = Path(parser.call_args.kwargs["source_path"])
+    assert source_path.name.endswith(".osm.pbf")
+    assert snapshots.replaced["snapshot_id"] == snapshots.snapshot.id
+    observations.return_value.invalidate_active_for_source.assert_called_once_with(
+        "urban"
+    )
+    assert len(runtime.submitted) == 1
+    assert str(snapshots.snapshot.id) in runtime.submitted[0].identity.idempotency_key
+    assert str(correlation_id) in runtime.submitted[0].identity.idempotency_key

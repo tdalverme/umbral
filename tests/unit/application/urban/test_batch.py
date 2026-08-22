@@ -79,8 +79,11 @@ def test_batch_produces_normalized_signals_and_observations(
     assert outcome.listings_processed == 1
     assert outcome.signal_rows > 0
     assert outcome.stats_rows > 0
-    client_rows = signals.for_listing_contract(listing_id, uuid4())
-    assert any(str(row["signal"]) == "cafe_lifestyle" for row in client_rows)
+    assert any(
+        str(row["signal"]) == "cafe_lifestyle"
+        for row in signals.rows
+        if row["listing_id"] == listing_id
+    )
     assert outcome.observation_count == 2
 
 

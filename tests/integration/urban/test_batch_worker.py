@@ -41,7 +41,9 @@ def test_batch_worker_produces_all_artifacts(urban_backend) -> None:
 
     repos = urban_repos(urban_backend)
     contract_id = repos["contracts"].active().id
-    signals = repos["signals"].for_listing_contract(listing_id, contract_id)
+    signals = repos["signals"].for_listing_snapshot_contract(
+        listing_id, snapshot_id, contract_id
+    )
     names = {str(row["signal"]) for row in signals}
     assert "cafe_lifestyle" in names
     primitives = repos["primitives"].for_listing_snapshot(listing_id, snapshot_id)

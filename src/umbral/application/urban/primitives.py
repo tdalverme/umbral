@@ -39,8 +39,8 @@ def buckets_to_primitives(
             "snapshot_id": snapshot_id,
             "category": category,
             "kind": kind,
-            "count_300m": 0,
-            "count_600m": 0,
+            "count_300m": None,
+            "count_600m": None,
             "nearest_m": float(nearest),
         }
         for metric in spec:

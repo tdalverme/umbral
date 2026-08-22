@@ -43,6 +43,16 @@ class UrbanSnapshotRepository(Protocol):
 
     def active(self) -> object | None: ...
 
+    def replace_snapshot_derived(
+        self,
+        snapshot_id: UUID,
+        rows: Sequence[object],
+        *,
+        poi_count: int,
+        linear_count: int,
+        correlation_id: UUID,
+    ) -> None: ...
+
 
 class UrbanPrimitiveRepository(Protocol):
     def upsert_many(
@@ -60,12 +70,18 @@ class UrbanPrimitiveRepository(Protocol):
 
 
 class UrbanSignalRepositoryPort(Protocol):
-    def replace_for_contract(
-        self, contract_version_id: UUID, rows: Sequence[Mapping[str, object]]
+    def replace_for_snapshot_contract(
+        self,
+        snapshot_id: UUID,
+        contract_version_id: UUID,
+        rows: Sequence[Mapping[str, object]],
     ) -> None: ...
 
-    def for_listing_contract(
-        self, listing_id: UUID, contract_version_id: UUID
+    def for_listing_snapshot_contract(
+        self,
+        listing_id: UUID,
+        snapshot_id: UUID,
+        contract_version_id: UUID,
     ) -> tuple[Mapping[str, object], ...]: ...
 
 

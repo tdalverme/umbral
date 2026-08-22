@@ -171,7 +171,9 @@ class UrbanBatchService:
                         "correlation_id": correlation_id,
                     }
                 )
-        self.signals.replace_for_contract(contract_version_id, signal_rows)
+        self.signals.replace_for_snapshot_contract(
+            snapshot_id, contract_version_id, signal_rows
+        )
         self.stats.replace_for_snapshot(snapshot_id, stats_rows)
 
         observations = self._build_observations(

@@ -27,10 +27,18 @@ OSM_POI_PREFIX = "n"
 OSM_LINEAR_PREFIX = "w"
 
 Classifier = Callable[[Mapping[str, str]], str | None]
+Coordinate = tuple[float, float]
 
 
 class OsmiumUnavailable(RuntimeError):
     """osmium (and its native build) is not installed in this environment."""
+
+
+@dataclass(frozen=True, slots=True)
+class ImportResult:
+    rows: tuple[UrbanCategory, ...]
+    poi_count: int
+    linear_count: int
 
 
 def classify(tags: Mapping[str, str], mappings: Sequence[TagMapping]) -> str | None:
@@ -44,6 +52,17 @@ def classify(tags: Mapping[str, str], mappings: Sequence[TagMapping]) -> str | N
             if tags.get(key) == value:
                 return mapping.category
     return None
+
+
+def point_wkt(lon: float, lat: float) -> str:
+    return f"SRID=4326;POINT({lon:g} {lat:g})"
+
+
+def linestring_wkt(points: Sequence[Coordinate]) -> str:
+    if len(points) < 2:
+        raise ValueError("a linestring requires at least two coordinates")
+    coordinates = ",".join(f"{lon:g} {lat:g}" for lon, lat in points)
+    return f"SRID=4326;LINESTRING({coordinates})"
 
 
 @dataclass(slots=True)
@@ -60,8 +79,7 @@ class _RowCollector:
         osm_id: str,
         category: str,
         kind: str,
-        lon: float,
-        lat: float,
+        geometry: WKTElement,
         name: str | None,
         tags: Mapping[str, str],
     ) -> None:
@@ -80,7 +98,7 @@ class _RowCollector:
                 kind=kind,
                 name=name,
                 tags=dict(tags),
-                geometry=WKTElement(f"SRID=4326;POINT({lon} {lat})"),
+                geometry=geometry,
             )
         )
         if kind == "poi":
@@ -100,6 +118,25 @@ def import_snapshot(
 
     Returns ``(poi_count, linear_count)`` after committing the parsed rows.
     """
+    result = parse_snapshot(
+        snapshot_id=snapshot_id,
+        source_path=source_path,
+        contract=contract,
+    )
+
+    with session_factory() as session:
+        session.add_all(result.rows)
+        session.commit()
+    return result.poi_count, result.linear_count
+
+
+def parse_snapshot(
+    *,
+    snapshot_id: UUID,
+    source_path: str | Path,
+    contract: UrbanContract,
+) -> ImportResult:
+    """Parse an OSM PBF into staged category rows without database writes."""
     try:  # pragma: no cover - exercised only when osmium is installed
         osmium = importlib.import_module("osmium")
     except ImportError as error:  # pragma: no cover
@@ -121,8 +158,9 @@ def import_snapshot(
                 osm_id=f"{OSM_POI_PREFIX}{node.id}",
                 category=category,
                 kind="poi",
-                lon=node.location.lon,
-                lat=node.location.lat,
+                geometry=WKTElement(
+                    point_wkt(node.location.lon, node.location.lat)
+                ),
                 name=node.tags.get("name"),
                 tags=_tags(node.tags),
             )
@@ -131,28 +169,32 @@ def import_snapshot(
             if len(way.nodes) < 2:
                 return
             category = linear(_tags(way.tags))
-            location = way.nodes[0].location
-            if category is None or location is None or not location.valid():
+            if category is None:
+                return
+            points: list[Coordinate] = []
+            for node in way.nodes:
+                location = node.location
+                if location is not None and location.valid():
+                    points.append((location.lon, location.lat))
+            if len(points) < 2:
                 return
             writer.add(
                 snapshot_id=snapshot_id,
                 osm_id=f"{OSM_LINEAR_PREFIX}{way.id}",
                 category=category,
                 kind="linear",
-                lon=location.lon,
-                lat=location.lat,
+                geometry=WKTElement(linestring_wkt(points)),
                 name=way.tags.get("name"),
                 tags=_tags(way.tags),
             )
 
     handler = _Handler()
     handler.apply_file(str(source_path), locations=True)
-
-    with session_factory() as session:
-        for row in writer.rows:
-            session.add(row)
-        session.commit()
-    return writer.poi_count, writer.linear_count
+    return ImportResult(
+        rows=tuple(writer.rows),
+        poi_count=writer.poi_count,
+        linear_count=writer.linear_count,
+    )
 
 
 def _classifier(mappings: Sequence[TagMapping]) -> Classifier:

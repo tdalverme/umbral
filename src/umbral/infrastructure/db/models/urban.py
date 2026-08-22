@@ -109,7 +109,7 @@ class UrbanCategory(IdentityAuditMixin, Base):
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tags: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     geometry: Mapped[object | None] = mapped_column(
-        Geometry(geometry_type="POINT", srid=4326), nullable=True
+        Geometry(geometry_type="GEOMETRY", srid=4326), nullable=True
     )
 
 
@@ -144,8 +144,8 @@ class UrbanPrimitive(IdentityAuditMixin, Base):
     )
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
-    count_300m: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    count_600m: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    count_300m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    count_600m: Mapped[int | None] = mapped_column(Integer, nullable=True)
     nearest_m: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
@@ -157,9 +157,10 @@ class UrbanSignal(IdentityAuditMixin, Base):
     __table_args__ = (
         UniqueConstraint(
             "listing_id",
+            "snapshot_id",
             "contract_version_id",
             "signal",
-            name="uq_urban_signals_listing_contract_signal",
+            name="uq_urban_signals_listing_snapshot_contract_signal",
         ),
         CheckConstraint(
             "value >= 0 AND value <= 1", name="ck_urban_signals_value"
@@ -176,7 +177,12 @@ class UrbanSignal(IdentityAuditMixin, Base):
             "normalization_scope IN ('barrio', 'caba')",
             name="ck_urban_signals_scope",
         ),
-        Index("ix_urban_signals_listing_contract", "listing_id", "contract_version_id"),
+        Index(
+            "ix_urban_signals_listing_contract",
+            "listing_id",
+            "snapshot_id",
+            "contract_version_id",
+        ),
         Index("ix_urban_signals_snapshot", "snapshot_id"),
         Index("ix_urban_signals_signal", "signal"),
     )

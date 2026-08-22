@@ -16,7 +16,7 @@
     {"category": "nightlife", "osm_tags": [["amenity", "bar"], ["amenity", "pub"], ["amenity", "nightclub"]]},
     {"category": "restaurant", "osm_tags": [["amenity", "restaurant"], ["amenity", "fast_food"]]},
     {"category": "bus_stop", "osm_tags": [["highway", "bus_stop"], ["amenity", "bus_station"]]},
-    {"category": "subway_station", "osm_tags": [["station", "subway"], ["railway", "subway_entrance"]]},
+    {"category": "subway_station", "osm_tags": [["station", "subway"]]},
     {"category": "train_station", "osm_tags": [["railway", "station"], ["railway", "halt"]]},
     {"category": "green_space", "osm_tags": [["leisure", "park"], ["leisure", "garden"], ["landuse", "grass"], ["natural", "wood"]]},
     {"category": "shopping_mall", "osm_tags": [["shop", "mall"]]},

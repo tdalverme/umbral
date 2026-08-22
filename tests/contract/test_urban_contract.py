@@ -64,6 +64,44 @@ def test_contract_v2_is_a_superset_and_keeps_v1_signals() -> None:
             assert category in parsed.primitive_names()
 
 
+def test_v2_subway_station_mapping_excludes_entrances() -> None:
+    contract = load_urban_contract(CONTRACT_V2_PATH)
+
+    station = next(
+        mapping
+        for mapping in contract.tags_mapping
+        if mapping.category == "subway_station"
+    )
+
+    assert station.osm_tags == (("station", "subway"),)
+
+
+def test_count_operator_cannot_reference_nearest_metric() -> None:
+    data = _load()
+    cafe = next(
+        signal for signal in data["signals"] if signal["name"] == "cafe_lifestyle"
+    )
+    cafe["formula"]["terms"][0]["primitive"] = "cafe.nearest_m"
+    cafe["formula"]["terms"][0]["op"] = "count"
+
+    with pytest.raises(UrbanContractInvalid, match="operator"):
+        parse_urban_contract(data)
+
+
+def test_distance_operator_cannot_reference_count_metric() -> None:
+    data = _load()
+    cafe = next(
+        signal for signal in data["signals"] if signal["name"] == "cafe_lifestyle"
+    )
+    cafe["formula"]["terms"][0]["primitive"] = "cafe.count_600m"
+    cafe["formula"]["terms"][0]["op"] = "distance"
+    cafe["formula"]["terms"][0]["near"] = 100
+    cafe["formula"]["terms"][0]["far"] = 650
+
+    with pytest.raises(UrbanContractInvalid, match="operator"):
+        parse_urban_contract(data)
+
+
 def test_contract_document_matches_the_published_json() -> None:
     parsed = load_urban_contract(CONTRACT_PATH)
 

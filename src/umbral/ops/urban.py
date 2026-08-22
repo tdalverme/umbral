@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
@@ -27,6 +28,9 @@ from uuid import UUID, uuid4
 import httpx
 
 from umbral.application.jobs.contracts import SubmitJob
+from umbral.infrastructure.db.repositories.criteria import (
+    SqlAlchemyObservationRepository,
+)
 from umbral.infrastructure.db.repositories.urban import (
     SqlAlchemyUrbanSnapshotRepository,
 )
@@ -134,6 +138,61 @@ def import_snapshot(
     return poi_count, linear_count, snapshot.id
 
 
+def rebuild_active_snapshot(
+    snapshots: SnapshotsLike,
+    object_store: ObjectStoreLike,
+    *,
+    session_factory: Any,
+    job_runtime: JobRuntimeLike,
+    correlation_id: UUID,
+) -> tuple[int, int, UUID]:
+    """Rebuild the active snapshot from its immutable object-store PBF."""
+    snapshot = snapshots.active()
+    if snapshot is None:
+        raise RuntimeError("urban_snapshot_missing")
+
+    contract = load_urban_contract_published()
+    provider_ref = object_store.ref_for_key(snapshot.source_path)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", suffix=".osm.pbf", delete=False
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            with object_store.open(provider_ref) as body:
+                while chunk := body.read(1024 * 1024):
+                    temporary.write(chunk)
+            temporary.flush()
+
+        staged = osm_importer.parse_snapshot(
+            snapshot_id=snapshot.id,
+            source_path=temporary_path,
+            contract=contract,
+        )
+        SqlAlchemyObservationRepository(session_factory).invalidate_active_for_source(
+            "urban"
+        )
+        snapshots.replace_snapshot_derived(
+            snapshot.id,
+            staged.rows,
+            poi_count=staged.poi_count,
+            linear_count=staged.linear_count,
+            correlation_id=correlation_id,
+        )
+        job_runtime.submit(
+            SubmitJob.create(
+                job_type="urban.batch",
+                logical_target="full",
+                idempotency_key=f"urban.rebuild:{snapshot.id}:{correlation_id}",
+                correlation_id=correlation_id,
+            )
+        )
+        return staged.poi_count, staged.linear_count, snapshot.id
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
 def _cli_import(
     session_factory: Any,
     object_store: ObjectStoreLike,
@@ -169,6 +228,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     object_store = build_object_store(deps.settings)
     correlation_id = uuid4()
     dest = Path(args.dest)
+
+    if args.rebuild_active:
+        poi_count, linear_count, snapshot_id = rebuild_active_snapshot(
+            SqlAlchemyUrbanSnapshotRepository(deps.session_provider.session_factory),
+            object_store,
+            session_factory=deps.session_provider.session_factory,
+            job_runtime=deps.runtime,
+            correlation_id=correlation_id,
+        )
+        print(
+            f"snapshot={snapshot_id} poi={poi_count} "
+            f"linear={linear_count} rebuilt=true"
+        )
+        return 0
 
     if args.fetch:
         with httpx.Client(follow_redirects=True, timeout=600) as client:
@@ -214,6 +287,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="import_",
         action="store_true",
         help="import categories and trigger the urban batch",
+    )
+    parser.add_argument(
+        "--rebuild-active",
+        action="store_true",
+        help="rebuild the active snapshot from its stored PBF",
     )
     parser.add_argument("--url", default=_DEFAULT_URL, help="Geofabrik snapshot URL")
     parser.add_argument("--dest", default=_DEFAULT_DEST, help="local snapshot path")

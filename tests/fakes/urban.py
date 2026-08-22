@@ -96,7 +96,9 @@ class FakeUrbanPrimitiveRepository:
         self, listing_id: UUID, snapshot_id: UUID
     ) -> tuple[Mapping[str, object], ...]:
         return tuple(
-            row for row in self.rows if row["listing_id"] == listing_id
+            row
+            for row in self.rows
+            if row["listing_id"] == listing_id and row["snapshot_id"] == snapshot_id
         )
 
     def listing_ids_with_precise_coordinates(self) -> tuple[UUID, ...]:
@@ -110,18 +112,40 @@ class FakeUrbanSignalRepository:
     def __init__(self) -> None:
         self.rows: list[Mapping[str, object]] = []
 
-    def replace_for_contract(
-        self, contract_version_id: UUID, rows: Sequence[Mapping[str, object]]
+    def replace_for_snapshot_contract(
+        self,
+        snapshot_id: UUID,
+        contract_version_id: UUID,
+        rows: Sequence[Mapping[str, object]],
     ) -> None:
-        self.rows = list(rows)
+        self.rows = [
+            row
+            for row in self.rows
+            if not (
+                row.get("snapshot_id") == snapshot_id
+                and row.get("contract_version_id") == contract_version_id
+            )
+        ] + [
+            {
+                **row,
+                "snapshot_id": snapshot_id,
+                "contract_version_id": contract_version_id,
+            }
+            for row in rows
+        ]
 
-    def for_listing_contract(
-        self, listing_id: UUID, contract_version_id: UUID
+    def for_listing_snapshot_contract(
+        self,
+        listing_id: UUID,
+        snapshot_id: UUID,
+        contract_version_id: UUID,
     ) -> tuple[Mapping[str, object], ...]:
         return tuple(
             row
             for row in self.rows
             if row["listing_id"] == listing_id
+            and row["snapshot_id"] == snapshot_id
+            and row["contract_version_id"] == contract_version_id
         )
 
     def upsert(self, signal: Mapping[str, object], *, correlation_id: UUID) -> None:

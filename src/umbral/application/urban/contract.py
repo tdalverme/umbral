@@ -365,6 +365,15 @@ def _parse_terms(
         )
         if op not in _OPS:
             raise UrbanContractInvalid(f"signal.{signal_name}.{primitive}.bad_op")
+        metric_spec = next(
+            metric_spec for metric_spec in spec if metric_spec.name == metric
+        )
+        if (op == "count" and metric_spec.kind != "count") or (
+            op == "distance" and metric_spec.kind != "nearest"
+        ):
+            raise UrbanContractInvalid(
+                f"signal.{signal_name}.{primitive}.operator_metric_mismatch"
+            )
         weight = _weight(
             term.get("weight"), f"signal.{signal_name}.{primitive}.weight"
         )

@@ -49,8 +49,8 @@ def test_contract_supersede_invalidates_previous_observations(
     assert old_active is not None and old_active.status == "active"
 
     superseding = contracts.register(
-        contract_version="urban-contract-v2",
-        payload={"contract_version": "urban-contract-v2"},
+        contract_version="urban-contract-test-next",
+        payload={"contract_version": "urban-contract-test-next"},
         correlation_id=uuid4(),
     )
     assert superseding.status == "active"

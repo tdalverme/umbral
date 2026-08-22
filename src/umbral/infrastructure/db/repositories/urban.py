@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
 from umbral.infrastructure.db.models.silver import SilverListing
 from umbral.infrastructure.db.models.urban import (
     NeighborhoodSignalStats as NeighborhoodSignalStatsModel,
 )
+from umbral.infrastructure.db.models.urban import UrbanCategory as UrbanCategoryModel
 from umbral.infrastructure.db.models.urban import UrbanContract as UrbanContractModel
 from umbral.infrastructure.db.models.urban import (
     UrbanPrimitive as UrbanPrimitiveModel,
@@ -145,6 +146,57 @@ class SqlAlchemyUrbanSnapshotRepository:
                 .limit(1)
             )
 
+    def replace_snapshot_derived(
+        self,
+        snapshot_id: UUID,
+        rows: Sequence[object],
+        *,
+        poi_count: int,
+        linear_count: int,
+        correlation_id: UUID,
+    ) -> None:
+        stamp = _now()
+        with self.session_factory() as session:
+            snapshot = session.get(UrbanSnapshotModel, snapshot_id)
+            if snapshot is None:
+                raise KeyError(snapshot_id)
+            session.execute(
+                text(
+                    "SELECT pg_advisory_xact_lock("
+                    "hashtextextended(:lock_key, 0))"
+                ),
+                {"lock_key": f"urban-rebuild:{snapshot_id}"},
+            )
+            session.execute(
+                delete(NeighborhoodSignalStatsModel).where(
+                    NeighborhoodSignalStatsModel.snapshot_id == snapshot_id
+                )
+            )
+            session.execute(
+                delete(UrbanSignalModel).where(
+                    UrbanSignalModel.snapshot_id == snapshot_id
+                )
+            )
+            session.execute(
+                delete(UrbanPrimitiveModel).where(
+                    UrbanPrimitiveModel.snapshot_id == snapshot_id
+                )
+            )
+            session.execute(
+                delete(UrbanCategoryModel).where(
+                    UrbanCategoryModel.snapshot_id == snapshot_id
+                )
+            )
+            for row in rows:
+                if not isinstance(row, UrbanCategoryModel):
+                    raise TypeError("urban snapshot rows must be UrbanCategory models")
+                session.add(row)
+            snapshot.poi_count = poi_count
+            snapshot.linear_count = linear_count
+            snapshot.correlation_id = correlation_id
+            snapshot.updated_at = stamp
+            session.commit()
+
 
 class SqlAlchemyUrbanPrimitiveRepository:
     def __init__(self, session_factory: SessionFactory) -> None:
@@ -172,8 +224,8 @@ class SqlAlchemyUrbanPrimitiveRepository:
                     )
                 )
                 if existing is not None:
-                    existing.count_300m = _int(row.get("count_300m"), 0)
-                    existing.count_600m = _int(row.get("count_600m"), 0)
+                    existing.count_300m = _opt_int(row.get("count_300m"))
+                    existing.count_600m = _opt_int(row.get("count_600m"))
                     existing.nearest_m = _opt_float(row.get("nearest_m"))
                     existing.updated_at = stamp
                     existing.correlation_id = correlation_id
@@ -191,8 +243,8 @@ class SqlAlchemyUrbanPrimitiveRepository:
                             snapshot_id=snapshot_id,
                             category=category,
                             kind=str(row.get("kind", "poi")),
-                            count_300m=_int(row.get("count_300m"), 0),
-                            count_600m=_int(row.get("count_600m"), 0),
+                            count_300m=_opt_int(row.get("count_300m")),
+                            count_600m=_opt_int(row.get("count_600m")),
                             nearest_m=_opt_float(row.get("nearest_m")),
                         )
                     )
@@ -260,8 +312,9 @@ class SqlAlchemyUrbanSignalRepository:
     def __init__(self, session_factory: SessionFactory) -> None:
         self.session_factory = session_factory
 
-    def replace_for_contract(
+    def replace_for_snapshot_contract(
         self,
+        snapshot_id: UUID,
         contract_version_id: UUID,
         rows: Sequence[Mapping[str, object]],
     ) -> None:
@@ -269,7 +322,8 @@ class SqlAlchemyUrbanSignalRepository:
         with self.session_factory() as session:
             session.execute(
                 delete(UrbanSignalModel).where(
-                    UrbanSignalModel.contract_version_id == contract_version_id
+                    UrbanSignalModel.snapshot_id == snapshot_id,
+                    UrbanSignalModel.contract_version_id == contract_version_id,
                 )
             )
             for row in rows:
@@ -298,13 +352,17 @@ class SqlAlchemyUrbanSignalRepository:
                 )
             session.commit()
 
-    def for_listing_contract(
-        self, listing_id: UUID, contract_version_id: UUID
+    def for_listing_snapshot_contract(
+        self,
+        listing_id: UUID,
+        snapshot_id: UUID,
+        contract_version_id: UUID,
     ) -> tuple[Mapping[str, object], ...]:
         with self.session_factory() as session:
             models = session.scalars(
                 select(UrbanSignalModel).where(
                     UrbanSignalModel.listing_id == listing_id,
+                    UrbanSignalModel.snapshot_id == snapshot_id,
                     UrbanSignalModel.contract_version_id == contract_version_id,
                 )
             )
@@ -390,6 +448,14 @@ def _int(value: object, default: int) -> int:
     if isinstance(value, int):
         return value
     return default
+
+
+def _opt_int(value: object) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
 
 
 def _float(value: object) -> float:

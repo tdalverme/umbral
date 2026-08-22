@@ -75,7 +75,7 @@ def test_primitives_upsert_and_for_listing_snapshot(urban_backend) -> None:
     assert rows[0]["count_300m"] == 2
 
 
-def test_signals_replace_for_contract(urban_backend) -> None:
+def test_signals_replace_for_snapshot_contract(urban_backend) -> None:
     listing_id = seed_listing(urban_backend)
     snapshot_id = seed_urban_snapshot(urban_backend)
     contract_id, _ = seed_urban_contract(urban_backend)
@@ -94,14 +94,52 @@ def test_signals_replace_for_contract(urban_backend) -> None:
             "correlation_id": _CID,
         }
     ]
-    signals.replace_for_contract(contract_id, rows)
-    fetched = signals.for_listing_contract(listing_id, contract_id)
+    signals.replace_for_snapshot_contract(snapshot_id, contract_id, rows)
+    fetched = signals.for_listing_snapshot_contract(
+        listing_id, snapshot_id, contract_id
+    )
     assert len(fetched) == 1
     assert fetched[0]["signal"] == "cafe_lifestyle"
     assert fetched[0]["normalization_scope"] == "barrio"
     # replace wipes old rows.
-    signals.replace_for_contract(contract_id, ())
-    assert signals.for_listing_contract(listing_id, contract_id) == ()
+    signals.replace_for_snapshot_contract(snapshot_id, contract_id, ())
+    assert signals.for_listing_snapshot_contract(
+        listing_id, snapshot_id, contract_id
+    ) == ()
+
+
+def test_signals_replace_keeps_another_snapshot(urban_backend) -> None:
+    listing_id = seed_listing(urban_backend)
+    first_snapshot = seed_urban_snapshot(urban_backend)
+    second_snapshot = seed_urban_snapshot(urban_backend)
+    contract_id, _ = seed_urban_contract(urban_backend)
+    signals = urban_repos(urban_backend)["signals"]
+    row = {
+        "listing_id": listing_id,
+        "signal": "cafe_lifestyle",
+        "value": 0.4,
+        "normalized_value": 0.8,
+        "normalization_scope": "barrio",
+        "confidence": 0.9,
+        "missing": False,
+        "contributors": [],
+        "correlation_id": _CID,
+    }
+    signals.replace_for_snapshot_contract(
+        first_snapshot, contract_id, [{**row, "snapshot_id": first_snapshot}]
+    )
+    signals.replace_for_snapshot_contract(
+        second_snapshot, contract_id, [{**row, "snapshot_id": second_snapshot}]
+    )
+
+    signals.replace_for_snapshot_contract(first_snapshot, contract_id, ())
+
+    assert signals.for_listing_snapshot_contract(
+        listing_id, first_snapshot, contract_id
+    ) == ()
+    assert signals.for_listing_snapshot_contract(
+        listing_id, second_snapshot, contract_id
+    )
 
 
 def test_stats_replace_for_snapshot(urban_backend) -> None:

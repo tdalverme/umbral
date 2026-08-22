@@ -63,4 +63,4 @@ def test_observation_traces_to_contract_and_snapshot(urban_backend) -> None:
         assert snapshot.source_hash == _HASH
         assert snapshot.data_date == _NOW
 
-    assert contract_version == "urban-contract-v1"
+    assert contract_version == "urban-contract-v2"

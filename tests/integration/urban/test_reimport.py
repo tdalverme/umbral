@@ -73,5 +73,6 @@ def test_reimport_recalcs_all_coordinate_listings(urban_backend) -> None:
 
     after = _signal_snapshots(urban_backend)
     assert set(after) == {first, second}
-    assert all(snapshots == {new_snapshot} for snapshots in after.values())
-    assert old_snapshot not in {s for snapshots in after.values() for s in snapshots}
+    assert all(
+        snapshots == {old_snapshot, new_snapshot} for snapshots in after.values()
+    )

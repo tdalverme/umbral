@@ -7,10 +7,12 @@ fake tag dicts without needing a real planet file or the osmium binary.
 from __future__ import annotations
 
 from umbral.application.urban.contract import TagMapping
+from umbral.infrastructure.urban.contract_loader import load_urban_contract_published
 from umbral.infrastructure.urban.osm_importer import (
     OsmiumUnavailable,
     _tags,
     classify,
+    linestring_wkt,
 )
 
 _POI = [
@@ -74,3 +76,26 @@ def test_pyosmium_tag_list_is_converted_before_classification() -> None:
 
 def test_osmium_unavailable_is_a_runtime_error() -> None:
     assert issubclass(OsmiumUnavailable, RuntimeError)
+
+
+def test_way_geometry_uses_all_valid_nodes() -> None:
+    geometry = linestring_wkt(
+        [(-58.40, -34.60), (-58.41, -34.61), (-58.42, -34.62)]
+    )
+
+    assert (
+        geometry
+        == "SRID=4326;LINESTRING(-58.4 -34.6,-58.41 -34.61,-58.42 -34.62)"
+    )
+
+
+def test_published_subway_mapping_excludes_entrances() -> None:
+    contract = load_urban_contract_published()
+    mappings = tuple(
+        mapping
+        for mapping in contract.tags_mapping
+        if mapping.category == "subway_station"
+    )
+
+    assert classify({"station": "subway"}, mappings) == "subway_station"
+    assert classify({"railway": "subway_entrance"}, mappings) is None
