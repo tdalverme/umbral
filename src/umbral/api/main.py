@@ -44,6 +44,8 @@ from umbral.api.routers.matches import configure_matches_routes
 from umbral.api.routers.matches import router as matches_router
 from umbral.api.routers.notifications import configure_notifications_routes
 from umbral.api.routers.notifications import router as notifications_router
+from umbral.api.routers.playground import configure_playground_routes
+from umbral.api.routers.playground import router as playground_router
 from umbral.api.routers.product_events import configure_product_events_routes
 from umbral.api.routers.product_events import router as product_events_router
 from umbral.api.routers.runtime import configure_runtime_routes
@@ -280,6 +282,7 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     configure_chat_routes(dependencies)
     configure_notifications_routes(dependencies)
     configure_agent_ops_routes(dependencies)
+    configure_playground_routes(dependencies)
     app.add_middleware(CorrelationMiddleware)
     app.add_exception_handler(ApplicationError, application_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -301,6 +304,8 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     app.include_router(learning_router)
     app.include_router(chat_router)
     app.include_router(notifications_router)
+    if dependencies.playground is not None:
+        app.include_router(playground_router)
 
     def custom_openapi() -> dict[str, Any]:
         return _openapi_for_app(app)

@@ -16,6 +16,7 @@ from umbral.application.identity.ports import IdentityStore
 from umbral.application.ingestion.service import ImportRunService
 from umbral.application.jobs.ports import JobRuntime
 from umbral.application.objects.ports import ObjectStore
+from umbral.application.playground.service import PlaygroundService
 from umbral.application.radar.service import RadarService
 from umbral.application.runtime.readiness import ReadinessModule
 from umbral.application.runtime.version import (
@@ -186,6 +187,7 @@ class RuntimeDependencies:
     ops_overview: object | None = None
     notifications: object | None = None
     preferences: object | None = None
+    playground: PlaygroundService | None = None
 
 
 def build_runtime_dependencies(

@@ -24,8 +24,13 @@ from umbral.api.dependencies import (
     _load_release,
 )
 from umbral.api.main import create_app
+from umbral.application.playground.service import PlaygroundService
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.db.session import SessionProvider
+from umbral.infrastructure.playground.conversation import (
+    build_local_conversation_runner,
+)
+from umbral.infrastructure.playground.geo import build_local_geo_inspector
 from umbral.infrastructure.runtime.composition import compose_runtime
 from umbral.infrastructure.runtime.heartbeat import RuntimeHeartbeatWriter
 
@@ -95,6 +100,10 @@ def _dependencies() -> RuntimeDependencies:
         heartbeat_writer=heartbeat_writer,
         job_runtime=composition.job_runtime,
         notifications=_build_notifications(settings),
+        playground=PlaygroundService(
+            conversation=build_local_conversation_runner(),
+            geo=build_local_geo_inspector(),
+        ),
         **_build_agent_stack(settings, composition),
     )
 
