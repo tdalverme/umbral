@@ -45,22 +45,49 @@ $apiProcess = Start-Process `
     -WindowStyle Hidden `
     -PassThru
 
-Write-Host "Playground API: http://127.0.0.1:$ApiPort"
-Write-Host "Playground web: http://localhost:$WebPort/playground"
-if ([string]::IsNullOrWhiteSpace($env:PLAYGROUND_SNAPSHOT_PATH)) {
-    Write-Host "Data source: demo fixture"
-} else {
-    Write-Host "Data source: real snapshot [$env:PLAYGROUND_SNAPSHOT_PATH]"
-}
-Write-Host "Fake mode: disponible sin credenciales. Real mode: requiere AGENT_MANAGED_ENDPOINT y AGENT_MANAGED_API_KEY."
-Write-Host "No se inicia Postgres, Redis, workers, scheduler, release ni harness."
-
+$apiProbe = "http://127.0.0.1:$ApiPort/api/v1/playground/fixtures"
 try {
+    $apiReady = $false
+    $apiProbeError = "sin respuesta"
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        if ($apiProcess.HasExited) {
+            $apiProbeError = "el proceso API terminó antes de responder"
+            break
+        }
+        try {
+            $probe = Invoke-WebRequest -Uri $apiProbe -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
+            if ($probe.StatusCode -eq 200 -and $probe.Content -match '"fixtures"') {
+                $apiReady = $true
+                break
+            }
+            $apiProbeError = "respondió HTTP $($probe.StatusCode) sin el contrato de fixtures"
+        } catch {
+            $apiProbeError = $_.Exception.Message
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    if (-not $apiReady) {
+        throw "El API del playground no respondió 200 en $apiProbe. Puede haber otro proceso ocupando el puerto $ApiPort. Detalle: $apiProbeError"
+    }
+
+    Write-Host "Playground API: http://127.0.0.1:$ApiPort"
+    Write-Host "Playground web: http://localhost:$WebPort/playground"
+    if ([string]::IsNullOrWhiteSpace($env:PLAYGROUND_SNAPSHOT_PATH)) {
+        Write-Host "Data source: demo fixture"
+    } else {
+        Write-Host "Data source: real snapshot [$env:PLAYGROUND_SNAPSHOT_PATH]"
+    }
+    Write-Host "Fake mode: disponible sin credenciales. Real mode: requiere AGENT_MANAGED_ENDPOINT y AGENT_MANAGED_API_KEY."
+    Write-Host "No se inicia Postgres, Redis, workers, scheduler, release ni harness."
+
     Push-Location (Join-Path $repoRoot "apps\web")
-    & $next dev --port $WebPort
+    try {
+        & $next dev --port $WebPort
+    } finally {
+        Pop-Location
+    }
 }
 finally {
-    Pop-Location
     if (-not $apiProcess.HasExited) {
         Stop-Process -Id $apiProcess.Id
     }
