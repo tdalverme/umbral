@@ -21,7 +21,7 @@ from umbral.infrastructure.playground.conversation import (
     build_local_conversation_runner,
 )
 from umbral.infrastructure.playground.fixtures import load_playground_catalog
-from umbral.infrastructure.playground.geo import build_local_geo_inspector
+from umbral.infrastructure.playground.geo import LocalGeoInspector
 
 
 def create_playground_app() -> FastAPI:
@@ -30,7 +30,7 @@ def create_playground_app() -> FastAPI:
     catalog = load_playground_catalog(snapshot_path)
     service = PlaygroundService(
         conversation=build_local_conversation_runner(),
-        geo=build_local_geo_inspector(snapshot_path),
+        geo=LocalGeoInspector(catalog),
     )
     dependencies = cast(
         RuntimeDependencies,

@@ -50,7 +50,7 @@ $expectRealSnapshot = -not [string]::IsNullOrWhiteSpace($env:PLAYGROUND_SNAPSHOT
 try {
     $apiReady = $false
     $apiProbeError = "sin respuesta"
-    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    for ($attempt = 0; $attempt -lt 45; $attempt++) {
         if ($apiProcess.HasExited) {
             $apiProbeError = "el proceso API terminó antes de responder"
             break
