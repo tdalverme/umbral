@@ -93,7 +93,7 @@ export function PlaygroundView(): React.ReactElement {
       ) : lab === "conversation" ? (
         <ConversationLab fixture={fixture} />
       ) : (
-        <GeoLab fixture={fixture} />
+        <GeoLab fixtures={fixtures} />
       )}
     </main>
   );
@@ -298,24 +298,32 @@ function ConversationLab({ fixture }: Readonly<{ fixture: PlaygroundFixture }>):
   );
 }
 
-function GeoLab({ fixture }: Readonly<{ fixture: PlaygroundFixture }>): React.ReactElement {
-  const [listingId, setListingId] = useState(fixture.listings[0]?.id ?? "");
+function GeoLab({ fixtures }: Readonly<{ fixtures: PlaygroundFixture[] }>): React.ReactElement {
+  const [sourceId, setSourceId] = useState("");
+  const [listingId, setListingId] = useState("");
   const [radius, setRadius] = useState("600");
   const [inspection, setInspection] = useState<GeoInspection | null>(null);
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const listing = fixture.listings.find((item) => item.id === listingId) ?? fixture.listings[0];
+  const activeSourceId = sourceId || fixtures[0]?.id || "";
+  const fixture = fixtures.find((item) => item.id === activeSourceId) ?? fixtures[0];
+  const activeListingId = listingId || fixture?.listings[0]?.id || "";
+  const listing = fixture?.listings.find((item) => item.id === activeListingId) ?? fixture?.listings[0];
   const activeSignal = inspection?.signals.find((signal) => signal.signal === selectedSignal) ?? inspection?.signals[0];
   const selectedFeature = inspection?.features.find((feature) => feature.id === selectedFeatureId);
+
+  if (fixture === undefined) {
+    return <p className="text-sm text-muted-foreground">Cargando fuentes de Geo Lab…</p>;
+  }
 
   const inspect = () => {
     setError(null);
     startTransition(() => {
       void postJson<GeoInspection>("/api/playground/geo", {
         fixture_id: fixture.id,
-        listing_id: listingId,
+        listing_id: activeListingId,
         radius_m: Number(radius),
       })
         .then((result) => {
@@ -332,15 +340,39 @@ function GeoLab({ fixture }: Readonly<{ fixture: PlaygroundFixture }>): React.Re
       <Card>
         <CardHeader>
           <CardTitle id="geo-lab-title">Inspeccioná el contexto urbano</CardTitle>
-          <CardDescription>Seleccioná un listing, ajustá el radio y seguí la línea feature → primitiva → señal.</CardDescription>
+          <CardDescription>Elegí una fuente, seleccioná un listing, ajustá el radio y seguí la línea feature → primitiva → señal.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-4">
+          <Field className="min-w-56 flex-1">
+            <FieldLabel htmlFor="geo-source">Fuente de datos</FieldLabel>
+            <select
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              id="geo-source"
+              value={activeSourceId}
+              onChange={(event) => {
+                const nextSourceId = event.target.value;
+                const nextFixture = fixtures.find((item) => item.id === nextSourceId);
+                setSourceId(nextSourceId);
+                setListingId(nextFixture?.listings[0]?.id ?? "");
+                setInspection(null);
+                setSelectedSignal(null);
+                setSelectedFeatureId(null);
+                setError(null);
+              }}
+            >
+              {fixtures.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.id === "demo" ? "Demo fixture" : `Snapshot real · ${item.id}`}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field className="min-w-56 flex-1">
             <FieldLabel htmlFor="geo-listing">Listing</FieldLabel>
             <select
               className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
               id="geo-listing"
-              value={listingId}
+              value={activeListingId}
               onChange={(event) => setListingId(event.target.value)}
             >
               {fixture.listings.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.neighborhood ?? "sin barrio"}</option>)}
