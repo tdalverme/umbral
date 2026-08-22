@@ -1,0 +1,125 @@
+{
+  "id": "demo",
+  "profile": {
+    "id": "00000000-0000-0000-0000-000000000005",
+    "name": "Mi radar demo",
+    "operation": "rental",
+    "zones": ["palermo"],
+    "budget_max": 1200,
+    "budget_min": null,
+    "min_rooms": 2,
+    "surface_min": null,
+    "surface_max": null,
+    "status": "active",
+    "version": 1
+  },
+  "listings": [
+    {
+      "id": "listing-palermo-001",
+      "uuid": "00000000-0000-0000-0000-000000000101",
+      "source_id": "fixture-listing-001",
+      "url": "https://example.test/listings/palermo-001",
+      "neighborhood": "Palermo",
+      "latitude": -34.5875,
+      "longitude": -58.3971,
+      "geo_precision": "rooftop",
+      "total_cost": 1150,
+      "price_value": 1050,
+      "price_currency": "USD",
+      "expenses_value": 100,
+      "surface_m2": 52,
+      "rooms": 2,
+      "bedrooms": 1,
+      "floor": 4,
+      "property_type": "apartment",
+      "amenities": ["balcony", "elevator"],
+      "description_text": "Fixture para explorar un listing desde el mapa."
+    }
+  ],
+  "urban": {
+    "snapshot_id": "urban-fixture-palermo-001",
+    "features": [
+      {
+        "id": "poi-cafe-001",
+        "name": "Café Fixture",
+        "category": "cafe",
+        "kind": "poi",
+        "distance_m": 120,
+        "geometry": {"type": "Point", "coordinates": [-58.3961, -34.5872]}
+      },
+      {
+        "id": "poi-cafe-002",
+        "name": "Café Dos",
+        "category": "cafe",
+        "kind": "poi",
+        "distance_m": 280,
+        "geometry": {"type": "Point", "coordinates": [-58.398, -34.588]}
+      },
+      {
+        "id": "poi-subway-001",
+        "name": "Plaza Italia",
+        "category": "subway_station",
+        "kind": "poi",
+        "distance_m": 480,
+        "geometry": {"type": "Point", "coordinates": [-58.3975, -34.5817]}
+      },
+      {
+        "id": "poi-green-001",
+        "name": "Plaza Italia",
+        "category": "green_space",
+        "kind": "poi",
+        "distance_m": 510,
+        "geometry": {"type": "Point", "coordinates": [-58.3978, -34.5818]}
+      },
+      {
+        "id": "poi-restaurant-001",
+        "name": "Restó Fixture",
+        "category": "restaurant",
+        "kind": "poi",
+        "distance_m": 190,
+        "geometry": {"type": "Point", "coordinates": [-58.3956, -34.5878]}
+      },
+      {
+        "id": "poi-bus-001",
+        "name": "Parada Fixture",
+        "category": "bus_stop",
+        "kind": "poi",
+        "distance_m": 160,
+        "geometry": {"type": "Point", "coordinates": [-58.3985, -34.5869]}
+      },
+      {
+        "id": "line-subway-001",
+        "name": "Línea D",
+        "category": "subway_line",
+        "kind": "linear",
+        "distance_m": 220,
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-58.401, -34.584], [-58.395, -34.584]]
+        }
+      },
+      {
+        "id": "line-major-road-001",
+        "name": "Avenida Fixture",
+        "category": "major_road",
+        "kind": "linear",
+        "distance_m": 340,
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[-58.401, -34.589], [-58.394, -34.589]]
+        }
+      }
+    ],
+    "poi_distances": {
+      "cafe": {"count_300m": [120, 280], "count_600m": [120, 280], "nearest_m": [120, 280]},
+      "restaurant": {"count_300m": [190], "nearest_m": [190]},
+      "bus_stop": {"count_300m": [160], "count_600m": [160], "nearest_m": [160]},
+      "subway_station": {"count_600m": [480], "nearest_m": [480]},
+      "green_space": {"count_600m": [510], "nearest_m": [510]}
+    },
+    "linear_distances": {
+      "subway_line": {"nearest_m": [220]},
+      "major_road": {"nearest_m": [340]}
+    }
+  }
+}
