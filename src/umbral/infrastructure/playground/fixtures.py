@@ -49,6 +49,12 @@ def load_fixtures(path: Path | None = None) -> PlaygroundFixtures:
         raise ValueError("playground fixture is missing required sections")
     if not listings or not all(isinstance(item, Mapping) for item in listings):
         raise ValueError("playground fixture must contain listings")
+    by_listing = urban.get("by_listing")
+    if by_listing is not None and (
+        not isinstance(by_listing, Mapping)
+        or not all(isinstance(item, Mapping) for item in by_listing.values())
+    ):
+        raise ValueError("playground fixture urban.by_listing must be an object")
     fixture = PlaygroundFixture(
         fixture_id=fixture_id,
         profile=copy.deepcopy(dict(profile)),

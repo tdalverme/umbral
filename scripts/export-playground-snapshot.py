@@ -43,7 +43,8 @@ def main() -> int:
 
     print(
         f"Snapshot exportado: {summary.output_path} "
-        f"({summary.listing_count} listings, {summary.feature_count} features)"
+        f"({summary.listing_count} listings, "
+        f"{summary.skipped_listing_count} omitidos, {summary.feature_count} features)"
     )
     return 0
 

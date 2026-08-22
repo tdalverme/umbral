@@ -24,6 +24,7 @@ class SnapshotExportSummary:
     output_path: Path
     snapshot_id: str
     listing_count: int
+    skipped_listing_count: int
     feature_count: int
 
 
@@ -58,6 +59,9 @@ def build_snapshot_payload(
         category = str(raw_feature.get("category", ""))
         kind = str(raw_feature.get("kind", "poi"))
         feature_id = f"{raw_feature.get('osm_id', '')}:{category}"
+        geometry = _parse_geometry(raw_feature.get("geometry"))
+        if geometry is None:
+            continue
         urban["features"].append(
             {
                 "id": feature_id,
@@ -65,7 +69,7 @@ def build_snapshot_payload(
                 "category": category,
                 "kind": kind,
                 "distance_m": distance,
-                "geometry": _parse_geometry(raw_feature.get("geometry")),
+                "geometry": geometry,
             }
         )
         distance_buckets = urban[
@@ -151,9 +155,7 @@ def export_playground_snapshot(
                         sl.bedrooms,
                         sl.floor,
                         sl.property_type,
-                        sl.amenities,
-                        sl.description_text,
-                        sl.location_text
+                        sl.amenities
                     FROM silver_listings sl
                     WHERE sl.geometry IS NOT NULL
                       {listing_filter}
@@ -224,6 +226,9 @@ def export_playground_snapshot(
         output_path=output_path,
         snapshot_id=snapshot_id,
         listing_count=len(listing_rows),
+        skipped_listing_count=(
+            max(0, len(set(listing_ids)) - len(selected_ids)) if listing_ids else 0
+        ),
         feature_count=len(feature_rows),
     )
 
@@ -290,8 +295,6 @@ def _serialize_listing(row: Mapping[str, object]) -> dict[str, Any]:
         "floor": _json_value(row.get("floor")),
         "property_type": _json_value(row.get("property_type")),
         "amenities": _json_value(row.get("amenities") or []),
-        "description_text": _json_value(row.get("description_text")),
-        "location_text": _json_value(row.get("location_text")),
     }
 
 

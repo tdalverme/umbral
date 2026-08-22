@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from umbral.application.playground.contracts import GeoInspection, GeoInspectionRequest
@@ -74,7 +75,7 @@ class LocalGeoInspector:
         )
 
 
-def build_local_geo_inspector(snapshot_path=None) -> LocalGeoInspector:
+def build_local_geo_inspector(snapshot_path: Path | None = None) -> LocalGeoInspector:
     return LocalGeoInspector(load_playground_catalog(snapshot_path))
 
 

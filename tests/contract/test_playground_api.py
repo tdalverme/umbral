@@ -91,3 +91,14 @@ def test_playground_app_lists_configured_real_snapshot(monkeypatch, tmp_path) ->
         "demo",
         "real-snapshot-test",
     ]
+    geo = TestClient(create_playground_app()).post(
+        "/api/v1/playground/geo",
+        json={
+            "fixture_id": "real-snapshot-test",
+            "listing_id": "listing-real-001",
+            "radius_m": 600,
+        },
+    )
+
+    assert geo.status_code == 200
+    assert geo.json()["listing_id"] == "listing-real-001"
