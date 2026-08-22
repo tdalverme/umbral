@@ -28,3 +28,9 @@ class PlaygroundService:
 
     def inspect_listing_geo(self, request: GeoInspectionRequest) -> GeoInspection:
         return self.geo.inspect(request)
+
+
+def playground_enabled(environment: str) -> bool:
+    """The playground is intentionally available only in local development."""
+
+    return environment == "local"

@@ -54,6 +54,7 @@ from umbral.api.routers.search_profiles import configure_search_profiles_routes
 from umbral.api.routers.search_profiles import router as search_profiles_router
 from umbral.api.routers.urban import configure_urban_routes
 from umbral.api.routers.urban import router as urban_router
+from umbral.application.playground.service import playground_enabled
 from umbral.domain.errors import ApplicationError
 from umbral.infrastructure.observability.runtime import (
     initialize_observability,
@@ -304,7 +305,9 @@ def create_app(dependencies: RuntimeDependencies | None = None) -> FastAPI:
     app.include_router(learning_router)
     app.include_router(chat_router)
     app.include_router(notifications_router)
-    if dependencies.playground is not None:
+    if dependencies.playground is not None and playground_enabled(
+        str(dependencies.settings.environment)
+    ):
         app.include_router(playground_router)
 
     def custom_openapi() -> dict[str, Any]:
