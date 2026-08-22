@@ -15,6 +15,11 @@ $env:PYTHONPATH = Join-Path $repoRoot "src"
 $env:UMBRAL_API_BASE_URL = "http://127.0.0.1:$ApiPort"
 $env:UMBRAL_PRIVATE_API_URL = "http://127.0.0.1:$ApiPort"
 $env:UMBRAL_BFF_TOKEN = "local-bff-token"
+$next = Join-Path $repoRoot "node_modules\.bin\next.cmd"
+
+if (-not (Test-Path -LiteralPath $next)) {
+    throw "Faltan dependencias web instaladas: no existe node_modules/.bin/next.cmd. Ejecuta npm ci con el lockfile."
+}
 
 $apiProcess = Start-Process `
     -FilePath $python `
@@ -30,7 +35,7 @@ Write-Host "No se inicia Postgres, Redis, workers, scheduler, release ni harness
 
 try {
     Push-Location (Join-Path $repoRoot "apps\web")
-    npm run dev -- --port $WebPort
+    & $next dev --port $WebPort
 }
 finally {
     Pop-Location
@@ -38,4 +43,3 @@ finally {
         Stop-Process -Id $apiProcess.Id
     }
 }
-
