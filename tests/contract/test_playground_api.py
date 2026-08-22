@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -64,3 +65,29 @@ def test_playground_routes_serialize_conversation_and_geo_results() -> None:
     assert conversation.json()["run_id"] == "run-1"
     assert geo.status_code == 200
     assert geo.json()["contract_version"] == "urban-contract-v2"
+
+
+def test_playground_app_lists_configured_real_snapshot(monkeypatch, tmp_path) -> None:
+    snapshot_path = tmp_path / "real-snapshot.json"
+    snapshot_path.write_text(
+        json.dumps(
+            {
+                "id": "real-snapshot-test",
+                "profile": {"id": "profile-test"},
+                "listings": [{"id": "listing-real-001", "neighborhood": "Belgrano"}],
+                "urban": {"by_listing": {"listing-real-001": {"features": []}}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PLAYGROUND_SNAPSHOT_PATH", str(snapshot_path))
+
+    from umbral.api.playground_main import create_playground_app
+
+    response = TestClient(create_playground_app()).get("/api/v1/playground/fixtures")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["fixtures"]] == [
+        "demo",
+        "real-snapshot-test",
+    ]

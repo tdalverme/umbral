@@ -1,6 +1,7 @@
 param(
     [int]$ApiPort = 8000,
-    [int]$WebPort = 3000
+    [int]$WebPort = 3000,
+    [string]$SnapshotPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +17,21 @@ $env:UMBRAL_API_BASE_URL = "http://127.0.0.1:$ApiPort"
 $env:UMBRAL_PRIVATE_API_URL = "http://127.0.0.1:$ApiPort"
 $env:UMBRAL_BFF_TOKEN = "local-bff-token"
 $env:UMBRAL_ACCESS_MODE = "product_session"
+$env:PLAYGROUND_SNAPSHOT_PATH = ""
+$defaultSnapshotPath = Join-Path $repoRoot ".data\playground\real-snapshot.json"
+if ([string]::IsNullOrWhiteSpace($SnapshotPath)) {
+    if (Test-Path -LiteralPath $defaultSnapshotPath) {
+        $SnapshotPath = $defaultSnapshotPath
+    }
+} else {
+    if (-not (Test-Path -LiteralPath $SnapshotPath -PathType Leaf)) {
+        throw "No encontré el snapshot indicado: $SnapshotPath"
+    }
+    $SnapshotPath = (Resolve-Path -LiteralPath $SnapshotPath).Path
+}
+if (-not [string]::IsNullOrWhiteSpace($SnapshotPath)) {
+    $env:PLAYGROUND_SNAPSHOT_PATH = $SnapshotPath
+}
 $next = Join-Path $repoRoot "node_modules\.bin\next.cmd"
 
 if (-not (Test-Path -LiteralPath $next)) {
@@ -31,6 +47,11 @@ $apiProcess = Start-Process `
 
 Write-Host "Playground API: http://127.0.0.1:$ApiPort"
 Write-Host "Playground web: http://localhost:$WebPort/playground"
+if ([string]::IsNullOrWhiteSpace($env:PLAYGROUND_SNAPSHOT_PATH)) {
+    Write-Host "Data source: demo fixture"
+} else {
+    Write-Host "Data source: real snapshot [$env:PLAYGROUND_SNAPSHOT_PATH]"
+}
 Write-Host "Fake mode: disponible sin credenciales. Real mode: requiere AGENT_MANAGED_ENDPOINT y AGENT_MANAGED_API_KEY."
 Write-Host "No se inicia Postgres, Redis, workers, scheduler, release ni harness."
 

@@ -6,6 +6,9 @@ def test_playground_launcher_invokes_hoisted_next_directly() -> None:
     launcher = (repo_root / "scripts" / "playground.ps1").read_text(encoding="utf-8")
 
     assert '$env:UMBRAL_ACCESS_MODE = "product_session"' in launcher
+    assert '[string]$SnapshotPath = ""' in launcher
+    assert '$env:PLAYGROUND_SNAPSHOT_PATH' in launcher
+    assert "real-snapshot.json" in launcher
     assert '$next = Join-Path $repoRoot "node_modules\\.bin\\next.cmd"' in launcher
     assert "& $next dev --port $WebPort" in launcher
     assert "npm run dev -- --port" not in launcher

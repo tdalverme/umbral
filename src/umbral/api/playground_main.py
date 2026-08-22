@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
@@ -18,23 +20,26 @@ from umbral.application.playground.service import PlaygroundService
 from umbral.infrastructure.playground.conversation import (
     build_local_conversation_runner,
 )
+from umbral.infrastructure.playground.fixtures import load_playground_catalog
 from umbral.infrastructure.playground.geo import build_local_geo_inspector
 
 
 def create_playground_app() -> FastAPI:
+    snapshot_value = os.environ.get("PLAYGROUND_SNAPSHOT_PATH", "").strip()
+    snapshot_path = Path(snapshot_value) if snapshot_value else None
+    catalog = load_playground_catalog(snapshot_path)
     service = PlaygroundService(
         conversation=build_local_conversation_runner(),
-        geo=build_local_geo_inspector(),
+        geo=build_local_geo_inspector(snapshot_path),
     )
     dependencies = cast(
         RuntimeDependencies,
         SimpleNamespace(playground=service),
     )
-    configure_playground_routes(dependencies)
+    configure_playground_routes(dependencies, catalog=catalog)
     app = FastAPI(title="Umbral Local Playground", version="local")
     app.include_router(playground_router)
     return app
 
 
 app = create_playground_app()
-

@@ -12,11 +12,15 @@ from umbral.application.playground.contracts import (
     ConversationRequest,
     GeoInspectionRequest,
 )
-from umbral.infrastructure.playground.fixtures import load_fixtures
+from umbral.infrastructure.playground.fixtures import (
+    PlaygroundFixtures,
+    load_playground_catalog,
+)
 from umbral.infrastructure.playground.trace import primitive
 
 router = APIRouter(prefix="/api/v1/playground", tags=["Playground"])
 _dependencies: RuntimeDependencies | None = None
+_catalog: PlaygroundFixtures | None = None
 
 
 class ConversationBody(BaseModel):
@@ -35,9 +39,12 @@ class GeoBody(BaseModel):
     radius_m: int = Field(default=600, ge=50, le=5000)
 
 
-def configure_playground_routes(dependencies: RuntimeDependencies) -> None:
-    global _dependencies
+def configure_playground_routes(
+    dependencies: RuntimeDependencies, *, catalog: PlaygroundFixtures | None = None
+) -> None:
+    global _catalog, _dependencies
     _dependencies = dependencies
+    _catalog = catalog
 
 
 def _deps() -> RuntimeDependencies:
@@ -48,7 +55,7 @@ def _deps() -> RuntimeDependencies:
 
 @router.get("/fixtures")
 def list_fixtures() -> dict[str, object]:
-    fixtures = load_fixtures()
+    fixtures = _catalog or load_playground_catalog()
     return {
         "fixtures": [
             {
@@ -83,4 +90,3 @@ def inspect_geo(body: GeoBody) -> dict[str, object]:
         )
     )
     return primitive(result)
-
