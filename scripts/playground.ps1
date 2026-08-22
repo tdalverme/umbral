@@ -15,6 +15,7 @@ $env:PYTHONPATH = Join-Path $repoRoot "src"
 $env:UMBRAL_API_BASE_URL = "http://127.0.0.1:$ApiPort"
 $env:UMBRAL_PRIVATE_API_URL = "http://127.0.0.1:$ApiPort"
 $env:UMBRAL_BFF_TOKEN = "local-bff-token"
+$env:UMBRAL_ACCESS_MODE = "product_session"
 $next = Join-Path $repoRoot "node_modules\.bin\next.cmd"
 
 if (-not (Test-Path -LiteralPath $next)) {
