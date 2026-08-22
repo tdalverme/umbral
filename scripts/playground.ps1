@@ -46,6 +46,7 @@ $apiProcess = Start-Process `
     -PassThru
 
 $apiProbe = "http://127.0.0.1:$ApiPort/api/v1/playground/fixtures"
+$expectRealSnapshot = -not [string]::IsNullOrWhiteSpace($env:PLAYGROUND_SNAPSHOT_PATH)
 try {
     $apiReady = $false
     $apiProbeError = "sin respuesta"
@@ -56,11 +57,23 @@ try {
         }
         try {
             $probe = Invoke-WebRequest -Uri $apiProbe -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
-            if ($probe.StatusCode -eq 200 -and $probe.Content -match '"fixtures"') {
-                $apiReady = $true
-                break
+            if ($probe.StatusCode -eq 200) {
+                try {
+                    $probePayload = $probe.Content | ConvertFrom-Json
+                    $hasRealFixture = @(
+                        $probePayload.fixtures | Where-Object { $_.id -ne "demo" }
+                    ).Count -gt 0
+                    if (-not $expectRealSnapshot -or $hasRealFixture) {
+                        $apiReady = $true
+                        break
+                    }
+                    $apiProbeError = "respondió demo-only aunque se indicó un snapshot real"
+                } catch {
+                    $apiProbeError = "respondió HTTP 200 con un payload inválido"
+                }
+            } else {
+                $apiProbeError = "respondió HTTP $($probe.StatusCode)"
             }
-            $apiProbeError = "respondió HTTP $($probe.StatusCode) sin el contrato de fixtures"
         } catch {
             $apiProbeError = $_.Exception.Message
         }

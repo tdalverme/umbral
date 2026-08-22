@@ -11,6 +11,8 @@ def test_playground_launcher_invokes_hoisted_next_directly() -> None:
     assert "real-snapshot.json" in launcher
     assert '$apiProbe = "http://127.0.0.1:$ApiPort/api/v1/playground/fixtures"' in launcher
     assert 'Invoke-WebRequest -Uri $apiProbe' in launcher
+    assert '$expectRealSnapshot' in launcher
+    assert 'respondió demo-only' in launcher
     assert 'El API del playground no respondió 200' in launcher
     assert '$next = Join-Path $repoRoot "node_modules\\.bin\\next.cmd"' in launcher
     assert "& $next dev --port $WebPort" in launcher
