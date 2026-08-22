@@ -7,6 +7,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { GeoFeature } from "@/lib/playground/types";
 
+import { scheduleSelectedFeaturePaint } from "./geo-map-style";
+
 const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const SOURCE_ID = "playground-urban-features";
 
@@ -133,15 +135,8 @@ export default function GeoMapClient({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (!selectedFeatureId) return;
-    map.setPaintProperty("urban-points", "circle-radius", [
-      "case",
-      ["==", ["get", "id"], selectedFeatureId],
-      10,
-      7,
-    ]);
+    return scheduleSelectedFeaturePaint(map, selectedFeatureId);
   }, [selectedFeatureId]);
 
   return <div ref={containerRef} className="min-h-80 w-full flex-1" aria-label="Mapa de contexto urbano" />;
 }
-
