@@ -56,3 +56,13 @@ def load_fixtures(path: Path | None = None) -> PlaygroundFixtures:
         urban=copy.deepcopy(dict(urban)),
     )
     return PlaygroundFixtures(items=(fixture,))
+
+
+def load_playground_catalog(snapshot_path: Path | None = None) -> PlaygroundFixtures:
+    """Load the demo fixture and optionally append a local real snapshot."""
+
+    demo = load_fixtures()
+    if snapshot_path is None:
+        return demo
+    snapshot = load_fixtures(snapshot_path)
+    return PlaygroundFixtures(items=demo.items + snapshot.items)

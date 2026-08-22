@@ -8,13 +8,17 @@ from typing import Any
 
 from umbral.application.playground.contracts import GeoInspection, GeoInspectionRequest
 from umbral.application.urban.calculator import UrbanSignalCalculator
-from umbral.infrastructure.playground.fixtures import PlaygroundFixture, load_fixtures
+from umbral.infrastructure.playground.fixtures import (
+    PlaygroundFixture,
+    PlaygroundFixtures,
+    load_playground_catalog,
+)
 from umbral.infrastructure.urban.contract_loader import load_urban_contract_published
 
 
 class LocalGeoInspector:
-    def __init__(self) -> None:
-        self.fixtures = load_fixtures()
+    def __init__(self, fixtures: PlaygroundFixtures | None = None) -> None:
+        self.fixtures = fixtures or load_playground_catalog()
         self.contract = load_urban_contract_published()
         self.calculator = UrbanSignalCalculator(self.contract)
 
@@ -22,7 +26,7 @@ class LocalGeoInspector:
         fixture = self.fixtures.by_id(request.fixture_id)
         listing = _listing_by_id(fixture, request.listing_id)
         radius_m = max(1, int(request.radius_m))
-        urban = fixture.urban
+        urban = _urban_for_listing(fixture, listing_id=request.listing_id)
         features = tuple(
             serialize_feature(feature)
             for feature in _features_within_radius(urban.get("features"), radius_m)
@@ -70,8 +74,8 @@ class LocalGeoInspector:
         )
 
 
-def build_local_geo_inspector() -> LocalGeoInspector:
-    return LocalGeoInspector()
+def build_local_geo_inspector(snapshot_path=None) -> LocalGeoInspector:
+    return LocalGeoInspector(load_playground_catalog(snapshot_path))
 
 
 def serialize_feature(feature: Mapping[str, object]) -> Mapping[str, object]:
@@ -90,6 +94,26 @@ def _listing_by_id(fixture: PlaygroundFixture, listing_id: str) -> Mapping[str, 
         if listing_id in {str(listing.get("id")), str(listing.get("uuid"))}:
             return listing
     raise KeyError(f"unknown fixture listing: {listing_id}")
+
+
+def _urban_for_listing(
+    fixture: PlaygroundFixture, *, listing_id: str
+) -> Mapping[str, object]:
+    urban = fixture.urban
+    by_listing = urban.get("by_listing")
+    if not isinstance(by_listing, Mapping):
+        return urban
+    listing = _listing_by_id(fixture, listing_id)
+    for candidate_id in (listing_id, listing.get("id"), listing.get("uuid")):
+        if candidate_id is None:
+            continue
+        selected = by_listing.get(str(candidate_id))
+        if isinstance(selected, Mapping):
+            resolved = dict(selected)
+            if "snapshot_id" not in resolved and "snapshot_id" in urban:
+                resolved["snapshot_id"] = urban["snapshot_id"]
+            return resolved
+    return {}
 
 
 def _features_within_radius(
