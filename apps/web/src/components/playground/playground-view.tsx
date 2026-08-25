@@ -17,6 +17,7 @@ import type {
 } from "@/lib/playground/types";
 
 type Lab = "conversation" | "geo";
+type GeoMapPoint = { latitude: number; longitude: number };
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path, { cache: "no-store" });
@@ -311,27 +312,44 @@ function GeoLab({ fixtures }: Readonly<{ fixtures: PlaygroundFixture[] }>): Reac
   const fixture = fixtures.find((item) => item.id === activeSourceId) ?? fixtures[0];
   const activeListingId = listingId || fixture?.listings[0]?.id || "";
   const listing = fixture?.listings.find((item) => item.id === activeListingId) ?? fixture?.listings[0];
+  const mapListing = inspection?.listing ?? listing;
   const activeSignal = inspection?.signals.find((signal) => signal.signal === selectedSignal) ?? inspection?.signals[0];
   const selectedFeature = inspection?.features.find((feature) => feature.id === selectedFeatureId);
+  const isPointInspection = inspection?.listing.selection === "map_point";
 
   if (fixture === undefined) {
     return <p className="text-sm text-muted-foreground">Cargando fuentes de Geo Lab…</p>;
   }
 
-  const inspect = () => {
+  const applyInspection = (result: GeoInspection) => {
+    setInspection(result);
+    setSelectedSignal(result.signals[0]?.signal ?? null);
+    setSelectedFeatureId(result.features[0]?.id ?? null);
+  };
+
+  const runGeoInspection = (payload: JsonRecord) => {
     setError(null);
     startTransition(() => {
-      void postJson<GeoInspection>("/api/playground/geo", {
-        fixture_id: fixture.id,
-        listing_id: activeListingId,
-        radius_m: Number(radius),
-      })
-        .then((result) => {
-          setInspection(result);
-          setSelectedSignal(result.signals[0]?.signal ?? null);
-          setSelectedFeatureId(result.features[0]?.id ?? null);
-        })
-        .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo inspeccionar el listing"));
+      void postJson<GeoInspection>("/api/playground/geo", payload)
+        .then(applyInspection)
+        .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo inspeccionar la ubicación"));
+    });
+  };
+
+  const inspect = () => {
+    runGeoInspection({
+      fixture_id: fixture.id,
+      listing_id: activeListingId,
+      radius_m: Number(radius),
+    });
+  };
+
+  const inspectPoint = ({ latitude, longitude }: GeoMapPoint) => {
+    runGeoInspection({
+      fixture_id: fixture.id,
+      latitude,
+      longitude,
+      radius_m: Number(radius),
     });
   };
 
@@ -340,7 +358,7 @@ function GeoLab({ fixtures }: Readonly<{ fixtures: PlaygroundFixture[] }>): Reac
       <Card>
         <CardHeader>
           <CardTitle id="geo-lab-title">Inspeccioná el contexto urbano</CardTitle>
-          <CardDescription>Elegí una fuente, seleccioná un listing, ajustá el radio y seguí la línea feature → primitiva → señal.</CardDescription>
+          <CardDescription>Elegí un listing para centrar el mapa, o hacé click en cualquier punto para recalcular su contexto y score.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-4">
           <Field className="min-w-56 flex-1">
@@ -373,7 +391,13 @@ function GeoLab({ fixtures }: Readonly<{ fixtures: PlaygroundFixture[] }>): Reac
               className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
               id="geo-listing"
               value={activeListingId}
-              onChange={(event) => setListingId(event.target.value)}
+              onChange={(event) => {
+                setListingId(event.target.value);
+                setInspection(null);
+                setSelectedSignal(null);
+                setSelectedFeatureId(null);
+                setError(null);
+              }}
             >
               {fixture.listings.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.neighborhood ?? "sin barrio"}</option>)}
             </select>
@@ -387,51 +411,64 @@ function GeoLab({ fixtures }: Readonly<{ fixtures: PlaygroundFixture[] }>): Reac
         </CardContent>
       </Card>
 
-      {inspection && listing ? (
+      {mapListing ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(32rem,1.25fr)_minmax(22rem,0.75fr)]">
           <div className="flex flex-col gap-4">
             <GeoMap
-              features={inspection.features}
-              listing={inspection.listing}
+              features={inspection?.features ?? []}
+              listing={mapListing}
               onFeatureSelect={setSelectedFeatureId}
-              selectedFeatureId={selectedFeatureId}
+              onMapPointSelect={inspectPoint}
+              selectedFeatureId={inspection ? selectedFeatureId : null}
             />
-            <Card>
-              <CardHeader>
-                <CardTitle>Features alrededor</CardTitle>
-                <CardDescription>{inspection.features.length} elementos dentro de {inspection.radius_m} m · snapshot {inspection.snapshot_id}</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-2 sm:grid-cols-2">
-                {inspection.features.map((feature) => (
-                  <button
-                    aria-pressed={feature.id === selectedFeatureId}
-                    className="flex flex-col gap-1 rounded-md border border-border bg-background p-3 text-left transition-colors hover:bg-muted aria-pressed:border-primary aria-pressed:bg-muted"
-                    key={feature.id}
-                    onClick={() => setSelectedFeatureId(feature.id)}
-                    type="button"
-                  >
-                    <span className="text-sm font-medium text-foreground">{feature.name}</span>
-                    <span className="text-xs text-muted-foreground">{humanizeKey(feature.category)} · {displayValue(feature.distance_m)} m</span>
-                  </button>
-                ))}
-              </CardContent>
-            </Card>
-            {selectedFeature ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Feature seleccionada</CardTitle>
-                  <CardDescription>{selectedFeature.id}</CardDescription>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3 text-sm">
-                  <span className="text-muted-foreground">Categoría</span><span>{humanizeKey(selectedFeature.category)}</span>
-                  <span className="text-muted-foreground">Distancia</span><span>{displayValue(selectedFeature.distance_m)} m</span>
-                  <span className="text-muted-foreground">Tipo</span><span>{selectedFeature.kind}</span>
-                </CardContent>
-              </Card>
-            ) : null}
+            {inspection ? (
+              <>
+                {inspection.warnings.length > 0 ? (
+                  <p className="text-xs text-muted-foreground" role="status">{inspection.warnings.join(" ")}</p>
+                ) : null}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Features alrededor</CardTitle>
+                    <CardDescription>
+                      {isPointInspection ? "Punto seleccionado en el mapa · " : ""}
+                      {inspection.features.length} elementos dentro de {inspection.radius_m} m · snapshot {inspection.snapshot_id}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-2 sm:grid-cols-2">
+                    {inspection.features.map((feature) => (
+                      <button
+                        aria-pressed={feature.id === selectedFeatureId}
+                        className="flex flex-col gap-1 rounded-md border border-border bg-background p-3 text-left transition-colors hover:bg-muted aria-pressed:border-primary aria-pressed:bg-muted"
+                        key={feature.id}
+                        onClick={() => setSelectedFeatureId(feature.id)}
+                        type="button"
+                      >
+                        <span className="text-sm font-medium text-foreground">{feature.name}</span>
+                        <span className="text-xs text-muted-foreground">{humanizeKey(feature.category)} · {displayValue(feature.distance_m)} m</span>
+                      </button>
+                    ))}
+                  </CardContent>
+                </Card>
+                {selectedFeature ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Feature seleccionada</CardTitle>
+                      <CardDescription>{selectedFeature.id}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                      <span className="text-muted-foreground">Categoría</span><span>{humanizeKey(selectedFeature.category)}</span>
+                      <span className="text-muted-foreground">Distancia</span><span>{displayValue(selectedFeature.distance_m)} m</span>
+                      <span className="text-muted-foreground">Tipo</span><span>{selectedFeature.kind}</span>
+                    </CardContent>
+                  </Card>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Hacé click en cualquier área del mapa para inspeccionar ese punto.</p>
+            )}
           </div>
 
-          <div className="flex flex-col gap-4">
+          {inspection ? <div className="flex flex-col gap-4">
             <Card>
               <CardHeader>
                 <CardTitle>Señales</CardTitle>
@@ -485,10 +522,10 @@ function GeoLab({ fixtures }: Readonly<{ fixtures: PlaygroundFixture[] }>): Reac
             </Card>
 
             <p className="text-xs text-muted-foreground">{inspection.contract_version} · {inspection.attribution}</p>
-          </div>
+          </div> : null}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">Elegí “Inspeccionar” para abrir el mapa y el lineage urbano.</p>
+        <p className="text-sm text-muted-foreground">La fuente seleccionada todavía no tiene listings para centrar el mapa.</p>
       )}
     </section>
   );

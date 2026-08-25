@@ -40,7 +40,7 @@ if (-not (Test-Path -LiteralPath $next)) {
 
 $apiProcess = Start-Process `
     -FilePath $python `
-    -ArgumentList @("-m", "uvicorn", "umbral.api.playground_main:app", "--reload", "--port", "$ApiPort") `
+    -ArgumentList @("-m", "uvicorn", "umbral.api.playground_main:app", "--port", "$ApiPort") `
     -WorkingDirectory $repoRoot `
     -WindowStyle Hidden `
     -PassThru
@@ -81,6 +81,38 @@ try {
     }
     if (-not $apiReady) {
         throw "El API del playground no respondió 200 en $apiProbe. Puede haber otro proceso ocupando el puerto $ApiPort. Detalle: $apiProbeError"
+    }
+
+    $pointProbePayload = @{
+        fixture_id = "demo"
+        latitude = -34.5875
+        longitude = -58.3971
+        radius_m = 600
+    } | ConvertTo-Json -Compress
+    try {
+        $pointProbe = Invoke-WebRequest `
+            -Uri "http://127.0.0.1:$ApiPort/api/v1/playground/geo" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Body $pointProbePayload `
+            -UseBasicParsing `
+            -TimeoutSec 3 `
+            -ErrorAction Stop
+        if ($pointProbe.StatusCode -ne 200) {
+            throw "respondió HTTP $($pointProbe.StatusCode)"
+        }
+    } catch {
+        $pointProbeError = $_.Exception.Message
+        if ($_.Exception.Response -ne $null) {
+            try {
+                $reader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
+                $pointProbeError = $reader.ReadToEnd()
+                $reader.Dispose()
+            } catch {
+                $pointProbeError = $_.Exception.Message
+            }
+        }
+        throw "El API del playground no acepta inspecciones por coordenadas en /api/v1/playground/geo. Reiniciá el proceso API y volvé a ejecutar este script. Detalle: $pointProbeError"
     }
 
     Write-Host "Playground API: http://127.0.0.1:$ApiPort"

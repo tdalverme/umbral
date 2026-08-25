@@ -17,6 +17,9 @@ from umbral.application.playground.contracts import (
 
 
 class _Playground:
+    def __init__(self):
+        self.geo_requests = []
+
     def run_conversation(self, request):
         return ConversationTrace(
             fixture_id=request.fixture_id,
@@ -27,9 +30,10 @@ class _Playground:
         )
 
     def inspect_listing_geo(self, request):
+        self.geo_requests.append(request)
         return GeoInspection(
             fixture_id=request.fixture_id,
-            listing_id=request.listing_id,
+            listing_id=request.listing_id or "point",
             radius_m=request.radius_m,
             listing={},
             features=(),
@@ -43,7 +47,8 @@ class _Playground:
 
 def test_playground_routes_serialize_conversation_and_geo_results() -> None:
     app = FastAPI()
-    dependencies = SimpleNamespace(playground=_Playground())
+    playground = _Playground()
+    dependencies = SimpleNamespace(playground=playground)
     configure_playground_routes(dependencies)
     app.include_router(router)
 
@@ -65,6 +70,28 @@ def test_playground_routes_serialize_conversation_and_geo_results() -> None:
     assert conversation.json()["run_id"] == "run-1"
     assert geo.status_code == 200
     assert geo.json()["contract_version"] == "urban-contract-v2"
+
+
+def test_playground_geo_route_accepts_an_arbitrary_point() -> None:
+    app = FastAPI()
+    playground = _Playground()
+    configure_playground_routes(SimpleNamespace(playground=playground))
+    app.include_router(router)
+
+    response = TestClient(app).post(
+        "/api/v1/playground/geo",
+        json={
+            "fixture_id": "demo",
+            "latitude": -34.5875,
+            "longitude": -58.3971,
+            "radius_m": 600,
+        },
+    )
+
+    assert response.status_code == 200
+    assert playground.geo_requests[0].listing_id is None
+    assert playground.geo_requests[0].latitude == -34.5875
+    assert playground.geo_requests[0].longitude == -58.3971
 
 
 def test_playground_app_lists_configured_real_snapshot(monkeypatch, tmp_path) -> None:

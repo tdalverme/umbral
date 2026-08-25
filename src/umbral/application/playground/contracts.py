@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Literal
 
 ModelMode = Literal["fake", "real"]
@@ -30,8 +31,25 @@ class ConversationTrace:
 @dataclass(frozen=True, slots=True)
 class GeoInspectionRequest:
     fixture_id: str
-    listing_id: str
+    listing_id: str | None = None
     radius_m: int = 600
+    latitude: float | None = None
+    longitude: float | None = None
+
+    def __post_init__(self) -> None:
+        has_listing = self.listing_id is not None
+        has_point = self.latitude is not None or self.longitude is not None
+        if has_listing == has_point:
+            raise ValueError(
+                "geo inspection requires either listing_id or latitude and longitude"
+            )
+        if has_point and (self.latitude is None or self.longitude is None):
+            raise ValueError("geo point inspection requires latitude and longitude")
+        if has_point:
+            assert self.latitude is not None
+            assert self.longitude is not None
+            if not isfinite(self.latitude) or not isfinite(self.longitude):
+                raise ValueError("geo point coordinates must be finite")
 
 
 @dataclass(frozen=True, slots=True)
