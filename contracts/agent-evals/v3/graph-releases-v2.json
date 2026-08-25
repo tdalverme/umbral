@@ -1,0 +1,28 @@
+{
+  "contract_version": "2",
+  "registry_version": "graph-releases-v2",
+  "releases": [
+    {
+      "id": "graph-release-003",
+      "components": {
+        "prompt_versions": ["interpretation-v4", "reply-v4"],
+        "model_version": "gpt-4.1-mini",
+        "state_schema_version": "chat-state-v4",
+        "topology_version": "chat-topology-v4",
+        "interpretation_schema_version": "interpretation-schema-v4",
+        "reply_schema_version": "reply-v4",
+        "tool_contract_version": null,
+        "price_table_version": "price-table-v1"
+      },
+      "owner": "tomi",
+      "justification": "Baseline inicial del copilot v4 para agent-evals v3.",
+      "activation": {
+        "status": "pending",
+        "approved_by": null,
+        "approval_evidence": null,
+        "reverted_reason": null
+      },
+      "date": "2026-08-25"
+    }
+  ]
+}

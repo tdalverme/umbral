@@ -43,7 +43,7 @@ def _imported_modules(tree: ast.Module) -> list[str]:
 
 def _collect_violations(package: Path, forbidden: tuple[str, ...]) -> list[str]:
     violations: list[str] = []
-    for source in sorted(package.glob("*.py")):
+    for source in sorted(package.rglob("*.py")):
         if source.name == "__init__.py":
             continue
         tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
@@ -51,7 +51,7 @@ def _collect_violations(package: Path, forbidden: tuple[str, ...]) -> list[str]:
             if any(
                 module == item or module.startswith(f"{item}.") for item in forbidden
             ):
-                violations.append(f"{source.name} -> {module}")
+                violations.append(f"{source.relative_to(package)} -> {module}")
     return violations
 
 
@@ -60,6 +60,17 @@ def test_application_agent_evals_has_no_infrastructure_or_web_dependencies() -> 
         _SRC / "application" / "agent_evals", _APPLICATION_FORBIDDEN
     )
     assert violations == []
+
+
+def test_collect_violations_detects_nested_forbidden_import() -> None:
+    root = Path(".pytest_cache") / "architecture-nested-import"
+    nested = root / "v3"
+    nested.mkdir(parents=True, exist_ok=True)
+    (nested / "forbidden.py").write_text("import sqlalchemy\n", encoding="utf-8")
+
+    assert _collect_violations(root, ("sqlalchemy",)) == [
+        "v3\\forbidden.py -> sqlalchemy"
+    ]
 
 
 def test_application_agent_ops_has_no_infrastructure_or_web_dependencies() -> None:

@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "conversation-trajectories-v3.schema.json",
+  "title": "ConversationTrajectoriesV3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "registry_version", "cases"],
+  "properties": {
+    "contract_version": {"const": "3"},
+    "registry_version": {"const": "conversation-trajectories-v3"},
+    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "suite", "partition", "family", "risk", "initial_state", "turns", "final_state", "invariants", "tags", "review"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "suite": {"enum": ["safety", "regression", "capability"]},
+        "partition": {"enum": ["development", "holdout"]},
+        "family": {"type": "string", "minLength": 1},
+        "risk": {"enum": ["normal", "high", "critical"]},
+        "initial_state": {"type": "object"},
+        "turns": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/turn"}},
+        "final_state": {"type": "object"},
+        "invariants": {"type": "array", "items": {"enum": ["final_state_matches_expected", "no_repeated_answered_question", "no_unconfirmed_material_effect", "forbidden_bindings_are_non_computable", "no_wrong_target_mutation"]}},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "review": {"$ref": "#/$defs/review"}
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user", "context", "script", "expect"],
+      "properties": {
+        "user": {"type": "string", "minLength": 1},
+        "context": {"type": "object"},
+        "script": {"$ref": "#/$defs/script"},
+        "expect": {"$ref": "#/$defs/expectation"}
+      }
+    },
+    "script": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interpretation", "reply"],
+      "properties": {
+        "interpretation": {"$ref": "#/$defs/interpretation"},
+        "reply": {"$ref": "#/$defs/reply"}
+      }
+    },
+    "interpretation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acts", "ambiguity"],
+      "properties": {
+        "acts": {"type": "array", "items": {"$ref": "#/$defs/act"}},
+        "ambiguity": {"type": ["object", "null"]}
+      }
+    },
+    "act": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["act_id", "kind", "target", "payload", "confidence"],
+      "properties": {
+        "act_id": {"type": "string"},
+        "kind": {"enum": ["resolve_pending", "create_radar", "set_filter", "clear_filter", "express_preference", "revise_preference", "withdraw_preference", "record_feedback", "query"]},
+        "target": {"type": "object"},
+        "payload": {"type": "object"},
+        "confidence": {"type": "number"}
+      }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reply_text", "effects", "question", "refs"],
+      "properties": {
+        "reply_text": {"type": "string"},
+        "effects": {"type": "array", "items": {"type": "string"}},
+        "question": {"type": ["object", "null"]},
+        "refs": {"type": "array", "items": {"type": "object", "additionalProperties": {"type": "string"}}}
+      }
+    },
+    "expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_acts", "allowed_acts", "forbidden_acts", "required_tools", "allowed_tools", "forbidden_tools", "argument_predicates", "required_effects", "forbidden_effects", "outcomes", "require_grounding"],
+      "properties": {
+        "required_acts": {"$ref": "#/$defs/acts"}, "allowed_acts": {"$ref": "#/$defs/acts"}, "forbidden_acts": {"$ref": "#/$defs/acts"},
+        "required_tools": {"$ref": "#/$defs/tools"}, "allowed_tools": {"$ref": "#/$defs/tools"}, "forbidden_tools": {"$ref": "#/$defs/tools"},
+        "argument_predicates": {"type": "array", "items": {"$ref": "#/$defs/predicate"}},
+        "required_effects": {"type": "array", "items": {"type": "string"}},
+        "forbidden_effects": {"type": "array", "items": {"type": "string"}},
+        "outcomes": {"type": "array", "items": {"type": "string"}},
+        "require_grounding": {"type": "boolean"}
+      }
+    },
+    "acts": {"type": "array", "items": {"enum": ["resolve_pending", "create_radar", "set_filter", "clear_filter", "express_preference", "revise_preference", "withdraw_preference", "record_feedback", "query"]}},
+    "tools": {"type": "array", "items": {"enum": ["get_search_profile", "propose_search_profile_update", "apply_search_profile_update", "find_matches", "explain_match", "compare_listings", "record_feedback", "search_urban_context", "propose_search_preference_update", "propose_search_preference_removal", "propose_learning_confirmation", "list_search_preferences", "get_listing_detail"]}},
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "name", "path", "operator"],
+      "properties": {
+        "source": {"enum": ["act", "tool"]}, "name": {"type": "string", "minLength": 1}, "path": {"type": "string", "minLength": 1},
+        "operator": {"enum": ["equals", "greater_than_initial", "less_than_initial", "in_verified_context", "in_allowed_values", "target_is_active_radar", "scope_equals"]},
+        "expected": {}, "initial_path": {"type": ["string", "null"]}
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewed_by", "reviewed_at", "rationale"],
+      "properties": {"reviewed_by": {"type": "string", "minLength": 1}, "reviewed_at": {"type": "string", "minLength": 1}, "rationale": {"type": "string", "minLength": 1}}
+    }
+  }
+}

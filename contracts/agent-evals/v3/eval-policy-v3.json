@@ -1,0 +1,12 @@
+{
+  "contract_version": "3",
+  "registry_version": "eval-policy-v3",
+  "scripted_trials": 1,
+  "managed_normal_trials": 3,
+  "managed_critical_trials": 10,
+  "provider_retry_limit": 1,
+  "max_concurrency": 1,
+  "confidence_level": 0.95,
+  "review_sample_size": 5,
+  "max_reserved_cost_per_trial_usd": 0.01
+}
