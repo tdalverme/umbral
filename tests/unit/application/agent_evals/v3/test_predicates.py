@@ -251,3 +251,37 @@ def test_unknown_operator_and_malformed_path_fail_without_raising() -> None:
     result = evaluate_predicate(predicate, _case(), _trace(acts=(_act("query"),)))
     assert result.passed is False
     assert result.code == "evals_v3.predicate.equals"
+
+
+def test_unknown_source_and_missing_source_record_fail_without_raising() -> None:
+    unknown_source = ArgumentPredicate(  # type: ignore[arg-type]
+        "event", "query", "/payload/scope", "equals", expected="active_radar"
+    )
+    missing_record = ArgumentPredicate(
+        "act", "query", "/payload/scope", "equals", expected="active_radar"
+    )
+    trace = _trace()
+    assert evaluate_predicate(unknown_source, _case(), trace).passed is False
+    assert evaluate_predicate(missing_record, _case(), trace).passed is False
+
+
+def test_missing_initial_evidence_and_type_mismatch_fail_without_raising() -> None:
+    predicate = ArgumentPredicate(
+        "act",
+        "set_filter",
+        "/payload/max_price",
+        "greater_than_initial",
+        initial_path="/filters/max_price",
+    )
+    missing_initial = evaluate_predicate(
+        predicate,
+        _case(),
+        _trace(acts=(_act("set_filter", payload={"max_price": 120}),)),
+    )
+    type_mismatch = evaluate_predicate(
+        predicate,
+        _case(initial_state={"filters": {"max_price": "100"}}),
+        _trace(acts=(_act("set_filter", payload={"max_price": 120}),)),
+    )
+    assert missing_initial.passed is False
+    assert type_mismatch.passed is False

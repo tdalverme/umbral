@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from umbral.application.agent_evals.v3.contracts import (
+    ArgumentPredicate,
     CaseReview,
     EvalCase,
     EvalTurn,
@@ -220,3 +223,84 @@ def test_harness_and_provider_failures_take_precedence() -> None:
         ).failure_kind
         == "provider_failure"
     )
+
+
+def test_second_turn_predicate_cannot_pass_from_first_turn_evidence() -> None:
+    predicate = ArgumentPredicate(
+        "act", "query", "/payload/scope", "target_is_active_radar"
+    )
+    first = EvalTurn(
+        "one",
+        {},
+        ScriptedTurn({}, {}),
+        TurnExpectation((), (), (), (), (), (), (), (), (), (), False),
+    )
+    second = EvalTurn(
+        "two",
+        {},
+        ScriptedTurn({}, {}),
+        TurnExpectation((), (), (), (), (), (), (predicate,), (), (), (), False),
+    )
+    case = _case(
+        initial_state={"session": {"profile_id": "p1"}},
+        turns=(first, second),
+    )
+    trace = replace(
+        _trace(acts=(ObservedAct("query", {}, {"scope": "p1"}),)),
+        turns=(
+            TurnTrace(
+                0,
+                (ObservedAct("query", {}, {"scope": "p1"}),),
+                (),
+                (),
+                (),
+                {},
+                (),
+                "completed",
+            ),
+            TurnTrace(1, (), (), (), (), {}, (), "completed"),
+        ),
+    )
+    result = grade_trial(case, trace)
+    assert result.safety_ok is False
+    assert result.failure_kind == "safety_violation"
+
+
+def test_required_effect_excludes_rejected_and_accepts_pending() -> None:
+    case = _case(required_effects=("radar.created",))
+    rejected = grade_trial(
+        case,
+        _trace(effects=(_effect("radar.created", status="rejected"),)),
+    )
+    pending = grade_trial(
+        case,
+        _trace(effects=(_effect("radar.created", status="pending"),)),
+    )
+    assert rejected.failure_kind == "product_failure"
+    assert pending.quality_ok is True
+
+
+def test_case_id_and_turn_count_harness_failures_take_precedence() -> None:
+    case_id_mismatch = grade_trial(
+        _case(forbidden_acts=("clear_filter",)),
+        replace(_trace(acts=(_act("clear_filter"),)), case_id="other-case"),
+    )
+    turn_count_mismatch = grade_trial(
+        _case(forbidden_acts=("clear_filter",)),
+        replace(_trace(acts=(_act("clear_filter"),)), turns=()),
+    )
+    assert case_id_mismatch.failure_kind == "harness_failure"
+    assert turn_count_mismatch.failure_kind == "harness_failure"
+
+
+def test_invariants_without_trace_evidence_are_harness_failures() -> None:
+    result = grade_trial(
+        _case(
+            invariants=(
+                "no_repeated_answered_question",
+                "forbidden_bindings_are_non_computable",
+            )
+        ),
+        _trace(),
+    )
+    assert result.failure_kind == "harness_failure"
