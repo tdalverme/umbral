@@ -102,6 +102,8 @@ def test_trajectory_suite_passes_the_strict_gate_over_postgres(
     for case in dataset.cases:
         try:
             traces[case.id] = executor.execute(case=case)
+            assert type(traces[case.id]) is TrajectoryTrace
+            assert traces[case.id].case_id == case.id
         except Exception as exc:  # noqa: BLE001 - reported per case
             failures.append(f"{case.id}: {type(exc).__name__}: {exc}")
 
@@ -123,13 +125,10 @@ def test_trajectory_suite_passes_the_strict_gate_over_postgres(
                 print(f"  verified: {trace.verified_target_ids}")
     assert suite.blocked is False, "; ".join(suite.reasons)
     for result in suite.case_results:
-        assert result.success, (
-            f"{result.case_id} failed: "
-            + "; ".join(
-                f"{v.invariant_id}:{v.detail}"
-                for v in result.invariant_verdicts
-                if not v.passed
-            )
+        assert result.success, f"{result.case_id} failed: " + "; ".join(
+            f"{v.invariant_id}:{v.detail}"
+            for v in result.invariant_verdicts
+            if not v.passed
         )
 
 

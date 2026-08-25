@@ -13,11 +13,12 @@ binding snapshots and verified target ids.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
-from typing import cast
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from umbral.agent.graph import COPILOT_TOPOLOGY_VERSION, build_topology_v4
@@ -28,13 +29,26 @@ from umbral.application.agent.contracts import ModelResult
 from umbral.application.agent.ports import ModelGateway
 from umbral.application.agent.service import RunRecorderService
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
+from umbral.application.agent_evals.contracts import ModelCallCostRecord
 from umbral.application.agent_evals.trajectories.contracts import (
-    BindingSnapshot,
     DurableStateSnapshot,
-    QuestionSnapshot,
     TrajectoryCase,
     TrajectoryTrace,
     TurnEffectRecord,
+)
+from umbral.application.agent_evals.v3.contracts import (
+    CaseReview,
+    EvalCase,
+    EvalRelease,
+    EvalReleaseComponents,
+    EvalTurn,
+    ObservedAct,
+    ObservedEffect,
+    ObservedToolCall,
+    ScriptedTurn,
+    TrialTrace,
+    TurnExpectation,
+    TurnTrace,
 )
 from umbral.application.chat.service import ChatService
 from umbral.application.events.registry import EventsRegistrySpec
@@ -52,6 +66,8 @@ from umbral.infrastructure.conversation.composition import (
     CopilotServices,
     build_conversation_turn_service,
 )
+from umbral.infrastructure.db.models.agent import AgentModelCall, AgentNodeRun
+from umbral.infrastructure.db.models.chat import ChatMessage as ChatMessageModel
 from umbral.infrastructure.db.repositories.agent import (
     SqlAlchemyGraphRunRepository,
     SqlAlchemyModelCallRepository,
@@ -107,6 +123,20 @@ _PREFERENCE_ACTS = frozenset(
         "withdraw_preference",
     }
 )
+_V4_TOPOLOGY_RELEASE = "chat-topology-v4"
+_MISSING_GRAPH_STATE = "agent_evals_v3.missing_graph_state"
+
+
+class EvalModelAdapter(Protocol):
+    """Small local seam matching the application adapter planned for Task 6."""
+
+    def gateway_for(
+        self,
+        case: EvalCase,
+        release: EvalRelease,
+        trial_index: int,
+        attempt_index: int,
+    ) -> ModelGateway: ...
 
 
 class ScriptedV4Gateway:
@@ -277,8 +307,8 @@ class TrajectoryEvalStack:
     proposals: object
 
 
-class PostgresTrajectoryExecutor:
-    """Executes one trajectory case through the real v4 copilot stack."""
+class PostgresConversationTrialExecutor:
+    """Execute one v3 trial through the product's topology-v4 graph."""
 
     def __init__(
         self,
@@ -287,167 +317,140 @@ class PostgresTrajectoryExecutor:
         url: str,
         seed_user: Callable[[SessionFactory], UUID],
         seed_profile: Callable[[SessionFactory, UUID], object],
-        gateway_factory: Callable[[TrajectoryCase], ScriptedV4Gateway] | None = None,
     ) -> None:
         self.factory = factory
         self.url = url
         self.seed_user = seed_user
         self.seed_profile = seed_profile
-        self.gateway_factory = gateway_factory or _scripted_gateway_for
 
-    def execute(self, *, case: TrajectoryCase) -> TrajectoryTrace:
-        stack = self._build_stack(case)
+    def execute(
+        self,
+        case: EvalCase,
+        release: EvalRelease,
+        model_adapter: EvalModelAdapter,
+        trial_index: int,
+        attempt_index: int,
+    ) -> TrialTrace:
+        if release.components.topology_version != _V4_TOPOLOGY_RELEASE:
+            raise ValueError(
+                "agent_evals_v3.incompatible_topology:"
+                f"{release.components.topology_version}"
+            )
+
+        gateway = model_adapter.gateway_for(case, release, trial_index, attempt_index)
+        stack = self._build_stack(release=release, gateway=gateway)
         user_id = self.seed_user(self.factory)
-        initial = case.initial_state
-        initial_profiles = initial.get("profiles")
-        profile_id: UUID | None = None
-        if isinstance(initial_profiles, list) and initial_profiles:
-            seeded = self.seed_profile(self.factory, user_id)
-            profile_id = cast(UUID, getattr(seeded, "profile_id", None))
-            first = initial_profiles[0]
-            if isinstance(first, Mapping):
-                self._apply_initial_profile_state(
-                    stack.radar, user_id, profile_id, first
-                )
+        profile_id = self._seed_initial_state(stack, case, user_id)
         session = stack.chat.create_session(
             user_id=user_id,
             search_profile_id=profile_id,
             correlation_id=uuid4(),
         )
-        initial_pending = initial.get("pending_action")
-        if isinstance(initial_pending, Mapping) and profile_id is not None:
-            self._seed_pending_proposal(
-                stack,
-                user_id=user_id,
-                session_id=session.session_id,
-                profile_id=profile_id,
-                pending=initial_pending,
-            )
-        if isinstance(initial_profiles, list) and initial_profiles and profile_id:
-            first = initial_profiles[0]
-            if isinstance(first, Mapping):
-                self._seed_initial_subjects(
-                    stack.preferences, profile_id, first
-                )
-        durable_states: list[DurableStateSnapshot] = []
-        questions: list[QuestionSnapshot] = []
-        effects: list[TurnEffectRecord] = []
-        bindings: list[BindingSnapshot] = []
-        verified_targets: list[str] = [str(session.session_id)]
+        self._seed_pending_state(
+            stack=stack,
+            case=case,
+            user_id=user_id,
+            session_id=session.session_id,
+            profile_id=profile_id,
+        )
+
+        turn_traces: list[TurnTrace] = []
+        verified_targets = _declared_verified_targets(case.initial_state)
+        verified_targets.add(str(session.session_id))
         if profile_id is not None:
-            verified_targets.append(str(profile_id))
+            verified_targets.add(str(profile_id))
+        allowed_refs: set[tuple[str, str]] = set()
+        run_ids: list[UUID] = []
+        effect_offsets: dict[UUID, int] = {}
+        total_latency_ms = 0
         previous_interrupted = False
 
         for index, turn in enumerate(case.turns):
+            verified_targets.update(_declared_verified_targets(turn.context))
             resume = previous_interrupted
-            decision = {"decision": "approve"} if resume else None
             outcome = stack.runtime.run_turn(
                 user_id=user_id,
                 session_id=session.session_id,
                 text=turn.user,
                 correlation_id=uuid4(),
                 resume=resume,
-                decision=decision,
+                decision={"decision": "approve"} if resume else None,
+                context=turn.context,
             )
             previous_interrupted = outcome.status == "interrupted"
-            values = stack.runtime.graph.compiled.get_state(
-                {"configurable": {"thread_id": str(outcome.run_id)}}
-            ).values
-            context = values.get("context")
-            ctx = context if isinstance(context, Mapping) else {}
-            effect_results = values.get("effect_results") or []
-            turn_resolved = any(
-                isinstance(raw, Mapping) and raw.get("effect_key") == "pending.resolved"
-                for raw in effect_results
+            run_ids.append(outcome.run_id)
+            total_latency_ms += outcome.latency_ms or 0
+            values = _read_graph_state(stack.runtime.graph, outcome.run_id)
+            if values is None:
+                model_calls, provider_error = self._model_evidence(run_ids)
+                return TrialTrace(
+                    case_id=case.id,
+                    release_id=release.id,
+                    trial_index=trial_index,
+                    attempt_index=attempt_index,
+                    turns=tuple(turn_traces),
+                    verified_target_ids=frozenset(verified_targets),
+                    allowed_ref_ids=frozenset(allowed_refs),
+                    model_calls=model_calls,
+                    latency_ms=total_latency_ms,
+                    provider_error_code=provider_error,
+                    harness_error_code=_MISSING_GRAPH_STATE,
+                )
+
+            raw_effects = tuple(
+                raw
+                for raw in _as_sequence(values.get("effect_results"))
+                if isinstance(raw, Mapping)
             )
-            # effect_results accumulates across turns of the same run: only
-            # register the effects added by this turn.
-            raw_effects = [
-                raw for raw in effect_results if isinstance(raw, Mapping)
-            ]
-            new_effects = raw_effects[len(effects) :]
-            for raw in new_effects:
-                confirmed = bool(raw.get("confirmed", False))
-                raw_key = str(raw.get("effect_key", ""))
-                object_id = (
-                    str(raw["object_id"])
-                    if isinstance(raw.get("object_id"), str)
-                    else None
-                )
-                # Objects created this turn (radar, preference expression) are
-                # legitimate targets of the verified session (FR-003).
-                if (
-                    object_id is not None
-                    and raw.get("status") == "applied"
-                    and object_id not in verified_targets
-                ):
-                    verified_targets.append(object_id)
-                effects.append(
-                    TurnEffectRecord(
-                        turn_index=index,
-                        effect_key=raw_key,
-                        status=str(raw.get("status", "rejected")),
-                        confirmed=confirmed,
-                        object_type=(
-                            str(raw["object_type"])
-                            if isinstance(raw.get("object_type"), str)
-                            else None
-                        ),
-                        object_id=object_id,
-                        reason_code=(
-                            str(raw["reason_code"])
-                            if isinstance(raw.get("reason_code"), str)
-                            else None
-                        ),
-                        target_ids=tuple(verified_targets),
-                    )
-                )
-            if turn_resolved:
-                # A confirmation resolved the material change: mark every
-                # pending material effect of the case as confirmed (FR-013).
-                for record in effects:
-                    if (
-                        record.effect_key in _MATERIAL_KEYS
-                        and record.status in {"pending", "applied"}
-                        and not record.confirmed
-                    ):
-                        effects[effects.index(record)] = TurnEffectRecord(
-                            turn_index=record.turn_index,
-                            effect_key=record.effect_key,
-                            status=record.status,
-                            confirmed=True,
-                            object_type=record.object_type,
-                            object_id=record.object_id,
-                            reason_code=record.reason_code,
-                            target_ids=record.target_ids,
-                        )
-            question = ctx.get("turn_question")
-            if isinstance(question, str) and question:
-                questions.append(
-                    QuestionSnapshot(
-                        turn_index=index,
-                        slot="clarification",
-                        answered=False,
-                    )
-                )
-            # After a turn the session may have bound a newly created radar
-            # (FR-003); refresh the local identity and the verified targets
-            # before capturing the durable snapshot.
+            offset = effect_offsets.get(outcome.run_id, 0)
+            new_effects = raw_effects[offset:]
+            effect_offsets[outcome.run_id] = len(raw_effects)
+            observed_effects = tuple(_observed_effect(raw) for raw in new_effects)
+
             bound = self._session_profile_id(stack, user_id, session.session_id)
-            if bound is not None and str(bound) not in verified_targets:
-                verified_targets.append(str(bound))
             if bound is not None:
                 profile_id = bound
-            state = self._durable_state(stack, user_id, profile_id)
-            durable_states.append(DurableStateSnapshot(turn_index=index, state=state))
+                verified_targets.add(str(bound))
+            for effect in observed_effects:
+                if (
+                    effect.status == "applied"
+                    and effect.object_id is not None
+                    and effect.object_type in {"radar", "preference", "proposal"}
+                ):
+                    verified_targets.add(effect.object_id)
 
-        return TrajectoryTrace(
+            if any(
+                effect.effect_key == "pending.resolved" for effect in observed_effects
+            ):
+                turn_traces = [_confirm_material_effects(item) for item in turn_traces]
+
+            accepted_refs = self._accepted_refs(outcome.run_id)
+            allowed_refs.update(accepted_refs)
+            turn_traces.append(
+                TurnTrace(
+                    turn_index=index,
+                    acts=_observed_acts(values),
+                    tools=_observed_tools(values),
+                    effects=observed_effects,
+                    refs=_generated_refs(values),
+                    durable_state=self._durable_state(stack, user_id, profile_id),
+                    node_names=self._node_names(outcome.run_id),
+                    outcome=outcome.status,
+                )
+            )
+
+        model_calls, provider_error = self._model_evidence(run_ids)
+        return TrialTrace(
             case_id=case.id,
-            durable_states=tuple(durable_states),
-            questions=tuple(questions),
-            turn_effects=tuple(effects),
-            bindings=tuple(bindings),
-            verified_target_ids=tuple(verified_targets),
+            release_id=release.id,
+            trial_index=trial_index,
+            attempt_index=attempt_index,
+            turns=tuple(turn_traces),
+            verified_target_ids=frozenset(verified_targets),
+            allowed_ref_ids=frozenset(allowed_refs),
+            model_calls=model_calls,
+            latency_ms=total_latency_ms,
+            provider_error_code=provider_error,
         )
 
     @staticmethod
@@ -483,7 +486,11 @@ class PostgresTrajectoryExecutor:
             "active_subjects": subjects,
         }
 
-    def _build_stack(self, case: TrajectoryCase) -> TrajectoryEvalStack:
+    def _build_stack(
+        self, *, release: EvalRelease, gateway: ModelGateway
+    ) -> TrajectoryEvalStack:
+        components = release.components
+        interpretation_prompt, reply_prompt = components.prompt_versions[:2]
         radar = build_radar_service(
             session_factory=self.factory,
             job_runtime=None,
@@ -522,13 +529,12 @@ class PostgresTrajectoryExecutor:
             ttl_hours=24,
             clock=_advancing_clock,
         )
-        gateway = self.gateway_factory(case)
-        gateway_typed = cast(ModelGateway, gateway)
         interpretation_compiler = InterpretationCompiler(
-            gateway=gateway_typed,
+            gateway=gateway,
             schema=load_interpretation_schema(),
-            prompt_version=_INTERPRETATION_PROMPT,
-            model_version="provider-x-model-y",
+            prompt_version=interpretation_prompt,
+            model_version=components.model_version,
+            interpretation_version=components.interpretation_schema_version,
         )
         turn_service = build_conversation_turn_service(
             services=CopilotServices(
@@ -544,16 +550,16 @@ class PostgresTrajectoryExecutor:
         graph = cast(
             "GraphLike",
             build_topology_v4(
-                gateway=gateway_typed,
+                gateway=gateway,
                 conversation=chat,
                 recorder=recorder,
                 saver=saver,
                 turn_service=turn_service,
                 interpretation=interpretation_compiler,
                 clock=_advancing_clock,
-                model_version="provider-x-model-y",
-                prompt_version=_REPLY_PROMPT,
-                schema_version="reply-v4",
+                model_version=components.model_version,
+                prompt_version=reply_prompt,
+                schema_version=components.reply_schema_version,
                 reply_schema=_REPLY_SCHEMA,
             ),
         )
@@ -563,8 +569,13 @@ class PostgresTrajectoryExecutor:
             runs=runs,
             recorder=recorder,
             clock=_advancing_clock,
-            state_schema_version=COPILOT_STATE_SCHEMA_VERSION,
-            topology_version=COPILOT_TOPOLOGY_VERSION,
+            state_schema_version=_release_number(
+                components.state_schema_version, "chat-state-v"
+            ),
+            topology_version=_release_number(
+                components.topology_version, "chat-topology-v"
+            ),
+            release_id=release.id,
         )
         return TrajectoryEvalStack(
             runtime=runtime,
@@ -576,6 +587,101 @@ class PostgresTrajectoryExecutor:
             proposals=proposals,
         )
 
+    def _seed_initial_state(
+        self, stack: TrajectoryEvalStack, case: EvalCase, user_id: UUID
+    ) -> UUID | None:
+        profiles = _as_sequence(case.initial_state.get("profiles"))
+        if not profiles:
+            return None
+        seeded = self.seed_profile(self.factory, user_id)
+        profile_id = cast(UUID, getattr(seeded, "profile_id", None))
+        first = profiles[0]
+        if isinstance(first, Mapping):
+            self._apply_initial_profile_state(stack.radar, user_id, profile_id, first)
+            self._seed_initial_subjects(stack.preferences, profile_id, first)
+        return profile_id
+
+    def _seed_pending_state(
+        self,
+        *,
+        stack: TrajectoryEvalStack,
+        case: EvalCase,
+        user_id: UUID,
+        session_id: UUID,
+        profile_id: UUID | None,
+    ) -> None:
+        pending = case.initial_state.get("pending_action")
+        if isinstance(pending, Mapping) and profile_id is not None:
+            self._seed_pending_proposal(
+                stack,
+                user_id=user_id,
+                session_id=session_id,
+                profile_id=profile_id,
+                pending=pending,
+            )
+
+    def _node_names(self, run_id: UUID) -> tuple[str, ...]:
+        with self.factory() as current:
+            rows = current.scalars(
+                select(AgentNodeRun)
+                .where(AgentNodeRun.graph_run_id == run_id)
+                .order_by(AgentNodeRun.started_at, AgentNodeRun.id)
+            )
+            return tuple(row.node_name for row in rows)
+
+    def _accepted_refs(self, run_id: UUID) -> frozenset[tuple[str, str]]:
+        accepted: set[tuple[str, str]] = set()
+        with self.factory() as current:
+            rows = current.scalars(
+                select(ChatMessageModel)
+                .where(
+                    ChatMessageModel.graph_run_id == run_id,
+                    ChatMessageModel.role == "assistant",
+                )
+                .order_by(ChatMessageModel.created_at, ChatMessageModel.id)
+            )
+            for row in rows:
+                for raw in _as_sequence(row.content.get("refs")):
+                    if not isinstance(raw, Mapping):
+                        continue
+                    entity = raw.get("entity")
+                    ref_id = raw.get("id")
+                    if isinstance(entity, str) and isinstance(ref_id, str):
+                        accepted.add((entity, ref_id))
+        return frozenset(accepted)
+
+    def _model_evidence(
+        self, run_ids: Sequence[UUID]
+    ) -> tuple[tuple[ModelCallCostRecord, ...], str | None]:
+        if not run_ids:
+            return (), None
+        unique_ids = tuple(dict.fromkeys(run_ids))
+        with self.factory() as current:
+            rows = tuple(
+                current.scalars(
+                    select(AgentModelCall)
+                    .where(AgentModelCall.graph_run_id.in_(unique_ids))
+                    .order_by(AgentModelCall.created_at, AgentModelCall.id)
+                )
+            )
+        records = tuple(
+            ModelCallCostRecord(
+                model_version=row.model_version,
+                input_tokens=row.input_tokens,
+                output_tokens=row.output_tokens,
+            )
+            for row in rows
+        )
+        provider_error = next(
+            (
+                row.error_code or f"provider.{row.status}"
+                for row in rows
+                if row.status != "success"
+            ),
+            None,
+        )
+        return records, provider_error
+
     @staticmethod
     def _seed_initial_subjects(
         preferences: PreferenceService,
@@ -586,10 +692,7 @@ class PostgresTrajectoryExecutor:
         and withdrawal turns have a durable predecessor (FR-014)."""
         from umbral.application.preferences.contracts import BindingDraft
 
-        raw_subjects = initial.get("active_subjects")
-        if not isinstance(raw_subjects, list):
-            return
-        for subject in raw_subjects:
+        for subject in _as_sequence(initial.get("active_subjects")):
             if not isinstance(subject, str) or not subject:
                 continue
             try:
@@ -599,9 +702,7 @@ class PostgresTrajectoryExecutor:
                     subject_key=subject,
                     raw_text=subject,
                     authority="explicit",
-                    binding_drafts=(
-                        BindingDraft.unresolved("initial_state_seed"),
-                    ),
+                    binding_drafts=(BindingDraft.unresolved("initial_state_seed"),),
                     correlation_id=uuid4(),
                 )
             except Exception:  # noqa: BLE001 - duplicate seed degrades gracefully
@@ -643,10 +744,9 @@ class PostgresTrajectoryExecutor:
     ) -> None:
         changes: dict[str, object] = {}
         if "zones" in initial:
-            zones = initial.get("zones")
-            changes["zones"] = (
-                [str(item) for item in zones] if isinstance(zones, list) else []
-            )
+            changes["zones"] = [
+                str(item) for item in _as_sequence(initial.get("zones"))
+            ]
         if "budget_max" in initial:
             budget = initial.get("budget_max")
             changes["budget_max"] = (
@@ -666,6 +766,274 @@ class PostgresTrajectoryExecutor:
                 changes=changes,
                 correlation_id=uuid4(),
             )
+
+
+class PostgresTrajectoryExecutor:
+    """Compatibility projection of the shared v3 executor into v2 evidence."""
+
+    def __init__(
+        self,
+        *,
+        factory: SessionFactory,
+        url: str,
+        seed_user: Callable[[SessionFactory], UUID],
+        seed_profile: Callable[[SessionFactory, UUID], object],
+        gateway_factory: Callable[[TrajectoryCase], ScriptedV4Gateway] | None = None,
+    ) -> None:
+        self.shared = PostgresConversationTrialExecutor(
+            factory=factory,
+            url=url,
+            seed_user=seed_user,
+            seed_profile=seed_profile,
+        )
+        self.gateway_factory = gateway_factory or _scripted_gateway_for
+
+    def execute(self, *, case: TrajectoryCase) -> TrajectoryTrace:
+        executable = _v3_case_from_v2(case)
+        trace = self.shared.execute(
+            executable,
+            _V2_COMPAT_RELEASE,
+            _V2ScriptedAdapter(case, self.gateway_factory),
+            0,
+            0,
+        )
+        target_ids = tuple(sorted(trace.verified_target_ids))
+        return TrajectoryTrace(
+            case_id=case.id,
+            durable_states=tuple(
+                DurableStateSnapshot(item.turn_index, item.durable_state)
+                for item in trace.turns
+            ),
+            questions=(),
+            turn_effects=tuple(
+                TurnEffectRecord(
+                    turn_index=turn.turn_index,
+                    effect_key=effect.effect_key,
+                    status=effect.status,
+                    confirmed=effect.confirmed,
+                    object_type=effect.object_type,
+                    object_id=effect.object_id,
+                    reason_code=effect.reason_code,
+                    target_ids=target_ids,
+                )
+                for turn in trace.turns
+                for effect in turn.effects
+            ),
+            bindings=(),
+            verified_target_ids=target_ids,
+        )
+
+
+class _V2ScriptedAdapter:
+    def __init__(
+        self,
+        case: TrajectoryCase,
+        gateway_factory: Callable[[TrajectoryCase], ScriptedV4Gateway],
+    ) -> None:
+        self.case = case
+        self.gateway_factory = gateway_factory
+
+    def gateway_for(
+        self,
+        case: EvalCase,
+        release: EvalRelease,
+        trial_index: int,
+        attempt_index: int,
+    ) -> ModelGateway:
+        del case, release, trial_index, attempt_index
+        return cast(ModelGateway, self.gateway_factory(self.case))
+
+
+_V2_COMPAT_RELEASE = EvalRelease(
+    id="trajectory-v2-compat",
+    components=EvalReleaseComponents(
+        prompt_versions=(_INTERPRETATION_PROMPT, _REPLY_PROMPT),
+        model_version="provider-x-model-y",
+        state_schema_version=f"chat-state-v{COPILOT_STATE_SCHEMA_VERSION}",
+        topology_version=f"chat-topology-v{COPILOT_TOPOLOGY_VERSION}",
+        interpretation_schema_version="conversation-interpretation-v4",
+        reply_schema_version="reply-v4",
+        tool_contract_version=None,
+        price_table_version="price-table-v1",
+    ),
+    owner="trajectory-v2",
+    justification="Compatibility projection over the shared v4 executor.",
+    activation={},
+    date="2026-08-25",
+)
+
+
+def _v3_case_from_v2(case: TrajectoryCase) -> EvalCase:
+    turns = tuple(
+        EvalTurn(
+            user=turn.user,
+            context={},
+            script=ScriptedTurn(interpretation={}, reply={}),
+            expect=TurnExpectation(
+                required_acts=turn.expected_acts,
+                allowed_acts=turn.expected_acts,
+                forbidden_acts=(),
+                required_tools=(),
+                allowed_tools=(),
+                forbidden_tools=(),
+                argument_predicates=(),
+                required_effects=turn.expected_effects,
+                forbidden_effects=(),
+                outcomes=("completed", "failed", "interrupted"),
+                require_grounding=False,
+            ),
+        )
+        for turn in case.turns
+    )
+    return EvalCase(
+        id=case.id,
+        suite="regression",
+        partition="development",
+        family=case.family,
+        risk="normal",
+        initial_state=case.initial_state,
+        turns=turns,
+        final_state=case.final_state,
+        invariants=case.invariants,
+        tags=("v2-compat",),
+        review=CaseReview(
+            reviewed_by="trajectory-v2",
+            reviewed_at="2026-08-25",
+            rationale="Existing v2 contract projected through topology-v4.",
+        ),
+    )
+
+
+def _read_graph_state(graph: GraphLike, run_id: UUID) -> Mapping[str, object] | None:
+    try:
+        snapshot = graph.compiled.get_state(
+            {"configurable": {"thread_id": str(run_id)}}
+        )
+    except Exception:  # noqa: BLE001 - converted to typed harness evidence
+        return None
+    values = getattr(snapshot, "values", None)
+    if not isinstance(values, Mapping) or not values:
+        return None
+    return values
+
+
+def _observed_acts(values: Mapping[str, object]) -> tuple[ObservedAct, ...]:
+    interpretation = values.get("interpretation")
+    if not isinstance(interpretation, Mapping):
+        return ()
+    acts: list[ObservedAct] = []
+    for raw in _as_sequence(interpretation.get("acts")):
+        if not isinstance(raw, Mapping):
+            continue
+        target = raw.get("target")
+        payload = raw.get("payload")
+        acts.append(
+            ObservedAct(
+                kind=str(raw.get("kind", "")),
+                target=dict(target) if isinstance(target, Mapping) else {},
+                payload=dict(payload) if isinstance(payload, Mapping) else {},
+            )
+        )
+    return tuple(acts)
+
+
+def _observed_tools(values: Mapping[str, object]) -> tuple[ObservedToolCall, ...]:
+    tools: list[ObservedToolCall] = []
+    for raw in _as_sequence(values.get("tool_calls")):
+        if not isinstance(raw, Mapping):
+            continue
+        args = raw.get("args")
+        tools.append(
+            ObservedToolCall(
+                name=str(raw.get("name") or raw.get("tool") or ""),
+                args=dict(args) if isinstance(args, Mapping) else {},
+                status=str(raw.get("status", "completed")),
+                error_code=(
+                    str(raw["error_code"])
+                    if isinstance(raw.get("error_code"), str)
+                    else None
+                ),
+            )
+        )
+    return tuple(tools)
+
+
+def _observed_effect(raw: Mapping[str, object]) -> ObservedEffect:
+    detail = raw.get("detail")
+    object_id = raw.get("object_id")
+    return ObservedEffect(
+        effect_key=str(raw.get("effect_key", "")),
+        status=str(raw.get("status", "rejected")),
+        object_type=(
+            str(raw["object_type"]) if isinstance(raw.get("object_type"), str) else None
+        ),
+        object_id=str(object_id) if object_id is not None else None,
+        reason_code=(
+            str(raw["reason_code"]) if isinstance(raw.get("reason_code"), str) else None
+        ),
+        detail=dict(detail) if isinstance(detail, Mapping) else {},
+        confirmed=bool(raw.get("confirmed", False)),
+    )
+
+
+def _confirm_material_effects(turn: TurnTrace) -> TurnTrace:
+    effects = tuple(
+        replace(effect, confirmed=True)
+        if effect.effect_key in _MATERIAL_KEYS
+        and effect.status in {"pending", "applied"}
+        and not effect.confirmed
+        else effect
+        for effect in turn.effects
+    )
+    return replace(turn, effects=effects)
+
+
+def _generated_refs(
+    values: Mapping[str, object],
+) -> tuple[Mapping[str, str], ...]:
+    context = values.get("context")
+    if not isinstance(context, Mapping):
+        return ()
+    reply = context.get("generated_reply")
+    if not isinstance(reply, Mapping):
+        return ()
+    refs: list[Mapping[str, str]] = []
+    for raw in _as_sequence(reply.get("refs")):
+        if not isinstance(raw, Mapping):
+            continue
+        entity = raw.get("entity")
+        ref_id = raw.get("id")
+        if isinstance(entity, str) and isinstance(ref_id, str):
+            refs.append({"entity": entity, "id": ref_id})
+    return tuple(refs)
+
+
+def _declared_verified_targets(source: Mapping[str, object]) -> set[str]:
+    targets: set[str] = set()
+    for key in ("verified_target_ids", "listing_ids"):
+        for item in _as_sequence(source.get(key)):
+            if isinstance(item, (str, UUID)):
+                targets.add(str(item))
+    entity = source.get("entity")
+    entity_id = source.get("id")
+    if isinstance(entity, str) and isinstance(entity_id, (str, UUID)):
+        targets.add(str(entity_id))
+    return targets
+
+
+def _as_sequence(value: object) -> Sequence[object]:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return value
+    return ()
+
+
+def _release_number(value: str, prefix: str) -> int:
+    if not value.startswith(prefix):
+        raise ValueError(f"agent_evals_v3.incompatible_version:{value}")
+    try:
+        return int(value.removeprefix(prefix))
+    except ValueError as exc:
+        raise ValueError(f"agent_evals_v3.incompatible_version:{value}") from exc
 
 
 class _ConceptReader:
