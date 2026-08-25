@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 from umbral.application.agent_evals.v3.contracts import (
     KNOWN_ACTS,
@@ -120,11 +121,11 @@ def _parse_case(raw: Mapping[str, object]) -> tuple[EvalCase | None, list[str]]:
     initial = _mapping(raw.get("initial_state"), errors, "initial_state")
     final = _mapping(raw.get("final_state"), errors, "final_state")
     turns = _parse_turns(raw.get("turns"), errors)
-    invariants = _strings(raw.get("invariants"), errors, "invariants", required=True)
+    invariants = _strings(raw.get("invariants"), errors, "invariants")
     for invariant in invariants:
         if invariant not in KNOWN_INVARIANTS:
             errors.append(f"agent_evals_v3.unknown_invariant:{invariant}")
-    tags = _strings(raw.get("tags"), errors, "tags", required=True)
+    tags = _strings(raw.get("tags"), errors, "tags")
     review = _parse_review(raw.get("review"), errors, case_id)
     if suite == "safety" and partition == "holdout":
         errors.append(f"agent_evals_v3.holdout_safety_case:{case_id}")
@@ -176,13 +177,44 @@ def _parse_script(value: object, errors: list[str]) -> ScriptedTurn | None:
         errors.append("agent_evals_v3.script_acts_required")
     else:
         for act in acts:
-            if not isinstance(act, Mapping) or not isinstance(act.get("kind"), str):
+            if not isinstance(act, Mapping) or set(act) != {
+                "act_id", "kind", "target", "payload", "confidence"
+            }:
+                errors.append("agent_evals_v3.script_act_invalid")
+                continue
+            if (
+                not isinstance(act.get("act_id"), str)
+                or not isinstance(act.get("kind"), str)
+                or not isinstance(act.get("target"), Mapping)
+                or not isinstance(act.get("payload"), Mapping)
+                or not isinstance(act.get("confidence"), (int, float))
+                or isinstance(act.get("confidence"), bool)
+            ):
                 errors.append("agent_evals_v3.script_act_invalid")
             elif act["kind"] not in KNOWN_ACTS:
                 errors.append(f"agent_evals_v3.unknown_act:{act['kind']}")
+    ambiguity = interpretation.get("ambiguity")
+    if ambiguity is not None and not isinstance(ambiguity, Mapping):
+        errors.append("agent_evals_v3.interpretation_invalid")
     if set(reply) != {"reply_text", "effects", "question", "refs"}:
         errors.append("agent_evals_v3.reply_invalid")
-    return ScriptedTurn(dict(interpretation), dict(reply))
+    effects = reply.get("effects")
+    refs = reply.get("refs")
+    question = reply.get("question")
+    if (
+        not isinstance(reply.get("reply_text"), str)
+        or not isinstance(effects, list)
+        or not all(isinstance(effect, str) for effect in effects)
+        or (question is not None and not isinstance(question, Mapping))
+        or not isinstance(refs, list)
+        or not all(
+            isinstance(ref, Mapping)
+            and all(isinstance(key, str) and isinstance(item, str) for key, item in ref.items())
+            for ref in refs
+        )
+    ):
+        errors.append("agent_evals_v3.reply_invalid")
+    return ScriptedTurn(_freeze_mapping(interpretation), _freeze_mapping(reply))
 
 
 def _parse_expectation(value: object, errors: list[str]) -> TurnExpectation | None:
@@ -190,8 +222,8 @@ def _parse_expectation(value: object, errors: list[str]) -> TurnExpectation | No
         errors.append("agent_evals_v3.expectation_required")
         return None
     errors.extend(_unknown_properties(value, _EXPECT_FIELDS, "expectation"))
-    acts = {field: _strings(value.get(field), errors, field, required=True) for field in ("required_acts", "allowed_acts", "forbidden_acts")}
-    tools = {field: _strings(value.get(field), errors, field, required=True) for field in ("required_tools", "allowed_tools", "forbidden_tools")}
+    acts = {field: _strings(value.get(field), errors, field) for field in ("required_acts", "allowed_acts", "forbidden_acts")}
+    tools = {field: _strings(value.get(field), errors, field) for field in ("required_tools", "allowed_tools", "forbidden_tools")}
     for items, known, label in ((acts, KNOWN_ACTS, "act"), (tools, KNOWN_TOOLS, "tool")):
         for field, values in items.items():
             for item in values:
@@ -205,9 +237,9 @@ def _parse_expectation(value: object, errors: list[str]) -> TurnExpectation | No
             if item not in allowed:
                 errors.append(f"agent_evals_v3.unknown_forbidden_{label}:{item}")
     predicates = _parse_predicates(value.get("argument_predicates"), errors)
-    required_effects = _strings(value.get("required_effects"), errors, "required_effects", required=True)
-    forbidden_effects = _strings(value.get("forbidden_effects"), errors, "forbidden_effects", required=True)
-    outcomes = _strings(value.get("outcomes"), errors, "outcomes", required=True)
+    required_effects = _strings(value.get("required_effects"), errors, "required_effects")
+    forbidden_effects = _strings(value.get("forbidden_effects"), errors, "forbidden_effects")
+    outcomes = _strings(value.get("outcomes"), errors, "outcomes")
     grounding = value.get("require_grounding")
     if not isinstance(grounding, bool):
         errors.append("agent_evals_v3.require_grounding_invalid")
@@ -233,8 +265,11 @@ def _parse_predicates(value: object, errors: list[str]) -> list[ArgumentPredicat
             errors.append(f"agent_evals_v3.unknown_predicate_source:{source}")
         if operator not in KNOWN_PREDICATE_OPERATORS:
             errors.append(f"agent_evals_v3.unknown_predicate_operator:{operator}")
-        if isinstance(source, str) and name and path and isinstance(operator, str) and operator in KNOWN_PREDICATE_OPERATORS:
-            predicates.append(ArgumentPredicate(source, name, path, operator, raw.get("expected"), raw.get("initial_path") if isinstance(raw.get("initial_path"), str) else None))
+        initial_path = raw.get("initial_path")
+        if initial_path is not None and not isinstance(initial_path, str):
+            errors.append("agent_evals_v3.initial_path_invalid")
+        if isinstance(source, str) and name and path and isinstance(operator, str) and operator in KNOWN_PREDICATE_OPERATORS and (initial_path is None or isinstance(initial_path, str)):
+            predicates.append(ArgumentPredicate(source, name, path, operator, _freeze_value(raw.get("expected")), initial_path))
     return predicates
 
 
@@ -252,12 +287,10 @@ def _parse_review(value: object, errors: list[str], case_id: str) -> CaseReview 
     return CaseReview(reviewed_by, reviewed_at, rationale)
 
 
-def _strings(value: object, errors: list[str], field: str, *, required: bool) -> tuple[str, ...]:
+def _strings(value: object, errors: list[str], field: str) -> tuple[str, ...]:
     if not isinstance(value, list):
         errors.append(f"agent_evals_v3.{field}_required")
         return ()
-    if required and value is None:
-        errors.append(f"agent_evals_v3.{field}_required")
     result: list[str] = []
     for item in value:
         if not isinstance(item, str):
@@ -270,8 +303,22 @@ def _strings(value: object, errors: list[str], field: str, *, required: bool) ->
 def _mapping(value: object, errors: list[str], field: str) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         errors.append(f"agent_evals_v3.{field}_required")
-        return {}
-    return dict(value)
+        return MappingProxyType({})
+    return _freeze_mapping(value)
+
+
+def _freeze_mapping(value: Mapping[str, object]) -> Mapping[str, object]:
+    return MappingProxyType({key: _freeze_value(item) for key, item in value.items()})
+
+
+def _freeze_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return _freeze_mapping(value)
+    if isinstance(value, list) or isinstance(value, tuple):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, set) or isinstance(value, frozenset):
+        return frozenset(_freeze_value(item) for item in value)
+    return value
 
 
 def _enum(value: object, allowed: frozenset[str], errors: list[str], field: str) -> str | None:

@@ -51,7 +51,8 @@ def _collect_violations(package: Path, forbidden: tuple[str, ...]) -> list[str]:
             if any(
                 module == item or module.startswith(f"{item}.") for item in forbidden
             ):
-                violations.append(f"{source.relative_to(package)} -> {module}")
+                relative = source.relative_to(package).as_posix()
+                violations.append(f"{relative} -> {module}")
     return violations
 
 
@@ -69,7 +70,7 @@ def test_collect_violations_detects_nested_forbidden_import() -> None:
     (nested / "forbidden.py").write_text("import sqlalchemy\n", encoding="utf-8")
 
     assert _collect_violations(root, ("sqlalchemy",)) == [
-        "v3\\forbidden.py -> sqlalchemy"
+        "v3/forbidden.py -> sqlalchemy"
     ]
 
 

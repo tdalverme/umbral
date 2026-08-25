@@ -140,6 +140,98 @@ def test_parse_dataset_rejects_duplicate_ids_and_safety_holdouts() -> None:
     )
 
 
+def test_parse_dataset_rejects_malformed_script_fields() -> None:
+    case = _case()
+    script = case["turns"][0]["script"]  # type: ignore[index]
+    act = script["interpretation"]["acts"][0]  # type: ignore[index]
+    del act["act_id"]
+    act["target"] = "not-a-mapping"
+    act["payload"] = []
+    act["confidence"] = "certain"
+    reply = script["reply"]  # type: ignore[index]
+    reply["reply_text"] = 1
+    reply["effects"] = ["valid", 2]
+
+    with pytest.raises(EvalV3ValidationError) as raised:
+        parse_dataset(
+            {
+                "contract_version": "3",
+                "registry_version": "conversation-trajectories-v3",
+                "cases": [case],
+            }
+        )
+
+    assert set(raised.value.error_codes) >= {
+        "agent_evals_v3.reply_invalid",
+        "agent_evals_v3.script_act_invalid",
+    }
+
+
+def test_parse_dataset_rejects_non_string_predicate_initial_path() -> None:
+    case = _case()
+    expect = case["turns"][0]["expect"]  # type: ignore[index]
+    expect["argument_predicates"] = [  # type: ignore[index]
+        {
+            "source": "act",
+            "name": "query",
+            "path": "$.payload.scope",
+            "operator": "scope_equals",
+            "initial_path": 1,
+        }
+    ]
+
+    with pytest.raises(EvalV3ValidationError) as raised:
+        parse_dataset(
+            {
+                "contract_version": "3",
+                "registry_version": "conversation-trajectories-v3",
+                "cases": [case],
+            }
+        )
+
+    assert "agent_evals_v3.initial_path_invalid" in raised.value.error_codes
+
+
+def test_parsed_mappings_are_read_only() -> None:
+    dataset = parse_dataset(
+        {
+            "contract_version": "3",
+            "registry_version": "conversation-trajectories-v3",
+            "cases": [_case()],
+        }
+    )
+    releases = parse_releases(
+        {
+            "contract_version": "2",
+            "registry_version": "graph-releases-v2",
+            "releases": [
+                {
+                    "id": "graph-release-003",
+                    "components": {
+                        "prompt_versions": ["interpretation-v4", "reply-v4"],
+                        "model_version": "gpt-4.1-mini",
+                        "state_schema_version": "chat-state-v4",
+                        "topology_version": "chat-topology-v4",
+                        "interpretation_schema_version": "interpretation-schema-v4",
+                        "reply_schema_version": "reply-v4",
+                        "tool_contract_version": None,
+                        "price_table_version": "price-table-v1",
+                    },
+                    "owner": "tomi",
+                    "justification": "baseline",
+                    "activation": {"status": "pending", "approved_by": None, "approval_evidence": None, "reverted_reason": None},
+                    "date": "2026-08-25",
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(TypeError):
+        dataset.cases[0].initial_state["profiles"] = []  # type: ignore[index]
+    with pytest.raises(TypeError):
+        releases.releases[0].activation["status"] = "active"  # type: ignore[index]
+
+
 def test_policy_and_release_compatibility_exclude_model_and_prompts() -> None:
     policy = parse_policy(
         {

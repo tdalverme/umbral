@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 from umbral.application.agent_evals.v3.contracts import (
     EvalDataset,
@@ -83,10 +84,10 @@ def _parse_release(raw: Mapping[str, object]) -> tuple[EvalRelease | None, list[
     activation = raw.get("activation")
     if not isinstance(activation, Mapping):
         errors.append("agent_evals_v3.release_activation_required")
-        activation_copy: Mapping[str, object] = {}
+        activation_copy: Mapping[str, object] = MappingProxyType({})
     else:
         errors.extend(_unknown(activation, _ACTIVATION_FIELDS, "release_activation"))
-        activation_copy = dict(activation)
+        activation_copy = _freeze_mapping(activation)
     if not release_id or components is None:
         return None, errors
     return EvalRelease(release_id, components, owner, justification, activation_copy, date), errors
@@ -120,3 +121,17 @@ def _required_str(value: object, errors: list[str], field: str) -> str:
 
 def _unknown(value: Mapping[str, object], allowed: frozenset[str], level: str) -> list[str]:
     return [f"agent_evals_v3.unknown_{level}_property:{key}" for key in value.keys() - allowed]
+
+
+def _freeze_mapping(value: Mapping[str, object]) -> Mapping[str, object]:
+    return MappingProxyType({key: _freeze_value(item) for key, item in value.items()})
+
+
+def _freeze_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return _freeze_mapping(value)
+    if isinstance(value, list) or isinstance(value, tuple):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, set) or isinstance(value, frozenset):
+        return frozenset(_freeze_value(item) for item in value)
+    return value
