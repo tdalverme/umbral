@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
-from typing import Never, cast, get_args, get_type_hints
+from typing import cast, get_args, get_type_hints
 
 import pytest
 
 from umbral.application.conversation.v5.contracts import (
     ClearFilter,
+    CommandV5,
     ConversationActV5,
     CreateRadar,
     EvidenceSpan,
@@ -167,15 +168,15 @@ def test_set_filter_rejects_values_outside_the_published_constraints(
         )
 
 
-def test_turn_plan_does_not_accept_open_command_payloads() -> None:
-    """Commands remain uninhabited until Task 6 supplies their closed union."""
-    assert get_type_hints(TurnPlanV5)["commands"] == tuple[Never, ...]
+def test_turn_plan_commands_use_the_closed_union() -> None:
+    """Commands are typed by the published closed command union."""
+    assert get_type_hints(TurnPlanV5)["commands"] == tuple[CommandV5, ...]
 
 
-def test_turn_plan_rejects_non_empty_commands_at_runtime() -> None:
-    """The temporary command field must not accept arbitrary runtime objects."""
+def test_turn_plan_accepts_only_commanded_payloads_at_runtime() -> None:
+    """Commands must be members of the closed command union, not open objects."""
     with pytest.raises(ValueError):
         TurnPlanV5(
             decisions=(),
-            commands=cast(tuple[Never, ...], (object(),)),
+            commands=cast(tuple[CommandV5, ...], (object(),)),
         )

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Never, TypeAlias
+from typing import Literal, TypeAlias
 
 FilterKeyV5: TypeAlias = Literal["budget_max", "zones", "min_rooms"]
 FeedbackTypeV5: TypeAlias = Literal["like", "dislike", "save", "dismiss", "contacted"]
@@ -238,15 +238,42 @@ class ActDecisionV5:
 
 
 @dataclass(frozen=True, slots=True)
+class CreateRadarCommand:
+    act_id: str
+    name: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SetFilterCommand:
+    act_id: str
+    filter_key: FilterKeyV5
+    value: FilterValueV5
+    expected_profile_version: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ClearFilterCommand:
+    act_id: str
+    filter_key: FilterKeyV5
+    expected_profile_version: int | None = None
+
+
+CommandV5 = CreateRadarCommand | SetFilterCommand | ClearFilterCommand
+
+
+@dataclass(frozen=True, slots=True)
 class TurnPlanV5:
     decisions: tuple[ActDecisionV5, ...]
-    commands: tuple[Never, ...] = ()
+    commands: tuple[CommandV5, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.commands:
-            raise ValueError(
-                "commands are unavailable until the closed union is published"
-            )
+        for command in self.commands:
+            if not isinstance(
+                command, (CreateRadarCommand, SetFilterCommand, ClearFilterCommand)
+            ):
+                raise ValueError(
+                    "commands must be members of the closed command union"
+                )
 
 
 @dataclass(frozen=True, slots=True)

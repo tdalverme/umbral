@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from umbral.application.conversation.v5.contracts import (
     ConversationActV5,
+    CreateRadar,
+    CreateRadarCommand,
     EvidenceSpan,
+    HardFilterV5,
     Query,
     RecordFeedback,
     ReviseDesire,
     SetFilter,
+    SetFilterCommand,
     TurnContextV5,
     TurnInterpretationV5,
     UntrustedContentV5,
@@ -36,13 +40,15 @@ def _context(
     active_desires: tuple[str, ...] = ("desire:1",),
     untrusted: tuple[UntrustedContentV5, ...] = (),
     allowed_capabilities: tuple[str, ...] = _ALL_CAPABILITIES,
+    active_radar_ref: str | None = "radar:1",
+    current_filters: tuple[HardFilterV5, ...] = (),
 ) -> TurnContextV5:
     return TurnContextV5(
         user_id="user:1",
         session_id="session:1",
-        active_radar_ref="radar:1",
+        active_radar_ref=active_radar_ref,
         active_radar_version=1,
-        current_filters=(),
+        current_filters=current_filters,
         active_desires=(),
         pending_action=None,
         focused_entity=None,
@@ -172,3 +178,101 @@ def test_query_plus_mutation_is_not_guessed() -> None:
     assert plan.decisions[0].status == "needs_clarification"
     assert plan.decisions[0].reason_code == "act.query_with_mutation"
     assert plan.decisions[1].status == "applied"
+
+
+def test_new_filter_applies_but_existing_filter_change_is_pending() -> None:
+    new = plan_turn_v5(
+        user_message="Subí el presupuesto a 900",
+        context=_context(),
+        interpretation=_interpretation(
+            SetFilter(
+                act_id="a1",
+                confidence=0.9,
+                evidence_spans=(_span("Subí el presupuesto a 900"),),
+                filter_key="budget_max",
+                value=900,
+            )
+        ),
+    )
+    assert new.decisions[0].status == "applied"
+    assert new.commands == (
+        SetFilterCommand(
+            act_id="a1",
+            filter_key="budget_max",
+            value=900,
+            expected_profile_version=1,
+        ),
+    )
+
+    changed = plan_turn_v5(
+        user_message="Subí el presupuesto a 1200",
+        context=_context(
+            current_filters=(HardFilterV5(filter_key="budget_max", value=800.0),)
+        ),
+        interpretation=_interpretation(
+            SetFilter(
+                act_id="a2",
+                confidence=0.9,
+                evidence_spans=(_span("Subí el presupuesto a 1200"),),
+                filter_key="budget_max",
+                value=1200,
+            )
+        ),
+    )
+    assert changed.decisions[0].status == "pending"
+    assert changed.decisions[0].reason_code == "filter.changes_existing_hard_filter"
+    assert len(changed.commands) == 1
+
+
+def test_create_radar_when_unbound_emits_command_but_rejects_when_bound() -> None:
+    unbound = plan_turn_v5(
+        user_message="Creá mi radar",
+        context=_context(active_radar_ref=None),
+        interpretation=_interpretation(
+            CreateRadar(
+                act_id="a1",
+                confidence=0.9,
+                evidence_spans=(_span("Creá mi radar"),),
+                name="Mi búsqueda",
+            )
+        ),
+    )
+    assert unbound.decisions[0].status == "applied"
+    assert unbound.commands == (
+        CreateRadarCommand(act_id="a1", name="Mi búsqueda"),
+    )
+
+    bound = plan_turn_v5(
+        user_message="Creá otro radar",
+        context=_context(),
+        interpretation=_interpretation(
+            CreateRadar(
+                act_id="a1",
+                confidence=0.9,
+                evidence_spans=(_span("Creá otro radar"),),
+            )
+        ),
+    )
+    assert bound.decisions[0].status == "rejected"
+    assert bound.decisions[0].reason_code == "radar.already_bound"
+    assert bound.commands == ()
+
+
+def test_set_filter_without_bound_radar_is_rejected() -> None:
+    plan = plan_turn_v5(
+        user_message="Subí el presupuesto a 900",
+        context=_context(active_radar_ref=None),
+        interpretation=_interpretation(
+            SetFilter(
+                act_id="a1",
+                confidence=0.9,
+                evidence_spans=(_span("Subí el presupuesto a 900"),),
+                filter_key="budget_max",
+                value=900,
+            )
+        ),
+    )
+
+    assert plan.decisions[0].status == "rejected"
+    assert plan.decisions[0].reason_code == "radar.not_bound"
+    assert plan.commands == ()
