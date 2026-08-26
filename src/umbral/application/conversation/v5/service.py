@@ -65,6 +65,43 @@ class ConversationTurnV5:
         self.audit = audit
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
+    def load_context(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        correlation_id: UUID,
+    ) -> TurnContextV5:
+        return self.contexts.load(
+            user_id=user_id, session_id=session_id, correlation_id=correlation_id
+        )
+
+    def interpret(
+        self,
+        *,
+        message_text: str,
+        context: TurnContextV5,
+        correlation_id: UUID,
+    ) -> TurnInterpretationV5:
+        return self.interpreter.interpret(
+            message_text=message_text,
+            context=context,
+            correlation_id=correlation_id,
+        )
+
+    def plan(
+        self,
+        *,
+        user_message: str,
+        context: TurnContextV5,
+        interpretation: TurnInterpretationV5,
+    ) -> TurnPlanV5:
+        return self.policy(
+            user_message=user_message,
+            context=context,
+            interpretation=interpretation,
+        )
+
     def process(
         self,
         *,
@@ -74,11 +111,11 @@ class ConversationTurnV5:
         message_text: str,
         correlation_id: UUID,
     ) -> ConversationTurnResultV5:
-        context = self.contexts.load(
+        context = self.load_context(
             user_id=user_id, session_id=session_id, correlation_id=correlation_id
         )
         try:
-            interpretation = self.interpreter.interpret(
+            interpretation = self.interpret(
                 message_text=message_text,
                 context=context,
                 correlation_id=correlation_id,
@@ -91,14 +128,36 @@ class ConversationTurnV5:
             )
             return self._failed_result(context, stage)
         try:
-            plan = self.policy(
+            plan = self.plan(
                 user_message=message_text,
                 context=context,
                 interpretation=interpretation,
             )
         except Exception:
             return self._failed_result(context, "policy_failure")
+        return self.execute(
+            user_id=user_id,
+            session_id=session_id,
+            message_id=message_id,
+            message_text=message_text,
+            correlation_id=correlation_id,
+            context=context,
+            interpretation=interpretation,
+            plan=plan,
+        )
 
+    def execute(
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        message_id: UUID,
+        message_text: str,
+        correlation_id: UUID,
+        context: TurnContextV5,
+        interpretation: TurnInterpretationV5,
+        plan: TurnPlanV5,
+    ) -> ConversationTurnResultV5:
         executed: list[ExecutedActV5] = []
         outcomes: list[ActOutcomeV5] = []
         try:
