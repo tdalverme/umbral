@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias
+from typing import Literal, Never, TypeAlias
 
 FilterKeyV5: TypeAlias = Literal["budget_max", "zones", "min_rooms"]
 FeedbackTypeV5: TypeAlias = Literal["like", "dislike", "save", "dismiss", "contacted"]
@@ -20,7 +20,7 @@ FailureStageV5: TypeAlias = Literal[
     "provider_failure",
     "contract_or_fixture_failure",
 ]
-FilterValueV5: TypeAlias = float | int | tuple[str, ...] | None
+FilterValueV5: TypeAlias = float | int | tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +75,9 @@ class HardFilterV5:
     value: FilterValueV5
     force: Literal["hard"] = "hard"
 
+    def __post_init__(self) -> None:
+        _validate_filter_value(self.filter_key, self.value)
+
 
 @dataclass(frozen=True, slots=True)
 class TurnContextV5:
@@ -123,6 +126,9 @@ class SetFilter:
     value: FilterValueV5
     force: Literal["hard"] = field(init=False, default="hard")
     kind: Literal["set_filter"] = field(init=False, default="set_filter")
+
+    def __post_init__(self) -> None:
+        _validate_filter_value(self.filter_key, self.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,7 +240,7 @@ class ActDecisionV5:
 @dataclass(frozen=True, slots=True)
 class TurnPlanV5:
     decisions: tuple[ActDecisionV5, ...]
-    commands: tuple[object, ...] = ()
+    commands: tuple[Never, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,3 +267,18 @@ class ConversationTurnResultV5:
     executed: tuple[ExecutedActV5, ...]
     outcomes: tuple[ActOutcomeV5, ...]
     failure_stage: FailureStageV5 | None = None
+
+
+def _validate_filter_value(filter_key: FilterKeyV5, value: object) -> None:
+    if filter_key == "budget_max":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("budget_max must be numeric")
+        return
+    if filter_key == "min_rooms":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("min_rooms must be an integer")
+        return
+    if filter_key != "zones":
+        raise ValueError("filter key is not published")
+    if not isinstance(value, tuple) or not all(isinstance(zone, str) for zone in value):
+        raise ValueError("zones must be a tuple of strings")

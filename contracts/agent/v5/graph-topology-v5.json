@@ -7,11 +7,24 @@
   "required": ["contract_version", "topology_version", "entry", "nodes", "edges", "interrupts"],
   "properties": {
     "contract_version": {"const": "5"}, "topology_version": {"const": "conversation-topology-v5"}, "entry": {"const": "load_context"},
-    "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}}, "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}}, "interrupts": {"type": "array", "items": {"type": "string"}}
+    "nodes": {"type": "array", "minItems": 9, "maxItems": 9, "uniqueItems": true, "items": {"$ref": "#/$defs/node"}}, "edges": {"type": "array", "minItems": 10, "maxItems": 10, "uniqueItems": true, "items": {"$ref": "#/$defs/edge"}}, "interrupts": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"const": "confirmation"}}
   },
   "$defs": {
     "node": {"type": "object", "additionalProperties": false, "required": ["name"], "properties": {"name": {"enum": ["load_context", "interpret_turn", "plan_segment", "execute_segment", "reload_context", "require_confirmation", "compose_reply", "persist_turn", "end"]}}},
-    "edge": {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"type": "string"}, "to": {"type": "string"}, "condition": {"type": "string"}}}
+    "edge": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "load_context"}, "to": {"const": "interpret_turn"}}},
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "interpret_turn"}, "to": {"const": "plan_segment"}}},
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "plan_segment"}, "to": {"const": "execute_segment"}}},
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "execute_segment"}, "to": {"const": "reload_context"}}},
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "execute_segment"}, "to": {"const": "require_confirmation"}}},
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "execute_segment"}, "to": {"const": "compose_reply"}}},
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "reload_context"}, "to": {"const": "plan_segment"}}},
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "require_confirmation"}, "to": {"const": "reload_context"}}},
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "compose_reply"}, "to": {"const": "persist_turn"}}},
+        {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"from": {"const": "persist_turn"}, "to": {"const": "end"}}}
+      ]
+    }
   },
   "examples": [{
     "contract_version": "5", "topology_version": "conversation-topology-v5", "entry": "load_context",

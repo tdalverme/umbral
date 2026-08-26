@@ -95,3 +95,68 @@ Success: no issues found in 4 source files
 
 None. Future tasks will add policy, commands, execution, and persistence; this
 task intentionally contains no such behavior.
+
+## Fix Round 1 — Normative topology, typed filters, and closed commands
+
+### Root cause
+
+The topology schema restricted each node name but did not require the complete
+set, and its edge endpoints were unconstrained strings. The context filter
+value used a broad union without conditioning it on `filter_key`; the
+interpretation set-filter branch had the same gap. Finally, `TurnPlanV5`
+declared an unrestricted `tuple[object, ...]` before a closed command union
+exists.
+
+### RED
+
+Command:
+
+```powershell
+$env:PYTHONPATH=(Join-Path (Get-Location) 'src')
+D:\Tomi\dev\umbral\.venv\Scripts\python.exe -m pytest tests/contract/test_agent_contracts_v5.py tests/unit/application/conversation/v5/test_contracts.py -q --basetemp .pytest-task-2-fix-1-red
+```
+
+Output:
+
+```text
+........FFF....FF.......FFFF                                             [100%]
+9 failed, 19 passed in 0.97s
+```
+
+The failing cases showed that missing graph nodes, an external edge endpoint,
+the direct `interpret_turn -> execute_segment` edge, numeric-filter arrays,
+invalid Python filter values, and `tuple[object, ...]` were all accepted.
+An additional focused RED run showed that an unpublished Python filter key was
+accepted; the final GREEN run confirms it is now rejected.
+
+### GREEN
+
+Command:
+
+```powershell
+$env:PYTHONPATH=(Join-Path (Get-Location) 'src')
+D:\Tomi\dev\umbral\.venv\Scripts\python.exe -m pytest tests/contract/test_agent_contracts_v5.py tests/unit/application/conversation/v5/test_contracts.py tests/contract/test_agent_contracts_v4.py -q --basetemp .pytest-task-2-fix-1-final
+```
+
+Output:
+
+```text
+....................................                                     [100%]
+36 passed in 1.01s
+```
+
+### Changes and verification
+
+- Required the exact nine-node, ten-edge graph shape through bounded unique
+  arrays and a closed `oneOf` edge vocabulary; added a valid graph fixture and
+  rejection coverage for missing nodes, unknown endpoints, and the forbidden
+  direct edge.
+- Closed filters by key in context and set-filter interpretation contracts:
+  `budget_max` is numeric, `min_rooms` is integer, and `zones` is a bounded
+  array of strings. `HardFilterV5` and `SetFilter` now apply matching runtime
+  validation.
+- Replaced `TurnPlanV5.commands: tuple[object, ...]` with the deliberately
+  uninhabited `tuple[Never, ...]` pending Task 6's closed command union.
+- `ruff check` passed; `mypy` reported `Success: no issues found in 4 source
+  files`; all V5 JSON schemas passed Draft 2020-12 meta-validation; `git diff
+  --check` passed.

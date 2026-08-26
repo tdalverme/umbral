@@ -46,6 +46,63 @@ def _act(kind: str, **fields: object) -> dict[str, object]:
     }
 
 
+def _context(filters: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "contract_version": "5",
+        "user_id": "user:1",
+        "session_id": "session:1",
+        "active_radar_ref": "radar:1",
+        "active_radar_version": 1,
+        "current_filters": filters,
+        "active_desires": [],
+        "pending_action": None,
+        "focused_entity": None,
+        "verified_listing_refs": [],
+        "allowed_capabilities": ["query"],
+        "untrusted_content": [],
+        "context_schema_version": "5",
+        "correlation_id": "correlation:1",
+    }
+
+
+def _topology() -> dict[str, object]:
+    return {
+        "contract_version": "5",
+        "topology_version": "conversation-topology-v5",
+        "entry": "load_context",
+        "nodes": [
+            {"name": name}
+            for name in (
+                "load_context",
+                "interpret_turn",
+                "plan_segment",
+                "execute_segment",
+                "reload_context",
+                "require_confirmation",
+                "compose_reply",
+                "persist_turn",
+                "end",
+            )
+        ],
+        "edges": [
+            {"from": source, "to": target}
+            for source, target in (
+                ("load_context", "interpret_turn"),
+                ("interpret_turn", "plan_segment"),
+                ("plan_segment", "execute_segment"),
+                ("execute_segment", "reload_context"),
+                ("execute_segment", "require_confirmation"),
+                ("execute_segment", "compose_reply"),
+                ("reload_context", "plan_segment"),
+                ("require_confirmation", "reload_context"),
+                ("compose_reply", "persist_turn"),
+                ("persist_turn", "end"),
+            )
+        ],
+        "interrupts": ["confirmation"],
+    }
+
+
 def test_v5_schemas_are_closed_and_versioned() -> None:
     """An unversioned or open top-level schema would widen the public seam."""
     for name in SCHEMA_NAMES:
@@ -114,3 +171,77 @@ def test_act_branches_reject_unrelated_fields(act: dict[str, object]) -> None:
 
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(_interpretation(act), schema)
+
+
+def test_topology_accepts_the_complete_v5_graph() -> None:
+    """The published topology must describe the one permitted graph shape."""
+    jsonschema.validate(_topology(), _schema("graph-topology-v5.json"))
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda topology: topology["nodes"].pop(),
+        lambda topology: topology["edges"].__setitem__(
+            0, {"from": "outside", "to": "interpret_turn"}
+        ),
+        lambda topology: topology["edges"].__setitem__(
+            1, {"from": "interpret_turn", "to": "execute_segment"}
+        ),
+    ],
+)
+def test_topology_rejects_missing_nodes_and_unsafe_edges(
+    mutate: Any,
+) -> None:
+    """An incomplete graph or interpretation-to-execution shortcut bypasses policy."""
+    topology = _topology()
+    mutate(topology)
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(topology, _schema("graph-topology-v5.json"))
+
+
+@pytest.mark.parametrize(
+    ("filter_key", "json_value"),
+    [
+        ("budget_max", 1200.0),
+        ("min_rooms", 2),
+        ("zones", ["palermo", "belgrano"]),
+    ],
+)
+def test_filter_schema_accepts_the_published_typed_values(
+    filter_key: str, json_value: object
+) -> None:
+    """Context and set-filter payloads must share the same closed value surface."""
+    filter_value = {"filter_key": filter_key, "value": json_value, "force": "hard"}
+
+    jsonschema.validate(_context([filter_value]), _schema("context-schema-v5.json"))
+    jsonschema.validate(
+        _interpretation(_act("set_filter", **filter_value)),
+        _schema("interpretation-schema-v5.json"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("filter_key", "json_value"),
+    [
+        ("zones", {"not": "a zone list"}),
+        ("min_rooms", [2]),
+        ("budget_max", [1200]),
+    ],
+)
+def test_filter_schema_rejects_key_value_type_mismatches(
+    filter_key: str, json_value: object
+) -> None:
+    """A mismatched filter shape would create an untyped mutation proposal."""
+    filter_value = {"filter_key": filter_key, "value": json_value, "force": "hard"}
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            _context([filter_value]), _schema("context-schema-v5.json")
+        )
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            _interpretation(_act("set_filter", **filter_value)),
+            _schema("interpretation-schema-v5.json"),
+        )

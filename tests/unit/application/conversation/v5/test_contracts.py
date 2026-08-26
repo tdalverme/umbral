@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
-from typing import get_args
+from typing import Never, cast, get_args, get_type_hints
 
 import pytest
 
@@ -13,12 +13,16 @@ from umbral.application.conversation.v5.contracts import (
     CreateRadar,
     EvidenceSpan,
     ExpressDesire,
+    FilterKeyV5,
+    FilterValueV5,
+    HardFilterV5,
     Query,
     RecordFeedback,
     ResolvePending,
     ReviseDesire,
     SetFilter,
     TurnContextV5,
+    TurnPlanV5,
     UnsupportedRequest,
     WithdrawDesire,
 )
@@ -83,3 +87,48 @@ def test_act_union_is_exhaustive_and_ordered() -> None:
         Query,
         UnsupportedRequest,
     )
+
+
+@pytest.mark.parametrize(
+    ("filter_key", "value"),
+    [
+        ("budget_max", 1200.0),
+        ("min_rooms", 2),
+        ("zones", ("palermo", "belgrano")),
+    ],
+)
+def test_hard_filter_values_match_the_published_types(
+    filter_key: FilterKeyV5, value: FilterValueV5
+) -> None:
+    """Python contracts must accept precisely the values published in JSON."""
+    filter_view = HardFilterV5(
+        filter_key=filter_key,
+        value=value,
+    )
+
+    assert filter_view.value == value
+
+
+@pytest.mark.parametrize(
+    ("filter_key", "value"),
+    [
+        ("budget_max", ("1200",)),
+        ("min_rooms", 2.5),
+        ("zones", ("palermo", 3)),
+        ("unknown", ("palermo",)),
+    ],
+)
+def test_hard_filter_rejects_values_outside_the_published_types(
+    filter_key: FilterKeyV5, value: object
+) -> None:
+    """Mismatched Python values must fail at the same boundary as JSON values."""
+    with pytest.raises(ValueError):
+        HardFilterV5(
+            filter_key=filter_key,
+            value=cast(FilterValueV5, value),
+        )
+
+
+def test_turn_plan_does_not_accept_open_command_payloads() -> None:
+    """Commands remain uninhabited until Task 6 supplies their closed union."""
+    assert get_type_hints(TurnPlanV5)["commands"] == tuple[Never, ...]
