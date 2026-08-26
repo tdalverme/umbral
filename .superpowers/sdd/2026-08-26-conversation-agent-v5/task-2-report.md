@@ -160,3 +160,58 @@ Output:
 - `ruff check` passed; `mypy` reported `Success: no issues found in 4 source
   files`; all V5 JSON schemas passed Draft 2020-12 meta-validation; `git diff
   --check` passed.
+
+## Fix Round 2 — Runtime parity for zones and commands
+
+### Root cause
+
+The shared Python filter validator only checked that zones were strings; it
+missed the JSON Schema's non-empty-string and maximum-fifteen-item limits.
+`TurnPlanV5` used an uninhabited static type but had no runtime guard, so a
+cast or untyped caller could still supply command objects.
+
+### RED
+
+Command:
+
+```powershell
+$env:PYTHONPATH=(Join-Path (Get-Location) 'src')
+D:\Tomi\dev\umbral\.venv\Scripts\python.exe -m pytest tests/unit/application/conversation/v5/test_contracts.py -q --basetemp .pytest-task-2-fix-2-red
+```
+
+Output:
+
+```text
+...........FF..FF.F                                                      [100%]
+5 failed, 14 passed in 0.28s
+```
+
+The failures covered empty and sixteen-item zone tuples for `HardFilterV5` and
+`SetFilter`, plus runtime acceptance of a non-empty `TurnPlanV5.commands`.
+
+### GREEN
+
+Command:
+
+```powershell
+$env:PYTHONPATH=(Join-Path (Get-Location) 'src')
+D:\Tomi\dev\umbral\.venv\Scripts\python.exe -m pytest tests/contract/test_agent_contracts_v5.py tests/unit/application/conversation/v5/test_contracts.py tests/contract/test_agent_contracts_v4.py -q --basetemp .pytest-task-2-fix-2-final
+```
+
+Output:
+
+```text
+...........................................                              [100%]
+43 passed in 1.03s
+```
+
+### Changes and verification
+
+- `HardFilterV5` and `SetFilter` now reject empty zone strings and more than
+  fifteen zones, matching the published JSON shape. Existing scalar-type
+  validation continues to run through the same shared validator.
+- `TurnPlanV5.__post_init__` rejects every non-empty `commands` tuple until
+  Task 6 replaces the temporary `Never` field with the closed command union.
+- `ruff check` passed; `mypy` reported `Success: no issues found in 4 source
+  files`; all V5 JSON schemas passed Draft 2020-12 meta-validation; `git diff
+  --check` passed.

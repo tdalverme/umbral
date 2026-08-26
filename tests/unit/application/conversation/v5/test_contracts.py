@@ -129,6 +129,53 @@ def test_hard_filter_rejects_values_outside_the_published_types(
         )
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        ("",),
+        tuple(f"zone-{index}" for index in range(16)),
+    ],
+)
+def test_hard_filter_rejects_zones_outside_the_published_constraints(
+    value: tuple[str, ...],
+) -> None:
+    """Python zone filters must match JSON's non-empty, fifteen-zone limit."""
+    with pytest.raises(ValueError):
+        HardFilterV5(filter_key="zones", value=value)
+
+
+@pytest.mark.parametrize(
+    ("filter_key", "value"),
+    [
+        ("budget_max", ("1200",)),
+        ("min_rooms", 2.5),
+        ("zones", ("",)),
+        ("zones", tuple(f"zone-{index}" for index in range(16))),
+    ],
+)
+def test_set_filter_rejects_values_outside_the_published_constraints(
+    filter_key: FilterKeyV5, value: object
+) -> None:
+    """Set-filter acts must enforce the same scalar and zone constraints."""
+    with pytest.raises(ValueError):
+        SetFilter(
+            act_id="act-1",
+            confidence=0.9,
+            evidence_spans=(EvidenceSpan(start=0, end=1, text="x"),),
+            filter_key=filter_key,
+            value=cast(FilterValueV5, value),
+        )
+
+
 def test_turn_plan_does_not_accept_open_command_payloads() -> None:
     """Commands remain uninhabited until Task 6 supplies their closed union."""
     assert get_type_hints(TurnPlanV5)["commands"] == tuple[Never, ...]
+
+
+def test_turn_plan_rejects_non_empty_commands_at_runtime() -> None:
+    """The temporary command field must not accept arbitrary runtime objects."""
+    with pytest.raises(ValueError):
+        TurnPlanV5(
+            decisions=(),
+            commands=cast(tuple[Never, ...], (object(),)),
+        )

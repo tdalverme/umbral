@@ -242,6 +242,12 @@ class TurnPlanV5:
     decisions: tuple[ActDecisionV5, ...]
     commands: tuple[Never, ...] = ()
 
+    def __post_init__(self) -> None:
+        if self.commands:
+            raise ValueError(
+                "commands are unavailable until the closed union is published"
+            )
+
 
 @dataclass(frozen=True, slots=True)
 class ExecutedActV5:
@@ -280,5 +286,9 @@ def _validate_filter_value(filter_key: FilterKeyV5, value: object) -> None:
         return
     if filter_key != "zones":
         raise ValueError("filter key is not published")
-    if not isinstance(value, tuple) or not all(isinstance(zone, str) for zone in value):
+    if (
+        not isinstance(value, tuple)
+        or len(value) > 15
+        or not all(isinstance(zone, str) and zone for zone in value)
+    ):
         raise ValueError("zones must be a tuple of strings")
