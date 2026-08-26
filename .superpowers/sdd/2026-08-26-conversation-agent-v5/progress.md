@@ -44,7 +44,8 @@
 - Task 5: complete — commit `a53e9d4`; `plan_turn_v5` pure policy (capability/evidence-provenance/ref checks, typed dispatch, stable reason codes); 26 V5 + 13 V4 regression passed, ruff/mypy clean.
 - Task 6: complete — commit `19bff3d`; closed `CommandV5` union (replaces `Never`), policy emits radar commands, `EffectExecutorV5` over RadarService/ChatService/proposals; 76 passed, ruff/mypy clean.
 - Task 7: complete — commit `46f24fe`; desire commands + `ExecutedActV5.status`, policy ambiguity (`desire.ambiguous`), preference adapters in executor; 70 passed, ruff/mypy clean.
-- Task 8: complete — commit `TBD`; `RecordFeedbackCommand` + `FeedbackRecorderV5` port, feedback adapter in executor; 62 with feedback/abuse regression passed, ruff/mypy clean.
+- Task 8: complete — commit `f0a46f1`; `RecordFeedbackCommand` + `FeedbackRecorderV5` port, feedback adapter in executor; 62 with feedback/abuse regression passed, ruff/mypy clean.
+- Task 9: complete — commit `TBD`; `ConversationTurnV5` service (segments, reload/replan, stop on pending/clarification), `CommandReceiptStore` (in-memory + SQLAlchemy + migration 0022), `TurnAuditWriterV5` port, `ProposalsPendingResolverV5`; 76 passed, ruff/mypy clean.
 - Task 3: pending
 - Task 4: pending
 - Task 5: pending

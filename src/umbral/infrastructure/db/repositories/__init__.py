@@ -1,5 +1,8 @@
 """Capability-specific database repositories."""
 
+from umbral.infrastructure.db.repositories.conversation_v5 import (
+    SqlAlchemyCommandReceiptStore,
+)
 from umbral.infrastructure.db.repositories.identity import (
     InMemoryIdentityStore,
     PostgresIdentityRepository,
@@ -22,6 +25,7 @@ __all__ = [
     "InMemoryIdentityStore",
     "PostgresIdentityRepository",
     "SqlAlchemyObjectRepository",
+    "SqlAlchemyCommandReceiptStore",
     "SqlAlchemyBindingRepository",
     "SqlAlchemyExpressionRepository",
     "SqlAlchemyUrbanContractRepository",

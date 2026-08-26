@@ -12,8 +12,13 @@ from typing import Protocol
 from uuid import UUID
 
 from umbral.application.conversation.v5.contracts import (
+    CommandV5,
+    ConversationTurnResultV5,
+    ExecutedActV5,
     PendingActionV5,
     TurnContextV5,
+    TurnInterpretationV5,
+    TurnPlanV5,
 )
 
 
@@ -78,3 +83,54 @@ class ContextAssemblyFailed(Exception):
     def __init__(self, reason_code: str) -> None:
         super().__init__(reason_code)
         self.reason_code = reason_code
+
+
+class InterpreterV5(Protocol):
+    def interpret(
+        self,
+        *,
+        message_text: str,
+        context: TurnContextV5,
+        correlation_id: object | None = None,
+    ) -> TurnInterpretationV5: ...
+
+
+class TurnPolicyV5(Protocol):
+    def __call__(
+        self,
+        *,
+        user_message: str,
+        context: TurnContextV5,
+        interpretation: TurnInterpretationV5,
+    ) -> TurnPlanV5: ...
+
+
+class EffectExecutorV5Like(Protocol):
+    def execute(
+        self,
+        *,
+        command: CommandV5,
+        context: TurnContextV5,
+        idempotency_key: str,
+    ) -> ExecutedActV5: ...
+
+
+class PendingResolverV5(Protocol):
+    def resolve(
+        self,
+        *,
+        act_id: str,
+        context: TurnContextV5,
+        pending_ref: str,
+        decision: str,
+        correlation_id: UUID,
+        idempotency_key: str,
+    ) -> ExecutedActV5: ...
+
+
+class TurnAuditWriterV5(Protocol):
+    def record(
+        self,
+        result: ConversationTurnResultV5,
+        versions: Mapping[str, object],
+    ) -> None: ...

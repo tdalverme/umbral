@@ -11,6 +11,9 @@ from umbral.infrastructure.db.models.agent_evals import (
     AgentEvalSuite,
 )
 from umbral.infrastructure.db.models.chat import ChatMessage, ChatSession
+from umbral.infrastructure.db.models.conversation_v5 import (
+    ConversationV5CommandReceipt,
+)
 from umbral.infrastructure.db.models.criteria import (
     Concept,
     ConceptVersion,
@@ -96,6 +99,7 @@ __all__ = [
     "AgentEvalCaseResult",
     "ChatSession",
     "ChatMessage",
+    "ConversationV5CommandReceipt",
     "Concept",
     "ConceptVersion",
     "PreferenceFact",

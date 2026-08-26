@@ -357,6 +357,61 @@ class EffectExecutorV5:
         )
 
 
+class ProposalsPendingResolverV5:
+    """Resolves the durable pending proposal through its native service."""
+
+    def __init__(self, *, proposals: SearchProfileUpdateProposals) -> None:
+        self.proposals = proposals
+
+    def resolve(
+        self,
+        *,
+        act_id: str,
+        context: TurnContextV5,
+        pending_ref: str,
+        decision: str,
+        correlation_id: UUID,
+        idempotency_key: str,
+    ) -> ExecutedActV5:
+        profile_id = _profile_id(context)
+        if profile_id is None:
+            return ExecutedActV5(
+                act_id=act_id,
+                effect_key="pending.resolved",
+                status="rejected",
+                reason_code="radar.not_bound",
+            )
+        pending_id = _ref_uuid(pending_ref, "pending")
+        if decision == "approve":
+            self.proposals.apply(
+                user_id=UUID(context.user_id),
+                session_id=UUID(context.session_id),
+                search_profile_id=profile_id,
+                proposal_id=pending_id,
+                confirmation=True,
+                idempotency_key=idempotency_key,
+                correlation_id=correlation_id,
+            )
+            return ExecutedActV5(
+                act_id=act_id,
+                effect_key="pending.resolved",
+                object_ref=f"radar:{profile_id}",
+            )
+        self.proposals.reject(
+            user_id=UUID(context.user_id),
+            session_id=UUID(context.session_id),
+            search_profile_id=profile_id,
+            proposal_id=pending_id,
+            note="rechazado desde el chat",
+            correlation_id=correlation_id,
+        )
+        return ExecutedActV5(
+            act_id=act_id,
+            effect_key="pending.resolved",
+            object_ref=f"pending:{pending_id}",
+        )
+
+
 def _profile_id(context: TurnContextV5) -> UUID | None:
     if context.active_radar_ref is None:
         return None
