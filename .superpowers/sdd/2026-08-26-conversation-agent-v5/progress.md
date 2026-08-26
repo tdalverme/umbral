@@ -39,7 +39,8 @@
 
 - Task 1: complete — commits `a613d5e`, `0d2f483`; fix round 1/5 addressed reporting leak; scoped re-review clean; V4 11 passed, V3 18 passed, mypy/ruff clean.
 - Task 2: complete — commits `53d5a0b`, `9b89dce`, `521b90a`; fix rounds 1–2/5 closed topology, typed filters, `Never` command guard, and zone parity; re-verified 43 passed (v5 contract + unit + v4 regression), ruff/mypy clean, HEAD `521b90a`.
-- Task 3: complete — commit `3e5a9f1`; ports (`ContextReaderV5`, `PendingActionReaderV5`, `FocusedEntityReader` + `FocusedListingV5`), `ContextAssemblerV5`, `ProposalsPendingReaderV5`; 28 task-scoped + 33 regression passed, ruff/mypy clean.
+- Task 3: complete — commit `b221d43`; ports (`ContextReaderV5`, `PendingActionReaderV5`, `FocusedEntityReader` + `FocusedListingV5`), `ContextAssemblerV5`, `ProposalsPendingReaderV5`; 28 task-scoped + 33 regression passed, ruff/mypy clean.
+- Task 4: complete — commit `TBD`; `InterpretationCompilerV5` (strict evidence/ref decoding, `InterpretationContractFailed`), prompt `interpretation-v5.md`; 9 task-scoped + 26 with contract passed, ruff/mypy clean.
 - Task 3: pending
 - Task 4: pending
 - Task 5: pending
