@@ -8,6 +8,8 @@ dictionaries, never guesses targets, and produces no durable commands for
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from umbral.application.conversation.v5.contracts import (
     ActDecisionV5,
     ClearFilter,
@@ -20,6 +22,7 @@ from umbral.application.conversation.v5.contracts import (
     Query,
     RecordDesireCommand,
     RecordFeedback,
+    RecordFeedbackCommand,
     ResolvePending,
     ReviseDesire,
     ReviseDesireCommand,
@@ -169,7 +172,15 @@ def _decide(
         case RecordFeedback():
             if not context.authorizes(act.listing_ref):
                 return _rejected(act.act_id, "feedback.listing_not_authorized"), None
-            return _applied(act.act_id), None
+            return (
+                _applied(act.act_id),
+                RecordFeedbackCommand(
+                    act_id=act.act_id,
+                    listing_id=UUID(act.listing_ref.removeprefix("listing:")),
+                    feedback_type=act.feedback_type,
+                    raw_text=act.raw_text,
+                ),
+            )
         case ResolvePending():
             if not context.authorizes(act.pending_ref):
                 return _rejected(act.act_id, "pending.not_found"), None

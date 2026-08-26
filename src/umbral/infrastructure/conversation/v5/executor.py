@@ -23,11 +23,13 @@ from umbral.application.conversation.v5.contracts import (
     CreateRadarCommand,
     ExecutedActV5,
     RecordDesireCommand,
+    RecordFeedbackCommand,
     ReviseDesireCommand,
     SetFilterCommand,
     TurnContextV5,
     WithdrawDesireCommand,
 )
+from umbral.application.conversation.v5.ports import FeedbackRecorderV5
 from umbral.application.preferences.contracts import BindingDraft
 from umbral.application.radar.service import RadarService
 from umbral.domain.errors import ConcurrencyConflict
@@ -44,12 +46,14 @@ class EffectExecutorV5:
         chat: ChatService,
         proposals: SearchProfileUpdateProposals,
         preferences: PreferenceServiceLike | None = None,
+        feedback: FeedbackRecorderV5 | None = None,
         radar_name: str = "Mi búsqueda",
     ) -> None:
         self.radar = radar
         self.chat = chat
         self.proposals = proposals
         self.preferences = preferences
+        self.feedback = feedback
         self.radar_name = radar_name
 
     def execute(
@@ -72,6 +76,8 @@ class EffectExecutorV5:
                 return self._revise_desire(command, context)
             case WithdrawDesireCommand():
                 return self._withdraw_desire(command, context)
+            case RecordFeedbackCommand():
+                return self._record_feedback(command, context, idempotency_key)
 
     def _create_radar(
         self, command: CreateRadarCommand, context: TurnContextV5
@@ -284,6 +290,45 @@ class EffectExecutorV5:
             act_id=command.act_id,
             effect_key="desire.withdrawn",
             object_ref=f"desire:{change.expression.expression_id}",
+        )
+
+    def _record_feedback(
+        self,
+        command: RecordFeedbackCommand,
+        context: TurnContextV5,
+        idempotency_key: str,
+    ) -> ExecutedActV5:
+        profile_id = _profile_id(context)
+        if profile_id is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="feedback.recorded",
+                status="rejected",
+                reason_code="radar.not_bound",
+            )
+        feedback = self.feedback
+        if feedback is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="feedback.recorded",
+                status="rejected",
+                reason_code="feedback.not_configured",
+            )
+        feedback.record_feedback(
+            owner_id=UUID(context.user_id),
+            profile_id=profile_id,
+            listing_id=command.listing_id,
+            run_id=None,
+            event_type=command.feedback_type,
+            reason_keys=(),
+            idempotency_key=idempotency_key,
+            correlation_id=UUID(context.correlation_id),
+            free_feedback=command.raw_text,
+        )
+        return ExecutedActV5(
+            act_id=command.act_id,
+            effect_key="feedback.recorded",
+            object_ref=f"listing:{command.listing_id}",
         )
 
     def _propose(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
+from uuid import UUID
 
 FilterKeyV5: TypeAlias = Literal["budget_max", "zones", "min_rooms"]
 FeedbackTypeV5: TypeAlias = Literal["like", "dislike", "save", "dismiss", "contacted"]
@@ -280,6 +281,14 @@ class WithdrawDesireCommand:
     desire_ref: str
 
 
+@dataclass(frozen=True, slots=True)
+class RecordFeedbackCommand:
+    act_id: str
+    listing_id: UUID
+    feedback_type: FeedbackTypeV5
+    raw_text: str | None = None
+
+
 CommandV5 = (
     CreateRadarCommand
     | SetFilterCommand
@@ -287,6 +296,7 @@ CommandV5 = (
     | RecordDesireCommand
     | ReviseDesireCommand
     | WithdrawDesireCommand
+    | RecordFeedbackCommand
 )
 
 
@@ -306,6 +316,7 @@ class TurnPlanV5:
                     RecordDesireCommand,
                     ReviseDesireCommand,
                     WithdrawDesireCommand,
+                    RecordFeedbackCommand,
                 ),
             ):
                 raise ValueError(

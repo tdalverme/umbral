@@ -6,6 +6,7 @@ needs. They never expose repository objects or generic query methods.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -48,6 +49,27 @@ class ContextReaderV5(Protocol):
     def load(
         self, *, user_id: UUID, session_id: UUID, correlation_id: UUID
     ) -> TurnContextV5: ...
+
+
+class FeedbackRecorderV5(Protocol):
+    """The existing feedback application interface used by feedback tooling."""
+
+    def record_feedback(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        listing_id: UUID,
+        run_id: UUID | None,
+        event_type: str,
+        reason_keys: tuple[str, ...],
+        idempotency_key: str,
+        correlation_id: UUID,
+        concept_feedback: tuple[Mapping[str, object], ...] = (),
+        free_feedback: str | None = None,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> object: ...
 
 
 class ContextAssemblyFailed(Exception):
