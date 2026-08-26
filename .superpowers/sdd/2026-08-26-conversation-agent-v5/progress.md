@@ -48,7 +48,9 @@
 - Task 9: complete — commit `b58b287`; `ConversationTurnV5` service (segments, reload/replan, stop on pending/clarification), `CommandReceiptStore` (in-memory + SQLAlchemy + migration 0022), `TurnAuditWriterV5` port, `ProposalsPendingResolverV5`; 76 passed, ruff/mypy clean.
 - Task 10: complete — commit `481871f`; `ReplyComposerV5` + fallback + `reply-v5.md`, `graph_v5.py` (topology/interrupt, phase methods en service), `composition.py`; 28 passed (V4 graph suite sin cambios), ruff/mypy clean.
 - Task 11: complete — commit `ab354ab`; dataset/policy/releases V4, loader, statistics, `v4_flow.py` (scripted+managed sobre `build_graph_v5`), 12 casos pasan 12/12 en scripted; 80 passed, ruff/mypy clean.
-- Task 12: complete — commit `TBD`; gate (`evaluate_v5_gate` + latency exception), selector `select_production_conversation_builder` (V4 default, V5 gated por evidencia, fail closed), setting `AGENT_V5_ACTIVATION_EVIDENCE`, runbook `agent-v5-release.md`, check.ps1 extendido; 287 V5 + 32 V4 regresión passed, ruff/mypy clean.
+- Task 12: complete — commit `449b84a`; gate (`evaluate_v5_gate` + latency exception), selector `select_production_conversation_builder` (V4 default, V5 gated por evidencia, fail closed), setting `AGENT_V5_ACTIVATION_EVIDENCE`, runbook `agent-v5-release.md`, check.ps1 extendido; 287 V5 + 32 V4 regresión passed, ruff/mypy clean.
+- Final: todos los tasks 1–12 commiteados; verificación final en curso.
+- Final verification (2026-08-26): `git diff 781c086 -- contracts/agent/v4 src/umbral/application/conversation src/umbral/agent/graph.py` solo contiene archivos nuevos bajo `conversation/v5/` (cero edits a V4). Todos los componentes del release `graph-release-005` resuelven a archivos commiteados. Scripted y managed cruzan el mismo `build_graph_v5` (test_v4_same_path). Evidencia de eval con atribución por etapa y sin valores sensibles. Runtime V5 INACTIVO por defecto: `agent_graph_release_id=graph-release-001` y `agent_v5_activation_evidence=""`; el selector falla cerrado sin evidencia.
 - Task 3: pending
 - Task 4: pending
 - Task 5: pending
