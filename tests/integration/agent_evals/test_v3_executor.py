@@ -48,6 +48,7 @@ class _ScriptedAdapter:
 
     def gateway_for(
         self,
+        *,
         case: EvalCase,
         release: EvalRelease,
         trial_index: int,

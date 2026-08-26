@@ -132,6 +132,7 @@ class EvalModelAdapter(Protocol):
 
     def gateway_for(
         self,
+        *,
         case: EvalCase,
         release: EvalRelease,
         trial_index: int,
@@ -337,7 +338,12 @@ class PostgresConversationTrialExecutor:
                 f"{release.components.topology_version}"
             )
 
-        gateway = model_adapter.gateway_for(case, release, trial_index, attempt_index)
+        gateway = model_adapter.gateway_for(
+            case=case,
+            release=release,
+            trial_index=trial_index,
+            attempt_index=attempt_index,
+        )
         stack = self._build_stack(release=release, gateway=gateway)
         user_id = self.seed_user(self.factory)
         profile_id = self._seed_initial_state(stack, case, user_id)
@@ -835,6 +841,7 @@ class _V2ScriptedAdapter:
 
     def gateway_for(
         self,
+        *,
         case: EvalCase,
         release: EvalRelease,
         trial_index: int,
