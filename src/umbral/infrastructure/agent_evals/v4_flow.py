@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -61,6 +62,7 @@ from umbral.application.preferences.contracts import (
     PreferenceView,
 )
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
+from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.conversation.v5.composition import (
     V5Services,
     build_conversation_v5_turn_service,
@@ -72,6 +74,15 @@ _REPLY_MARKER = "outcomes"
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _settings_from_environment() -> Settings:
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key in Settings._known_fields
+    }
+    return Settings.from_environment(environment)
 
 
 class EvalModelAdapterV4(Protocol):
@@ -164,7 +175,12 @@ class _ScriptedGatewayV4:
 
 
 class ManagedEvalModelAdapterV4:
-    """Fresh managed-provider gateway per trial with the release model pinned."""
+    """Fresh managed-provider gateway per trial with the release model pinned.
+
+    Declared provider/reply failure cases are injected at their respective
+    gateway call. They exercise graph failure handling without pretending that
+    a successful model call was a model failure.
+    """
 
     fidelity: Fidelity = "managed"
 
@@ -189,8 +205,8 @@ class ManagedEvalModelAdapterV4:
         trial_index: int,
         attempt_index: int,
     ) -> ModelGateway:
-        del case, release, trial_index, attempt_index
-        return cast(
+        del release, trial_index, attempt_index
+        gateway = cast(
             ModelGateway,
             ManagedModelGateway(
                 endpoint=self.endpoint,
@@ -198,6 +214,51 @@ class ManagedEvalModelAdapterV4:
                 model=self.model,
                 max_retries=0,
             ),
+        )
+        behavior = next(
+            (
+                turn.scripted_behavior
+                for turn in case.turns
+                if turn.scripted_behavior is not None
+            ),
+            None,
+        )
+        if behavior is None:
+            return gateway
+        return _InjectedFailureGateway(gateway, behavior)
+
+
+class _InjectedFailureGateway:
+    """Inject one declared infrastructure failure while delegating the rest."""
+
+    def __init__(self, delegate: ModelGateway, behavior: str) -> None:
+        self.delegate = delegate
+        self.behavior = behavior
+
+    def generate_structured(
+        self,
+        *,
+        messages: tuple[Mapping[str, object], ...],
+        schema: Mapping[str, object],
+        schema_version: str,
+        prompt_version: str,
+        model_version: str,
+        tools: Sequence[Mapping[str, object]] | None = None,
+    ) -> ModelResult:
+        if (
+            self.behavior == "provider_failure"
+            and prompt_version.startswith("interpretation")
+        ) or (
+            self.behavior == "reply_failure" and prompt_version == "reply-v5"
+        ):
+            return _error_result(model_version, "provider.timeout")
+        return self.delegate.generate_structured(
+            messages=messages,
+            schema=schema,
+            schema_version=schema_version,
+            prompt_version=prompt_version,
+            model_version=model_version,
+            tools=tools,
         )
 
 
@@ -224,6 +285,11 @@ class V5EvalTrialExecutor:
         trial_index: int,
         attempt_index: int,
     ) -> TrialEvidenceV4:
+        if release.components.interpretation_schema_version != "interpretation-schema-v5":
+            raise ValueError(
+                "agent_evals_v5.requires_v5_release:"
+                "V5EvalTrialExecutor cannot execute legacy releases"
+            )
         del attempt_index
         services = _EvalServices()
         services.seed(case.seed)
@@ -357,8 +423,6 @@ def run_v4_eval(
     include_holdout: bool = True,
     contracts_dir: Path = Path(__file__).parents[4] / "contracts",
 ) -> tuple[TrialEvidenceV4, ...]:
-    from umbral.infrastructure.config.settings import Settings
-
     v4_dir = contracts_dir / "agent-evals" / "v4"
     dataset = load_dataset(v4_dir / "conversation-trajectories-v4.json")
     policy = load_policy(v4_dir / "eval-policy-v4.json")
@@ -372,7 +436,7 @@ def run_v4_eval(
     if fidelity == "scripted":
         adapter = ScriptedEvalModelAdapterV4()
     else:
-        adapter = ManagedEvalModelAdapterV4(settings=Settings.from_environment({}))
+        adapter = ManagedEvalModelAdapterV4(settings=_settings_from_environment())
     executor = V5EvalTrialExecutor(contracts_dir=contracts_dir)
     trials = run_v4_suite(
         dataset=dataset,
@@ -483,16 +547,29 @@ class _EvalServices:
             session_id=self.session_id,
             correlation_id=self.correlation_id,
         )
-        interpretation = service.interpret(
-            message_text=cast(Any, turn).user,
-            context=context,
-            correlation_id=self.correlation_id,
-        )
-        plan = service.plan(
-            user_message=cast(Any, turn).user,
-            context=context,
-            interpretation=interpretation,
-        )
+        try:
+            interpretation = service.interpret(
+                message_text=cast(Any, turn).user,
+                context=context,
+                correlation_id=self.correlation_id,
+            )
+        except Exception as error:
+            from umbral.application.conversation.v5.service import _is_provider_error
+
+            stage = (
+                "provider_failure"
+                if _is_provider_error(error)
+                else "interpretation_failure"
+            )
+            return service._failed_result(context, stage)
+        try:
+            plan = service.plan(
+                user_message=cast(Any, turn).user,
+                context=context,
+                interpretation=interpretation,
+            )
+        except Exception:
+            return service._failed_result(context, "policy_failure")
         profile = next(iter(self.profile_rows.values()))
         profile["version"] = int(profile["version"]) + 1
         return service.execute(
@@ -953,3 +1030,7 @@ def _read_json(path: Path) -> dict[str, object]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(raw, dict)
     return cast(dict[str, object], raw)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

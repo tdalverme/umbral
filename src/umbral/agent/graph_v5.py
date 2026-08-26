@@ -423,12 +423,14 @@ def _act_from_dict(data: Mapping[str, object]) -> ConversationActV5:
     if kind == "revise_desire":
         return ReviseDesire(
             **common,
-            desire_ref=str(data["desire_ref"]),
+            desire_ref=_optional_str(data.get("desire_ref")),
             raw_text=str(data["raw_text"]),
             concept_links=_links(data.get("concept_links")),
         )
     if kind == "withdraw_desire":
-        return WithdrawDesire(**common, desire_ref=str(data["desire_ref"]))
+        return WithdrawDesire(
+            **common, desire_ref=_optional_str(data.get("desire_ref"))
+        )
     if kind == "record_feedback":
         return RecordFeedback(
             **common,

@@ -98,6 +98,28 @@ def test_untrusted_span_cannot_authorize_feedback() -> None:
     assert plan.decisions[0].reason_code == "act.untrusted_evidence"
 
 
+def test_untrusted_content_inside_broad_evidence_is_rejected() -> None:
+    message = f"{_INJECTION} y además quiero balcón"
+    context = _context(
+        untrusted=(UntrustedContentV5(source="listing", text=_INJECTION),)
+    )
+    plan = plan_turn_v5(
+        user_message=message,
+        context=context,
+        interpretation=_interpretation(
+            Query(
+                act_id="a1",
+                confidence=0.9,
+                evidence_spans=(_span(message),),
+                query_text=message,
+            )
+        ),
+    )
+
+    assert plan.decisions[0].status == "rejected"
+    assert plan.decisions[0].reason_code == "act.untrusted_evidence"
+
+
 def test_absent_evidence_is_rejected_before_act_rules() -> None:
     plan = plan_turn_v5(
         user_message="¿Qué opinás?",

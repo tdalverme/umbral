@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import httpx
 from fastapi.testclient import TestClient
@@ -107,6 +108,35 @@ def test_valid_request_returns_content_and_usage() -> None:
     ]
     assert "_intents" not in provider_schema["properties"]
     assert provider_body["messages"][0]["role"] == "system"
+
+
+def test_v5_interpretation_schema_translates_to_provider_compatible_union() -> None:
+    contract_path = (
+        Path(__file__).parents[4]
+        / "contracts"
+        / "agent"
+        / "v5"
+        / "interpretation-schema-v5.json"
+    )
+    schema = json.loads(contract_path.read_text(encoding="utf-8"))
+
+    translated = _translate_schema(schema)
+    act_items = translated["properties"]["acts"]["items"]
+
+    assert len(act_items["anyOf"]) == 9
+    assert _strict_compatible(translated) is True
+    for branch in act_items["anyOf"]:
+        assert branch["type"] == "object"
+        assert branch["additionalProperties"] is False
+        assert set(branch["required"]) == set(branch["properties"])
+        assert "evidence_spans" not in branch["properties"]
+        assert "evidence_text" in branch["properties"]
+
+    serialized = json.dumps(translated)
+    assert '"oneOf"' not in serialized
+    assert '"allOf"' not in serialized
+    assert '"if"' not in serialized
+    assert '"then"' not in serialized
 
 
 def test_preference_interpreter_schema_with_meta_keys_is_not_crashing() -> None:

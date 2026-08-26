@@ -54,8 +54,8 @@ correo. El manifiesto de release se entrega a las imágenes como JSON inline
      falta provisionarlos a mano.
 5. En Supabase: configurar Site URL y el redirect `/auth/capture`; en Resend:
    verificar el sender y registrar el webhook firmado.
-6. Cargar los repo secrets de Actions que consume `promote.yml` y el gate de
-   dependencias. Los 19 requeridos y su fuente:
+6. Cargar los repo/environment secrets de Actions que consume `promote.yml` y el
+   gate de dependencias. Variables requeridas y su fuente:
    - `RAILWAY_TOKEN`, `RAILWAY_API_TOKEN`: tokens sellados del proyecto/cuenta.
    - `DATABASE_URL`, `REDIS_URL`, `OBJECT_STORE_BUCKET`, `OBJECT_STORE_ENDPOINT_URL`,
      `OBJECT_STORE_ACCESS_KEY`, `OBJECT_STORE_SECRET_KEY`: valores de Railway.
@@ -82,8 +82,7 @@ correo. El manifiesto de release se entrega a las imágenes como JSON inline
    `git tag v0.2.1 <sha-de-main>` y `git push origin v0.2.1`.
 3. Verificar la corrida `release` en Acciones: login GHCR con `GHCR_DEPLOY_TOKEN`,
    build de web/runtime `linux/amd64`, escribir `release-manifest.json` + `.sha256`
-   y publicar el artifact `release-manifest-<sha>`. Los packages GHCR quedan
-   privados (no exponen código); Railway los pullea con credenciales.
+   y publicar el artifact `release-manifest-<sha>`.
 4. **Visibilidad pública de los packages GHCR (una vez, web UI):** Railway (plan
    Hobby, pull anónimo) no soporta credenciales de registry privado, así que
    `ghcr.io/tdalverme/umbral/{runtime,web}` deben ser `public`. GitHub no expone
@@ -124,7 +123,8 @@ el wrapper (el smoke valida el chat con el modelo real):
   `AGENT_MODEL_TIMEOUT_SECONDS` (30), `AGENT_MODEL_MAX_RETRIES` (2),
   `AGENT_MANAGED_ENDPOINT` (URL del servicio `model`),
   `AGENT_MANAGED_API_KEY` (misma que `MODEL_GATEWAY_SHARED_KEY`),
-  `AGENT_GRAPH_RELEASE_ID` (`graph-release-002`).
+  `AGENT_GRAPH_RELEASE_ID` (`graph-release-005`) y
+  `AGENT_V5_ACTIVATION_EVIDENCE` (referencia al reporte de evaluación aprobado).
 - `NOTIFICATIONS_ENABLED` (true), `NOTIFICATIONS_POLICY_VERSION`
   (`notification-policy-v1`), `NOTIFICATIONS_PLANNER_DATASET_VERSION`
   (`planner-golden-v1`), `NOTIFICATIONS_EMAIL_FROM`, `NOTIFICATIONS_UNSUBSCRIBE_TTL_HOURS`,

@@ -189,11 +189,25 @@ def _translate_json_schema(
 ) -> dict[str, Any]:
     """Translate a JSON-Schema-style document into a strict JSON Schema.
 
-    Handles the subset used by the v4 contracts: ``type`` (single or union),
-    ``properties``/``required``/``additionalProperties``, ``items``, ``enum``,
-    ``const``, ``$ref`` into ``$defs`` and string length bounds.
+    Handles the subset used by the conversation contracts: object and array
+    shapes, ``$ref`` into ``$defs``, discriminated ``oneOf`` unions, shared
+    ``allOf`` properties, enums, consts and scalar bounds. OpenAI Structured
+    Outputs supports ``anyOf`` but not the source contract's ``oneOf``/``allOf``
+    composition, so unions are compiled into provider-compatible schemas and
+    the full source contract remains the local validation authority.
     """
     node = _resolve_ref(node, defs)
+    conditional_variants = _conditional_property_variants(node, defs)
+    node = _merge_all_of(node, defs)
+    one_of = node.get("oneOf")
+    if isinstance(one_of, list):
+        variants: list[dict[str, Any]] = []
+        for branch in one_of:
+            if not isinstance(branch, dict):
+                raise ValueError("oneOf entries must be objects")
+            variants.append(_translate_json_schema(branch, defs))
+        return {"anyOf": variants}
+
     schema_type = node.get("type")
     result: dict[str, Any] = {}
     if isinstance(schema_type, list):  # union like ["string", "null"]
@@ -206,20 +220,38 @@ def _translate_json_schema(
         result["enum"] = list(node["enum"])
     if "const" in node:
         result["enum"] = [node["const"]]
+    if "type" not in result:
+        inferred_type = _infer_enum_type(result.get("enum"))
+        if inferred_type is not None:
+            result["type"] = inferred_type
     if "minLength" in node:
         result["minLength"] = node["minLength"]
     if "maxLength" in node:
         result["maxLength"] = node["maxLength"]
+    for key in ("minimum", "maximum", "minItems", "maxItems"):
+        if key in node:
+            result[key] = node[key]
     if "items" in node:
         result["items"] = _translate_json_schema(node["items"], defs)
     if isinstance(node.get("properties"), dict):
         properties: dict[str, Any] = {}
-        required_list: list[str] = []
+        declared_required = {
+            item for item in node.get("required", []) if isinstance(item, str)
+        }
         for key, raw in node["properties"].items():
-            properties[key] = _translate_json_schema(raw, defs)
-            required_list.append(key)
+            if raw == {} and key in conditional_variants:
+                properties[key] = {
+                    "anyOf": [
+                        _translate_json_schema(variant, defs)
+                        for variant in conditional_variants[key]
+                    ]
+                }
+            else:
+                properties[key] = _translate_json_schema(raw, defs)
+            if key not in declared_required:
+                properties[key] = _nullable_schema(properties[key])
         result["properties"] = properties
-        result["required"] = required_list
+        result["required"] = list(properties)
         result["additionalProperties"] = False
     return result
 
@@ -235,6 +267,89 @@ def _resolve_ref(node: dict[str, Any], defs: Mapping[str, Any]) -> dict[str, Any
     if not isinstance(resolved, dict):
         raise ValueError(f"invalid $defs entry: {name}")
     return resolved
+
+
+def _merge_all_of(node: dict[str, Any], defs: Mapping[str, Any]) -> dict[str, Any]:
+    """Inline non-conditional ``allOf`` object members into ``node``."""
+
+    merged = {key: value for key, value in node.items() if key != "allOf"}
+    own_properties = node.get("properties")
+    if isinstance(own_properties, dict):
+        merged["properties"] = dict(own_properties)
+    required = [item for item in node.get("required", []) if isinstance(item, str)]
+
+    clauses = node.get("allOf")
+    if not isinstance(clauses, list):
+        if required:
+            merged["required"] = required
+        return merged
+
+    for clause in clauses:
+        if not isinstance(clause, dict) or any(
+            key in clause for key in ("if", "then", "else")
+        ):
+            continue
+        branch = _merge_all_of(_resolve_ref(clause, defs), defs)
+        branch_properties = branch.get("properties")
+        if isinstance(branch_properties, dict):
+            properties = merged.setdefault("properties", {})
+            if isinstance(properties, dict):
+                for key, value in branch_properties.items():
+                    properties.setdefault(key, value)
+        for item in branch.get("required", []):
+            if isinstance(item, str) and item not in required:
+                required.append(item)
+        for key, value in branch.items():
+            if key not in {"properties", "required"}:
+                merged.setdefault(key, value)
+    if required:
+        merged["required"] = required
+    return merged
+
+
+def _conditional_property_variants(
+    node: dict[str, Any], defs: Mapping[str, Any]
+) -> dict[str, list[dict[str, Any]]]:
+    """Collect property types from conditional branches for provider output."""
+
+    variants: dict[str, list[dict[str, Any]]] = {}
+    clauses = node.get("allOf")
+    if not isinstance(clauses, list):
+        return variants
+    for clause in clauses:
+        if not isinstance(clause, dict):
+            continue
+        then = clause.get("then")
+        if not isinstance(then, dict):
+            continue
+        properties = then.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        for key, value in properties.items():
+            if isinstance(value, dict):
+                variants.setdefault(key, []).append(value)
+    return variants
+
+
+def _infer_enum_type(value: object) -> str | None:
+    if not isinstance(value, list) or not value:
+        return None
+    types = {type(item) for item in value}
+    if types == {str}:
+        return "string"
+    if types == {bool}:
+        return "boolean"
+    if types == {int}:
+        return "integer"
+    if types <= {int, float}:
+        return "number"
+    if types == {type(None)}:
+        return "null"
+    return None
+
+
+def _nullable_schema(node: dict[str, Any]) -> dict[str, Any]:
+    return {"anyOf": [node, {"type": "null"}]}
 
 
 def _strict_compatible(node: object) -> bool:

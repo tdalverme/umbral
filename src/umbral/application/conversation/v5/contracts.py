@@ -157,7 +157,7 @@ class ReviseDesire:
     act_id: str
     confidence: float
     evidence_spans: tuple[EvidenceSpan, ...]
-    desire_ref: str
+    desire_ref: str | None
     raw_text: str
     concept_links: tuple[ConceptLinkV5, ...] = ()
     kind: Literal["revise_desire"] = field(init=False, default="revise_desire")
@@ -168,7 +168,7 @@ class WithdrawDesire:
     act_id: str
     confidence: float
     evidence_spans: tuple[EvidenceSpan, ...]
-    desire_ref: str
+    desire_ref: str | None
     kind: Literal["withdraw_desire"] = field(init=False, default="withdraw_desire")
 
 

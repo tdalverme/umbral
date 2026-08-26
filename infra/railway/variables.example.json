@@ -38,6 +38,7 @@
     { "name": "AGENT_MANAGED_ENDPOINT", "scopes": ["api", "worker", "scheduler"] },
     { "name": "AGENT_MANAGED_API_KEY", "scopes": ["api", "worker", "scheduler"] },
     { "name": "AGENT_GRAPH_RELEASE_ID", "scopes": ["api", "worker", "scheduler"] },
+    { "name": "AGENT_V5_ACTIVATION_EVIDENCE", "scopes": ["api", "worker", "scheduler"] },
     { "name": "NOTIFICATIONS_ENABLED", "scopes": ["api", "worker", "scheduler"] },
     { "name": "NOTIFICATIONS_POLICY_VERSION", "scopes": ["api", "worker", "scheduler"] },
     { "name": "NOTIFICATIONS_PLANNER_DATASET_VERSION", "scopes": ["api", "worker", "scheduler"] },

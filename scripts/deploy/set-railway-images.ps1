@@ -158,6 +158,12 @@ foreach ($key in @("AGENT_MODEL_PROVIDER", "AGENT_MODEL_NAME", "AGENT_MODEL_TIME
     $value = [string][Environment]::GetEnvironmentVariable($key)
     if (-not [string]::IsNullOrWhiteSpace($value)) { $agentVars[$key] = $value }
 }
+$graphReleaseId = [string][Environment]::GetEnvironmentVariable("AGENT_GRAPH_RELEASE_ID")
+if ($graphReleaseId -eq "graph-release-005") {
+    $activationEvidence = [string][Environment]::GetEnvironmentVariable("AGENT_V5_ACTIVATION_EVIDENCE")
+    Require-Condition (-not [string]::IsNullOrWhiteSpace($activationEvidence)) "AGENT_V5_ACTIVATION_EVIDENCE is required when promoting graph-release-005."
+    $agentVars["AGENT_V5_ACTIVATION_EVIDENCE"] = $activationEvidence
+}
 $managedKey = [string][Environment]::GetEnvironmentVariable("AGENT_MANAGED_API_KEY")
 if (-not [string]::IsNullOrWhiteSpace($managedKey)) { $agentVars["AGENT_MANAGED_API_KEY"] = $managedKey }
 

@@ -201,10 +201,14 @@ def _pending(act_id: str, reason_code: str) -> ActDecisionV5:
 
 
 def _has_untrusted_evidence(act: ConversationActV5, context: TurnContextV5) -> bool:
-    untrusted = {item.text for item in context.untrusted_content}
-    if not untrusted:
-        return False
-    return any(span.text in untrusted for span in act.evidence_spans)
+    untrusted = tuple(
+        item.text for item in context.untrusted_content if item.text
+    )
+    return any(
+        span.text == content or content in span.text
+        for span in act.evidence_spans
+        for content in untrusted
+    )
 
 
 def _has_explicit_evidence(act: ConversationActV5, user_message: str) -> bool:

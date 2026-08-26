@@ -106,7 +106,7 @@ def test_ambiguous_revision_requests_clarification() -> None:
                 evidence_spans=(
                     EvidenceSpan(start=0, end=16, text="Cambiá ese deseo"),
                 ),
-                desire_ref=None,  # type: ignore[arg-type]
+                desire_ref=None,
                 raw_text="Quiero algo moderno",
                 concept_links=(),
             )

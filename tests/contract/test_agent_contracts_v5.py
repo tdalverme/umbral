@@ -30,8 +30,6 @@ def _interpretation(act: dict[str, object]) -> dict[str, object]:
     return {
         "contract_version": "5",
         "interpretation_version": "conversation-interpretation-v5",
-        "model_version": "gpt-4.1-mini",
-        "prompt_version": "interpretation-v5",
         "acts": [act],
     }
 
@@ -41,7 +39,7 @@ def _act(kind: str, **fields: object) -> dict[str, object]:
         "act_id": "act-1",
         "kind": kind,
         "confidence": 0.9,
-        "evidence_spans": [{"start": 0, "end": 3, "text": "foo"}],
+        "evidence_text": "foo",
         **fields,
     }
 
@@ -112,7 +110,7 @@ def test_v5_schemas_are_closed_and_versioned() -> None:
         assert schema["additionalProperties"] is False
 
 
-def test_interpretation_uses_exactly_ten_closed_discriminated_act_branches() -> None:
+def test_interpretation_uses_exactly_nine_closed_discriminated_act_branches() -> None:
     """Changing the model action vocabulary requires a deliberate schema revision."""
     schema = _schema("interpretation-schema-v5.json")
     branches = schema["$defs"]["act"]["oneOf"]
@@ -125,11 +123,22 @@ def test_interpretation_uses_exactly_ten_closed_discriminated_act_branches() -> 
         "revise_desire",
         "withdraw_desire",
         "record_feedback",
-        "resolve_pending",
         "query",
         "unsupported_request",
     ]
     assert all(branch["additionalProperties"] is False for branch in branches)
+
+
+def test_interpretation_wire_contract_leaves_provenance_and_versions_to_code() -> None:
+    schema = _schema("interpretation-schema-v5.json")
+
+    assert "model_version" not in schema["properties"]
+    assert "prompt_version" not in schema["properties"]
+    assert all(
+        "evidence_text" in branch["properties"]
+        and "evidence_spans" not in branch["properties"]
+        for branch in schema["$defs"]["act"]["oneOf"]
+    )
 
 
 def test_express_desire_without_raw_text_is_invalid() -> None:
@@ -139,6 +148,19 @@ def test_express_desire_without_raw_text_is_invalid() -> None:
 
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(payload, schema)
+
+
+def test_revision_without_target_is_valid_for_policy_clarification() -> None:
+    schema = _schema("interpretation-schema-v5.json")
+    payload = _interpretation(
+        _act(
+            "revise_desire",
+            raw_text="Cambiá ese deseo",
+            concept_links=[],
+        )
+    )
+
+    jsonschema.validate(payload, schema)
 
 
 @pytest.mark.parametrize(
@@ -217,7 +239,13 @@ def test_filter_schema_accepts_the_published_typed_values(
 
     jsonschema.validate(_context([filter_value]), _schema("context-schema-v5.json"))
     jsonschema.validate(
-        _interpretation(_act("set_filter", **filter_value)),
+        _interpretation(
+            _act(
+                "set_filter",
+                filter_key=filter_key,
+                value=json_value,
+            )
+        ),
         _schema("interpretation-schema-v5.json"),
     )
 
