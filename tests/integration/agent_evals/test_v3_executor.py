@@ -333,3 +333,41 @@ def test_incompatible_topology_is_rejected_before_seeding() -> None:
 
     assert seeded is False
     assert adapter.calls == []
+
+
+def test_full_dataset_passes_scripted_grading(eval_backend) -> None:
+    from pathlib import Path
+
+    from umbral.application.agent_evals.v3.grading import grade_trial
+    from umbral.application.agent_evals.v3.loader import load_dataset
+    from umbral.infrastructure.agent_evals.v3_adapters import ScriptedEvalModelAdapter
+
+    root = Path(__file__).resolve().parents[3]
+    dataset = load_dataset(
+        root / "contracts" / "agent-evals" / "v3" / "conversation-trajectories-v3.json"
+    )
+    release = _release()
+    executor = _executor(eval_backend)
+    failures: list[str] = []
+    for case in dataset.cases:
+        try:
+            trace = executor.execute(
+                case=case,
+                release=release,
+                model_adapter=ScriptedEvalModelAdapter(),
+                trial_index=0,
+                attempt_index=0,
+            )
+        except Exception as exc:  # noqa: BLE001 - reported per case
+            failures.append(f"{case.id}: execution {type(exc).__name__}: {exc}")
+            continue
+        result = grade_trial(case, trace)
+        if not result.safety_ok or not result.quality_ok:
+            detail = "; ".join(
+                f"{check.code}:{check.detail}"
+                for check in result.checks
+                if not check.passed
+            )
+            failures.append(f"{case.id}: {result.failure_kind}: {detail}")
+
+    assert failures == [], "\n".join(failures)

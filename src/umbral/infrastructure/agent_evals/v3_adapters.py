@@ -125,7 +125,7 @@ class _ScriptedCaseGateway:
                 error_code=f"evals_v3.script_exhausted:{exc.args[0][:80]}",
             )
         return ModelResult(
-            content=dict(content),
+            content=_unfrozen_plain(content),
             model_version=model_version,
             status="success",
             latency_ms=1,
@@ -173,6 +173,22 @@ class ManagedEvalModelAdapter:
                 max_retries=0,
             ),
         )
+
+
+def _unfrozen_plain(value: object) -> dict[str, object]:
+    """Deep-convert loader-frozen (MappingProxyType/tuple) payloads back to
+    plain mutable JSON shapes; the graph requires lists for acts/refs/effects."""
+
+    def convert(item: object) -> object:
+        if isinstance(item, Mapping):
+            return {str(key): convert(sub) for key, sub in item.items()}
+        if isinstance(item, (list, tuple)):
+            return [convert(sub) for sub in item]
+        return item
+
+    converted = convert(value)
+    assert isinstance(converted, dict)
+    return converted
 
 
 def _user_text(messages: Sequence[Mapping[str, object]]) -> str:

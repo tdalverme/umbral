@@ -176,6 +176,13 @@ def _final_state_check(case: EvalCase, trace: TrialTrace) -> CheckResult:
 
 
 def _is_subset(expected: object, actual: object) -> bool:
+    if isinstance(expected, (list, tuple)) and isinstance(actual, (list, tuple)):
+        if len(expected) != len(actual):
+            return False
+        return all(
+            _is_subset(left, right)
+            for left, right in zip(expected, actual, strict=True)
+        )
     if not isinstance(expected, Mapping):
         return expected == actual
     if not isinstance(actual, Mapping):

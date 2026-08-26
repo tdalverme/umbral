@@ -304,3 +304,45 @@ def test_invariants_without_trace_evidence_are_harness_failures() -> None:
         _trace(),
     )
     assert result.failure_kind == "harness_failure"
+
+def test_final_state_matches_case_insensitively_on_list_tuple_types() -> None:
+    case = _case()
+    case = replace(
+        case,
+        final_state={
+            "active_subjects": ("luminosidad",),
+            "budget_max": 900.0,
+        },
+    )
+    passing = grade_trial(
+        case,
+        replace(
+            _trace(),
+            turns=(
+                replace(
+                    _trace().turns[0],
+                    durable_state={
+                        "profile_id": "p1",
+                        "zones": [],
+                        "budget_max": 900.0,
+                        "min_rooms": None,
+                        "active_subjects": ["luminosidad"],
+                    },
+                ),
+            ),
+        ),
+    )
+    missing = grade_trial(
+        case,
+        replace(
+            _trace(),
+            turns=(
+                replace(
+                    _trace().turns[0],
+                    durable_state={"active_subjects": ["parque"]},
+                ),
+            ),
+        ),
+    )
+    assert passing.quality_ok is True
+    assert missing.quality_ok is False
