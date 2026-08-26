@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 
 class _Clients:
@@ -209,6 +211,19 @@ def test_promotion_workflow_orders_dependency_gates_before_exact_image_switch() 
     positions = [workflow.index(command) for command in ordered_commands]
 
     assert positions == sorted(positions)
+
+
+def test_release_manifest_revision_matches_alembic_head() -> None:
+    """The release manifest must expect the schema produced by upgrade head."""
+    workflow = (
+        Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml"
+    ).read_text(encoding="utf-8")
+    config = Config("alembic.ini")
+    config.set_main_option("script_location", "alembic")
+    heads = ScriptDirectory.from_config(config).get_heads()
+
+    assert len(heads) == 1
+    assert f'-DatabaseRevision "{heads[0]}"' in workflow
 
 
 def test_promotion_bootstraps_locked_uv_before_linux_python_deployment_steps() -> None:
