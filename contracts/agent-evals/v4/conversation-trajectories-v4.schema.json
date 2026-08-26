@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "conversation-trajectories-v4.schema.json",
+  "title": "ConversationTrajectoriesV4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "registry_version", "cases"],
+  "properties": {
+    "contract_version": {"const": "4"},
+    "registry_version": {"const": "conversation-trajectories-v4"},
+    "cases": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "suite", "partition", "family", "risk", "seed", "turns", "invariants", "tags", "review"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "suite": {"enum": ["safety", "regression", "capability"]},
+        "partition": {"enum": ["development", "holdout"]},
+        "family": {"type": "string", "minLength": 1},
+        "risk": {"enum": ["normal", "high", "critical"]},
+        "seed": {"$ref": "#/$defs/seed"},
+        "turns": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/turn"}},
+        "invariants": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "review": {"$ref": "#/$defs/review"}
+      }
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile"],
+      "properties": {
+        "profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["zones", "budget_max", "min_rooms"],
+          "properties": {
+            "zones": {"type": "array", "items": {"type": "string"}},
+            "budget_max": {"type": ["number", "null"]},
+            "min_rooms": {"type": ["integer", "null"]}
+          }
+        },
+        "focused_listing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["listing_id", "text"],
+          "properties": {
+            "listing_id": {"type": "string", "minLength": 1},
+            "text": {"type": "string"}
+          }
+        },
+        "desires": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["subject", "raw_text"],
+            "properties": {
+              "subject": {"type": "string", "minLength": 1},
+              "raw_text": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "pending_change": {"type": "object"},
+        "pending_id": {"type": "string", "minLength": 1},
+        "stale_after_context_load": {"type": "boolean"}
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user", "scripted_interpretation", "expected"],
+      "properties": {
+        "user": {"type": "string"},
+        "scripted_interpretation": {"type": "object"},
+        "scripted_behavior": {"enum": ["provider_failure", "reply_failure"]},
+        "expected": {"$ref": "#/$defs/expected"}
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome_statuses", "reason_codes", "failure_stage", "effects", "reply_source"],
+      "properties": {
+        "outcome_statuses": {
+          "type": "array",
+          "items": {"enum": ["applied", "pending", "rejected", "needs_clarification", "not_executed"]}
+        },
+        "reason_codes": {"type": "array", "items": {"type": ["string", "null"]}},
+        "failure_stage": {
+          "enum": ["context_failure", "interpretation_failure", "policy_failure", "execution_failure", "reply_failure", "provider_failure", "contract_or_fixture_failure", null]
+        },
+        "effects": {"type": "array", "items": {"type": "string"}},
+        "reply_source": {"enum": ["managed", "deterministic_fallback"]}
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewed_by", "reviewed_at", "rationale"],
+      "properties": {
+        "reviewed_by": {"type": "string", "minLength": 1},
+        "reviewed_at": {"type": "string", "minLength": 1},
+        "rationale": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

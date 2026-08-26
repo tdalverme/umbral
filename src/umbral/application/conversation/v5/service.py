@@ -368,5 +368,5 @@ def _is_provider_error(error: Exception) -> bool:
     from umbral.agent.intent.v5 import InterpretationContractFailed
 
     return isinstance(error, InterpretationContractFailed) and (
-        error.reason == "provider_failure"
+        error.reason == "provider_failure" or error.reason.startswith("provider")
     )

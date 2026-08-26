@@ -154,11 +154,21 @@ def build_graph_v5(
     ) -> dict[str, object]:
         context = _context_from_dict(state.get("context") or {})
         ids = _ids(config)
-        interpretation = deps.turn.interpret(
-            message_text=state["message_text"],
-            context=context,
-            correlation_id=ids["correlation_id"],
-        )
+        try:
+            interpretation = deps.turn.interpret(
+                message_text=state["message_text"],
+                context=context,
+                correlation_id=ids["correlation_id"],
+            )
+        except Exception as error:
+            return {
+                "interpretation": None,
+                "failure_stage": (
+                    "provider_failure"
+                    if _is_provider_error(error)
+                    else "interpretation_failure"
+                ),
+            }
         return {"interpretation": _interpretation_to_dict(interpretation)}
 
     def _plan_segment(
@@ -168,16 +178,26 @@ def build_graph_v5(
         interpretation = _interpretation_from_dict(
             state.get("interpretation") or {}
         )
-        plan = deps.turn.plan(
-            user_message=state["message_text"],
-            context=context,
-            interpretation=interpretation,
-        )
+        try:
+            plan = deps.turn.plan(
+                user_message=state["message_text"],
+                context=context,
+                interpretation=interpretation,
+            )
+        except Exception:
+            return {"plan": None, "failure_stage": "policy_failure"}
         return {"plan": _plan_to_dict(plan)}
 
     def _execute_segment(
         state: ConversationGraphStateV5, config: RunnableConfig
     ) -> dict[str, object]:
+        if state.get("failure_stage") is not None:
+            return {
+                "executed": [],
+                "outcomes": [],
+                "interpretation": None,
+                "plan": None,
+            }
         ids = _ids(config)
         context = _context_from_dict(state.get("context") or {})
         interpretation = _interpretation_from_dict(
@@ -245,6 +265,8 @@ def build_graph_v5(
         return {}
 
     def _route_after_execute(state: ConversationGraphStateV5) -> str:
+        if state.get("failure_stage") is not None:
+            return "compose_reply"
         outcomes = state.get("outcomes") or []
         if any(item.get("status") == "pending" for item in outcomes):
             return "require_confirmation"
@@ -315,12 +337,8 @@ def _context_from_dict(data: Mapping[str, object]) -> TurnContextV5:
             if data.get("focused_entity") is not None
             else None
         ),
-        verified_listing_refs=tuple(
-            str(item) for item in _list(data.get("verified_listing_refs"))
-        ),
-        allowed_capabilities=tuple(
-            str(item) for item in _list(data.get("allowed_capabilities"))
-        ),
+        verified_listing_refs=tuple(_strings(data.get("verified_listing_refs"))),
+        allowed_capabilities=tuple(_strings(data.get("allowed_capabilities"))),
         untrusted_content=tuple(
             UntrustedContentV5(
                 source=str(item["source"]),
@@ -562,9 +580,27 @@ def _result_from_state(state: ConversationGraphStateV5) -> ConversationTurnResul
 
 
 def _list(value: object) -> list[Mapping[str, object]]:
+    if isinstance(value, tuple):
+        value = list(value)
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, Mapping)]
+
+
+def _strings(value: object) -> list[str]:
+    if isinstance(value, tuple):
+        value = list(value)
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str)]
+
+
+def _is_provider_error(error: Exception) -> bool:
+    from umbral.agent.intent.v5 import InterpretationContractFailed
+
+    return isinstance(error, InterpretationContractFailed) and (
+        error.reason == "provider_failure" or error.reason.startswith("provider")
+    )
 
 
 def _optional_str(value: object) -> str | None:
