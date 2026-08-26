@@ -65,7 +65,15 @@ def _translate_schema(schema: dict[str, Any]) -> dict[str, Any]:
     either type strings (``"string"``, ``"number"``), ``{"kind": ...}``
     descriptors (reply style) or plain array-of-objects (intent style). The
     optional ``_intents`` sibling carries the allowed intent names.
+
+    Topology-v4 passes JSON-Schema-style documents (``"$defs"`` plus
+    ``"$ref"``, e.g. the interpretation contract); those are translated
+    meta-aware instead.
     """
+    if not isinstance(schema, dict):
+        raise ValueError(f"unsupported schema node: {type(schema).__name__}")
+    if "$defs" in schema and isinstance(schema["$defs"], dict):
+        return _translate_json_schema(schema, defs=schema["$defs"])
 
     def translate_value(value: Any) -> dict[str, Any]:
         if isinstance(value, str):
@@ -85,15 +93,31 @@ def _translate_schema(schema: dict[str, Any]) -> dict[str, Any]:
             return {"type": "array", "items": translate_value(value[0])}
         if not isinstance(value, dict):
             raise ValueError(f"unsupported schema node: {type(value).__name__}")
+        if "enum" in value and "properties" not in value:
+            if not isinstance(value["enum"], list) or not all(
+                isinstance(item, str) for item in value["enum"]
+            ):
+                raise ValueError("enum must be a list of strings")
+            result: dict[str, Any] = {"type": "string", "enum": list(value["enum"])}
+            if isinstance(value.get("description"), str):
+                result["description"] = value["description"]
+            return result
         kind = value.get("kind")
         if kind == "list":
-            result: dict[str, Any] = {"type": "array"}
-            if isinstance(value.get("item"), dict):
-                result["items"] = translate_value(value["item"])
-            elif isinstance(value.get("item"), str):
+            result = {"type": "array"}
+            if isinstance(value.get("item"), (dict, str)):
                 result["items"] = translate_value(value["item"])
             if isinstance(value.get("max_items"), int):
                 result["maxItems"] = value["max_items"]
+            if isinstance(value.get("description"), str):
+                result["description"] = value["description"]
+            return result
+        if kind == "nullable_string":
+            result = {"type": ["string", "null"]}
+            if isinstance(value.get("min_length"), int):
+                result["minLength"] = value["min_length"]
+            if isinstance(value.get("max_length"), int):
+                result["maxLength"] = value["max_length"]
             if isinstance(value.get("description"), str):
                 result["description"] = value["description"]
             return result
@@ -106,6 +130,10 @@ def _translate_schema(schema: dict[str, Any]) -> dict[str, Any]:
                     result["maxLength"] = value["max_length"]
             if isinstance(value.get("description"), str):
                 result["description"] = value["description"]
+            if isinstance(value.get("enum"), list) and all(
+                isinstance(item, str) for item in value["enum"]
+            ):
+                result["enum"] = list(value["enum"])
             return result
         return _translate_object(value)
 
@@ -156,15 +184,72 @@ def _translate_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _translate_json_schema(
+    node: dict[str, Any], defs: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Translate a JSON-Schema-style document into a strict JSON Schema.
+
+    Handles the subset used by the v4 contracts: ``type`` (single or union),
+    ``properties``/``required``/``additionalProperties``, ``items``, ``enum``,
+    ``const``, ``$ref`` into ``$defs`` and string length bounds.
+    """
+    node = _resolve_ref(node, defs)
+    schema_type = node.get("type")
+    result: dict[str, Any] = {}
+    if isinstance(schema_type, list):  # union like ["string", "null"]
+        result["type"] = [str(item) for item in schema_type]
+    elif isinstance(schema_type, str):
+        result["type"] = schema_type
+    if isinstance(node.get("description"), str):
+        result["description"] = node["description"]
+    if isinstance(node.get("enum"), list):
+        result["enum"] = list(node["enum"])
+    if "const" in node:
+        result["enum"] = [node["const"]]
+    if "minLength" in node:
+        result["minLength"] = node["minLength"]
+    if "maxLength" in node:
+        result["maxLength"] = node["maxLength"]
+    if "items" in node:
+        result["items"] = _translate_json_schema(node["items"], defs)
+    if isinstance(node.get("properties"), dict):
+        properties: dict[str, Any] = {}
+        required_list: list[str] = []
+        for key, raw in node["properties"].items():
+            properties[key] = _translate_json_schema(raw, defs)
+            required_list.append(key)
+        result["properties"] = properties
+        result["required"] = required_list
+        result["additionalProperties"] = False
+    return result
+
+
+def _resolve_ref(node: dict[str, Any], defs: Mapping[str, Any]) -> dict[str, Any]:
+    ref = node.get("$ref")
+    if not isinstance(ref, str) or not ref.startswith("#/$defs/"):
+        return node
+    name = ref.removeprefix("#/$defs/")
+    if not isinstance(defs, Mapping) or name not in defs:
+        raise ValueError(f"unresolved schema $ref: {ref}")
+    resolved = defs[name]
+    if not isinstance(resolved, dict):
+        raise ValueError(f"invalid $defs entry: {name}")
+    return resolved
+
+
 def _strict_compatible(node: object) -> bool:
     """True when the translated schema can run under OpenAI strict mode.
 
     Strict mode rejects free-form objects (an object without declared
-    properties, e.g. tool call ``args``) and requires ``items`` on arrays.
+    properties, e.g. tool call ``args``), requires ``items`` on arrays and
+    rejects union types (nullable fields).
     """
     if not isinstance(node, dict):
         return True
-    if node.get("type") == "object" and "properties" not in node:
+    node_type = node.get("type")
+    if isinstance(node_type, list):
+        return False
+    if node_type == "object" and "properties" not in node:
         return False
     return all(_strict_compatible(value) for value in node.values())
 
