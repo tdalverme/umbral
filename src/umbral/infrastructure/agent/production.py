@@ -10,7 +10,7 @@ builder composes the v4 copilot stack (feature 016) for the same surface.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -329,6 +329,221 @@ def build_production_copilot_stack(
     )
     return ProductionAgentStack(
         chat=chat, runtime=runtime, proposals=proposals, graph_runs=runs
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ProductionV5Stack:
+    """The V5 conversation wiring ready for the chat router."""
+
+    chat: ChatService
+    graph: object
+    turn: object
+    proposals: SearchProfileUpdateProposals
+    receipts: object
+    graph_runs: SqlAlchemyGraphRunRepository
+
+
+_V4_RELEASES = frozenset(
+    {
+        "graph-release-001",
+        "graph-release-002",
+        "graph-release-003",
+        "graph-release-004",
+    }
+)
+
+
+def select_production_conversation_builder(
+    settings: Settings,
+) -> Callable[..., object]:
+    """Return the stack builder for the configured release, failing closed.
+
+    V5 requires registered activation evidence; any unknown release fails
+    closed. The default release keeps the V4 path untouched.
+    """
+    release = settings.agent_graph_release_id
+    if release == "graph-release-005":
+        _require_v5_activation(settings)
+        return build_production_v5_stack
+    if release in _V4_RELEASES:
+        return build_production_copilot_stack
+    raise ValueError(f"agent_evals_v5.unknown_release:{release}")
+
+
+def build_production_conversation_stack(
+    *,
+    settings: Settings,
+    session_factory: SessionFactory,
+    database_url: str,
+    radar: object,
+    scoring: object,
+    feedback: object,
+    criteria: object,
+) -> object:
+    """Release-driven selector between the V4 copilot and the V5 graph."""
+    builder = select_production_conversation_builder(settings)
+    return builder(
+        settings=settings,
+        session_factory=session_factory,
+        database_url=database_url,
+        radar=radar,
+        scoring=scoring,
+        feedback=feedback,
+        criteria=criteria,
+    )
+
+
+def _require_v5_activation(settings: Settings) -> None:
+    if settings.agent_v5_activation_evidence:
+        return
+    raise ValueError(
+        "agent_evals_v5.activation_evidence_required:"
+        "set AGENT_V5_ACTIVATION_EVIDENCE with the registered evidence ref"
+    )
+
+
+def build_production_v5_stack(
+    *,
+    settings: Settings,
+    session_factory: SessionFactory,
+    database_url: str,
+    radar: object,
+    scoring: object,
+    feedback: object,
+    criteria: object,
+) -> ProductionV5Stack:
+    """Compose the V5 graph stack over the real services (release 005)."""
+    del scoring, criteria
+    from umbral.application.conversation.v5.ports import (
+        FeedbackRecorderV5,
+        FocusedListingV5,
+        InterpreterV5,
+    )
+    from umbral.infrastructure.conversation.v5.composition import (
+        V5Services,
+        build_conversation_v5_turn_service,
+        build_v5_graph,
+    )
+    from umbral.infrastructure.db.repositories.conversation_v5 import (
+        SqlAlchemyCommandReceiptStore,
+    )
+
+    events_out = SqlAlchemyEventRepository(session_factory)
+    events_registry = load_events_registry()
+
+    def clock() -> datetime:
+        return datetime.now(timezone.utc)
+
+    chat = ChatService(
+        sessions=SqlAlchemyChatSessionRepository(session_factory),
+        messages=SqlAlchemyChatMessageRepository(session_factory),
+        profile_status=SqlAlchemySearchProfileStatusReader(session_factory),
+        events_out=events_out,
+        events_registry=events_registry,
+        max_message_length=settings.chat_message_max_length,
+        clock=clock,
+    )
+    runs = SqlAlchemyGraphRunRepository(session_factory)
+    proposals = SearchProfileUpdateProposals(
+        repository=SqlAlchemyProposalRepository(session_factory),
+        radar=radar,  # type: ignore[arg-type]
+        events=events_out,
+        events_registry=events_registry,
+        ttl_hours=settings.agent_proposal_ttl_hours,
+        clock=clock,
+    )
+    if settings.agent_model_provider == "managed" and settings.agent_managed_endpoint:
+        gateway: ModelGateway = ManagedModelGateway(
+            endpoint=settings.agent_managed_endpoint,
+            api_key=settings.agent_managed_api_key or "",
+            model=settings.agent_model_name,
+            timeout_seconds=settings.agent_model_timeout_seconds,
+            max_retries=settings.agent_model_max_retries,
+        )
+    else:
+        from umbral.infrastructure.agent.model_gateway.fake import FakeModelGateway
+
+        gateway = cast(
+            ModelGateway,
+            FakeModelGateway(model_version=settings.agent_model_name),
+        )
+
+    class _NoFocusReader:
+        def verified_focus(
+            self, *, user_id: object, session_id: object
+        ) -> FocusedListingV5 | None:
+            return None
+
+    contracts_v5 = Path(__file__).parents[3] / "contracts" / "agent" / "v5"
+    interpretation_schema = json.loads(
+        (contracts_v5 / "interpretation-schema-v5.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    reply_schema = json.loads(
+        (contracts_v5 / "reply-schema-v5.json").read_text(encoding="utf-8")
+    )
+    interpreter = _build_v5_interpreter(
+        gateway=gateway,
+        schema=interpretation_schema,
+        prompt_version="interpretation-v5",
+        model_version=settings.agent_model_name,
+    )
+    services = V5Services(
+        chat=chat,
+        radar=cast(RadarService, radar),
+        proposals=proposals,
+        preferences=_build_preference_service(session_factory),
+        feedback=cast(FeedbackRecorderV5, feedback),
+    )
+    turn_service = build_conversation_v5_turn_service(
+        services=services,
+        focus=_NoFocusReader(),
+        interpreter=cast(InterpreterV5, interpreter),
+        receipts=SqlAlchemyCommandReceiptStore(session_factory),
+        clock=clock,
+    )
+    saver = create_postgres_saver(
+        database_url, strict_msgpack=settings.agent_strict_msgpack
+    )
+    graph = build_v5_graph(
+        services=services,
+        focus=_NoFocusReader(),
+        gateway=gateway,
+        interpretation_schema=interpretation_schema,
+        reply_schema=reply_schema,
+        model_version=settings.agent_model_name,
+        prompt_version="interpretation-v5",
+        reply_prompt_version="reply-v5",
+        receipts=SqlAlchemyCommandReceiptStore(session_factory),
+        checkpointer=saver,
+        clock=clock,
+    )
+    return ProductionV5Stack(
+        chat=chat,
+        graph=graph,
+        turn=turn_service,
+        proposals=proposals,
+        receipts=SqlAlchemyCommandReceiptStore(session_factory),
+        graph_runs=runs,
+    )
+
+
+def _build_v5_interpreter(
+    *,
+    gateway: ModelGateway,
+    schema: Mapping[str, object],
+    prompt_version: str,
+    model_version: str,
+) -> object:
+    from umbral.agent.intent.v5 import InterpretationCompilerV5
+
+    return InterpretationCompilerV5(
+        gateway=gateway,
+        schema=schema,
+        prompt_version=prompt_version,
+        model_version=model_version,
     )
 
 

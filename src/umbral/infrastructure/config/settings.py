@@ -346,6 +346,9 @@ class Settings(BaseSettings):
     agent_graph_release_id: str = Field(
         default="graph-release-001", validation_alias="AGENT_GRAPH_RELEASE_ID"
     )
+    agent_v5_activation_evidence: str = Field(
+        default="", validation_alias="AGENT_V5_ACTIVATION_EVIDENCE"
+    )
     copilot_enabled: bool = Field(
         default=False, validation_alias="COPILOT_ENABLED"
     )
@@ -511,6 +514,7 @@ class Settings(BaseSettings):
             "AGENT_EVALS_COST_THRESHOLD_PCT",
             "AGENT_EVALS_LATENCY_THRESHOLD_MS",
             "AGENT_GRAPH_RELEASE_ID",
+            "AGENT_V5_ACTIVATION_EVIDENCE",
             "AGENT_BUDGET_WINDOW_HOURS",
             "AGENT_BUDGET_SESSION_TOKEN_CAP",
             "AGENT_BUDGET_USER_TOKEN_CAP",

@@ -169,6 +169,43 @@ try {
         Invoke-ChildCheck -Name "Agent Evals" -Path (Join-Path $PSScriptRoot "check-evals.ps1")
     }
 
+    $conversationV5Surface = @(
+        (Join-Path $repoRoot "src\umbral\application\conversation\v5"),
+        (Join-Path $repoRoot "contracts\agent\v5\context-schema-v5.json"),
+        (Join-Path $repoRoot "tests\contract\test_agent_contracts_v5.py")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($conversationV5Surface) {
+        $pythonExe = Join-Path $repoRoot ".venv\Scripts\python.exe"
+        if (Test-Path -LiteralPath $pythonExe) {
+            try {
+                $global:LASTEXITCODE = 0
+                $env:PYTHONPATH = Join-Path $repoRoot "src"
+                & $pythonExe -m pytest @(
+                    (Join-Path $repoRoot "tests\contract\test_agent_contracts_v5.py"),
+                    (Join-Path $repoRoot "tests\contract\test_agent_evals_v4_contracts.py"),
+                    (Join-Path $repoRoot "tests\unit\application\conversation\v5"),
+                    (Join-Path $repoRoot "tests\unit\agent\intent\test_interpretation_v5.py"),
+                    (Join-Path $repoRoot "tests\unit\agent\test_graph_v5.py"),
+                    (Join-Path $repoRoot "tests\unit\application\agent_evals\v4")
+                ) -q
+                if ($LASTEXITCODE -ne 0) {
+                    throw ("La suite Conversation V5 termino con codigo {0}." -f $LASTEXITCODE)
+                }
+                Write-Host "[PASS] Conversation V5" -ForegroundColor Green
+            }
+            catch {
+                Write-Host ("[FAIL] Conversation V5: {0}" -f $_.Exception.Message) -ForegroundColor Red
+                $script:failures++
+            }
+        }
+        else {
+            Write-Host "[SKIP] Conversation V5: no existe .venv\Scripts\python.exe."
+        }
+    }
+    else {
+        Write-Host "[SKIP] Conversation V5: no existe la superficie V5."
+    }
+
     $notificationsSurface = @(
         (Join-Path $repoRoot "src\umbral\application\notifications"),
         (Join-Path $repoRoot "tests\contract\test_notifications_policy.py")
