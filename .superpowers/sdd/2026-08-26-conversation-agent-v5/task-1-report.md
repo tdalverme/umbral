@@ -85,3 +85,61 @@ The first V3 regression invocation encountered a Windows permission denial
 creating pytest's default temp directory (`C:\Users\Usuario\AppData\Local\Temp\pytest-of-Usuario`). Re-running the same requested V3 suites with a
 worktree-local `--basetemp` passed all 18 tests. This is an environment issue,
 not a Task 1 code failure.
+
+## Fix Round 1 — bounded safe stage evidence
+
+### RED evidence
+
+Added four negative tests before the corresponding production changes:
+
+- `test_neutral_and_nested_fields_cannot_emit_untrusted_listing_bodies`
+- `test_diagnostic_field_values_cannot_emit_untrusted_listing_bodies`
+- `test_dynamic_field_names_cannot_emit_untrusted_listing_bodies`
+- `test_every_emitted_string_has_a_deterministic_hard_maximum`
+
+Command:
+
+```powershell
+$env:PYTHONPATH=(Join-Path (Get-Location) 'src')
+D:\Tomi\dev\umbral\.venv\Scripts\python.exe -m pytest tests/unit/application/agent_evals/v4/test_reporting.py -q
+```
+
+Result: expected RED, `2 failed, 3 passed in 0.36s`. The first test found the
+full untrusted listing body under neutral `selected.description`, `payload`,
+and `description` paths. The second found a 257-character reason code emitted
+without a hard bound.
+
+The later diagnostic-value and dynamic-field-name tests each also produced the
+expected RED (`1 failed`) before their production changes: a short listing body
+was emitted under `status`, then as a mapping key.
+
+### Fix and GREEN evidence
+
+Replaced key-name listing heuristics with a strict field projection: only
+allowlisted diagnostic field names are retained, and only numeric, boolean, or
+null values are emitted for them. Unknown, nested, and string field values are
+summarized through an omitted-field count. Every remaining dynamic report
+string is deterministically capped at 256 characters. Short reason codes remain
+intact.
+
+Final verification:
+
+```powershell
+$env:PYTHONPATH=(Join-Path (Get-Location) 'src')
+D:\Tomi\dev\umbral\.venv\Scripts\python.exe -m pytest tests/unit/application/agent_evals/v4 -q
+D:\Tomi\dev\umbral\.venv\Scripts\python.exe -m pytest tests/unit/application/agent_evals/v3/test_grading.py tests/unit/application/agent_evals/v3/test_reporting.py -q --basetemp .umbral-local\pytest-task-1
+D:\Tomi\dev\umbral\.venv\Scripts\python.exe -m mypy src/umbral/application/agent_evals/v4 tests/unit/application/agent_evals/v4
+D:\Tomi\dev\umbral\.venv\Scripts\python.exe -m ruff check src/umbral/application/agent_evals/v4 tests/unit/application/agent_evals/v4
+```
+
+Results: `11 passed in 0.06s`; `18 passed in 0.12s`; `Success: no issues found
+in 6 source files`; `All checks passed!`.
+
+### Self-review
+
+- Confirmed arbitrary content in neutral, nested, diagnostic-value, and
+  dynamic-key evidence fields is omitted before it can reach JSON or Markdown.
+- Confirmed map keys are projected only from fixed allowlists, while every
+  remaining dynamic report string is capped.
+- Confirmed existing secret redaction, deterministic ordering, bounded sample
+  selection, and V3 regression behavior remain covered by the final suite.

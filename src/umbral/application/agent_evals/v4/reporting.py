@@ -25,6 +25,21 @@ _REDACTED_KEYS = frozenset(
 )
 _MAX_ITEMS = 8
 _MAX_DEPTH = 3
+_MAX_STRING_LENGTH = 256
+_SAFE_DIAGNOSTIC_KEYS = frozenset(
+    {
+        "act",
+        "action",
+        "error_code",
+        "id",
+        "kind",
+        "listing_id",
+        "profile_id",
+        "radar_id",
+        "reason_code",
+        "status",
+    }
+)
 
 
 def report_to_dict_v4(comparison: ComparisonEvidenceV4) -> dict[str, object]:
@@ -97,16 +112,16 @@ def _review_items(trials: tuple[ComparisonTrialV4, ...]) -> list[dict[str, objec
         if stage is None:
             continue
         turn = _failure_turn(trial.result.evidence.turns, stage)
-        for reason_code in turn.reason_codes:
-            key = (trial.family, stage, reason_code)
+        for raw_reason_code in turn.reason_codes:
+            key = (trial.family, stage, raw_reason_code)
             if key in seen:
                 continue
             seen.add(key)
             items.append(
                 {
-                    "family": trial.family,
+                    "family": _truncate(trial.family),
                     "failure_stage": stage,
-                    "reason_code": reason_code,
+                    "reason_code": _truncate(raw_reason_code),
                     "sample": _sample(trial, turn),
                 }
             )
@@ -121,10 +136,10 @@ def _failure_turn(
 
 def _sample(trial: ComparisonTrialV4, turn: TurnEvidenceV4) -> dict[str, object]:
     return {
-        "case_id": trial.result.evidence.case_id,
+        "case_id": _truncate(trial.result.evidence.case_id),
         "trial_index": trial.result.evidence.trial_index,
         "failure_kind": trial.result.failure_kind,
-        "reason_codes": list(turn.reason_codes),
+        "reason_codes": [_truncate(code) for code in turn.reason_codes],
         "stage_evidence": {
             "schema_valid": turn.schema_valid,
             "authorized_context": _bounded(turn.authorized_context),
@@ -143,28 +158,32 @@ def _bounded(value: object, depth: int = 0) -> object:
         return "[TRUNCATED]"
     if isinstance(value, Mapping):
         result: dict[str, object] = {}
+        omitted_fields = 0
         for key in sorted(value, key=str)[:_MAX_ITEMS]:
-            rendered_key = str(key)
-            normalized_key = rendered_key.casefold()
+            normalized_key = key.casefold() if isinstance(key, str) else ""
             if normalized_key in _REDACTED_KEYS:
-                result[rendered_key] = "[REDACTED]"
-            elif _is_untrusted_listing_key(normalized_key):
-                result[rendered_key] = "[OMITTED]"
+                result[normalized_key] = "[REDACTED]"
+            elif normalized_key in _SAFE_DIAGNOSTIC_KEYS:
+                result[normalized_key] = _safe_diagnostic(value[key])
             else:
-                result[rendered_key] = _bounded(value[key], depth + 1)
+                omitted_fields += 1
+        if omitted_fields:
+            result["omitted_field_count"] = omitted_fields
         return result
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return [_bounded(item, depth + 1) for item in value[:_MAX_ITEMS]]
-    if isinstance(value, (str, int, float, bool)) or value is None:
+    if isinstance(value, str):
+        return _truncate(value)
+    if isinstance(value, (int, float, bool)) or value is None:
         return value
     return "[UNSUPPORTED]"
 
 
-def _is_untrusted_listing_key(key: str) -> bool:
-    return key in {"listing", "listings"} or (
-        "listing" in key
-        and any(
-            token in key
-            for token in ("body", "raw", "description", "text", "content")
-        )
-    )
+def _safe_diagnostic(value: object) -> object:
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    return "[OMITTED]"
+
+
+def _truncate(value: str) -> str:
+    return value[:_MAX_STRING_LENGTH]
