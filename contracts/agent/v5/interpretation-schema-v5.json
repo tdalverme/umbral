@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "interpretation-schema-v5.json",
+  "title": "ConversationInterpretationV5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "interpretation_version", "model_version", "prompt_version", "acts"],
+  "properties": {
+    "contract_version": {"const": "5"},
+    "interpretation_version": {"const": "conversation-interpretation-v5"},
+    "model_version": {"type": "string", "minLength": 1},
+    "prompt_version": {"type": "string", "minLength": 1},
+    "acts": {"type": "array", "maxItems": 6, "items": {"$ref": "#/$defs/act"}}
+  },
+  "$defs": {
+    "evidence_span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "text"],
+      "properties": {
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 0},
+        "text": {"type": "string"}
+      }
+    },
+    "common": {
+      "type": "object",
+      "required": ["act_id", "kind", "confidence", "evidence_spans"],
+      "properties": {
+        "act_id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}}
+      }
+    },
+    "filter_key": {"enum": ["budget_max", "zones", "min_rooms"]},
+    "filter_value": {
+      "oneOf": [
+        {"type": "number"},
+        {"type": "null"},
+        {"type": "array", "items": {"type": "string", "minLength": 1}, "maxItems": 15}
+      ]
+    },
+    "concept_link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept_ref", "confidence", "evidence_spans", "force"],
+      "properties": {
+        "concept_ref": {"type": "string", "minLength": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}},
+        "force": {"const": "soft"}
+      }
+    },
+    "act": {
+      "oneOf": [
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "create_radar"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}},
+            "name": {"type": "string", "minLength": 1, "maxLength": 80}
+          }
+        },
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans", "filter_key", "value", "force"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "set_filter"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}},
+            "filter_key": {"$ref": "#/$defs/filter_key"}, "value": {"$ref": "#/$defs/filter_value"}, "force": {"const": "hard"}
+          }
+        },
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans", "filter_key"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "clear_filter"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}},
+            "filter_key": {"$ref": "#/$defs/filter_key"}
+          }
+        },
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans", "raw_text", "subject_ref", "concept_links"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "express_desire"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}},
+            "raw_text": {"type": "string", "minLength": 1}, "subject_ref": {"type": "string", "minLength": 1},
+            "concept_links": {"type": "array", "items": {"$ref": "#/$defs/concept_link"}}
+          }
+        },
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans", "desire_ref", "raw_text", "concept_links"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "revise_desire"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}},
+            "desire_ref": {"type": "string", "minLength": 1}, "raw_text": {"type": "string", "minLength": 1},
+            "concept_links": {"type": "array", "items": {"$ref": "#/$defs/concept_link"}}
+          }
+        },
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans", "desire_ref"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "withdraw_desire"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}}, "desire_ref": {"type": "string", "minLength": 1}
+          }
+        },
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans", "listing_ref", "feedback_type"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "record_feedback"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}},
+            "listing_ref": {"type": "string", "minLength": 1}, "feedback_type": {"enum": ["like", "dislike", "save", "dismiss", "contacted"]},
+            "raw_text": {"type": "string", "minLength": 1, "maxLength": 500}
+          }
+        },
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans", "pending_ref", "decision"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "resolve_pending"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}},
+            "pending_ref": {"type": "string", "minLength": 1}, "decision": {"enum": ["approve", "reject"]}
+          }
+        },
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans", "query_text"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "query"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}}, "query_text": {"type": "string", "minLength": 1, "maxLength": 500}
+          }
+        },
+        {
+          "allOf": [{"$ref": "#/$defs/common"}],
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_spans", "request_text"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "unsupported_request"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence_spans": {"type": "array", "items": {"$ref": "#/$defs/evidence_span"}}, "request_text": {"type": "string", "minLength": 1, "maxLength": 500}
+          }
+        }
+      ]
+    }
+  }
+}
