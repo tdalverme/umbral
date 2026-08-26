@@ -42,7 +42,8 @@
 - Task 3: complete — commit `b221d43`; ports (`ContextReaderV5`, `PendingActionReaderV5`, `FocusedEntityReader` + `FocusedListingV5`), `ContextAssemblerV5`, `ProposalsPendingReaderV5`; 28 task-scoped + 33 regression passed, ruff/mypy clean.
 - Task 4: complete — commit `230071d`; `InterpretationCompilerV5` (strict evidence/ref decoding, `InterpretationContractFailed`), prompt `interpretation-v5.md`; 9 task-scoped + 26 with contract passed, ruff/mypy clean.
 - Task 5: complete — commit `a53e9d4`; `plan_turn_v5` pure policy (capability/evidence-provenance/ref checks, typed dispatch, stable reason codes); 26 V5 + 13 V4 regression passed, ruff/mypy clean.
-- Task 6: complete — commit `TBD`; closed `CommandV5` union (replaces `Never`), policy emits radar commands, `EffectExecutorV5` over RadarService/ChatService/proposals; 76 passed, ruff/mypy clean.
+- Task 6: complete — commit `19bff3d`; closed `CommandV5` union (replaces `Never`), policy emits radar commands, `EffectExecutorV5` over RadarService/ChatService/proposals; 76 passed, ruff/mypy clean.
+- Task 7: complete — commit `TBD`; desire commands + `ExecutedActV5.status`, policy ambiguity (`desire.ambiguous`), preference adapters in executor; 70 passed, ruff/mypy clean.
 - Task 3: pending
 - Task 4: pending
 - Task 5: pending

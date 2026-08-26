@@ -258,7 +258,36 @@ class ClearFilterCommand:
     expected_profile_version: int | None = None
 
 
-CommandV5 = CreateRadarCommand | SetFilterCommand | ClearFilterCommand
+@dataclass(frozen=True, slots=True)
+class RecordDesireCommand:
+    act_id: str
+    raw_text: str
+    subject_ref: str
+    concept_links: tuple[ConceptLinkV5, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ReviseDesireCommand:
+    act_id: str
+    desire_ref: str
+    raw_text: str
+    concept_links: tuple[ConceptLinkV5, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class WithdrawDesireCommand:
+    act_id: str
+    desire_ref: str
+
+
+CommandV5 = (
+    CreateRadarCommand
+    | SetFilterCommand
+    | ClearFilterCommand
+    | RecordDesireCommand
+    | ReviseDesireCommand
+    | WithdrawDesireCommand
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,7 +298,15 @@ class TurnPlanV5:
     def __post_init__(self) -> None:
         for command in self.commands:
             if not isinstance(
-                command, (CreateRadarCommand, SetFilterCommand, ClearFilterCommand)
+                command,
+                (
+                    CreateRadarCommand,
+                    SetFilterCommand,
+                    ClearFilterCommand,
+                    RecordDesireCommand,
+                    ReviseDesireCommand,
+                    WithdrawDesireCommand,
+                ),
             ):
                 raise ValueError(
                     "commands must be members of the closed command union"
@@ -280,6 +317,7 @@ class TurnPlanV5:
 class ExecutedActV5:
     act_id: str
     effect_key: str
+    status: OutcomeStatusV5 = "applied"
     object_ref: str | None = None
     reason_code: str | None = None
 

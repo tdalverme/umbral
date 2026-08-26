@@ -18,9 +18,11 @@ from umbral.application.conversation.v5.contracts import (
     CreateRadarCommand,
     ExpressDesire,
     Query,
+    RecordDesireCommand,
     RecordFeedback,
     ResolvePending,
     ReviseDesire,
+    ReviseDesireCommand,
     SetFilter,
     SetFilterCommand,
     TurnContextV5,
@@ -28,6 +30,7 @@ from umbral.application.conversation.v5.contracts import (
     TurnPlanV5,
     UnsupportedRequest,
     WithdrawDesire,
+    WithdrawDesireCommand,
 )
 
 _MUTATION_KINDS = frozenset(
@@ -119,15 +122,50 @@ def _decide(
             )
             return _pending(act.act_id, "filter.removes_hard_filter"), clear_command
         case ExpressDesire():
-            return _applied(act.act_id), None
+            return (
+                _applied(act.act_id),
+                RecordDesireCommand(
+                    act_id=act.act_id,
+                    raw_text=act.raw_text,
+                    subject_ref=act.subject_ref,
+                    concept_links=act.concept_links,
+                ),
+            )
         case ReviseDesire():
-            if not context.authorizes(act.desire_ref):
+            target = _resolve_desire_ref(act.desire_ref, context)
+            if target is None:
                 return _rejected(act.act_id, "desire.not_active"), None
-            return _applied(act.act_id), None
+            if target == _AMBIGUOUS:
+                return (
+                    ActDecisionV5(
+                        act.act_id, "needs_clarification", "desire.ambiguous"
+                    ),
+                    None,
+                )
+            return (
+                _applied(act.act_id),
+                ReviseDesireCommand(
+                    act_id=act.act_id,
+                    desire_ref=target,
+                    raw_text=act.raw_text,
+                    concept_links=act.concept_links,
+                ),
+            )
         case WithdrawDesire():
-            if not context.authorizes(act.desire_ref):
+            target = _resolve_desire_ref(act.desire_ref, context)
+            if target is None:
                 return _rejected(act.act_id, "desire.not_active"), None
-            return _applied(act.act_id), None
+            if target == _AMBIGUOUS:
+                return (
+                    ActDecisionV5(
+                        act.act_id, "needs_clarification", "desire.ambiguous"
+                    ),
+                    None,
+                )
+            return (
+                _applied(act.act_id),
+                WithdrawDesireCommand(act_id=act.act_id, desire_ref=target),
+            )
         case RecordFeedback():
             if not context.authorizes(act.listing_ref):
                 return _rejected(act.act_id, "feedback.listing_not_authorized"), None
@@ -170,6 +208,22 @@ def _has_explicit_evidence(act: ConversationActV5, user_message: str) -> bool:
 
 def _has_mutation(acts: tuple[ConversationActV5, ...]) -> bool:
     return any(act.kind in _MUTATION_KINDS for act in acts)
+
+
+_AMBIGUOUS = "__ambiguous__"
+
+
+def _resolve_desire_ref(
+    desire_ref: str | None, context: TurnContextV5
+) -> str | None:
+    if desire_ref is not None:
+        return desire_ref if context.authorizes(desire_ref) else None
+    active = tuple(desire.desire_ref for desire in context.active_desires)
+    if len(active) == 1:
+        return active[0]
+    if len(active) > 1:
+        return _AMBIGUOUS
+    return None
 
 
 def _current_filter(

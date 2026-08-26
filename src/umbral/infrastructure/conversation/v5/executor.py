@@ -19,13 +19,19 @@ from umbral.application.chat.service import ChatService
 from umbral.application.conversation.v5.contracts import (
     ClearFilterCommand,
     CommandV5,
+    ConceptLinkV5,
     CreateRadarCommand,
     ExecutedActV5,
+    RecordDesireCommand,
+    ReviseDesireCommand,
     SetFilterCommand,
     TurnContextV5,
+    WithdrawDesireCommand,
 )
+from umbral.application.preferences.contracts import BindingDraft
 from umbral.application.radar.service import RadarService
 from umbral.domain.errors import ConcurrencyConflict
+from umbral.infrastructure.conversation.composition import PreferenceServiceLike
 
 
 class EffectExecutorV5:
@@ -37,11 +43,13 @@ class EffectExecutorV5:
         radar: RadarService,
         chat: ChatService,
         proposals: SearchProfileUpdateProposals,
+        preferences: PreferenceServiceLike | None = None,
         radar_name: str = "Mi búsqueda",
     ) -> None:
         self.radar = radar
         self.chat = chat
         self.proposals = proposals
+        self.preferences = preferences
         self.radar_name = radar_name
 
     def execute(
@@ -58,6 +66,12 @@ class EffectExecutorV5:
                 return self._set_filter(command, context)
             case ClearFilterCommand():
                 return self._clear_filter(command, context)
+            case RecordDesireCommand():
+                return self._record_desire(command, context)
+            case ReviseDesireCommand():
+                return self._revise_desire(command, context)
+            case WithdrawDesireCommand():
+                return self._withdraw_desire(command, context)
 
     def _create_radar(
         self, command: CreateRadarCommand, context: TurnContextV5
@@ -106,6 +120,7 @@ class EffectExecutorV5:
             return ExecutedActV5(
                 act_id=command.act_id,
                 effect_key="filter.set",
+                status="rejected",
                 reason_code="radar.not_bound",
             )
         current = _current_value(context, command.filter_key)
@@ -136,6 +151,7 @@ class EffectExecutorV5:
             return ExecutedActV5(
                 act_id=command.act_id,
                 effect_key="filter.set",
+                status="rejected",
                 reason_code="execution.stale_context",
             )
         return ExecutedActV5(
@@ -152,6 +168,7 @@ class EffectExecutorV5:
             return ExecutedActV5(
                 act_id=command.act_id,
                 effect_key="filter.cleared",
+                status="rejected",
                 reason_code="radar.not_bound",
             )
         return self._propose(
@@ -161,6 +178,112 @@ class EffectExecutorV5:
             profile_id=profile_id,
             change=_clear_change(command.filter_key),
             reason_code="filter.removes_hard_filter",
+        )
+
+    def _record_desire(
+        self, command: RecordDesireCommand, context: TurnContextV5
+    ) -> ExecutedActV5:
+        profile_id = _profile_id(context)
+        if profile_id is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.remembered",
+                status="rejected",
+                reason_code="radar.not_bound",
+            )
+        preferences = self.preferences
+        if preferences is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.remembered",
+                status="rejected",
+                reason_code="preferences.not_configured",
+            )
+        try:
+            change = preferences.record_expression(
+                profile_id=profile_id,
+                source_message_id=None,
+                subject_key=command.subject_ref,
+                raw_text=command.raw_text,
+                authority="explicit",
+                binding_drafts=_binding_drafts(command.concept_links),
+                correlation_id=UUID(context.correlation_id),
+            )
+        except RuntimeError:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.remembered",
+                status="rejected",
+                reason_code="preference.already_active",
+            )
+        return ExecutedActV5(
+            act_id=command.act_id,
+            effect_key="desire.remembered",
+            object_ref=f"desire:{change.expression.expression_id}",
+        )
+
+    def _revise_desire(
+        self, command: ReviseDesireCommand, context: TurnContextV5
+    ) -> ExecutedActV5:
+        profile_id = _profile_id(context)
+        if profile_id is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.revised",
+                status="rejected",
+                reason_code="radar.not_bound",
+            )
+        preferences = self.preferences
+        if preferences is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.revised",
+                status="rejected",
+                reason_code="preferences.not_configured",
+            )
+        change = preferences.revise_expression(
+            profile_id=profile_id,
+            previous_expression_id=_ref_uuid(command.desire_ref, "desire"),
+            source_message_id=None,
+            raw_text=command.raw_text,
+            authority="explicit",
+            binding_drafts=_binding_drafts(command.concept_links),
+            correlation_id=UUID(context.correlation_id),
+        )
+        return ExecutedActV5(
+            act_id=command.act_id,
+            effect_key="desire.revised",
+            object_ref=f"desire:{change.expression.expression_id}",
+        )
+
+    def _withdraw_desire(
+        self, command: WithdrawDesireCommand, context: TurnContextV5
+    ) -> ExecutedActV5:
+        profile_id = _profile_id(context)
+        if profile_id is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.withdrawn",
+                status="rejected",
+                reason_code="radar.not_bound",
+            )
+        preferences = self.preferences
+        if preferences is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.withdrawn",
+                status="rejected",
+                reason_code="preferences.not_configured",
+            )
+        change = preferences.withdraw_expression(
+            profile_id=profile_id,
+            expression_id=_ref_uuid(command.desire_ref, "desire"),
+            correlation_id=UUID(context.correlation_id),
+        )
+        return ExecutedActV5(
+            act_id=command.act_id,
+            effect_key="desire.withdrawn",
+            object_ref=f"desire:{change.expression.expression_id}",
         )
 
     def _propose(
@@ -183,6 +306,7 @@ class EffectExecutorV5:
         return ExecutedActV5(
             act_id=act_id,
             effect_key=effect_key,
+            status="pending",
             object_ref=f"proposal:{proposal.proposal_id}",
             reason_code=reason_code,
         )
@@ -195,6 +319,21 @@ def _profile_id(context: TurnContextV5) -> UUID | None:
         return UUID(context.active_radar_ref.removeprefix("radar:"))
     except ValueError:
         return None
+
+
+def _ref_uuid(ref: str, prefix: str) -> UUID:
+    return UUID(ref.removeprefix(f"{prefix}:"))
+
+
+def _binding_drafts(
+    concept_links: tuple[ConceptLinkV5, ...],
+) -> tuple[BindingDraft, ...]:
+    if not concept_links:
+        return (BindingDraft.unresolved("no_structured_evidence"),)
+    return tuple(
+        BindingDraft.unresolved(f"concept_link:{link.concept_ref}")
+        for link in concept_links
+    )
 
 
 def _current_value(context: TurnContextV5, filter_key: str) -> object | None:
