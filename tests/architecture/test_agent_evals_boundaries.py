@@ -91,6 +91,21 @@ def test_application_agent_evals_runner_uses_only_the_executor_port() -> None:
     )
 
 
+def test_agent_evals_v3_runner_uses_only_the_executor_port() -> None:
+    source = _SRC / "application" / "agent_evals" / "v3" / "runner.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+    modules = _imported_modules(tree)
+    assert not any(
+        module == "umbral.agent" or module.startswith("umbral.agent.")
+        for module in modules
+    )
+    assert not any(
+        module == "umbral.infrastructure"
+        or module.startswith("umbral.infrastructure.")
+        for module in modules
+    )
+
+
 def test_agent_evals_regression_is_pure() -> None:
     source = _SRC / "application" / "agent_evals" / "regression.py"
     assert source.exists()

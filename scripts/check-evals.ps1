@@ -10,13 +10,18 @@ $testPaths = @(
     "tests\contract\test_agent_evals_price.py",
     "tests\contract\test_agent_evals_regression.py",
     "tests\contract\test_model_provider_adr.py",
+    "tests\contract\test_agent_evals_v3_contracts.py",
     "tests\unit\application\agent_evals",
     "tests\unit\application\agent\test_budgets.py",
     "tests\unit\application\agent_ops",
     "tests\unit\config\test_agent_settings.py",
+    "tests\unit\infrastructure\agent_evals\test_v3_adapters.py",
+    "tests\unit\infrastructure\agent_evals\test_v3_flow.py",
     "tests\integration\agent_evals\test_suite_lifecycle.py",
     "tests\integration\agent_evals\test_run_release_stamp.py",
     "tests\integration\agent_evals\test_agent_budgets.py",
+    "tests\integration\agent_evals\test_v3_executor.py",
+    "tests\integration\agent_evals\test_v3_same_path.py",
     "tests\integration\agent_ops\test_overview.py",
     "tests\architecture\test_agent_evals_boundaries.py",
     "tests\migrations\test_0012_agent_evals.py"
@@ -37,4 +42,4 @@ finally {
     $env:PYTHONPATH = $previousPythonPath
     Pop-Location
 }
-Write-Host "[PASS] Checks agent evals (dataset golden, releases, price, regression gate, budgets, dashboard, ADR, migration 0012)"
+Write-Host "[PASS] Checks agent evals (dataset golden, releases, price, regression gate, v3 contracts/dataset/grading/adapters/executor/comparison/reporting, budgets, dashboard, ADR, migration 0012)"

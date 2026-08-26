@@ -17,9 +17,19 @@ from umbral.application.agent_evals.v3.contracts import (
 )
 
 _DOCUMENT_FIELDS = frozenset({"contract_version", "registry_version", "releases"})
-_RELEASE_FIELDS = frozenset({"id", "components", "owner", "justification", "activation", "date"})
-_COMPONENT_FIELDS = frozenset({"prompt_versions", "model_version", "state_schema_version", "topology_version", "interpretation_schema_version", "reply_schema_version", "tool_contract_version", "price_table_version"})
-_ACTIVATION_FIELDS = frozenset({"status", "approved_by", "approval_evidence", "reverted_reason"})
+_RELEASE_FIELDS = frozenset(
+    {"id", "components", "owner", "justification", "activation", "date"}
+)
+_COMPONENT_FIELDS = frozenset(
+    {
+        "prompt_versions", "model_version", "state_schema_version",
+        "topology_version", "interpretation_schema_version",
+        "reply_schema_version", "tool_contract_version", "price_table_version",
+    }
+)
+_ACTIVATION_FIELDS = frozenset(
+    {"status", "approved_by", "approval_evidence", "reverted_reason"}
+)
 
 
 def load_releases(path: Path) -> EvalReleases:
@@ -78,7 +88,9 @@ def _parse_release(raw: Mapping[str, object]) -> tuple[EvalRelease | None, list[
     errors = _unknown(raw, _RELEASE_FIELDS, "release")
     release_id = _required_str(raw.get("id"), errors, "release_id")
     owner = _required_str(raw.get("owner"), errors, "release_owner")
-    justification = _required_str(raw.get("justification"), errors, "release_justification")
+    justification = _required_str(
+        raw.get("justification"), errors, "release_justification"
+    )
     date = _required_str(raw.get("date"), errors, "release_date")
     components = _parse_components(raw.get("components"), errors)
     activation = raw.get("activation")
@@ -90,7 +102,13 @@ def _parse_release(raw: Mapping[str, object]) -> tuple[EvalRelease | None, list[
         activation_copy = _freeze_mapping(activation)
     if not release_id or components is None:
         return None, errors
-    return EvalRelease(release_id, components, owner, justification, activation_copy, date), errors
+    return (
+        EvalRelease(
+            release_id, components, owner,
+            justification, activation_copy, date,
+        ),
+        errors,
+    )
 
 
 def _parse_components(value: object, errors: list[str]) -> EvalReleaseComponents | None:
@@ -99,17 +117,28 @@ def _parse_components(value: object, errors: list[str]) -> EvalReleaseComponents
         return None
     errors.extend(_unknown(value, _COMPONENT_FIELDS, "release_components"))
     prompts = value.get("prompt_versions")
-    if not isinstance(prompts, list) or not all(isinstance(item, str) and item for item in prompts):
+    if not isinstance(prompts, list) or not all(
+        isinstance(item, str) and item for item in prompts
+    ):
         errors.append("agent_evals_v3.release_prompt_versions_invalid")
         prompt_versions: tuple[str, ...] = ()
     else:
         prompt_versions = tuple(prompts)
-    fields = {name: _required_str(value.get(name), errors, f"release_{name}") for name in _COMPONENT_FIELDS - {"prompt_versions", "tool_contract_version"}}
+    fields = {
+        name: _required_str(value.get(name), errors, f"release_{name}")
+        for name in _COMPONENT_FIELDS - {"prompt_versions", "tool_contract_version"}
+    }
     tool_contract = value.get("tool_contract_version")
     if tool_contract is not None and not isinstance(tool_contract, str):
         errors.append("agent_evals_v3.release_tool_contract_version_invalid")
         tool_contract = None
-    return EvalReleaseComponents(prompt_versions, fields["model_version"], fields["state_schema_version"], fields["topology_version"], fields["interpretation_schema_version"], fields["reply_schema_version"], tool_contract, fields["price_table_version"])
+    return EvalReleaseComponents(
+        prompt_versions,
+        fields["model_version"], fields["state_schema_version"],
+        fields["topology_version"], fields["interpretation_schema_version"],
+        fields["reply_schema_version"], tool_contract,
+        fields["price_table_version"],
+    )
 
 
 def _required_str(value: object, errors: list[str], field: str) -> str:
@@ -119,8 +148,13 @@ def _required_str(value: object, errors: list[str], field: str) -> str:
     return value
 
 
-def _unknown(value: Mapping[str, object], allowed: frozenset[str], level: str) -> list[str]:
-    return [f"agent_evals_v3.unknown_{level}_property:{key}" for key in value.keys() - allowed]
+def _unknown(
+    value: Mapping[str, object], allowed: frozenset[str], level: str
+) -> list[str]:
+    return [
+        f"agent_evals_v3.unknown_{level}_property:{key}"
+        for key in value.keys() - allowed
+    ]
 
 
 def _freeze_mapping(value: Mapping[str, object]) -> Mapping[str, object]:

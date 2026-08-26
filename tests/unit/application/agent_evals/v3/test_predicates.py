@@ -254,8 +254,9 @@ def test_unknown_operator_and_malformed_path_fail_without_raising() -> None:
 
 
 def test_unknown_source_and_missing_source_record_fail_without_raising() -> None:
-    unknown_source = ArgumentPredicate(  # type: ignore[arg-type]
-        "event", "query", "/payload/scope", "equals", expected="active_radar"
+    unknown_source = ArgumentPredicate(
+        "event", "query", "/payload/scope",  # type: ignore[arg-type]
+        "equals", expected="active_radar",
     )
     missing_record = ArgumentPredicate(
         "act", "query", "/payload/scope", "equals", expected="active_radar"

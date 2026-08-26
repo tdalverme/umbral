@@ -12,6 +12,13 @@ SuiteKind = Literal["safety", "regression", "capability"]
 Partition = Literal["development", "holdout"]
 Risk = Literal["normal", "high", "critical"]
 Fidelity = Literal["scripted", "managed"]
+PredicateSource = Literal["act", "tool"]
+PredicateOperator = Literal[
+    "equals", "greater_than_initial", "less_than_initial",
+    "in_verified_context", "in_allowed_values",
+    "target_is_active_radar", "scope_equals",
+]
+
 FailureKind = Literal[
     "product_failure",
     "safety_violation",

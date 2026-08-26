@@ -87,7 +87,7 @@ def test_parse_dataset_returns_all_validation_codes() -> None:
     case["invariants"] = ["unknown"]
     case["review"] = {}
     turn = case["turns"][0]  # type: ignore[index]
-    turn["expect"].update(  # type: ignore[index]
+    turn["expect"].update(
         {
             "required_acts": ["query", "missing"],
             "allowed_acts": ["query"],
@@ -143,12 +143,12 @@ def test_parse_dataset_rejects_duplicate_ids_and_safety_holdouts() -> None:
 def test_parse_dataset_rejects_malformed_script_fields() -> None:
     case = _case()
     script = case["turns"][0]["script"]  # type: ignore[index]
-    act = script["interpretation"]["acts"][0]  # type: ignore[index]
+    act = script["interpretation"]["acts"][0]
     del act["act_id"]
     act["target"] = "not-a-mapping"
     act["payload"] = []
     act["confidence"] = "certain"
-    reply = script["reply"]  # type: ignore[index]
+    reply = script["reply"]
     reply["reply_text"] = 1
     reply["effects"] = ["valid", 2]
 
@@ -170,7 +170,7 @@ def test_parse_dataset_rejects_malformed_script_fields() -> None:
 def test_parse_dataset_rejects_non_string_predicate_initial_path() -> None:
     case = _case()
     expect = case["turns"][0]["expect"]  # type: ignore[index]
-    expect["argument_predicates"] = [  # type: ignore[index]
+    expect["argument_predicates"] = [
         {
             "source": "act",
             "name": "query",
@@ -219,7 +219,12 @@ def test_parsed_mappings_are_read_only() -> None:
                     },
                     "owner": "tomi",
                     "justification": "baseline",
-                    "activation": {"status": "pending", "approved_by": None, "approval_evidence": None, "reverted_reason": None},
+                    "activation": {
+                        "status": "pending",
+                        "approved_by": None,
+                        "approval_evidence": None,
+                        "reverted_reason": None,
+                    },
                     "date": "2026-08-25",
                 }
             ],
@@ -248,7 +253,11 @@ def test_policy_and_release_compatibility_exclude_model_and_prompts() -> None:
         }
     )
     dataset = parse_dataset(
-        {"contract_version": "3", "registry_version": "conversation-trajectories-v3", "cases": [_case()]}
+        {
+            "contract_version": "3",
+            "registry_version": "conversation-trajectories-v3",
+            "cases": [_case()],
+        }
     )
     releases = parse_releases(
         {
@@ -269,7 +278,12 @@ def test_policy_and_release_compatibility_exclude_model_and_prompts() -> None:
                     },
                     "owner": "tomi",
                     "justification": "baseline",
-                    "activation": {"status": "pending", "approved_by": None, "approval_evidence": None, "reverted_reason": None},
+                    "activation": {
+                        "status": "pending",
+                        "approved_by": None,
+                        "approval_evidence": None,
+                        "reverted_reason": None,
+                    },
                     "date": "2026-08-25",
                 }
             ],

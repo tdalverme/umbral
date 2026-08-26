@@ -85,3 +85,34 @@ def test_dataset_excludes_explanation_and_comparison_cases() -> None:
         "legacy-018",
         "legacy-021",
     }
+
+
+def test_historical_v1_and_v2_contracts_are_frozen() -> None:
+    v1 = json.loads(
+        (_ROOT / "contracts" / "agent-evals" / "v1" / "conversations-golden-v1.json")
+        .read_text(encoding="utf-8")
+    )
+    v2 = json.loads(
+        (
+            _ROOT
+            / "contracts"
+            / "agent-evals"
+            / "v2"
+            / "conversation-trajectories-v2.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert v1["registry_version"] == "conversations-golden-v1"
+    assert len(v1["cases"]) == 26
+    assert v2["registry_version"] == "conversation-trajectories-v2"
+    assert len(v2["cases"]) == 13
+
+
+def test_v3_flow_reads_only_the_v3_dataset_path() -> None:
+    source = (
+        _ROOT / "src" / "umbral" / "infrastructure" / "agent_evals" / "v3_flow.py"
+    ).read_text(encoding="utf-8")
+
+    assert "conversation-trajectories-v3.json" in source
+    assert "conversations-golden-v1.json" not in source
+    assert "conversation-trajectories-v2.json" not in source

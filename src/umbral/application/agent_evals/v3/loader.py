@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
+from typing import cast
 
 from umbral.application.agent_evals.v3.contracts import (
     KNOWN_ACTS,
@@ -22,7 +23,12 @@ from umbral.application.agent_evals.v3.contracts import (
     EvalPolicy,
     EvalTurn,
     EvalV3ValidationError,
+    Partition,
+    PredicateOperator,
+    PredicateSource,
+    Risk,
     ScriptedTurn,
+    SuiteKind,
     TurnExpectation,
 )
 
@@ -34,11 +40,25 @@ _POLICY_FIELDS = frozenset(
         "max_reserved_cost_per_trial_usd",
     }
 )
-_CASE_FIELDS = frozenset({"id", "suite", "partition", "family", "risk", "initial_state", "turns", "final_state", "invariants", "tags", "review"})
+_CASE_FIELDS = frozenset(
+    {
+        "id", "suite", "partition", "family", "risk", "initial_state",
+        "turns", "final_state", "invariants", "tags", "review",
+    }
+)
 _TURN_FIELDS = frozenset({"user", "context", "script", "expect"})
 _SCRIPT_FIELDS = frozenset({"interpretation", "reply"})
-_EXPECT_FIELDS = frozenset({"required_acts", "allowed_acts", "forbidden_acts", "required_tools", "allowed_tools", "forbidden_tools", "argument_predicates", "required_effects", "forbidden_effects", "outcomes", "require_grounding"})
-_PREDICATE_FIELDS = frozenset({"source", "name", "path", "operator", "expected", "initial_path"})
+_EXPECT_FIELDS = frozenset(
+    {
+        "required_acts", "allowed_acts", "forbidden_acts",
+        "required_tools", "allowed_tools", "forbidden_tools",
+        "argument_predicates", "required_effects", "forbidden_effects",
+        "outcomes", "require_grounding",
+    }
+)
+_PREDICATE_FIELDS = frozenset(
+    {"source", "name", "path", "operator", "expected", "initial_path"}
+)
 _REVIEW_FIELDS = frozenset({"reviewed_by", "reviewed_at", "rationale"})
 
 
@@ -50,7 +70,9 @@ def load_dataset(path: Path) -> EvalDataset:
 
 
 def parse_dataset(data: Mapping[str, object]) -> EvalDataset:
-    errors = _unknown_properties(data, {"contract_version", "registry_version", "cases"}, "document")
+    errors = _unknown_properties(
+        data, {"contract_version", "registry_version", "cases"}, "document"
+    )
     if data.get("contract_version") != "3":
         errors.append("agent_evals_v3.unsupported_contract_version")
     if data.get("registry_version") != "conversation-trajectories-v3":
@@ -90,7 +112,11 @@ def parse_policy(data: Mapping[str, object]) -> EvalPolicy:
         errors.append("agent_evals_v3.unsupported_policy_contract_version")
     if data.get("registry_version") != "eval-policy-v3":
         errors.append("agent_evals_v3.policy_registry_version_required")
-    integer_fields = ("scripted_trials", "managed_normal_trials", "managed_critical_trials", "provider_retry_limit", "max_concurrency", "review_sample_size")
+    integer_fields = (
+        "scripted_trials", "managed_normal_trials",
+        "managed_critical_trials", "provider_retry_limit",
+        "max_concurrency", "review_sample_size",
+    )
     values: dict[str, int] = {}
     for field in integer_fields:
         value = data.get(field)
@@ -100,7 +126,11 @@ def parse_policy(data: Mapping[str, object]) -> EvalPolicy:
             errors.append(f"agent_evals_v3.policy_{field}_invalid")
             values[field] = 0
     confidence = data.get("confidence_level")
-    if not isinstance(confidence, (int, float)) or isinstance(confidence, bool) or not 0 < float(confidence) <= 1:
+    if (
+        not isinstance(confidence, (int, float))
+        or isinstance(confidence, bool)
+        or not 0 < float(confidence) <= 1
+    ):
         errors.append("agent_evals_v3.policy_confidence_level_invalid")
         confidence = 0.0
     cost = data.get("max_reserved_cost_per_trial_usd")
@@ -108,7 +138,12 @@ def parse_policy(data: Mapping[str, object]) -> EvalPolicy:
         errors.append("agent_evals_v3.policy_max_reserved_cost_per_trial_usd_invalid")
         cost = 0.0
     _raise_if_errors(errors)
-    return EvalPolicy("eval-policy-v3", **values, confidence_level=float(confidence), max_reserved_cost_per_trial_usd=float(cost))
+    return EvalPolicy(
+        "eval-policy-v3",
+        **values,
+        confidence_level=float(confidence),
+        max_reserved_cost_per_trial_usd=float(cost),
+    )
 
 
 def _parse_case(raw: Mapping[str, object]) -> tuple[EvalCase | None, list[str]]:
@@ -129,9 +164,25 @@ def _parse_case(raw: Mapping[str, object]) -> tuple[EvalCase | None, list[str]]:
     review = _parse_review(raw.get("review"), errors, case_id)
     if suite == "safety" and partition == "holdout":
         errors.append(f"agent_evals_v3.holdout_safety_case:{case_id}")
-    if not case_id or suite is None or partition is None or risk is None or review is None:
+    if (
+        not case_id
+        or suite is None
+        or partition is None
+        or risk is None
+        or review is None
+    ):
         return None, errors
-    return EvalCase(case_id, suite, partition, family, risk, initial, tuple(turns), final, invariants, tags, review), errors
+    return (
+        EvalCase(
+            case_id,
+            cast("SuiteKind", suite),
+            cast("Partition", partition),
+            family,
+            cast("Risk", risk),
+            initial, tuple(turns), final, invariants, tags, review,
+        ),
+        errors,
+    )
 
 
 def _parse_turns(value: object, errors: list[str]) -> list[EvalTurn]:
@@ -209,7 +260,10 @@ def _parse_script(value: object, errors: list[str]) -> ScriptedTurn | None:
         or not isinstance(refs, list)
         or not all(
             isinstance(ref, Mapping)
-            and all(isinstance(key, str) and isinstance(item, str) for key, item in ref.items())
+            and all(
+                isinstance(key, str) and isinstance(item, str)
+                for key, item in ref.items()
+            )
             for ref in refs
         )
     ):
@@ -222,9 +276,18 @@ def _parse_expectation(value: object, errors: list[str]) -> TurnExpectation | No
         errors.append("agent_evals_v3.expectation_required")
         return None
     errors.extend(_unknown_properties(value, _EXPECT_FIELDS, "expectation"))
-    acts = {field: _strings(value.get(field), errors, field) for field in ("required_acts", "allowed_acts", "forbidden_acts")}
-    tools = {field: _strings(value.get(field), errors, field) for field in ("required_tools", "allowed_tools", "forbidden_tools")}
-    for items, known, label in ((acts, KNOWN_ACTS, "act"), (tools, KNOWN_TOOLS, "tool")):
+    acts = {
+        field: _strings(value.get(field), errors, field)
+        for field in ("required_acts", "allowed_acts", "forbidden_acts")
+    }
+    tools = {
+        field: _strings(value.get(field), errors, field)
+        for field in ("required_tools", "allowed_tools", "forbidden_tools")
+    }
+    for items, known, label in (
+        (acts, KNOWN_ACTS, "act"),
+        (tools, KNOWN_TOOLS, "tool"),
+    ):
         for field, values in items.items():
             for item in values:
                 if item not in known:
@@ -237,14 +300,23 @@ def _parse_expectation(value: object, errors: list[str]) -> TurnExpectation | No
             if item not in allowed:
                 errors.append(f"agent_evals_v3.unknown_forbidden_{label}:{item}")
     predicates = _parse_predicates(value.get("argument_predicates"), errors)
-    required_effects = _strings(value.get("required_effects"), errors, "required_effects")
-    forbidden_effects = _strings(value.get("forbidden_effects"), errors, "forbidden_effects")
+    required_effects = _strings(
+        value.get("required_effects"), errors, "required_effects"
+    )
+    forbidden_effects = _strings(
+        value.get("forbidden_effects"), errors, "forbidden_effects"
+    )
     outcomes = _strings(value.get("outcomes"), errors, "outcomes")
     grounding = value.get("require_grounding")
     if not isinstance(grounding, bool):
         errors.append("agent_evals_v3.require_grounding_invalid")
         grounding = False
-    return TurnExpectation(acts["required_acts"], acts["allowed_acts"], acts["forbidden_acts"], tools["required_tools"], tools["allowed_tools"], tools["forbidden_tools"], tuple(predicates), required_effects, forbidden_effects, outcomes, grounding)
+    return TurnExpectation(
+        acts["required_acts"], acts["allowed_acts"], acts["forbidden_acts"],
+        tools["required_tools"], tools["allowed_tools"], tools["forbidden_tools"],
+        tuple(predicates), required_effects, forbidden_effects,
+        outcomes, grounding,
+    )
 
 
 def _parse_predicates(value: object, errors: list[str]) -> list[ArgumentPredicate]:
@@ -268,8 +340,24 @@ def _parse_predicates(value: object, errors: list[str]) -> list[ArgumentPredicat
         initial_path = raw.get("initial_path")
         if initial_path is not None and not isinstance(initial_path, str):
             errors.append("agent_evals_v3.initial_path_invalid")
-        if isinstance(source, str) and name and path and isinstance(operator, str) and operator in KNOWN_PREDICATE_OPERATORS and (initial_path is None or isinstance(initial_path, str)):
-            predicates.append(ArgumentPredicate(source, name, path, operator, _freeze_value(raw.get("expected")), initial_path))
+        if (
+            isinstance(source, str)
+            and name
+            and path
+            and isinstance(operator, str)
+            and operator in KNOWN_PREDICATE_OPERATORS
+            and (initial_path is None or isinstance(initial_path, str))
+        ):
+            predicates.append(
+                ArgumentPredicate(
+                    cast("PredicateSource", source),
+                    name,
+                    path,
+                    cast("PredicateOperator", operator),
+                    _freeze_value(raw.get("expected")),
+                    initial_path,
+                )
+            )
     return predicates
 
 
@@ -321,7 +409,9 @@ def _freeze_value(value: object) -> object:
     return value
 
 
-def _enum(value: object, allowed: frozenset[str], errors: list[str], field: str) -> str | None:
+def _enum(
+    value: object, allowed: frozenset[str], errors: list[str], field: str
+) -> str | None:
     if not isinstance(value, str) or value not in allowed:
         errors.append(f"agent_evals_v3.unknown_{field}:{value}")
         return None
@@ -335,8 +425,15 @@ def _required_str(value: object, errors: list[str], field: str) -> str:
     return value
 
 
-def _unknown_properties(value: Mapping[str, object], allowed: frozenset[str] | set[str], level: str) -> list[str]:
-    return [f"agent_evals_v3.unknown_{level}_property:{key}" for key in value.keys() - allowed]
+def _unknown_properties(
+    value: Mapping[str, object],
+    allowed: frozenset[str] | set[str],
+    level: str,
+) -> list[str]:
+    return [
+        f"agent_evals_v3.unknown_{level}_property:{key}"
+        for key in value.keys() - allowed
+    ]
 
 
 def _raise_if_errors(errors: list[str]) -> None:

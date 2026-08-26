@@ -1,3 +1,4 @@
+# mypy: disable-error-code="arg-type"
 from __future__ import annotations
 
 from dataclasses import replace
@@ -70,7 +71,7 @@ def _case(**changes: object) -> EvalCase:
                 ),
             ),
         )
-    return EvalCase(**values)  # type: ignore[arg-type]
+    return EvalCase(**values)
 
 
 def _act(name: str) -> ObservedAct:

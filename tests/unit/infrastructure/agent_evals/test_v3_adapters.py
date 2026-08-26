@@ -297,4 +297,7 @@ def _settings(*, provider: str, endpoint: str | None) -> Settings:
     }
     if endpoint is not None:
         values["AGENT_MANAGED_ENDPOINT"] = endpoint
-    return Settings.from_environment({**base, **values})
+    merged = {**base, **values}
+    return Settings.from_environment(
+        {str(key): str(value) for key, value in merged.items()}
+    )
