@@ -22,7 +22,7 @@ def upgrade() -> None:
         "applied",
         "failed",
         name="conversation_v5_receipt_state",
-        create_type=True,
+        create_type=False,
     )
     receipt_state.create(op.get_bind(), checkfirst=True)
     op.create_table(
