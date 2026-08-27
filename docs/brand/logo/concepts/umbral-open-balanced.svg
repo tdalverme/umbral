@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title-balanced desc-balanced">
+  <title id="title-balanced">Umbral abierto — concepto balanced</title>
+  <desc id="desc-balanced">Arco circular con base recta y acento terracota centrado que sugiere un umbral abierto.</desc>
+  <path d="M14 52V30C14 18.954 22.954 10 34 10s20 8.954 20 20v22" fill="none" stroke="#293F38" stroke-width="6" stroke-linecap="round"/>
+  <path d="M29 52h10" fill="none" stroke="#DE6D4A" stroke-width="6" stroke-linecap="round"/>
+</svg>

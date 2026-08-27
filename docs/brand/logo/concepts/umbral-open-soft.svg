@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title-soft desc-soft">
+  <title id="title-soft">Umbral abierto — concepto soft</title>
+  <desc id="desc-soft">Arco ancho y bajo con acento terracota que transmite calma y domesticidad sin dibujar una casa.</desc>
+  <path d="M10 52V34c0-13.255 10.745-24 24-24s24 10.745 24 24v18" fill="none" stroke="#293F38" stroke-width="6" stroke-linecap="round"/>
+  <path d="M29 52h10" fill="none" stroke="#DE6D4A" stroke-width="6" stroke-linecap="round"/>
+</svg>
