@@ -1,0 +1,87 @@
+import type { MatchItem, SearchProfile } from "./client";
+
+// 8 oportunidades curadas mock para preview sin DB — mix Palermo/Belgrano/Almagro, 6 con geo, 2 sin
+export const MOCK_PROFILES: SearchProfile[] = [
+  {
+    search_profile_id: "preview-palermo",
+    name: "Palermo 2 amb con balcón",
+    operation: "rent",
+    zones: ["Palermo", "Villa Crespo"],
+    budget_max: 650000,
+    budget_min: null,
+    min_rooms: 2,
+    surface_min: null,
+    surface_max: null,
+    status: "active",
+    unknown_strategy: {},
+    version: 1,
+    created_at: "2026-08-27T00:00:00Z",
+    updated_at: "2026-08-27T00:00:00Z",
+    latest_run: { run_id: "run-preview-1", state: "succeeded", trigger: "manual", score_policy_version: "v2", candidate_count: 8, published_item_count: 8, failure_code: null, created_at: "2026-08-27T00:00:00Z", finished_at: "2026-08-27T00:00:00Z" },
+  },
+  {
+    search_profile_id: "preview-belgrano",
+    name: "Belgrano luminoso",
+    operation: "rent",
+    zones: ["Belgrano", "Colegiales"],
+    budget_max: 800000,
+    budget_min: null,
+    min_rooms: 3,
+    surface_min: 50,
+    surface_max: null,
+    status: "active",
+    unknown_strategy: {},
+    version: 1,
+    created_at: "2026-08-27T00:00:00Z",
+    updated_at: "2026-08-27T00:00:00Z",
+    latest_run: { run_id: "run-preview-2", state: "succeeded", trigger: "manual", score_policy_version: "v2", candidate_count: 5, published_item_count: 5, failure_code: null, created_at: "2026-08-27T00:00:00Z", finished_at: "2026-08-27T00:00:00Z" },
+  },
+  {
+    search_profile_id: "preview-almagro",
+    name: "Almagro tranquilo",
+    operation: "rent",
+    zones: ["Almagro", "Boedo"],
+    budget_max: 500000,
+    budget_min: null,
+    min_rooms: 2,
+    surface_min: null,
+    surface_max: null,
+    status: "paused",
+    unknown_strategy: {},
+    version: 1,
+    created_at: "2026-08-27T00:00:00Z",
+    updated_at: "2026-08-27T00:00:00Z",
+    latest_run: null,
+  },
+];
+
+const base = (id: string, lng: number, lat: number, over: Partial<MatchItem> = {}): MatchItem => ({
+  item_id: `item-${id}`,
+  listing_id: `listing-${id}`,
+  score: 0.82,
+  position: Number(id),
+  contributions: {},
+  geo_precision: "rooftop",
+  geometry: [lng, lat],
+  total_cost: 620000,
+  neighborhood: "Palermo",
+  surface_m2: 48,
+  rooms: 2,
+  source_id: "mock",
+  url: null,
+  decision_state: null,
+  ...over,
+});
+
+export const MOCK_MATCHES: MatchItem[] = [
+  base("1", -58.431, -34.588, { neighborhood: "Palermo", total_cost: 620000, surface_m2: 52, rooms: 2, score: 0.91 }),
+  base("2", -58.428, -34.585, { neighborhood: "Villa Crespo", total_cost: 540000, surface_m2: 45, rooms: 2, score: 0.88 }),
+  base("3", -58.435, -34.591, { neighborhood: "Palermo", total_cost: 680000, surface_m2: 58, rooms: 3, score: 0.85 }),
+  base("4", -58.42, -34.583, { neighborhood: "Colegiales", total_cost: 590000, surface_m2: 44, rooms: 2, score: 0.83 }),
+  // colisión intencional <30px con #1 para probar espiral
+  base("5", -58.4312, -34.5881, { neighborhood: "Palermo", total_cost: 610000, surface_m2: 50, rooms: 2, score: 0.8 }),
+  base("6", -58.438, -34.595, { neighborhood: "Palermo", total_cost: 640000, surface_m2: 55, rooms: 2, score: 0.78 }),
+  // sin geo — solo lista
+  base("7", -58.0, -34.0, { neighborhood: "Almagro", total_cost: 480000, surface_m2: 40, rooms: 2, score: 0.75, geometry: null, geo_precision: null }),
+  base("8", -58.0, -34.0, { neighborhood: "Boedo", total_cost: 510000, surface_m2: 42, rooms: 2, score: 0.72, geometry: null, geo_precision: null }),
+];

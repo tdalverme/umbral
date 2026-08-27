@@ -57,6 +57,7 @@ function ReasonsStrip({ explanation }: { explanation: Explanation }): React.Reac
 export default function RadarViewPage(): React.ReactElement {
   const params = useParams<{ id: string }>();
   const profileId = params.id;
+  const isMock = process.env.NEXT_PUBLIC_USE_MOCKS === "1";
 
   const [profile, setProfile] = useState<SearchProfile | null>(null);
   const [items, setItems] = useState<MatchItem[]>([]);
@@ -72,6 +73,19 @@ export default function RadarViewPage(): React.ReactElement {
   const emittedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    if (isMock) {
+      import("@/lib/radar/mock-shell-data").then(({ MOCK_PROFILES, MOCK_MATCHES }) => {
+        const found = MOCK_PROFILES.find((p) => p.search_profile_id === profileId) ?? MOCK_PROFILES[0];
+        setProfile(found);
+        setRunState("succeeded");
+        setRunId(found.latest_run?.run_id ?? "run-preview-1");
+        setLegacyRun(false);
+        setItems(MOCK_MATCHES);
+        setNextAfter(null);
+        setError(null);
+      });
+      return;
+    }
     radarApi
       .getProfile(profileId)
       .then((value) => {
@@ -84,7 +98,7 @@ export default function RadarViewPage(): React.ReactElement {
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : "radar.error");
       });
-  }, [profileId, reloadKey]);
+  }, [profileId, reloadKey, isMock]);
 
   const loadExplanations = useCallback(
     (run: string) => {
@@ -137,8 +151,9 @@ export default function RadarViewPage(): React.ReactElement {
   );
 
   useEffect(() => {
+    if (isMock) return;
     loadMatches(runId);
-  }, [loadMatches, runId]);
+  }, [loadMatches, runId, isMock]);
 
   useEffect(() => {
     if (!runState || (runState !== "pending" && runState !== "running")) return;

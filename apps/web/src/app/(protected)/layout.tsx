@@ -6,6 +6,9 @@ import { forwardIdentityRequest } from "@/lib/api/server";
 import { Providers } from "@/lib/query/providers";
 
 export default async function ProtectedLayout({ children }: Readonly<{ children: ReactNode }>): Promise<ReactNode> {
+  if (process.env.NEXT_PUBLIC_USE_MOCKS === "1") {
+    return <Providers>{children}</Providers>;
+  }
   const cookieStore = await cookies();
   const session = cookieStore.get(process.env.SESSION_COOKIE_NAME || "umbral_local_session")?.value;
   if (!session) redirect("/login");

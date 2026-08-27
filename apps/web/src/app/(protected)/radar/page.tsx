@@ -24,6 +24,15 @@ export default function RadarPage(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_USE_MOCKS === "1") {
+      import("@/lib/radar/mock-shell-data").then(({ MOCK_PROFILES }) => {
+        const filtered = tab === "all" ? MOCK_PROFILES : MOCK_PROFILES.filter((p) => p.status === tab);
+        setProfiles(filtered);
+        setLoadedForTab(tab);
+        setError(null);
+      });
+      return;
+    }
     radarApi
       .listProfiles(tab === "all" ? undefined : tab)
       .then((items) => {
