@@ -20,6 +20,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   ) {
     return NextResponse.next();
   }
+  if (process.env.NEXT_PUBLIC_USE_MOCKS === "1" || process.env.USE_MOCKS === "1") {
+    return NextResponse.next();
+  }
   const token = request.headers.get("cf-access-jwt-assertion");
   const publicKey = process.env.CF_ACCESS_PUBLIC_KEY;
   const valid =
