@@ -3,46 +3,51 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.985 0.004 260);
-  --foreground: oklch(0.18 0.02 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 260);
-  --primary: oklch(0.32 0.09 258);
-  --primary-foreground: oklch(0.98 0.01 258);
-  --secondary: oklch(0.93 0.015 258);
-  --secondary-foreground: oklch(0.24 0.04 258);
-  --muted: oklch(0.94 0.008 260);
-  --muted-foreground: oklch(0.42 0.025 260);
-  --accent: oklch(0.91 0.03 188);
-  --accent-foreground: oklch(0.2 0.04 188);
+  --brand-forest: #293F38;
+  --brand-linen: #F4EFE6;
+  --brand-terracotta: #DE6D4A;
+  --brand-sand: #D9C59F;
+  --brand-ivory: #FFFAF2;
+  --background: var(--brand-linen);
+  --foreground: var(--brand-forest);
+  --card: var(--brand-ivory);
+  --card-foreground: var(--brand-forest);
+  --popover: var(--brand-ivory);
+  --popover-foreground: var(--brand-forest);
+  --primary: var(--brand-forest);
+  --primary-foreground: var(--brand-ivory);
+  --secondary: color-mix(in srgb, var(--brand-sand) 42%, var(--brand-ivory));
+  --secondary-foreground: var(--brand-forest);
+  --muted: color-mix(in srgb, var(--brand-sand) 22%, var(--brand-ivory));
+  --muted-foreground: color-mix(in srgb, var(--brand-forest) 68%, var(--brand-linen));
+  --accent: color-mix(in srgb, var(--brand-terracotta) 18%, var(--brand-ivory));
+  --accent-foreground: var(--brand-forest);
   --destructive: oklch(0.52 0.18 25);
-  --border: oklch(0.86 0.012 260);
-  --input: oklch(0.78 0.018 260);
-  --ring: oklch(0.48 0.12 258);
+  --border: color-mix(in srgb, var(--brand-sand) 55%, var(--brand-ivory));
+  --input: color-mix(in srgb, var(--brand-sand) 65%, var(--brand-linen));
+  --ring: color-mix(in srgb, var(--brand-forest) 78%, var(--brand-sand));
   --radius: 0.75rem;
 }
 
 .dark {
-  --background: oklch(0.16 0.02 260);
-  --foreground: oklch(0.95 0.01 260);
-  --card: oklch(0.2 0.025 260);
-  --card-foreground: oklch(0.95 0.01 260);
-  --popover: oklch(0.2 0.025 260);
-  --popover-foreground: oklch(0.95 0.01 260);
-  --primary: oklch(0.78 0.13 190);
-  --primary-foreground: oklch(0.17 0.04 190);
-  --secondary: oklch(0.28 0.03 260);
-  --secondary-foreground: oklch(0.95 0.01 260);
-  --muted: oklch(0.27 0.025 260);
-  --muted-foreground: oklch(0.76 0.02 260);
-  --accent: oklch(0.3 0.06 190);
-  --accent-foreground: oklch(0.95 0.01 190);
+  --background: color-mix(in srgb, var(--brand-forest) 94%, black);
+  --foreground: var(--brand-ivory);
+  --card: color-mix(in srgb, var(--brand-forest) 90%, var(--brand-ivory));
+  --card-foreground: var(--brand-ivory);
+  --popover: color-mix(in srgb, var(--brand-forest) 90%, var(--brand-ivory));
+  --popover-foreground: var(--brand-ivory);
+  --primary: var(--brand-ivory);
+  --primary-foreground: var(--brand-forest);
+  --secondary: color-mix(in srgb, var(--brand-forest) 78%, var(--brand-sand));
+  --secondary-foreground: var(--brand-ivory);
+  --muted: color-mix(in srgb, var(--brand-forest) 82%, var(--brand-sand));
+  --muted-foreground: color-mix(in srgb, var(--brand-linen) 78%, var(--brand-forest));
+  --accent: color-mix(in srgb, var(--brand-terracotta) 28%, var(--brand-forest));
+  --accent-foreground: var(--brand-ivory);
   --destructive: oklch(0.7 0.14 25);
-  --border: oklch(0.34 0.025 260);
-  --input: oklch(0.4 0.03 260);
-  --ring: oklch(0.78 0.13 190);
+  --border: color-mix(in srgb, var(--brand-forest) 88%, var(--brand-linen));
+  --input: color-mix(in srgb, var(--brand-forest) 84%, var(--brand-sand));
+  --ring: color-mix(in srgb, var(--brand-sand) 58%, var(--brand-ivory));
 }
 
 @theme inline {
@@ -64,6 +69,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --font-sans: var(--font-sans);
+  --font-brand: var(--font-brand);
   --radius-sm: calc(var(--radius) - 0.25rem);
   --radius-md: calc(var(--radius) - 0.125rem);
   --radius-lg: var(--radius);
@@ -82,7 +89,7 @@ body {
   min-width: 20rem;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
 *:focus-visible {

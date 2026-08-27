@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(webRoot, "src"),
+      "next/font/google": path.resolve(webRoot, "src/test/mocks/next-font-google.ts"),
     },
   },
   test: {
