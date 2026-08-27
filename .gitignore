@@ -38,6 +38,7 @@ apps/web/.env.local
 
 # Local runtime data and tooling
 .data/
+.superpowers/
 .vscode/
 .idea/
 *.swp
