@@ -8,7 +8,9 @@ import { Providers } from "@/lib/query/providers";
 export default async function ProtectedLayout({ children }: Readonly<{ children: ReactNode }>): Promise<ReactNode> {
   const cookieStore = await cookies();
   const rawMock = process.env.NEXT_PUBLIC_USE_MOCKS ?? process.env.USE_MOCKS;
-  if (rawMock === "1" || rawMock === "true") {
+  const isDevPreview =
+    rawMock === "1" || rawMock === "true" || process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_USE_MOCKS === "1";
+  if (isDevPreview) {
     return <Providers>{children}</Providers>;
   }
   // fallback preview cookie for manual "document.cookie=..."
