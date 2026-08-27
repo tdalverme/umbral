@@ -1,10 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 
-import RootLayout from "./layout";
+import RootLayout, { metadata } from "./layout";
 import Page from "./page";
 
 describe("foundation page", () => {
+  it("exposes the Umbral brand metadata", () => {
+    expect(metadata).toMatchObject({
+      title: "Umbral",
+      description: "Tu próximo lugar se acerca.",
+      icons: { icon: "/brand/umbral-favicon.svg" },
+    });
+  });
   it("provides an es-AR document, a keyboard skip link, and one main landmark", () => {
     render(createElement(RootLayout, null, createElement(Page)));
     expect(document.documentElement).toHaveAttribute("lang", "es-AR");

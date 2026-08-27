@@ -19,7 +19,8 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: "Umbral",
-  description: "Fundación del runtime de Umbral",
+  description: "Tu próximo lugar se acerca.",
+  icons: { icon: "/brand/umbral-favicon.svg" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
