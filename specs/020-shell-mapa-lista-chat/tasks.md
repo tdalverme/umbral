@@ -15,9 +15,9 @@
 
 **Purpose**: Project initialization and basic structure for shell
 
-- [ ] T001 Create radar shell feature directories per plan in apps/web/src/components/radar and apps/web/src/components/radar/map in apps/web/src/components/radar/map/map-luz-serena.tsx
-- [ ] T002 [P] Configure map style fork placeholder map-style-luz-serena.json in apps/web/src/components/radar/map/map-style-luz-serena.json
-- [ ] T003 [P] Add MapLibre mock helpers for isStyleLoaded/setPaintProperty/once/on in apps/web/src/test/mocks/maplibre-gl.ts
+- [X] T001 Create radar shell feature directories per plan in apps/web/src/components/radar and apps/web/src/components/radar/map in apps/web/src/components/radar/map/map-luz-serena.tsx
+- [X] T002 [P] Configure map style fork placeholder map-style-luz-serena.json in apps/web/src/components/radar/map/map-style-luz-serena.json
+- [X] T003 [P] Add MapLibre mock helpers for isStyleLoaded/setPaintProperty/once/on in apps/web/src/test/mocks/maplibre-gl.ts
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
@@ -25,12 +25,12 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Implement URL sync hook for ?listingId and ?filter with useSearchParams in apps/web/src/lib/radar/use-radar-selection.ts
-- [ ] T005 [P] Implement spiral offset helper for pin collision <30px in apps/web/src/components/radar/map/pin-offset.ts
-- [ ] T006 [P] Define shell contracts types for Radar/Oportunidad/Pin/Viewport in apps/web/src/lib/radar/shell-contracts.ts
-- [ ] T007 Setup shell landmarks base (nav/main/aside) and skip-link preservation in apps/web/src/app/(protected)/radar/[id]/layout.tsx
-- [ ] T008 [P] Add audit field helper for scoring_version/signal_version/snapshot hash display in apps/web/src/lib/urban/signal-meta.ts
-- [ ] T009 Configure reduced-motion helper for flyTo vs jumpTo in apps/web/src/lib/map/motion.ts
+- [X] T004 Implement URL sync hook for ?listingId and ?filter with useSearchParams in apps/web/src/lib/radar/use-radar-selection.ts
+- [X] T005 [P] Implement spiral offset helper for pin collision <30px in apps/web/src/components/radar/map/pin-offset.ts
+- [X] T006 [P] Define shell contracts types for Radar/Oportunidad/Pin/Viewport in apps/web/src/lib/radar/shell-contracts.ts
+- [X] T007 Setup shell landmarks base (nav/main/aside) and skip-link preservation in apps/web/src/app/(protected)/radar/[id]/layout.tsx
+- [X] T008 [P] Add audit field helper for scoring_version/signal_version/snapshot hash display in apps/web/src/lib/urban/signal-meta.ts
+- [X] T009 Configure reduced-motion helper for flyTo vs jumpTo in apps/web/src/lib/map/motion.ts
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -42,16 +42,16 @@
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] Shell integration test for sidebar navigation in apps/web/src/app/(protected)/radar/shell.integration.test.tsx
-- [ ] T011 [P] [US1] Unit test for radar selection URL hook in apps/web/src/lib/radar/use-radar-selection.test.ts
+- [X] T010 [P] [US1] Shell integration test for sidebar navigation in apps/web/src/app/(protected)/radar/shell.integration.test.tsx
+- [X] T011 [P] [US1] Unit test for radar selection URL hook in apps/web/src/lib/radar/use-radar-selection.test.ts
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Create RadarSidebar component with editable name and collapse to rail in apps/web/src/components/radar/radar-sidebar.tsx
-- [ ] T013 [US1] Create RadarShell orchestrator with 3 regions push/overlay/drawer breakpoints in apps/web/src/components/radar/radar-shell.tsx
-- [ ] T014 [US1] Implement /radar redirect to / with sidebar and /radar/new as Dialog in apps/web/src/app/(protected)/radar/page.tsx
-- [ ] T015 [US1] Wire radar/[id]/page.tsx to use RadarShell with lazy chat session in apps/web/src/app/(protected)/radar/[id]/page.tsx
-- [ ] T016 [US1] Add responsive Tabs Mapa|Lista|Chat + drawer hamburger for <1024 in apps/web/src/components/radar/radar-shell.tsx
+- [X] T012 [P] [US1] Create RadarSidebar component with editable name and collapse to rail in apps/web/src/components/radar/radar-sidebar.tsx
+- [X] T013 [US1] Create RadarShell orchestrator with 3 regions push/overlay/drawer breakpoints in apps/web/src/components/radar/radar-shell.tsx
+- [X] T014 [US1] Implement /radar redirect to / with sidebar and /radar/new as Dialog in apps/web/src/app/(protected)/radar/page.tsx
+- [X] T015 [US1] Wire radar/[id]/page.tsx to use RadarShell with lazy chat session in apps/web/src/app/(protected)/radar/[id]/page.tsx
+- [X] T016 [US1] Add responsive Tabs Mapa|Lista|Chat + drawer hamburger for <1024 in apps/web/src/components/radar/radar-shell.tsx
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently — radares navegables sin mapa data
 
@@ -63,18 +63,18 @@
 
 ### Tests for User Story 2
 
-- [ ] T017 [P] [US2] Integration test for floating list hover and filter tabs in apps/web/src/components/radar/opportunities/floating-list.test.tsx
-- [ ] T018 [P] [US2] Unit test for pin offset spiral helper in apps/web/src/components/radar/map/pin-offset.test.ts
-- [ ] T019 [P] [US2] Integration test for map pin selection and flyTo in apps/web/src/components/radar/map/map-luz-serena.test.tsx
+- [X] T017 [P] [US2] Integration test for floating list hover and filter tabs in apps/web/src/components/radar/opportunities/floating-list.test.tsx
+- [X] T018 [P] [US2] Unit test for pin offset spiral helper in apps/web/src/components/radar/map/pin-offset.test.ts
+- [X] T019 [P] [US2] Integration test for map pin selection and flyTo in apps/web/src/components/radar/map/map-luz-serena.test.tsx
 
 ### Implementation for User Story 2
 
-- [ ] T020 [P] [US2] Fork map style to Luz Serena desaturado (lino/bosque/arena/marfil + terracotta pins) in apps/web/src/components/radar/map/map-style-luz-serena.json
-- [ ] T021 [P] [US2] Implement MapLuzSerena wrapper with attributionControl false and reduced-motion guard in apps/web/src/components/radar/map/map-luz-serena.tsx
-- [ ] T022 [US2] Implement OpportunityPins layer with forest default, terracotta selected, hover ring and spiral offset in apps/web/src/components/radar/map/opportunity-pins.tsx
-- [ ] T023 [US2] Implement FloatingList sheet 320px with All|Guardadas|Descartadas tabs, max 8, aria-selected, scrollIntoView in apps/web/src/components/radar/opportunities/floating-list.tsx
-- [ ] T024 [US2] Integrate FloatingList + MapLuzSerena + Pins via ?listingId sync and hover state in apps/web/src/components/radar/radar-shell.tsx
-- [ ] T025 [US2] Add empty state (Skeleton 3 cards + Spinner role=status) and calma CTA Ajustar el radar in apps/web/src/components/radar/opportunities/floating-list.tsx
+- [X] T020 [P] [US2] Fork map style to Luz Serena desaturado (lino/bosque/arena/marfil + terracotta pins) in apps/web/src/components/radar/map/map-style-luz-serena.json
+- [X] T021 [P] [US2] Implement MapLuzSerena wrapper with attributionControl false and reduced-motion guard in apps/web/src/components/radar/map/map-luz-serena.tsx
+- [X] T022 [US2] Implement OpportunityPins layer with forest default, terracotta selected, hover ring and spiral offset in apps/web/src/components/radar/map/opportunity-pins.tsx
+- [X] T023 [US2] Implement FloatingList sheet 320px with All|Guardadas|Descartadas tabs, max 8, aria-selected, scrollIntoView in apps/web/src/components/radar/opportunities/floating-list.tsx
+- [X] T024 [US2] Integrate FloatingList + MapLuzSerena + Pins via ?listingId sync and hover state in apps/web/src/components/radar/radar-shell.tsx
+- [X] T025 [US2] Add empty state (Skeleton 3 cards + Spinner role=status) and calma CTA Ajustar el radar in apps/web/src/components/radar/opportunities/floating-list.tsx
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently — mapa+lista curada navegable
 
@@ -86,16 +86,16 @@
 
 ### Tests for User Story 3
 
-- [ ] T026 [P] [US3] Integration test for detail sheet focus and Esc handling in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.test.tsx
-- [ ] T027 [P] [US3] Unit test for signal meta display (sha256/date/unknown) in apps/web/src/lib/urban/signal-meta.test.ts
+- [X] T026 [P] [US3] Integration test for detail sheet focus and Esc handling in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.test.tsx
+- [X] T027 [P] [US3] Unit test for signal meta display (sha256/date/unknown) in apps/web/src/lib/urban/signal-meta.test.ts
 
 ### Implementation for User Story 3
 
-- [ ] T028 [P] [US3] Create OpportunityDetailSheet with hierarchy foto/por qué/concesiones/incertidumbre/señales/acciones in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.tsx
-- [ ] T029 [US3] Wire detail sheet to fetch listing + explanations + urban signals (count_300/600, distance_nearest) via lib/radar/client in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.tsx
-- [ ] T030 [US3] Implement feedback inline per concepto with soft→hard elevation and HITL confirm in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.tsx
-- [ ] T031 [US3] Highlight urban primitives on map via scheduleCategoryPaint/scheduleSelectedFeaturePaint on selection in apps/web/src/components/radar/map/map-luz-serena.tsx
-- [ ] T032 [US3] Handle signal unknown fallback with Alert "no sabemos — punto para consultar" in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.tsx
+- [X] T028 [P] [US3] Create OpportunityDetailSheet with hierarchy foto/por qué/concesiones/incertidumbre/señales/acciones in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.tsx
+- [X] T029 [US3] Wire detail sheet to fetch listing + explanations + urban signals (count_300/600, distance_nearest) via lib/radar/client in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.tsx
+- [X] T030 [US3] Implement feedback inline per concepto with soft→hard elevation and HITL confirm in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.tsx
+- [X] T031 [US3] Highlight urban primitives on map via scheduleCategoryPaint/scheduleSelectedFeaturePaint on selection in apps/web/src/components/radar/map/map-luz-serena.tsx
+- [X] T032 [US3] Handle signal unknown fallback with Alert "no sabemos — punto para consultar" in apps/web/src/components/radar/opportunities/opportunity-detail-sheet.tsx
 
 **Checkpoint**: All user stories should now be independently functional — detalle auditable con datos reales
 
@@ -107,15 +107,15 @@
 
 ### Tests for User Story 4
 
-- [ ] T033 [P] [US4] Integration test for radar-scoped chat with lazy session in apps/web/src/components/radar/chat/radar-chat-panel.test.tsx
-- [ ] T034 [P] [US4] Unit test for update_map_viewport tool validation and reduced-motion guard in apps/web/src/lib/map/motion.test.ts
+- [X] T033 [P] [US4] Integration test for radar-scoped chat with lazy session in apps/web/src/components/radar/chat/radar-chat-panel.test.tsx
+- [X] T034 [P] [US4] Unit test for update_map_viewport tool validation and reduced-motion guard in apps/web/src/lib/map/motion.test.ts
 
 ### Implementation for User Story 4
 
-- [ ] T035 [P] [US4] Create RadarChatPanel wrapper scoped to search_profile_id with resume and ai-elements blocks in apps/web/src/components/radar/chat/radar-chat-panel.tsx
-- [ ] T036 [US4] Implement update_map_viewport tool contract handling and emit map:flyTo with reason in apps/web/src/components/radar/radar-shell.tsx
-- [ ] T037 [US4] Add welcome state with descriptor + 3 chips and stream-status reasoning display in apps/web/src/components/radar/chat/radar-chat-panel.tsx
-- [ ] T038 [US4] Integrate chat → map coupling (tool does not mutate search_profile, auditable) in apps/web/src/components/radar/radar-shell.tsx
+- [X] T035 [P] [US4] Create RadarChatPanel wrapper scoped to search_profile_id with resume and ai-elements blocks in apps/web/src/components/radar/chat/radar-chat-panel.tsx
+- [X] T036 [US4] Implement update_map_viewport tool contract handling and emit map:flyTo with reason in apps/web/src/components/radar/radar-shell.tsx
+- [X] T037 [US4] Add welcome state with descriptor + 3 chips and stream-status reasoning display in apps/web/src/components/radar/chat/radar-chat-panel.tsx
+- [X] T038 [US4] Integrate chat → map coupling (tool does not mutate search_profile, auditable) in apps/web/src/components/radar/radar-shell.tsx
 
 **Checkpoint**: At this point, User Stories 1-4 should all work — shell completo navegable con chat situado
 
@@ -123,13 +123,13 @@
 
 **Purpose**: Improvements that affect multiple user stories + migration legacy + a11y perf
 
-- [ ] T039 [P] Add legacy aliases for shortlist/dismissed as ?filter saved/dismissed and Dialog for /radar/new in apps/web/src/app/(protected)/radar/[id]/page.tsx
-- [ ] T040 [P] Ensure landmarks nav[Radares]/main[Mapa de oportunidades]/aside[Conversación] + skip-link + focus management across shell in apps/web/src/components/radar/radar-shell.tsx
-- [ ] T041 [P] Apply brand constraints: terracotta never destructive, Fraunces only headings, shadcn semantic classes, zone ¼ symbol in apps/web/src/app/globals.css
-- [ ] T042 [P] Add bell mock with badge linking to /notifications legacy (no push) in apps/web/src/components/radar/radar-shell.tsx
-- [ ] T043 Extend web-foundation.spec.ts for axe 0 serious on shell light/dark and reduced-motion flyTo check in apps/web/e2e/web-foundation.spec.ts
-- [ ] T044 Run quickstart validation and ensure typecheck/lint/build pass in specs/020-shell-mapa-lista-chat/quickstart.md
-- [ ] T045 [P] Update docs/brand/visual-foundations.md with shell usage examples if needed in docs/brand/visual-foundations.md
+- [X] T039 [P] Add legacy aliases for shortlist/dismissed as ?filter saved/dismissed and Dialog for /radar/new in apps/web/src/app/(protected)/radar/[id]/page.tsx
+- [X] T040 [P] Ensure landmarks nav[Radares]/main[Mapa de oportunidades]/aside[Conversación] + skip-link + focus management across shell in apps/web/src/components/radar/radar-shell.tsx
+- [X] T041 [P] Apply brand constraints: terracotta never destructive, Fraunces only headings, shadcn semantic classes, zone ¼ symbol in apps/web/src/app/globals.css
+- [X] T042 [P] Add bell mock with badge linking to /notifications legacy (no push) in apps/web/src/components/radar/radar-shell.tsx
+- [X] T043 Extend web-foundation.spec.ts for axe 0 serious on shell light/dark and reduced-motion flyTo check in apps/web/e2e/web-foundation.spec.ts
+- [X] T044 Run quickstart validation and ensure typecheck/lint/build pass in specs/020-shell-mapa-lista-chat/quickstart.md
+- [X] T045 [P] Update docs/brand/visual-foundations.md with shell usage examples if needed in docs/brand/visual-foundations.md
 
 ## Dependencies & Execution Order
 
@@ -218,4 +218,5 @@ With multiple developers:
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
 - Constitution: radar truth persistent, matching deterministic, tools explicit, data lineage preserved, scope minimal verificable
+
 

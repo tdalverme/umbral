@@ -13,6 +13,7 @@ import { RadarMap, matchPoints } from "@/components/radar/map";
 import { FeedbackActions } from "@/components/radar/feedback-actions";
 import { ProposalBanner } from "@/components/radar/proposal-banner";
 import { UpdateProposalBanner } from "@/components/radar/update-proposal-banner";
+import { RadarShell } from "@/components/radar/radar-shell";
 import { radarApi, type Explanation, type FeedbackEventType, type MatchItem, type SearchProfile } from "@/lib/radar/client";
 import { emitExplanationViewed, emitImpression } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
@@ -301,71 +302,10 @@ export default function RadarViewPage(): React.ReactElement {
       )}
 
       {runState === "succeeded" && items.length > 0 && (
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-          <ul className="space-y-3">
-            {items.map((item) => {
-              const explanation = explanations[item.listing_id];
-              return (
-                <li key={item.item_id}>
-                  <Link
-                    href={`/listings/${item.listing_id}?profile=${profileId}&run=${runId ?? ""}`}
-                    onClick={() => {
-                      setSelectedListingId(item.listing_id);
-                      if (explanation) {
-                        emitExplanationViewed(profileId, explanation.run_id, item.listing_id, explanation.score_version);
-                      }
-                    }}
-                  >
-                    <Card className="transition-colors hover:border-ring" data-testid="match-card">
-                      <CardContent className="flex items-center justify-between gap-4 py-4">
-                        <div>
-                          <p className="font-medium">
-                            {item.neighborhood ?? "Barrio no declarado"} · $
-                            {Number(item.total_cost ?? 0).toLocaleString("es-AR")}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {item.surface_m2 !== null ? `${item.surface_m2} m²` : "superficie no declarada"} ·{" "}
-                            {item.rooms !== null ? `${item.rooms} ambientes` : "ambientes no declarados"} ·{" "}
-                            {item.source_id ?? "fuente no declarada"}
-                          </p>
-                          {explanation && <ReasonsStrip explanation={explanation} />}
-                        </div>
-                        <span className="rounded-md bg-muted px-2 py-1 text-sm font-medium">
-                          Score {item.score.toFixed(2)}
-                          {explanation ? ` · confianza ${explanation.confidence.toFixed(2)}` : ""}
-                        </span>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                  <div className="mt-2 pl-1">
-                    <FeedbackActions
-                      profileId={profileId}
-                      listingId={item.listing_id}
-                      runId={runId}
-                      initialDecisionState={decisionStates[item.listing_id]}
-                      onStateChange={(state) =>
-                        setDecisionStates((current) => ({ ...current, [item.listing_id]: state }))
-                      }
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="sticky top-4 h-[420px]">
-            <RadarMap
-              points={matchPoints(items)}
-              selectedListingId={selectedListingId}
-              onSelect={setSelectedListingId}
-            />
-            <p className="mt-2 text-xs text-muted-foreground">
-              Solo se muestran puntos con precisión geográfica autorizada; el resto aparece solo en la lista.
-            </p>
-          </div>
-        </div>
+        <RadarShell radars={profile ? [profile] : []} selectedRadarId={profileId} matches={items.slice(0, 8)} />
       )}
 
-      {nextAfter !== null && (
+      {runState === "succeeded" && items.length > 0 && nextAfter !== null && (
         <div className="mt-6 flex justify-center">
           <Button className="bg-muted text-foreground hover:bg-muted/80" onClick={() => void loadMore()}>
             Cargar más
@@ -373,12 +313,14 @@ export default function RadarViewPage(): React.ReactElement {
         </div>
       )}
 
-      <section className="mt-6" aria-label="Chat con Umbral">
-        <ChatPanel
-          profileId={profileId}
-          onDecisionApplied={() => setReloadKey((current) => current + 1)}
-        />
-      </section>
+      {runState !== "succeeded" && (
+        <section className="mt-6" aria-label="Chat con Umbral">
+          <ChatPanel
+            profileId={profileId}
+            onDecisionApplied={() => setReloadKey((current) => current + 1)}
+          />
+        </section>
+      )}
     </main>
   );
 }

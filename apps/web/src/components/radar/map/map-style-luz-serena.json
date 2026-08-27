@@ -1,0 +1,22 @@
+{
+  "version": 8,
+  "name": "Umbral Luz serena",
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      "tileSize": 256,
+      "attribution": "© OpenStreetMap contributors"
+    },
+    "opportunities": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "urban-features": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } }
+  },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "#F4EFE6" } },
+    { "id": "osm", "type": "raster", "source": "osm", "paint": { "raster-opacity": 0.92 } },
+    { "id": "urban-lines", "type": "line", "source": "urban-features", "filter": ["==", ["get", "kind"], "linear"], "paint": { "line-color": "#293F38", "line-width": 2, "line-opacity": 0.55 } },
+    { "id": "urban-points", "type": "circle", "source": "urban-features", "filter": ["==", ["get", "kind"], "poi"], "paint": { "circle-color": "#D9C59F", "circle-radius": 6, "circle-stroke-color": "#FFFAF2", "circle-stroke-width": 1.2, "circle-opacity": 0.9 } },
+    { "id": "opportunity-points", "type": "circle", "source": "opportunities", "paint": { "circle-color": "#293F38", "circle-radius": 7, "circle-stroke-color": "#FFFAF2", "circle-stroke-width": 1.5 } },
+    { "id": "opportunity-selected", "type": "circle", "source": "opportunities", "filter": ["==", ["get", "id"], ""], "paint": { "circle-color": "#DE6D4A", "circle-radius": 10, "circle-stroke-color": "#FFFAF2", "circle-stroke-width": 2 } }
+  ]
+}
