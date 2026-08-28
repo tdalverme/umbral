@@ -366,6 +366,63 @@ def test_built_graph_v3_llm_preference_without_proposal_id_skips_hitl() -> None:
     assert reply["text"] == "Listo, agregue la preferencia de luminosidad."
 
 
+def test_built_graph_v3_recovers_soft_preference_phrase_without_parameters() -> None:
+    calls: list[Mapping[str, object]] = []
+
+    def propose_preference(_ctx, args):
+        calls.append(dict(args))
+        return {
+            "outcome": "proposed",
+            "preserved": False,
+            "kind": "structured",
+            "concept_key": "luminosidad",
+            "polarity": "positive",
+            "proposal_id": None,
+            "expires_at": None,
+        }
+
+    graph = _build(
+        {
+            "intent": "refinamiento",
+            "parameters": [],
+            "high_impact_missing": [],
+            "allowed_tools": ["propose_search_preference_update"],
+        },
+        gateway=_Gateway(
+            [
+                {"reply_text": "", "refs": [], "tool_calls": []},
+                {
+                    "reply_text": "Listo, registré tu preferencia de luminosidad.",
+                    "refs": [],
+                    "tool_calls": [],
+                },
+            ]
+        ),
+        implementations={
+            "propose_search_preference_update": propose_preference,
+        },
+    )
+    run_id = UUID(int=17)
+    config = {"configurable": {"thread_id": str(run_id)}}
+
+    interrupted: list[object] = []
+    for chunk in graph.compiled.stream(
+        _run_state(run_id, "prefiero deptos luminosos"),
+        config,
+        stream_mode="updates",
+    ):
+        value = _interrupt_value(chunk)
+        if value is not None:
+            interrupted.append(value)
+
+    assert interrupted == []
+    assert calls == [{"preference": "prefiero deptos luminosos"}]
+    final = graph.compiled.get_state(config).values
+    reply = final["context"].get("generated_reply")
+    assert isinstance(reply, Mapping)
+    assert reply["text"] == "Listo, registré tu preferencia de luminosidad."
+
+
 def test_built_graph_v3_injects_idempotency_key_for_feedback() -> None:
     received: dict[str, object] = {}
 

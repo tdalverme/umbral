@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { MessageItem } from "@/components/chat/message-item";
+import { ProposalCard } from "@/components/chat/proposal-card";
 import type { ChatMessageDto, ProposalDecision } from "@/lib/chat/types";
 
 interface MessageListProps {
@@ -28,12 +29,16 @@ export function MessageList({
 }: MessageListProps): React.ReactElement {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
+  const [showJump, setShowJump] = useState(false);
 
   useEffect(() => {
     if (stickToBottom.current && scrollerRef.current) {
       scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
+      setShowJump(false);
+    } else if (messages.length > 0) {
+      setShowJump(true);
     }
-  }, [messages]);
+  }, [messages, pendingDecision]);
 
   return (
     <div className="flex h-full flex-col">
@@ -42,8 +47,9 @@ export function MessageList({
         className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-2"
         onScroll={(event) => {
           const target = event.currentTarget;
-          stickToBottom.current =
-            target.scrollHeight - target.scrollTop - target.clientHeight < 40;
+          const atBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 40;
+          stickToBottom.current = atBottom;
+          setShowJump(!atBottom && messages.length > 0);
         }}
       >
         {messages.length === 0 ? (
@@ -57,21 +63,30 @@ export function MessageList({
               message={message}
               profileId={profileId}
               runId={runId}
-              pendingDecision={pendingDecision}
-              onDecision={onDecision}
-              busy={busy}
               onFeedback={onFeedback}
             />
           ))
         )}
+        {pendingDecision && (
+          <div className="flex justify-start" data-testid="pending-decision-message">
+            <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+              <ProposalCard
+                decision={pendingDecision}
+                onDecision={onDecision}
+                busy={busy}
+              />
+            </div>
+          </div>
+        )}
       </div>
-      {messages.length > 0 && (
+      {showJump && (
         <div className="flex justify-end">
           <Button
             className="h-7 px-2 text-xs"
             aria-label="Ir a lo más reciente"
             onClick={() => {
               stickToBottom.current = true;
+              setShowJump(false);
               if (scrollerRef.current) scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
             }}
           >

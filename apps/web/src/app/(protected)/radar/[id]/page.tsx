@@ -23,6 +23,17 @@ const POLL_INTERVAL_MS = 3000;
 const LEGACY_SCORE_POLICY = "scoring-baseline-v1";
 const EVIDENCE_LABEL: Record<string, string> = { strong: "fuerte", medium: "media", low: "baja" };
 
+function humanizeError(code: string): string {
+  if (code.startsWith("http.401") || code === "unauthorized") return "No autorizado — iniciá sesión de nuevo.";
+  if (code.startsWith("http.403")) return "Sin permiso para este radar.";
+  if (code.startsWith("http.404") || code === "radar.error") return "Radar no encontrado.";
+  if (code.startsWith("http.429")) return "Demasiadas solicitudes — probá de nuevo en unos segundos.";
+  if (code.startsWith("http.5")) return "Error del servidor — reintentá o contactá soporte si persiste.";
+  if (code === "explanation_unavailable") return "Explicación no disponible para este run.";
+  if (code === "network_error" || code.includes("Failed to fetch")) return "Sin conexión — revisá tu red y reintentá.";
+  return code;
+}
+
 function EvidenceBadge({ level }: { level: "strong" | "medium" | "low" }): React.ReactElement {
   return (
     <span
@@ -60,6 +71,7 @@ export default function RadarViewPage(): React.ReactElement {
   const isMock = process.env.NEXT_PUBLIC_USE_MOCKS === "1";
 
   const [profile, setProfile] = useState<SearchProfile | null>(null);
+  const [allRadars, setAllRadars] = useState<SearchProfile[]>([]);
   const [items, setItems] = useState<MatchItem[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
   const [runState, setRunState] = useState<string | null>(null);
@@ -77,6 +89,7 @@ export default function RadarViewPage(): React.ReactElement {
       import("@/lib/radar/mock-shell-data").then(({ MOCK_PROFILES, MOCK_MATCHES }) => {
         const found = MOCK_PROFILES.find((p) => p.search_profile_id === profileId) ?? MOCK_PROFILES[0];
         setProfile(found);
+        setAllRadars(MOCK_PROFILES);
         setRunState("succeeded");
         setRunId(found.latest_run?.run_id ?? "run-preview-1");
         setLegacyRun(false);
@@ -98,6 +111,10 @@ export default function RadarViewPage(): React.ReactElement {
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : "radar.error");
       });
+    radarApi
+      .listProfiles()
+      .then((profiles) => setAllRadars(profiles))
+      .catch(() => {});
   }, [profileId, reloadKey, isMock]);
 
   const loadExplanations = useCallback(
@@ -195,6 +212,26 @@ export default function RadarViewPage(): React.ReactElement {
     }
   }
 
+  const generating = runState === "pending" || runState === "running";
+  const isMapView = runState === "succeeded" && items.length > 0;
+
+  // Ocultar footer global y evitar scroll del body en vista mapa — debe estar antes de cualquier early return (Rules of Hooks)
+  useEffect(() => {
+    if (!isMapView) return;
+    const footer = document.querySelector('footer[data-slot="global-attribution"]') as HTMLElement | null;
+    const prevDisplay = footer?.style.display ?? "";
+    const prevOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    if (footer) footer.style.display = "none";
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      if (footer) footer.style.display = prevDisplay;
+      document.body.style.overflow = prevOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+    };
+  }, [isMapView]);
+
   const loading = profile === null;
 
   if (loading) {
@@ -211,10 +248,11 @@ export default function RadarViewPage(): React.ReactElement {
     return (
       <main className="mx-auto w-full max-w-5xl px-6 py-16" id="main-content">
         <Alert role="alert">
-          No se pudo cargar el radar ({error}).{" "}
+          {humanizeError(error)}{" "}
           <Link href="/radar" className="underline">
             Volver a mis radares
           </Link>
+          <span className="ml-2 text-xs text-muted-foreground">({error})</span>
         </Alert>
       </main>
     );
@@ -228,51 +266,101 @@ export default function RadarViewPage(): React.ReactElement {
     );
   }
 
-  const generating = runState === "pending" || runState === "running";
-
+  if (isMapView) {
+    const headerNode = (
+      <div className="flex flex-col">
+        <div className="flex items-center gap-3 px-4 py-2">
+          <h1 className="truncate text-sm font-semibold tracking-tight">{profile.name}</h1>
+          <p className="hidden truncate text-xs text-muted-foreground sm:block">
+            {profile.zones.length > 0 ? profile.zones.map(neighborhoodLabel).join(", ") : "Sin zonas"} · hasta ${profile.budget_max.toLocaleString("es-AR")} · {profile.min_rooms || "sin"} amb
+            <span className="ml-2 hidden text-muted-foreground/60 sm:inline">· {profile.status === "active" ? "activo" : profile.status === "paused" ? "pausado" : "archivado"}</span>
+          </p>
+          <span className="ml-auto hidden text-xs text-muted-foreground sm:block">{items.length} oportunidades</span>
+        </div>
+        {legacyRun && !generating && (
+          <div className="border-t border-border/60 bg-card px-4 py-1">
+            <p className="text-xs text-muted-foreground">La explicación no está disponible para este run. Se regenerará con razones completas.</p>
+          </div>
+        )}
+        {!isMock && (
+          <>
+            <ProposalBanner profileId={profileId} onDecision={() => setReloadKey((c) => c + 1)} />
+            <UpdateProposalBanner profileId={profileId} onDecision={() => setReloadKey((c) => c + 1)} />
+          </>
+        )}
+      </div>
+    );
+    return (
+      <main data-fullscreen="true" className="flex h-[100dvh] w-full max-w-none overflow-hidden bg-background" id="main-content">
+        <RadarShell
+          header={headerNode}
+          radars={allRadars.length ? allRadars : profile ? [profile] : []}
+          selectedRadarId={profileId}
+          matches={items}
+          explanations={explanations}
+        />
+        {error && (
+          <div className="pointer-events-none fixed left-[280px] top-[41px] z-20 max-w-xl px-4 sm:left-[296px]">
+            <Alert role="alert" className="pointer-events-auto py-2 shadow-md">
+              <span className="text-sm">{humanizeError(error)}</span>{" "}
+              <Button className="ml-2 h-7 px-2.5 text-xs bg-muted text-foreground hover:bg-muted/80" onClick={() => setReloadKey((c) => c + 1)}>
+                Reintentar
+              </Button>
+            </Alert>
+          </div>
+        )}
+        {nextAfter !== null && (
+          <div className="fixed bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border bg-card px-2 py-1 shadow-md">
+            <Button className="h-7 bg-muted px-3 text-xs text-foreground hover:bg-muted/80" onClick={() => void loadMore()}>
+              Cargar más
+            </Button>
+          </div>
+        )}
+      </main>
+    );
+  }
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-16" id="main-content">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-semibold tracking-tight">{profile.name}</h1>
-          <p className="text-muted-foreground">
-            {profile.zones.map(neighborhoodLabel).join(", ")} · hasta ${profile.budget_max.toLocaleString("es-AR")} ·{" "}
-            {profile.min_rooms || "sin"} ambientes
+    <main className="mx-auto w-full max-w-5xl px-4 py-4 sm:px-6" id="main-content">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">{profile.name}</h1>
+          <p className="break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
+            {profile.zones.length > 0 ? profile.zones.map(neighborhoodLabel).join(", ") : "Sin zonas"} · hasta ${profile.budget_max.toLocaleString("es-AR")} · {profile.min_rooms || "sin"} amb
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {profile.status === "active" && (
-            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80" onClick={() => void changeStatus("paused")}>
+            <Button className="h-7 px-2.5 text-xs bg-muted text-foreground hover:bg-muted/80" onClick={() => void changeStatus("paused")}>
               Pausar
             </Button>
           )}
           {profile.status === "paused" && (
-            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80" onClick={() => void changeStatus("active")}>
+            <Button className="h-7 px-2.5 text-xs bg-muted text-foreground hover:bg-muted/80" onClick={() => void changeStatus("active")}>
               Reanudar
             </Button>
           )}
           {profile.status !== "archived" && (
-            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80" onClick={() => void changeStatus("archived")}>
+            <Button className="h-7 px-2.5 text-xs bg-muted text-foreground hover:bg-muted/80" onClick={() => void changeStatus("archived")}>
               Archivar
             </Button>
           )}
           <Link href={`/radar/${profileId}/compare`}>
-            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80">Comparar</Button>
+            <Button className="h-7 px-2.5 text-xs bg-muted text-foreground hover:bg-muted/80">Comparar</Button>
           </Link>
           <Link href={`/radar/${profileId}/shortlist`}>
-            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80">Guardados</Button>
+            <Button className="h-7 px-2.5 text-xs bg-muted text-foreground hover:bg-muted/80">Guardados</Button>
           </Link>
           <Link href={`/radar/${profileId}/dismissed`}>
-            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80">Descartados</Button>
+            <Button className="h-7 px-2.5 text-xs bg-muted text-foreground hover:bg-muted/80">Descartados</Button>
           </Link>
         </div>
       </div>
 
       {error && (
-        <Alert role="alert">
-          Ocurrió un error ({error}).{" "}
+        <Alert role="alert" className="py-2">
+          <span className="text-sm">{humanizeError(error)}</span>{" "}
           <Button
-            className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80"
+            className="ml-2 h-7 px-2.5 text-xs bg-muted text-foreground hover:bg-muted/80"
             onClick={() => setReloadKey((current) => current + 1)}
           >
             Reintentar
@@ -281,20 +369,19 @@ export default function RadarViewPage(): React.ReactElement {
       )}
 
       {generating && (
-        <div className="mb-4 flex items-center gap-2 text-muted-foreground" role="status">
+        <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground" role="status">
           <Spinner /> Generando resultados…
         </div>
       )}
 
       {legacyRun && !generating && (
-        <Alert role="status">
-          La explicación no está disponible para este run. Los resultados se generarán con razones completas en el próximo
-          run.
+        <Alert role="status" className="py-2 text-sm">
+          La explicación no está disponible para este run. Se regenerará con razones completas.
         </Alert>
       )}
 
-      <ProposalBanner profileId={profileId} onDecision={() => setReloadKey((current) => current + 1)} />
-      <UpdateProposalBanner profileId={profileId} onDecision={() => setReloadKey((current) => current + 1)} />
+      {!isMock && <ProposalBanner profileId={profileId} onDecision={() => setReloadKey((current) => current + 1)} />}
+      {!isMock && <UpdateProposalBanner profileId={profileId} onDecision={() => setReloadKey((current) => current + 1)} />}
 
       {!generating && runState === "failed" && (
         <Alert role="alert">
@@ -314,18 +401,6 @@ export default function RadarViewPage(): React.ReactElement {
             </p>
           </CardContent>
         </Card>
-      )}
-
-      {runState === "succeeded" && items.length > 0 && (
-        <RadarShell radars={profile ? [profile] : []} selectedRadarId={profileId} matches={items.slice(0, 8)} />
-      )}
-
-      {runState === "succeeded" && items.length > 0 && nextAfter !== null && (
-        <div className="mt-6 flex justify-center">
-          <Button className="bg-muted text-foreground hover:bg-muted/80" onClick={() => void loadMore()}>
-            Cargar más
-          </Button>
-        </div>
       )}
 
       {runState !== "succeeded" && (

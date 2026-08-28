@@ -27,7 +27,7 @@ from umbral.agent.intent.clarification import (
 from umbral.agent.intent.clarification import (
     decide as decide_clarification,
 )
-from umbral.agent.intent.compiler import IntentCompiler
+from umbral.agent.intent.compiler import IntentCompiler, has_soft_preference_marker
 from umbral.agent.intent.policy import validate_tool_calls
 from umbral.agent.state import (
     STATE_SCHEMA_VERSION,
@@ -2283,6 +2283,17 @@ def _fallback_tool_calls(
                         "args": {"preference": phrase},
                     }
                 ]
+
+    if (
+        "propose_search_preference_update" in allowed
+        and has_soft_preference_marker(message_text)
+    ):
+        return [
+            {
+                "tool": "propose_search_preference_update",
+                "args": {"preference": message_text.strip()},
+            }
+        ]
 
     change: dict[str, str] = {}
     for item in parameters:

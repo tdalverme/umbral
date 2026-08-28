@@ -138,6 +138,7 @@ def build_production_agent_stack(
         events_registry=events_registry,
         ttl_hours=settings.agent_proposal_ttl_hours,
         clock=clock,
+        waiting_runs=runs,
     )
     if settings.agent_model_provider == "managed" and settings.agent_managed_endpoint:
         gateway: ModelGateway = ManagedModelGateway(
@@ -266,6 +267,7 @@ def build_production_copilot_stack(
         events_registry=events_registry,
         ttl_hours=settings.agent_proposal_ttl_hours,
         clock=clock,
+        waiting_runs=runs,
     )
     if settings.agent_model_provider == "managed" and settings.agent_managed_endpoint:
         gateway: ModelGateway = ManagedModelGateway(
@@ -452,6 +454,7 @@ def build_production_v5_stack(
         events_registry=events_registry,
         ttl_hours=settings.agent_proposal_ttl_hours,
         clock=clock,
+        waiting_runs=runs,
     )
     if settings.agent_model_provider == "managed" and settings.agent_managed_endpoint:
         gateway: ModelGateway = ManagedModelGateway(

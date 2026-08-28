@@ -14,6 +14,13 @@ interface UpdateProposalBannerProps {
 
 /** Shows pending agent profile changes with the SAME decision surface as the
  * chat (FR-033, R-09). */
+function humanizeUpdateError(code: string): string {
+  if (code.startsWith("http.5")) return "No se pudo cargar cambios del chat — reintentá.";
+  if (code.startsWith("http.4")) return "No se pudo cargar cambios.";
+  if (code.includes("Failed to fetch")) return "Sin conexión.";
+  return code;
+}
+
 export function UpdateProposalBanner({
   profileId,
   onDecision,
@@ -63,7 +70,7 @@ export function UpdateProposalBanner({
   }
 
   return (
-    <Alert role="status" data-testid="update-proposal-banner">
+    <Alert role="status" data-testid="update-proposal-banner" className="py-2">
       {proposal && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm">
@@ -73,14 +80,14 @@ export function UpdateProposalBanner({
           </p>
           <div className="flex gap-2">
             <Button
-              className="min-h-8 bg-foreground px-3 text-xs text-background hover:bg-foreground/90"
+              className="min-h-9 bg-foreground px-3 py-2 text-xs text-background hover:bg-foreground/90"
               disabled={busy || !proposal.waiting_run_id}
               onClick={() => void act({ kind: "approve", idempotency_key: `banner-${crypto.randomUUID()}` })}
             >
               Aprobar
             </Button>
             <Button
-              className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80"
+              className="min-h-9 bg-muted px-3 py-2 text-xs text-foreground hover:bg-muted/80"
               disabled={busy || !proposal.waiting_run_id}
               onClick={() => void act({ kind: "reject", reason: "desde el radar", idempotency_key: `banner-${crypto.randomUUID()}` })}
             >
@@ -91,7 +98,7 @@ export function UpdateProposalBanner({
       )}
       {error && (
         <span className="text-xs text-destructive" role="alert">
-          {error}
+          {humanizeUpdateError(error)}
         </span>
       )}
     </Alert>

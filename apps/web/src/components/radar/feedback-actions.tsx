@@ -110,7 +110,7 @@ export function FeedbackActions({
         <Button
           key={action}
           type="button"
-          className={`min-h-8 px-3 text-xs ${
+          className={`min-h-9 px-3 py-2 text-xs ${
             decision === action
               ? "bg-foreground text-background hover:bg-foreground/90"
               : "bg-muted text-foreground hover:bg-muted/80"
@@ -141,7 +141,7 @@ export function FeedbackActions({
               </span>
             </span>
           ))}
-          <Button type="button" className="min-h-8 px-3 text-xs" disabled={pending !== null} onClick={() => void record(picking)}>
+          <Button type="button" className="min-h-9 px-3 py-2 text-xs" disabled={pending !== null} onClick={() => void record(picking)}>
             Confirmar razón
           </Button>
           {freeFeedbackEnabled && (

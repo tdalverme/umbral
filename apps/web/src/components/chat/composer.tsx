@@ -10,7 +10,7 @@ interface ComposerProps {
   onSend: (text: string) => void;
 }
 
-const BLOCKING: StreamStatus[] = ["sending", "running", "resuming", "waiting_decision"];
+const BLOCKING: StreamStatus[] = ["sending", "running", "resuming"];
 
 /** Chat composer: Enter sends, Shift+Enter adds a new line (FR-028). */
 export function Composer({ status, onSend }: ComposerProps): React.ReactElement {

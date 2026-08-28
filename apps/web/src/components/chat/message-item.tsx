@@ -1,16 +1,12 @@
 "use client";
 
 import { MiniCard } from "@/components/chat/mini-card";
-import { ProposalCard } from "@/components/chat/proposal-card";
-import type { ChatMessageDto, ProposalDecision } from "@/lib/chat/types";
+import type { ChatMessageDto } from "@/lib/chat/types";
 
 interface MessageItemProps {
   message: ChatMessageDto;
   profileId: string;
   runId: string | null;
-  pendingDecision: ProposalDecision | null;
-  onDecision: (decision: Record<string, unknown>) => void;
-  busy: boolean;
   onFeedback?: (text: string) => void;
 }
 
@@ -48,14 +44,11 @@ function RefList({
   );
 }
 
-/** A single chat bubble per role; renders refs and the pending decision (FR-031). */
+/** A single chat bubble per role; renders its references (FR-031). */
 export function MessageItem({
   message,
   profileId,
   runId,
-  pendingDecision,
-  onDecision,
-  busy,
   onFeedback,
 }: MessageItemProps): React.ReactElement {
   const isUser = message.role === "user";
@@ -73,9 +66,6 @@ export function MessageItem({
         <p aria-live={isDraft ? "polite" : "off"}>{text}</p>
         {!isUser && refs.length > 0 && (
           <RefList refs={refs} profileId={profileId} runId={runId} onFeedback={onFeedback} />
-        )}
-        {!isUser && pendingDecision && (
-          <ProposalCard decision={pendingDecision} onDecision={onDecision} busy={busy} />
         )}
       </div>
     </div>

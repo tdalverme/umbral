@@ -54,24 +54,24 @@ export function MiniCard({
 
   return (
     <Card data-testid="mini-card" className="border-border/60 p-2">
-      <p className="text-xs text-muted-foreground">Listing en tu radar</p>
+      <p className="text-xs text-muted-foreground">Oportunidad de tu radar</p>
       <Link
         href={`/listings/${listingId}?${query.toString()}`}
         className="text-sm font-medium underline-offset-4 hover:underline"
-        aria-label={`Ver detalle del listing ${listingId.slice(0, 8)}`}
+        aria-label={`Ver ficha del depto ${listingId.slice(0, 8)} en tu radar`}
       >
-        Ver detalle #{listingId.slice(0, 8)}
+        Ver ficha
       </Link>
       {onFeedback && mode === null && (
         <div className="mt-2 flex gap-2">
           <Button
-            className="h-6 px-2 text-xs"
+            className="min-h-9 px-3 py-2 text-xs"
             onClick={() => setMode("like")}
           >
             Me gusta
           </Button>
           <Button
-            className="h-6 px-2 text-xs"
+            className="min-h-9 px-3 py-2 text-xs"
             onClick={() => setMode("dislike")}
           >
             No me gusta
@@ -79,11 +79,11 @@ export function MiniCard({
         </div>
       )}
       {onFeedback && mode !== null && (
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {(mode === "dislike" ? DISLIKE_REASONS : LIKE_REASONS).map((reason) => (
             <Button
               key={reason.key}
-              className="h-6 border border-border bg-background px-2 text-xs text-foreground hover:bg-muted"
+              className="min-h-9 border border-border bg-background px-3 py-2 text-xs text-foreground hover:bg-muted"
               onClick={() => send(reason.label)}
             >
               {reason.label}

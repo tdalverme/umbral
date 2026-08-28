@@ -6,7 +6,7 @@ import { MiniCard } from "@/components/chat/mini-card";
 describe("MiniCard", () => {
   it("enlaza al detalle del listing con el contexto del radar", () => {
     render(<MiniCard listingId="abc-123" profileId="prof-1" runId="run-1" />);
-    const link = screen.getByRole("link", { name: /ver detalle/i });
+    const link = screen.getByRole("link", { name: /ver ficha/i });
     expect(link).toHaveAttribute("href", "/listings/abc-123?profile=prof-1&run=run-1");
   });
 });

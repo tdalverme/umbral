@@ -11,6 +11,13 @@ interface ProposalBannerProps {
   onDecision?: () => void;
 }
 
+function humanizeBannerError(code: string): string {
+  if (code.startsWith("http.5")) return "No se pudo cargar propuestas — reintentá.";
+  if (code.startsWith("http.4")) return "No se pudo cargar propuestas.";
+  if (code.includes("Failed to fetch")) return "Sin conexión.";
+  return code;
+}
+
 export function ProposalBanner({ profileId, onDecision }: ProposalBannerProps): React.ReactElement | null {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [busy, setBusy] = useState(false);
@@ -61,7 +68,7 @@ export function ProposalBanner({ profileId, onDecision }: ProposalBannerProps): 
 
   const proposal = proposals[0];
   return (
-    <Alert role="status" data-testid="proposal-banner">
+    <Alert role="status" data-testid="proposal-banner" className="py-2">
       {proposal && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm">
@@ -74,13 +81,13 @@ export function ProposalBanner({ profileId, onDecision }: ProposalBannerProps): 
           </p>
           <div className="flex gap-2">
             <Button
-              className="min-h-8 bg-foreground px-3 text-xs text-background hover:bg-foreground/90"
+              className="min-h-9 bg-foreground px-3 py-2 text-xs text-background hover:bg-foreground/90"
               disabled={busy}
               onClick={() => void confirm(proposal.proposal_id)}
             >
               Confirmar
             </Button>
-            <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80" disabled={busy} onClick={() => void reject(proposal.proposal_id)}>
+            <Button className="min-h-9 bg-muted px-3 py-2 text-xs text-foreground hover:bg-muted/80" disabled={busy} onClick={() => void reject(proposal.proposal_id)}>
               Descartar
             </Button>
           </div>
@@ -88,7 +95,7 @@ export function ProposalBanner({ profileId, onDecision }: ProposalBannerProps): 
       )}
       {error && (
         <span className="text-xs text-destructive" role="alert">
-          {error}
+          {humanizeBannerError(error)}
         </span>
       )}
     </Alert>

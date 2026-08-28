@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
+from types import SimpleNamespace
 
+import pytest
+from sqlalchemy.orm import Session
+
+from umbral.infrastructure.agent import production
 from umbral.infrastructure.agent.production import (
     _require_v5_activation,
     build_production_copilot_stack,
@@ -77,3 +81,43 @@ def test_default_release_keeps_the_v4_path() -> None:
     builder = select_production_conversation_builder(_settings("graph-release-001"))
 
     assert builder is build_production_copilot_stack
+
+
+def test_v3_stack_wires_pending_proposals_to_graph_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    graph_runs = object()
+
+    class _Proposals:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    def build_runs(_session_factory: object) -> object:
+        return graph_runs
+
+    def build_saver(*_args: object, **_kwargs: object) -> object:
+        return object()
+
+    def build_graph(**_kwargs: object) -> object:
+        return SimpleNamespace(deps=SimpleNamespace(sinks=SimpleNamespace()))
+
+    def session_factory() -> Session:
+        raise AssertionError("session factory should not be called")
+
+    monkeypatch.setattr(production, "SearchProfileUpdateProposals", _Proposals)
+    monkeypatch.setattr(production, "SqlAlchemyGraphRunRepository", build_runs)
+    monkeypatch.setattr(production, "create_postgres_saver", build_saver)
+    monkeypatch.setattr(production, "build_topology_v3", build_graph)
+
+    production.build_production_agent_stack(
+        settings=_settings("graph-release-001"),
+        session_factory=session_factory,
+        database_url="postgresql://u:p@127.0.0.1/db",
+        radar=object(),
+        scoring=object(),
+        feedback=object(),
+        criteria=object(),
+    )
+
+    assert captured["waiting_runs"] is graph_runs

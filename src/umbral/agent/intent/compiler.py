@@ -242,7 +242,7 @@ class IntentCompiler:
         )
         if intent == "refinamiento" and "zona" in missing:
             parameter_keys = {item.key for item in parameters}
-            if "preferencia" in parameter_keys or _has_soft_preference_marker(
+            if "preferencia" in parameter_keys or has_soft_preference_marker(
                 message_text
             ):
                 missing = tuple(item for item in missing if item != "zona")
@@ -277,7 +277,7 @@ def _number(value: object, default: float) -> float:
     return default
 
 
-def _has_soft_preference_marker(message_text: str) -> bool:
+def has_soft_preference_marker(message_text: str) -> bool:
     decomposed = unicodedata.normalize("NFD", message_text.casefold())
     without_marks = "".join(
         char for char in decomposed if unicodedata.category(char) != "Mn"

@@ -23,8 +23,9 @@ describe("Composer", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("se deshabilita mientras espera una decisión", () => {
+  it("permite seguir escribiendo mientras espera una decisión", () => {
     render(<Composer status="waiting_decision" onSend={vi.fn()} />);
-    expect(screen.getByLabelText(/escribile a umbral/i)).toBeDisabled();
+    expect(screen.getByLabelText(/escribile a umbral/i)).not.toBeDisabled();
+    expect(screen.getByLabelText(/escribile a umbral/i)).toHaveAttribute("placeholder", "Escribile a Umbral…");
   });
 });
