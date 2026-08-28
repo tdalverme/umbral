@@ -143,6 +143,42 @@ export default function RadarViewPage(): React.ReactElement {
       radarApi
         .matches(profileId, run, PAGE_SIZE, null)
         .then((page) => {
+          // Si el run pedido está aún pending/failed y no trae items, fallback al último succeeded para no dejar el mapa vacío
+          if (page.run_state !== "succeeded" && page.items.length === 0 && run !== null) {
+            radarApi
+              .matches(profileId, null, PAGE_SIZE, null)
+              .then((fallback) => {
+                if (fallback.items.length > 0) {
+                  setItems(fallback.items);
+                  setNextAfter(fallback.next_after_position);
+                  const states: Record<string, FeedbackEventType | null> = {};
+                  for (const item of fallback.items) states[item.listing_id] = item.decision_state ?? null;
+                  setDecisionStates(states);
+                  if (fallback.run_state === "succeeded") loadExplanations(fallback.run_id);
+                  fallback.items.forEach((item) => {
+                    const key = `${fallback.run_id}:${item.listing_id}`;
+                    if (!emittedRef.current.has(key)) {
+                      emittedRef.current.add(key);
+                      emitImpression(profileId, fallback.run_id, item.listing_id);
+                    }
+                  });
+                } else {
+                  setItems(page.items);
+                  setNextAfter(page.next_after_position);
+                }
+                setRunId(page.run_id);
+                setRunState(page.run_state);
+                setError(null);
+              })
+              .catch(() => {
+                setItems(page.items);
+                setRunId(page.run_id);
+                setRunState(page.run_state);
+                setNextAfter(page.next_after_position);
+                setError(null);
+              });
+            return;
+          }
           setItems(page.items);
           setRunId(page.run_id);
           setRunState(page.run_state);
@@ -213,7 +249,7 @@ export default function RadarViewPage(): React.ReactElement {
   }
 
   const generating = runState === "pending" || runState === "running";
-  const isMapView = runState === "succeeded" && items.length > 0;
+  const isMapView = items.length > 0;
 
   // Ocultar footer global y evitar scroll del body en vista mapa — debe estar antes de cualquier early return (Rules of Hooks)
   useEffect(() => {
@@ -287,6 +323,18 @@ export default function RadarViewPage(): React.ReactElement {
             <ProposalBanner profileId={profileId} onDecision={() => setReloadKey((c) => c + 1)} />
             <UpdateProposalBanner profileId={profileId} onDecision={() => setReloadKey((c) => c + 1)} />
           </>
+        )}
+        {generating && (
+          <div className="border-t border-border/60 bg-amber-50 px-4 py-1.5">
+            <p className="flex items-center gap-1.5 text-xs text-amber-800">
+              <Spinner className="size-3" /> Actualizando resultados… se muestran los anteriores
+            </p>
+          </div>
+        )}
+        {runState === "failed" && !generating && (
+          <div className="border-t border-amber-200 bg-amber-50 px-4 py-1.5">
+            <p className="text-xs text-amber-800">La última generación falló — mostrando resultados anteriores. Podés reintentar o ajustar el radar.</p>
+          </div>
         )}
       </div>
     );

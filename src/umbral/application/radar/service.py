@@ -653,40 +653,72 @@ class RadarService:
                 )
             compilation = self.policy_engine.compilation_for(profile_version_id)
             if compilation is None:
-                raise RadarPermanentError(
-                    "radar.compilation_not_found",
-                    "run criteria compilation is not available",
+                # Fallback a scoring baseline cuando la compilación aún no existe
+                # (criteria aún no compiló la nueva versión). Evita dejar el run en pending
+                # para siempre con radar.compilation_not_found y permite mostrar el mapa
+                # con el último run sucedido mientras se genera la compilación.
+                scored_fallback: list[tuple[float, NormalizedListing, Mapping[str, float]]] = []
+                for listing in passed:
+                    score, contributions = compute_score(
+                        profile, cast(ScorableListing, listing), self.scoring
+                    )
+                    scored_fallback.append((score, listing, contributions))
+                scored_fallback.sort(
+                    key=lambda pair: (
+                        -pair[0],
+                        pair[1].total_cost,
+                        str(pair[1].listing_id),
+                    )
                 )
-            try:
-                scored_v1 = self.policy_engine.score_run(
-                    profile=profile,
-                    compilation=compilation,
-                    candidates=passed,
-                    run_id=run.run_id,
-                    correlation_id=run.correlation_id,
-                    score_policy_version=run.score_policy_version,
+                items = tuple(
+                    RecommendationItem(
+                        item_id=uuid4(),
+                        run_id=run.run_id,
+                        listing_id=listing.listing_id,
+                        score=score,
+                        position=position,
+                        contributions={
+                            "budget": contributions["budget"],
+                            "rooms": contributions["rooms"],
+                            "surface": contributions["surface"],
+                            "location_precision": contributions["location_precision"],
+                            "score_policy_version": run.score_policy_version,
+                        },
+                    )
+                    for position, (score, listing, contributions) in enumerate(scored_fallback)
                 )
-            except (ScoringNotFound, ScoringValidationError) as error:
-                raise RadarPermanentError(
-                    "radar.score_policy_not_found",
-                    "run scoring policy is not available",
-                ) from error
-            items = tuple(
-                RecommendationItem(
-                    item_id=uuid4(),
-                    run_id=run.run_id,
-                    listing_id=candidate.listing_id,
-                    score=candidate.score,
-                    position=position,
-                    contributions=dict(candidate.contributions),
+                evaluations = ()
+            else:
+                try:
+                    scored_v1 = self.policy_engine.score_run(
+                        profile=profile,
+                        compilation=compilation,
+                        candidates=passed,
+                        run_id=run.run_id,
+                        correlation_id=run.correlation_id,
+                        score_policy_version=run.score_policy_version,
+                    )
+                except (ScoringNotFound, ScoringValidationError) as error:
+                    raise RadarPermanentError(
+                        "radar.score_policy_not_found",
+                        "run scoring policy is not available",
+                    ) from error
+                items = tuple(
+                    RecommendationItem(
+                        item_id=uuid4(),
+                        run_id=run.run_id,
+                        listing_id=candidate.listing_id,
+                        score=candidate.score,
+                        position=position,
+                        contributions=dict(candidate.contributions),
+                    )
+                    for position, candidate in enumerate(scored_v1)
                 )
-                for position, candidate in enumerate(scored_v1)
-            )
-            evaluations = tuple(
-                evaluation
-                for candidate in scored_v1
-                for evaluation in candidate.evaluations
-            )
+                evaluations = tuple(
+                    evaluation
+                    for candidate in scored_v1
+                    for evaluation in candidate.evaluations
+                )
         else:
             scored: list[tuple[float, NormalizedListing, Mapping[str, float]]] = []
             for listing in passed:
