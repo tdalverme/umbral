@@ -59,7 +59,7 @@ class MatchResponse(BaseModel):
             position=item.position,
             contributions=dict(item.contributions),
             geo_precision=point.geo_precision if point is not None else None,
-            geometry=((point.latitude, point.longitude) if point is not None else None),
+            geometry=((point.longitude, point.latitude) if point is not None else None),
             total_cost=summary.total_cost if summary is not None else None,
             neighborhood=summary.neighborhood if summary is not None else None,
             surface_m2=summary.surface_m2 if summary is not None else None,
