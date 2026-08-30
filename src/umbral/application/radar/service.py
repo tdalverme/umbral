@@ -438,15 +438,20 @@ class RadarService:
         include_dismissed: bool = False,
     ) -> MatchPage:
         self._owned(owner_id, profile_id)
-        run = (
-            self.runs.get(run_id)
-            if run_id is not None
-            else self.runs.latest_succeeded_for_profile(profile_id)
-        )
-        if run is None or run.profile_id != profile_id:
-            if run_id is not None:
+        if run_id is not None:
+            run = self.runs.get(run_id)
+            if run is None or run.profile_id != profile_id:
                 raise RunNotFound(run_id)
-            raise RunNotFound(profile_id)
+        else:
+            run = self.runs.latest_succeeded_for_profile(profile_id)
+            if run is None:
+                # Sin succeeded aún (radar recién creado): devolver el último run aunque esté pending/failed
+                # para que el front muestre "Generando…" sin 404 y sin ocultar el mapa cuando haya fallback
+                run = self.runs.latest_for_profile(profile_id)
+                if run is None or run.profile_id != profile_id:
+                    raise RunNotFound(profile_id)
+                if run.state != "succeeded":
+                    return MatchPage(run=run, items=(), next_after_position=None)
         if run.state != "succeeded":
             return MatchPage(run=run, items=(), next_after_position=None)
         items = self.items.list_for_run(run.run_id, after_position, limit)
