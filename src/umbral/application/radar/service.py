@@ -602,19 +602,32 @@ class RadarService:
             return self._summary(run)
 
         current_run = self.runs.latest_succeeded_for_profile(profile_id)
-        if (
-            current_run is not None
-            and current_run.profile_version_id != profile_version_id
-        ):
-            # A newer radar version already published; this run's results would
-            # replace the current ones (FR-026/SC-012), so it is superseded.
-            superseded = self.runs.supersede(
-                run_id,
-                reason="radar.results_superseded",
-                correlation_id=run.correlation_id,
-            )
-            if superseded is not None:
-                return self._summary(superseded)
+        if current_run is not None and current_run.profile_version_id != profile_version_id:
+            # Only supersede if the run is for an older profile version than the
+            # already-published one (stale job). A run for a newer version must
+            # proceed and replace the current results.
+            try:
+                cur_ver = self.versions.get(current_run.profile_version_id)
+                run_ver = version
+                if cur_ver is not None and run_ver.profile_version < cur_ver.profile_version:
+                    superseded = self.runs.supersede(
+                        run_id,
+                        reason="radar.results_superseded",
+                        correlation_id=run.correlation_id,
+                    )
+                    if superseded is not None:
+                        return self._summary(superseded)
+            except Exception:
+                # On version lookup failure, fall back to strict check to avoid
+                # publishing stale results.
+                if current_run.profile_version_id != profile_version_id:
+                    superseded = self.runs.supersede(
+                        run_id,
+                        reason="radar.results_superseded",
+                        correlation_id=run.correlation_id,
+                    )
+                    if superseded is not None:
+                        return self._summary(superseded)
 
         if job_execution_id is not None and run.job_execution_id is None:
             run = replace(run, job_execution_id=job_execution_id)
