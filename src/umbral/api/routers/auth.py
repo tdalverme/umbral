@@ -28,6 +28,11 @@ class MagicLinkConfirmation(BaseModel):
     token_hash: str = Field(min_length=32, max_length=512)
 
 
+class DevLoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=3, max_length=320)
+
+
 class CurrentSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user_id: UUID
@@ -72,6 +77,19 @@ def _check_bff(token: str | None) -> None:
     expected = _deps().settings.bff_token
     if expected and token != expected:
         raise IdentityError("auth.request_invalid", status=400, recovery="none")
+
+
+def _check_preview_dev_token(token: str | None) -> None:
+    settings = _deps().settings
+    expected = settings.preview_dev_login_token
+    # Only enabled when a preview bypass token is configured.
+    if not expected:
+        raise IdentityError("auth.request_invalid", status=404, recovery="none")
+    # Restrict to non-production by default; allow local for testing.
+    if settings.environment not in {"preview", "local"}:
+        raise IdentityError("auth.request_invalid", status=404, recovery="none")
+    if token != expected:
+        raise IdentityError("auth.request_invalid", status=403, recovery="none")
 
 
 @router.post(
@@ -147,6 +165,35 @@ async def get_current_session(request: Request, x_umbral_bff_token: str | None =
             roles=principal.roles,
             last_activity_at=principal.last_activity_at,
         )
+    except IdentityError as error:
+        return _problem(error, request)
+
+
+@router.post("/auth/dev-login", operation_id="devLogin", status_code=204, response_model=None)
+async def dev_login(
+    payload: DevLoginRequest,
+    request: Request,
+    x_umbral_bff_token: str | None = Header(default=None, include_in_schema=False),
+    x_umbral_preview_dev_token: str | None = Header(default=None, include_in_schema=False),
+    x_correlation_id: UUID | None = Header(default=None),
+) -> Response:
+    try:
+        _check_bff(x_umbral_bff_token)
+        _check_preview_dev_token(x_umbral_preview_dev_token)
+        result = _deps().identity_access.dev_login(
+            email=payload.email, now=datetime.now(timezone.utc), correlation_id=x_correlation_id or uuid4()
+        )
+        cookie_response = Response(status_code=204)
+        cookie_response.set_cookie(
+            key=_deps().settings.session_cookie_name,
+            value=result.token,
+            httponly=True,
+            secure=_deps().settings.session_secure,
+            samesite="lax",
+            path="/",
+        )
+        cookie_response.headers["Cache-Control"] = "private, no-store"
+        return cookie_response
     except IdentityError as error:
         return _problem(error, request)
 

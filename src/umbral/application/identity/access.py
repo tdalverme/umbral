@@ -391,6 +391,55 @@ class IdentityAccess:
             correlation_id=correlation_id,
         )
 
+    def dev_login(
+        self, *, email: str, now: datetime, correlation_id: UUID | None = None
+    ) -> SessionResult:
+        """Create an active user+session without provider verification.
+
+        Intended only for preview testing behind a dedicated secret. Bypasses
+        invitation and email checks but remains fully audited.
+        """
+
+        now = utc(now)
+        correlation_id = correlation_id or uuid4()
+        try:
+            normalized = normalize_email(email).value
+        except ValueError as exc:
+            raise IdentityError("auth.request_invalid", status=400, recovery="none", detail="invalid_email") from exc
+        with self._transaction():
+            user = self.store.user_for_email(normalized)
+            if user is None:
+                user = ProductUser(uuid4(), normalized, status="active", created_at=now, status_changed_at=now)
+                self.store.save_user(user)
+                self.store.save_role(RoleAssignment(uuid4(), user.id, "user", now))
+                self._audit("user.activated.v1", "accepted", "preview_bypass", correlation_id, subject_user_id=user.id)
+            elif user.status != "active":
+                user.enable(now=now)
+                self.store.save_user(user)
+                self._audit("user.activated.v1", "accepted", "preview_bypass_reactivated", correlation_id, subject_user_id=user.id)
+            # Create synthetic request+attempt to satisfy FK on product_sessions.magic_link_attempt_id.
+            request_id = uuid4()
+            email_fingerprint = self.store.fingerprint(normalized)
+            origin_fingerprint = self.store.fingerprint("preview-bypass")
+            self.store.save_request(
+                MagicLinkRequest(request_id, email_fingerprint, origin_fingerprint, "preview_bypass", now, now + timedelta(hours=24), correlation_id)
+            )
+            attempt_id = uuid4()
+            attempt = MagicLinkAttempt(attempt_id, request_id, "product_user", None, user.id)
+            attempt.state = "consumed"
+            attempt.provider_generated_at = now
+            attempt.issued_at = now
+            attempt.expires_at = now + timedelta(minutes=15)
+            attempt.consumed_at = now
+            self.store.save_attempt(attempt)
+            self._audit("magic_link.consumed.v1", "accepted", "preview_bypass", correlation_id, subject_user_id=user.id, attempt_id=attempt_id)
+            token = secrets.token_urlsafe(32)
+            digest = hashlib.sha256(token.encode()).digest()
+            session = ProductSession(uuid4(), user.id, attempt_id, digest, now)
+            self.store.save_session(session)
+            self._audit("session.started.v1", "accepted", "preview_bypass", correlation_id, subject_user_id=user.id, session_id=session.id)
+            return SessionResult(session.id, user.id, token, now)
+
     def logout(self, token: str, *, now: datetime, correlation_id: UUID | None = None) -> None:
         digest = hashlib.sha256(token.encode()).digest()
         with self._transaction():

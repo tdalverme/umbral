@@ -129,6 +129,9 @@ class Settings(BaseSettings):
         default="__Host-umbral_session", validation_alias="SESSION_COOKIE_NAME"
     )
     session_secure: bool = Field(default=True, validation_alias="SESSION_SECURE")
+    preview_dev_login_token: str | None = Field(
+        default=None, validation_alias="PREVIEW_DEV_LOGIN_TOKEN", repr=False
+    )
     silver_geocoding_enabled: bool = Field(
         default=False, validation_alias="SILVER_GEOCODING_ENABLED"
     )
@@ -445,6 +448,7 @@ class Settings(BaseSettings):
             "IDENTITY_FINGERPRINT_KEY",
             "SESSION_COOKIE_NAME",
             "SESSION_SECURE",
+            "PREVIEW_DEV_LOGIN_TOKEN",
             "SILVER_GEOCODING_ENABLED",
             "SILVER_GEOCODING_ENDPOINT",
             "SILVER_GEOCODING_CACHE_SIZE",

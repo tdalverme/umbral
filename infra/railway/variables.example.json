@@ -27,6 +27,8 @@
     { "name": "IDENTITY_ISSUER", "scopes": ["api"] },
     { "name": "IDENTITY_CAPTURE_ORIGIN", "scopes": ["api"] },
     { "name": "IDENTITY_FINGERPRINT_KEY", "scopes": ["api", "worker", "scheduler"] },
+    { "name": "PREVIEW_DEV_LOGIN_TOKEN", "scopes": ["api", "web"] },
+    { "name": "NEXT_PUBLIC_PREVIEW_DEV_LOGIN_ENABLED", "scopes": ["web"] },
     { "name": "EMAIL_PROVIDER", "scopes": ["api", "worker", "scheduler"] },
     { "name": "RESEND_API_KEY", "scopes": ["api", "worker", "scheduler"] },
     { "name": "RESEND_FROM_EMAIL", "scopes": ["api", "worker", "scheduler"] },

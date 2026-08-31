@@ -42,7 +42,7 @@ REASONS = frozenset(
         "action_unknown", "role_unknown", "role_not_allowed", "owner_missing",
         "owner_ambiguous", "owner_mismatch", "logout", "administrator_change",
         "zero_admin_bootstrap", "eligible", "provider_signature_invalid",
-        "ignored",
+        "preview_bypass", "preview_bypass_reactivated", "ignored",
     }
 )
 
