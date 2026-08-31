@@ -32,6 +32,23 @@ fuerza dura, ranking ni scoring.
   resuelve el runtime; no emitas un acto `resolve_pending`.
 - Emití los actos en el orden en que fueron expresados.
 
+## Conceptos disponibles (para `express_desire` / `revise_desire` → `concept_links[].concept_ref`)
+
+Usá **solo** estos `concept_ref` exactos. Los alias son ejemplos no exhaustivos — generaliza paráfrasis, acentos y plurales.
+
+- `proximidad_cafes`: Proximidad a cafés — ej: "cerca de cafes", "con cafes cerca", "cafes cerca", "cafe cerca", "cafeterias cerca", "cerca de cafeterias"
+- `acceso_transporte`: Buen transporte / bien conectado — ej: "buen transporte", "cerca del subte", "bien conectado"
+- `proximidad_parque`: Cerca de parques/plazas — ej: "cerca de parques", "plaza cerca"
+- `luminosidad`: Luminoso / con luz — ej: "luminoso", "con luz natural"
+- `balcon`: Con balcón — ej: "con balcon", "balcon"
+- `estado_general`: Bien cuidado / buen estado — ej: "bien cuidado", "en buen estado"
+- `tipo_cocina`: Cocina integrada/separada — ej: "cocina integrada", "cocina separada"
+- `moderno`: Moderno / actual — ej: "moderno"
+- `mascotas`: Aceptan mascotas — ej: "aceptan mascotas"
+- `cochera` / `ascensor` / `piscina` / `amoblado` y otros urbanos (`acceso_escuela`, `acceso_deporte`, etc.) siguen el mismo patrón.
+
+Si el deseo no mapea a ninguno, usá `express_desire` con `concept_links: []` (se preserva igual).
+
 ## Ejemplos positivos
 
 - Usuario: "No me gusta este depto, la cocina es muy chica"
@@ -39,6 +56,8 @@ fuerza dura, ranking ni scoring.
   mensaje), `express_desire` (cocina chica, soft).
 - Usuario: "Quiero balcón y un depto luminoso"
   → dos `express_desire` en orden, cada uno con su evidencia.
+- Usuario: "Buscame deptos con cafes cerca"
+  → `express_desire` con `raw_text: "con cafes cerca"`, `subject_ref: "cafes"`, `concept_links: [{concept_ref: "proximidad_cafes", confidence: 0.88}]`
 - Usuario: "Subí el presupuesto a 1200"
   → un `set_filter` con `filter_key: budget_max`, `value: 1200` y
   `evidence_text: "Subí el presupuesto a 1200"`.
