@@ -96,6 +96,7 @@ jobs:
           NOTIFICATIONS_DEFAULT_TIMEZONE: ${{ secrets.NOTIFICATIONS_DEFAULT_TIMEZONE }}
           MODEL_GATEWAY_OPENAI_API_KEY: ${{ secrets.MODEL_GATEWAY_OPENAI_API_KEY }}
           MODEL_GATEWAY_SHARED_KEY: ${{ secrets.MODEL_GATEWAY_SHARED_KEY }}
+          PREVIEW_DEV_LOGIN_TOKEN: ${{ secrets.PREVIEW_DEV_LOGIN_TOKEN }}
         run: |
           $manifest = Get-Item artifacts/release/release-manifest.json
           $checksum = (Get-Content -Raw "${manifest}.sha256").Trim()

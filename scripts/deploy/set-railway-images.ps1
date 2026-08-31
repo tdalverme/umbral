@@ -145,6 +145,8 @@ foreach ($key in @("RESEND_API_KEY", "RESEND_FROM_EMAIL", "SUPABASE_URL", "SUPAB
 }
 $bffToken = [string][Environment]::GetEnvironmentVariable("UMBRAL_BFF_TOKEN")
 if (-not [string]::IsNullOrWhiteSpace($bffToken)) { $providerVars["UMBRAL_BFF_TOKEN"] = $bffToken }
+$previewDevLoginToken = [string][Environment]::GetEnvironmentVariable("PREVIEW_DEV_LOGIN_TOKEN")
+if (-not [string]::IsNullOrWhiteSpace($previewDevLoginToken)) { $providerVars["PREVIEW_DEV_LOGIN_TOKEN"] = $previewDevLoginToken }
 $previewBaseUrl = [string][Environment]::GetEnvironmentVariable("UMBRAL_PREVIEW_BASE_URL")
 Require-Condition (-not [string]::IsNullOrWhiteSpace($previewBaseUrl)) "Missing UMBRAL_PREVIEW_BASE_URL environment value for Railway service variables."
 $providerVars["IDENTITY_CAPTURE_ORIGIN"] = "https://" + $previewBaseUrl.Trim()
@@ -237,6 +239,7 @@ function Test-ServiceAtTarget {
     } elseif ($Service -eq "web") {
         if ([string]$SvcConfig.variables.IDENTITY_CAPTURE_ORIGIN.value -ne [string]$ProviderVars["IDENTITY_CAPTURE_ORIGIN"]) { return $false }
         if ($ProviderVars.Contains("UMBRAL_BFF_TOKEN") -and [string]$SvcConfig.variables.UMBRAL_BFF_TOKEN.value -ne [string]$ProviderVars["UMBRAL_BFF_TOKEN"]) { return $false }
+        if ($ProviderVars.Contains("PREVIEW_DEV_LOGIN_TOKEN") -and [string]$SvcConfig.variables.PREVIEW_DEV_LOGIN_TOKEN.value -ne [string]$ProviderVars["PREVIEW_DEV_LOGIN_TOKEN"]) { return $false }
     }
     if ($Service -eq "model") {
         foreach ($key in $ModelVars.Keys) {
@@ -311,6 +314,9 @@ foreach ($service in $servicesToPatch) {
         $serviceVariables["IDENTITY_CAPTURE_ORIGIN"] = [ordered]@{ value = $ProviderVars["IDENTITY_CAPTURE_ORIGIN"] }
         if ($ProviderVars.Contains("UMBRAL_BFF_TOKEN")) {
             $serviceVariables["UMBRAL_BFF_TOKEN"] = [ordered]@{ value = $ProviderVars["UMBRAL_BFF_TOKEN"] }
+        }
+        if ($ProviderVars.Contains("PREVIEW_DEV_LOGIN_TOKEN")) {
+            $serviceVariables["PREVIEW_DEV_LOGIN_TOKEN"] = [ordered]@{ value = $ProviderVars["PREVIEW_DEV_LOGIN_TOKEN"] }
         }
     }
     if ($service -eq "model") {
