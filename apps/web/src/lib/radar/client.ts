@@ -272,6 +272,8 @@ export const radarApi = {
   },
   listing: async (listingId: string): Promise<ListingDetail> =>
     (await getJson(`/api/radar/listings/${listingId}`)) as ListingDetail,
+  pois: async (listingId: string, radiusM = 600, limit = 50): Promise<{ listing_id: string; radius_m: number; count: number; pois: import("./urban").RadarPoi[] }> =>
+    (await getJson(`/api/radar/listings/${listingId}/pois?radius_m=${radiusM}&limit=${limit}`)) as { listing_id: string; radius_m: number; count: number; pois: import("./urban").RadarPoi[] },
   explanations: async (
     id: string,
     runId: string | null,

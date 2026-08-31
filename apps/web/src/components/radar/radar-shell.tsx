@@ -9,7 +9,8 @@ import { MapLuzSerena } from "./map/map-luz-serena";
 import { RadarChatPanel } from "./chat/radar-chat-panel";
 import { useRadarSelection } from "@/lib/radar/use-radar-selection";
 import type { Explanation, MatchItem, SearchProfile } from "@/lib/radar/client";
-import { generateMockPoisForListing } from "@/lib/radar/urban";
+import { radarApi } from "@/lib/radar/client";
+import type { RadarPoi } from "@/lib/radar/urban";
 import { cn } from "@/lib/utils";
 
 export function RadarShell({
@@ -50,14 +51,29 @@ export function RadarShell({
   const selected = filtered.find((m) => m.listing_id === selectedId) ?? null;
   const selectedExplanation = selectedId ? explanations?.[selectedId] : undefined;
 
-  // Qué hay cerca — mock POIs 600m para la oportunidad enfocada (variante 2)
+  // Qué hay cerca — POIs reales OSM 600m (urban_categories via PostGIS)
   const [visibleCategories, setVisibleCategories] = useState<string[]>([]);
   const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null);
+  const [allPois, setAllPois] = useState<RadarPoi[]>([]);
 
-  const allPois = useMemo(() => {
-    if (!selected?.geometry || !Array.isArray(selected.geometry)) return [];
-    return generateMockPoisForListing(selected.listing_id, selected.geometry as [number, number]);
-  }, [selected?.listing_id, selected?.geometry]);
+  useEffect(() => {
+    if (!selected?.listing_id) {
+      setAllPois([]);
+      return;
+    }
+    let cancelled = false;
+    radarApi
+      .pois(selected.listing_id, 600, 50)
+      .then((res) => {
+        if (!cancelled) setAllPois(res.pois ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setAllPois([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.listing_id]);
 
   const visiblePois = useMemo(
     () => allPois.filter((p) => visibleCategories.includes(p.category)),
