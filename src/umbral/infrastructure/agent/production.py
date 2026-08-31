@@ -616,11 +616,26 @@ def _interpret_preference(
         / "concepts-seed-v1.json"
     )
     raw = json.loads(seed_path.read_text(encoding="utf-8"))
+    # Cargar vocabulario como few-shot examples para el LLM (no como allowlist dura)
+    vocab_aliases: dict[str, list[str]] = {}
+    try:
+        from umbral.infrastructure.agent.tools.preferences_loader import (
+            load_preference_vocabulary,
+        )
+
+        vocab = load_preference_vocabulary()
+        for entry in vocab.entries:
+            key = entry.intent.concept_key
+            # alias ya normalizado en spec, pero mostramos original para el prompt
+            vocab_aliases.setdefault(key, []).extend(list(entry.aliases))
+    except Exception:
+        vocab_aliases = {}
     options = tuple(
         ConceptOption(
             key=str(concept["key"]),
             description=str(concept.get("name") or concept["key"]),
             matchers=(str(concept["matcher_type"]),),
+            aliases=tuple(vocab_aliases.get(str(concept["key"]), ())[:6]),
         )
         for concept in raw.get("concepts", [])
     )

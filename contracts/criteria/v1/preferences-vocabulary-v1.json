@@ -1,7 +1,7 @@
 {
   "registry_version": "preferences-vocabulary-v1",
   "schema_version": "preferences-v1",
-  "description": "Vocabulario canonico de preferencias suaves del chat: alias naturales mapeados deterministicamente a conceptos del catalogo con polaridad y value opcional. El LLM nunca elige concept_key ni polarity; solo expresa la intencion en lenguaje natural.",
+  "description": "Vocabulario de preferencias suaves: alias canonicos como few-shot para el LLM (concept_key enum validado contra el registry). El LLM generaliza parafrasis, acentos y variaciones ('cafes cerca' -> proximidad_cafes) y el backend valida contra el catalogo versionado.",
   "entries": [
     {
       "aliases": ["luminoso", "luminosa", "con luz", "iluminado", "iluminada", "bien iluminado", "claro"],
@@ -77,7 +77,18 @@
       "value": null
     },
     {
-      "aliases": ["cerca de cafes", "con cafes cerca", "cerca de un cafe"],
+      "aliases": [
+        "cerca de cafes",
+        "con cafes cerca",
+        "cerca de un cafe",
+        "cafes cerca",
+        "cafe cerca",
+        "cerca de cafes lindos",
+        "con cafes lindos cerca",
+        "cafeterias cerca",
+        "con cafeterias cerca",
+        "cerca de cafeterias"
+      ],
       "concept_key": "proximidad_cafes",
       "polarity": "positive",
       "value": null

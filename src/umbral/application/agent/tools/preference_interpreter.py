@@ -48,6 +48,7 @@ class ConceptOption:
     key: str
     description: str
     matchers: tuple[str, ...]
+    aliases: tuple[str, ...] = ()
 
 
 def resolve_concept(
@@ -69,13 +70,15 @@ def resolve_concept(
             "key": concept.key,
             "description": concept.description,
             "matchers": list(concept.matchers),
+            "aliases": list(concept.aliases) if concept.aliases else [],
         }
         for concept in concepts
     ]
+    allowed_keys = [c.key for c in concepts]
     schema: dict[str, object] = {
         "resolution": "string",
         "reason": "string",
-        "concept_key": "string",
+        "concept_key": {"kind": "string", "enum": allowed_keys} if allowed_keys else "string",
         "polarity": "string",
         "value": "string",
         "confidence": "number",
@@ -106,17 +109,17 @@ def resolve_concept(
 
 
 _INSTRUCTIONS = (
-    "Dado el mensaje del usuario, elige UNA resolucion:\n"
-    "- 'structured': la frase expresa una preferencia clara sobre UN "
-    "concepto del catalogo. Rellena concept_key (exacto del catalogo), "
+    "Dado el mensaje del usuario (puede contener busqueda + preferencia), elige UNA resolucion:\n"
+    "- 'structured': la frase expresa, aunque sea como parte de un pedido mas largo "
+    "('Buscame deptos con cafes cerca', 'quiero cafés lindos próximos'), UNA preferencia "
+    "clara sobre UN concepto del catalogo. Extrae el fragmento relevante y rellena "
+    "concept_key (EXACTO del catalogo, solo de la lista permitida), "
     "polarity (positive/negative), value opcional, confidence 0..1, "
-    "matcher_type (uno de los matchers validos del concepto) y params "
-    "con el valor.\n"
-    "- 'unresolved': la frase NO corresponde a ningun concepto del "
-    "catalogo (o es vaga, o pide algo no evaluable). Rellena reason "
-    "explicando la limitacion y deja concept_key vacio.\n"
-    "Nunca inventes concept_key fuera del catalogo ni fuerces una "
-    "preferencia que no este explicitamente pedida."
+    "matcher_type (uno de los matchers validos del concepto) y params con el valor.\n"
+    "- 'unresolved': la frase NO corresponde a ningun concepto del catalogo o es demasiado vaga.\n"
+    "Los alias listados son EJEMPLOS no exhaustivos: generaliza paráfrasis, acentos, "
+    "plurales y variaciones naturales ('cafes cerca', 'café cerca', 'con cafeterias cerca' → mismo concepto). "
+    "Nunca inventes concept_key fuera del catalogo."
 )
 
 
@@ -133,15 +136,24 @@ def _interpreter_system_prompt_and_catalog(
     only knows ``_intents`` as a meta key). Passing them as a system message
     keeps the schema a pure output contract (FR-004 structured outputs).
     """
-    catalog_lines = (
-        f"- {concept.get('key')}: "
-        f"{concept.get('description')} (matchers: "
-        f"{', '.join(str(item) for item in concept.get('matchers') or [])})"
-        for concept in catalog
-        if isinstance(concept.get("key"), str)
-    )
+    catalog_lines = []
+    for concept in catalog:
+        if not isinstance(concept.get("key"), str):
+            continue
+        key = concept.get("key")
+        desc = concept.get("description")
+        matchers = ", ".join(str(item) for item in concept.get("matchers") or [])
+        aliases = concept.get("aliases")
+        alias_part = ""
+        if isinstance(aliases, (list, tuple)) and aliases:
+            # mostrar hasta 4 alias como few-shot, el resto se generaliza
+            shown = ", ".join(f'"{a}"' for a in list(aliases)[:4])
+            alias_part = f" ej: {shown}"
+            if len(list(aliases)) > 4:
+                alias_part += f" (+{len(list(aliases)) - 4} más)"
+        catalog_lines.append(f"- {key}: {desc} (matchers: {matchers}){alias_part}")
     return (
-        "Catalogo de conceptos disponibles (elegi concept_key EXACTO):\n"
+        "Catalogo de conceptos disponibles (elegi concept_key EXACTO de la lista):\n"
         + "\n".join(catalog_lines)
         + "\n\nInstrucciones:\n"
         + instructions
