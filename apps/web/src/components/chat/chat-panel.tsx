@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Alert } from "@/components/ui/alert";
@@ -9,6 +9,8 @@ import { Composer } from "@/components/chat/composer";
 import { MessageList } from "@/components/chat/message-list";
 import { ProposalCard } from "@/components/chat/proposal-card";
 import { StreamStatus } from "@/components/chat/stream-status";
+import { chatApi } from "@/lib/chat/client";
+import type { ProposalDecision, UpdateProposalDto } from "@/lib/chat/types";
 import { useChatStream } from "@/lib/chat/use-chat-stream";
 
 interface ChatPanelProps {
@@ -80,11 +82,72 @@ export function ChatPanel({
     void chat.send(text);
   };
 
+  const [fallbackProposal, setFallbackProposal] = useState<UpdateProposalDto | null>(null);
+
+  // Fallback: si el SSE no entregó el interrupt pero el backend tiene un pending
+  // (ej. reconexión, decisión pendiente previa), mostramos el pending de updateProposals
+  // para que nunca quede "Esperando confirmación" sin card.
+  useEffect(() => {
+    if (chat.pendingDecision) {
+      setFallbackProposal(null);
+      return;
+    }
+    if (chat.status !== "waiting_decision") {
+      setFallbackProposal(null);
+      return;
+    }
+    let cancelled = false;
+    chatApi
+      .updateProposals(profileId, "pending")
+      .then((page) => {
+        if (!cancelled) setFallbackProposal(page.items[0] ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setFallbackProposal(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chat.pendingDecision, chat.status, profileId]);
+
   const handleDecision = (decision: Record<string, unknown>): void => {
+    // Si hay fallback (SSE interrumpido), decidir contra su run_id/sesión
+    if (!chat.pendingDecision && fallbackProposal?.waiting_run_id) {
+      void chatApi
+        .decide(fallbackProposal.session_id, fallbackProposal.waiting_run_id, decision)
+        .then(async (response) => {
+          if (response.body) {
+            const reader = response.body.getReader();
+            // drenar stream para que el backend cierre el run
+            for (;;) {
+              const { done } = await reader.read();
+              if (done) break;
+            }
+          }
+          onDecisionApplied?.();
+          setFallbackProposal(null);
+          void chat.resume();
+        })
+        .catch(() => {});
+      return;
+    }
     void chat.decide(decision).then((applied) => {
       if (applied) onDecisionApplied?.();
     });
   };
+
+  const fallbackDecision: ProposalDecision | null = fallbackProposal
+    ? {
+        type: "proposal_decision",
+        kind: "profile",
+        proposal_id: fallbackProposal.proposal_id,
+        diff: fallbackProposal.diff as Record<string, unknown>,
+        impact: fallbackProposal.impact as Record<string, unknown>,
+        expires_at: fallbackProposal.expires_at,
+      }
+    : null;
+
+  const activeDecision = chat.pendingDecision ?? fallbackDecision;
 
   return (
     <div
@@ -141,13 +204,13 @@ export function ChatPanel({
           />
         </div>
 
-        {chat.pendingDecision && (
+        {activeDecision && (
           <div
             className="shrink-0 border-t border-border bg-card px-3 py-3 shadow-[0_-8px_24px_rgba(41,63,56,0.08)]"
             data-testid="pending-decision-bar"
           >
             <ProposalCard
-              decision={chat.pendingDecision}
+              decision={activeDecision}
               onDecision={handleDecision}
               busy={chat.status === "running" || chat.status === "resuming"}
             />
