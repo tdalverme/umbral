@@ -81,7 +81,7 @@ export function MessageList({
       {showJump && (
         <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
           <Button
-            className="pointer-events-auto h-8 rounded-full border border-border bg-card px-3.5 text-xs font-medium shadow-md hover:bg-muted"
+            className="pointer-events-auto h-8 rounded-full border border-border bg-card px-3.5 text-xs font-medium text-foreground shadow-md hover:bg-muted"
             aria-label="Ir a lo más reciente"
             onClick={() => {
               stickToBottom.current = true;

@@ -12,7 +12,6 @@ import { ChatPanel } from "@/components/chat/chat-panel";
 import { RadarMap, matchPoints } from "@/components/radar/map";
 import { FeedbackActions } from "@/components/radar/feedback-actions";
 import { ProposalBanner } from "@/components/radar/proposal-banner";
-import { UpdateProposalBanner } from "@/components/radar/update-proposal-banner";
 import { RadarShell } from "@/components/radar/radar-shell";
 import { radarApi, type Explanation, type FeedbackEventType, type MatchItem, type SearchProfile } from "@/lib/radar/client";
 import { emitExplanationViewed, emitImpression } from "@/lib/radar/events";
@@ -318,12 +317,7 @@ export default function RadarViewPage(): React.ReactElement {
             <p className="text-xs text-muted-foreground">La explicación no está disponible para este run. Se regenerará con razones completas.</p>
           </div>
         )}
-        {!isMock && (
-          <>
-            <ProposalBanner profileId={profileId} onDecision={() => setReloadKey((c) => c + 1)} />
-            <UpdateProposalBanner profileId={profileId} onDecision={() => setReloadKey((c) => c + 1)} />
-          </>
-        )}
+        {!isMock && <ProposalBanner profileId={profileId} onDecision={() => setReloadKey((c) => c + 1)} />}
         {generating && (
           <div className="border-t border-border/60 bg-amber-50 px-4 py-1.5">
             <p className="flex items-center gap-1.5 text-xs text-amber-800">
@@ -429,7 +423,6 @@ export default function RadarViewPage(): React.ReactElement {
       )}
 
       {!isMock && <ProposalBanner profileId={profileId} onDecision={() => setReloadKey((current) => current + 1)} />}
-      {!isMock && <UpdateProposalBanner profileId={profileId} onDecision={() => setReloadKey((current) => current + 1)} />}
 
       {!generating && runState === "failed" && (
         <Alert role="alert">
