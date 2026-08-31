@@ -34,7 +34,36 @@ const VALUE_LABELS: Record<string, string> = {
   tipo_cocina: "Tipo de cocina",
 };
 
+function formatCurrency(value: unknown): string | null {
+  const num = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(num)) return null;
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(num);
+}
+
+function formatZones(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  return value.map((zone) => String(zone).replaceAll("_", " ")).join(" · ");
+}
+
 function renderValue(key: string, value: unknown): string {
+  if (
+    key === "budget_max" ||
+    key === "budget_min" ||
+    key === "surface_min" ||
+    key === "surface_max"
+  ) {
+    const formatted = formatCurrency(value);
+    if (formatted) return formatted;
+  }
+  if (key === "zones") {
+    const formatted = formatZones(value);
+    if (formatted) return formatted;
+  }
+  if (Array.isArray(value)) return value.map((v) => String(v)).join(", ");
   const text = String(value ?? "");
   return VALUE_LABELS[text] ?? text;
 }
@@ -66,58 +95,105 @@ export function ProposalCard({ decision, onDecision, busy }: ProposalCardProps):
   const diff = decision.diff as Record<string, unknown>;
   const isRemoval = diff.operation === "remove";
   const fields = Object.entries(diff).filter(([key]) => key in FIELD_LABELS);
+  const impact = decision.impact as Record<string, unknown> | undefined;
+  const affectedCount =
+    typeof impact?.["affected_matches"] === "number" ? (impact["affected_matches"] as number) : null;
 
   return (
-    <Card data-testid="proposal-card" className="mt-2 border-border/60 p-3">
-      <p className="text-xs font-medium">
-        {isPreference
-          ? isRemoval
-            ? "Quitar preferencia de tu radar"
-            : "Preferencia propuesta en tu radar"
-          : "Cambio propuesto en tu radar"}
+    <Card
+      data-testid="proposal-card"
+      className="border-border bg-card p-4 shadow-sm"
+    >
+      <div className="flex items-center gap-2.5">
+        <span aria-hidden className="size-2 shrink-0 rounded-full bg-[var(--brand-terracotta)]" />
+        <p className="text-sm font-semibold leading-none tracking-tight text-foreground">
+          {isPreference
+            ? isRemoval
+              ? "Quitar preferencia de tu radar"
+              : "Preferencia propuesta en tu radar"
+            : "Cambio propuesto en tu radar"}
+        </p>
+      </div>
+      <p className="ml-[18px] mt-1 text-xs leading-relaxed text-muted-foreground">
+        Revisá el cambio antes de aplicarlo. Podés aprobar, rechazar o editar el valor.
       </p>
+
       {fields.length > 0 ? (
-        <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+        <ul className="mt-3 space-y-1.5 rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5">
           {fields.map(([key, value]) => (
-            <li key={key}>
-              {FIELD_LABELS[key]}:{" "}
-              <strong className="text-foreground">{renderValue(key, value)}</strong>
+            <li key={key} className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="shrink-0 text-xs text-muted-foreground">{FIELD_LABELS[key]}</span>
+              <strong className="text-right text-sm font-semibold text-foreground">
+                {renderValue(key, value)}
+              </strong>
             </li>
           ))}
+          {affectedCount !== null && (
+            <li className="border-t border-border/50 pt-1.5 text-xs text-muted-foreground">
+              Afectará aprox. <strong className="font-medium text-foreground">{affectedCount}</strong> oportunidades de tu radar.
+            </li>
+          )}
         </ul>
       ) : (
-        <p className="mt-1 text-xs text-muted-foreground">Sin campos detallados.</p>
+        <p className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          Sin campos detallados.
+        </p>
       )}
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Button className="min-h-8 bg-foreground px-3 text-xs text-background hover:bg-foreground/90" disabled={busy} onClick={approve}>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          className="min-h-9 bg-foreground px-4 text-sm font-medium text-background hover:bg-foreground/90 focus-visible:ring-foreground"
+          disabled={busy}
+          onClick={approve}
+          aria-busy={busy}
+        >
           Aprobar
         </Button>
-        <Button className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80" disabled={busy} onClick={reject}>
+        <Button
+          className="min-h-9 border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-muted"
+          disabled={busy}
+          onClick={reject}
+        >
           Rechazar
         </Button>
         {!isPreference && (
           <Button
-            className="min-h-8 bg-muted px-3 text-xs text-foreground hover:bg-muted/80"
+            className="min-h-9 border border-border bg-background px-3.5 text-sm text-foreground hover:bg-muted"
             disabled={busy}
+            aria-expanded={editing}
+            aria-controls="proposal-edit-field"
             onClick={() => setEditing((current) => !current)}
           >
-            Editar
+            {editing ? "Cancelar edición" : "Editar"}
           </Button>
         )}
       </div>
+
       {editing && (
-        <div className="mt-2 flex items-end gap-2">
-          <label className="flex-1 text-xs text-muted-foreground">
-            Presupuesto máx.
+        <div
+          id="proposal-edit-field"
+          className="mt-3 flex items-end gap-2 rounded-lg border border-border bg-muted/30 p-3"
+        >
+          <label className="flex-1 text-xs font-medium text-foreground">
+            Presupuesto máx. (ARS)
             <input
               type="number"
               inputMode="numeric"
+              placeholder="Ej. 1600000"
               value={changeText}
-              className="mt-1 w-full rounded border border-input bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Presupuesto máx."
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onChange={(event) => setChangeText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && changeText.trim() !== "" && !busy) edit();
+              }}
             />
           </label>
-          <Button className="min-h-8 px-3 text-xs" disabled={busy || changeText.trim() === ""} onClick={edit}>
+          <Button
+            className="min-h-9 shrink-0 px-4 text-sm"
+            disabled={busy || changeText.trim() === ""}
+            onClick={edit}
+          >
             Aplicar edición
           </Button>
         </div>

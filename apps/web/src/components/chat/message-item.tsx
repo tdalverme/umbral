@@ -25,7 +25,7 @@ function RefList({
   const proposals = refs.filter((ref) => ref.entity === "proposal");
   if (listings.length === 0 && proposals.length === 0) return null;
   return (
-    <div className="mt-2 flex flex-col gap-2">
+    <div className="mt-3 flex flex-col gap-2">
       {listings.map((ref) => (
         <MiniCard
           key={`listing-${ref.id}`}
@@ -59,11 +59,15 @@ export function MessageItem({
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-          isUser ? "bg-foreground text-background" : "bg-muted text-foreground"
+        className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ${
+          isUser
+            ? "rounded-br-md bg-foreground text-background"
+            : "rounded-bl-md border border-border bg-card text-foreground"
         }`}
       >
-        <p aria-live={isDraft ? "polite" : "off"}>{text}</p>
+        <p className="whitespace-pre-wrap break-words" aria-live={isDraft ? "polite" : "off"}>
+          {text}
+        </p>
         {!isUser && refs.length > 0 && (
           <RefList refs={refs} profileId={profileId} runId={runId} onFeedback={onFeedback} />
         )}

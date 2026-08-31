@@ -46,11 +46,7 @@ export function OpportunityDetailSheet({
     setFeedback(null);
     setShowAllPois(false);
     setEntornoOpen(false);
-    // abrir reparos solo si hay algo que realmente frene
-    const hasReparos = Boolean(
-      explanation && (explanation.risks.length > 0 || explanation.missing_data.length > 0),
-    );
-    setReparosOpen(hasReparos && (explanation?.risks.length ?? 0) > 0);
+    setReparosOpen(false);
   }, [opportunity.listing_id, explanation]);
 
   const handleSave = () => setFeedback("Guardada — queda arriba en tu radar. Podés deshacer.");

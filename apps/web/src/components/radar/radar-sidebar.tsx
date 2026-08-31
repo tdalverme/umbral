@@ -221,10 +221,10 @@ export function RadarSidebar({
                         />
                       </span>
 
-                      {/* Expandido: nombre + badge — mismo elemento que se expande por max-width */}
+                      {/* Expandido: nombre + badge — chip siempre a la derecha, gap consistente */}
                       <span
                         className={cn(
-                          "min-w-0 flex-1 items-center gap-2 overflow-hidden whitespace-nowrap",
+                          "min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden whitespace-nowrap",
                           "motion-safe:transition-[max-width,opacity,transform] motion-safe:duration-[280ms] motion-safe:ease-[cubic-bezier(0.32,0.08,0.24,1)]",
                           effectiveCollapsed
                             ? "flex max-w-0 opacity-0 -translate-x-1 pointer-events-none"

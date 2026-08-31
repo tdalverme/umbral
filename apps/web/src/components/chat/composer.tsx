@@ -26,24 +26,31 @@ export function Composer({ status, onSend }: ComposerProps): React.ReactElement 
   }
 
   return (
-    <div className="flex items-end gap-2">
-      <textarea
-        ref={inputRef}
-        rows={2}
-        value={value}
-        disabled={disabled}
-        aria-label="Escribile a Umbral"
-        placeholder={disabled ? "La conversación está en curso…" : "Escribile a Umbral…"}
-        className="min-h-10 w-full resize-y rounded border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            submit();
-          }
-        }}
-      />
-      <Button onClick={submit} disabled={disabled || value.trim() === ""}>
+    <div className="flex items-end gap-2 border-t border-border/60 bg-card px-3 py-3">
+      <div className="relative min-w-0 flex-1">
+        <textarea
+          ref={inputRef}
+          rows={2}
+          value={value}
+          disabled={disabled}
+          aria-label="Escribile a Umbral"
+          placeholder={disabled ? "La conversación está en curso…" : "Escribile a Umbral…"}
+          className="max-h-[96px] min-h-10 w-full resize-none rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              submit();
+            }
+          }}
+        />
+      </div>
+      <Button
+        onClick={submit}
+        disabled={disabled || value.trim() === ""}
+        className="h-10 shrink-0 rounded-xl px-5 text-sm font-medium"
+        aria-label="Enviar mensaje"
+      >
         Enviar
       </Button>
     </div>

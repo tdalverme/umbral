@@ -41,21 +41,26 @@ export function MessageList({
   }, [messages, pendingDecision]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
       <div
         ref={scrollerRef}
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-2"
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent]"
         onScroll={(event) => {
           const target = event.currentTarget;
-          const atBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 40;
+          const atBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 48;
           stickToBottom.current = atBottom;
           setShowJump(!atBottom && messages.length > 0);
         }}
       >
         {messages.length === 0 ? (
-          <p className="text-center text-xs text-muted-foreground">
-            Preguntame sobre tu radar: criterios, oportunidades, comparaciones o cambios.
-          </p>
+          <div className="flex min-h-[140px] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-6 py-8 text-center">
+            <p className="max-w-[28ch] text-sm leading-relaxed text-muted-foreground">
+              Preguntame sobre tu radar: criterios, oportunidades, comparaciones o cambios.
+            </p>
+            <p className="mt-1.5 text-xs text-muted-foreground/80">
+              Ej.: “Bajá el presupuesto a 1.5M” o “Compará estas dos”
+            </p>
+          </div>
         ) : (
           messages.map((message) => (
             <MessageItem
@@ -68,21 +73,15 @@ export function MessageList({
           ))
         )}
         {pendingDecision && (
-          <div className="flex justify-start" data-testid="pending-decision-message">
-            <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-              <ProposalCard
-                decision={pendingDecision}
-                onDecision={onDecision}
-                busy={busy}
-              />
-            </div>
+          <div className="pt-1" data-testid="pending-decision-message">
+            <ProposalCard decision={pendingDecision} onDecision={onDecision} busy={busy} />
           </div>
         )}
       </div>
       {showJump && (
-        <div className="flex justify-end">
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
           <Button
-            className="h-7 px-2 text-xs"
+            className="pointer-events-auto h-8 rounded-full border border-border bg-card px-3.5 text-xs font-medium shadow-md hover:bg-muted"
             aria-label="Ir a lo más reciente"
             onClick={() => {
               stickToBottom.current = true;
@@ -90,7 +89,7 @@ export function MessageList({
               if (scrollerRef.current) scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
             }}
           >
-            Ir a lo más reciente
+            Ir a lo más reciente ↓
           </Button>
         </div>
       )}

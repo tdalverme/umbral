@@ -5,9 +5,9 @@ import { useSearchParams } from "next/navigation";
 
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Composer } from "@/components/chat/composer";
 import { MessageList } from "@/components/chat/message-list";
+import { ProposalCard } from "@/components/chat/proposal-card";
 import { StreamStatus } from "@/components/chat/stream-status";
 import { useChatStream } from "@/lib/chat/use-chat-stream";
 
@@ -87,36 +87,75 @@ export function ChatPanel({
   };
 
   return (
-    <Card data-testid="chat-panel">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
-        <CardTitle className="text-base">Chat con Umbral</CardTitle>
-        <Button className="h-7 px-2 text-xs" onClick={() => void chat.startNewConversation()}>
+    <div
+      data-testid="chat-panel"
+      className="flex h-full min-h-0 flex-col bg-card"
+    >
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold leading-none tracking-tight text-foreground">
+            Chat con Umbral
+          </h2>
+          <p className="mt-1 text-xs leading-none text-muted-foreground">
+            Tu radar entiende lenguaje natural
+          </p>
+        </div>
+        <Button
+          className="h-8 shrink-0 rounded-full border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-muted"
+          onClick={() => void chat.startNewConversation()}
+        >
           Conversación nueva
         </Button>
-      </CardHeader>
-      <CardContent className="flex h-80 flex-col gap-2">
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col">
         {chat.error && (
-          <Alert role="alert">
-            Ocurrió un error ({chat.error}).{" "}
-            <Button className="h-auto p-0 text-xs underline" onClick={() => void chat.resume()}>
-              Reanudar
-            </Button>
-          </Alert>
+          <div className="px-3 pt-3">
+            <Alert role="alert" className="flex items-center justify-between gap-3 py-2 text-xs">
+              <span>Ocurrió un error ({chat.error}).</span>
+              <Button
+                className="h-7 shrink-0 rounded-full px-3 text-xs"
+                onClick={() => void chat.resume()}
+              >
+                Reanudar
+              </Button>
+            </Alert>
+          </div>
         )}
-        <StreamStatus status={chat.status} />
-        <div className="min-h-0 flex-1">
+
+        {chat.status !== "idle" && chat.status !== "completed" && (
+          <div className="px-3 pt-3">
+            <StreamStatus status={chat.status} />
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-hidden">
           <MessageList
             messages={chat.messages}
             profileId={profileId}
             runId={chat.runId}
-            pendingDecision={chat.pendingDecision}
+            pendingDecision={null}
             onDecision={handleDecision}
             busy={chat.status === "running" || chat.status === "resuming"}
             onFeedback={handleFeedback}
           />
         </div>
+
+        {chat.pendingDecision && (
+          <div
+            className="shrink-0 border-t border-border bg-card px-3 py-3 shadow-[0_-8px_24px_rgba(41,63,56,0.08)]"
+            data-testid="pending-decision-bar"
+          >
+            <ProposalCard
+              decision={chat.pendingDecision}
+              onDecision={handleDecision}
+              busy={chat.status === "running" || chat.status === "resuming"}
+            />
+          </div>
+        )}
+
         <Composer status={chat.status} onSend={handleSend} />
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

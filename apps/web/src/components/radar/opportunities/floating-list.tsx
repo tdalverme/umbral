@@ -6,13 +6,22 @@ import { cn } from "@/lib/utils";
 import type { Explanation, MatchItem } from "@/lib/radar/client";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
 
+function formatScore(score: number | null | undefined): string {
+  if (score == null || typeof score !== "number" || Number.isNaN(score)) return "—";
+  return new Intl.NumberFormat("es-AR", {
+    style: "percent",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(score);
+}
+
 function EvidenceDot({ level }: { level: "strong" | "medium" | "low" }) {
   const map: Record<string, string> = {
     strong: "bg-emerald-500",
     medium: "bg-amber-500",
     low: "bg-muted-foreground/40",
   };
-  return <span className={cn("inline-block size-1.5 rounded-full", map[level])} aria-hidden="true" />;
+  return <span className={cn("size-1 shrink-0 rounded-full mt-[6px]", map[level])} aria-hidden="true" />;
 }
 
 export function FloatingList({
@@ -110,12 +119,12 @@ export function FloatingList({
                   >
                     <span className="flex items-start justify-between gap-2">
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex items-center gap-2">
                           <span
-                            className={cn("mt-0.5 size-2 rounded-full border border-border", isSelected ? "bg-[var(--brand-terracotta)] border-[var(--brand-terracotta)]" : "bg-[var(--brand-forest)]")}
+                            className={cn("size-2 shrink-0 rounded-full border border-border", isSelected ? "bg-[var(--brand-terracotta)] border-[var(--brand-terracotta)]" : "bg-[var(--brand-forest)]")}
                             aria-hidden="true"
                           />
-                          <span className="truncate text-sm font-medium">
+                          <span className="truncate text-sm font-medium leading-none">
                             {o.neighborhood ? neighborhoodLabel(o.neighborhood) : "Barrio no declarado"} · ${Number(o.total_cost ?? 0).toLocaleString("es-AR")}
                           </span>
                         </span>
@@ -123,7 +132,7 @@ export function FloatingList({
                           {o.surface_m2 != null ? `${o.surface_m2} m²` : "superficie no declarada"} · {o.rooms != null ? `${o.rooms} amb` : "ambientes no declarados"}
                         </span>
                       </span>
-                      <span className="shrink-0 text-xs font-medium text-muted-foreground">#{o.score ?? ""}</span>
+                      <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">{formatScore(o.score)}</span>
                     </span>
                     {exp ? (
                       <span className="mt-2 block space-y-1">

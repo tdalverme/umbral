@@ -53,25 +53,30 @@ export function MiniCard({
   }
 
   return (
-    <Card data-testid="mini-card" className="border-border/60 p-2">
-      <p className="text-xs text-muted-foreground">Oportunidad de tu radar</p>
+    <Card data-testid="mini-card" className="border-border bg-muted/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Oportunidad de tu radar
+        </p>
+        <span className="size-1.5 shrink-0 rounded-full bg-[var(--brand-terracotta)]" aria-hidden />
+      </div>
       <Link
         href={`/listings/${listingId}?${query.toString()}`}
-        className="text-sm font-medium underline-offset-4 hover:underline"
+        className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-foreground underline-offset-4 hover:underline"
         aria-label={`Ver ficha del depto ${listingId.slice(0, 8)} en tu radar`}
       >
-        Ver ficha
+        Ver ficha <span aria-hidden>↗</span>
       </Link>
       {onFeedback && mode === null && (
-        <div className="mt-2 flex gap-2">
+        <div className="mt-3 flex gap-2">
           <Button
-            className="min-h-9 px-3 py-2 text-xs"
+            className="h-8 flex-1 rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted"
             onClick={() => setMode("like")}
           >
             Me gusta
           </Button>
           <Button
-            className="min-h-9 px-3 py-2 text-xs"
+            className="h-8 flex-1 rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted"
             onClick={() => setMode("dislike")}
           >
             No me gusta
@@ -79,16 +84,22 @@ export function MiniCard({
         </div>
       )}
       {onFeedback && mode !== null && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {(mode === "dislike" ? DISLIKE_REASONS : LIKE_REASONS).map((reason) => (
             <Button
               key={reason.key}
-              className="min-h-9 border border-border bg-background px-3 py-2 text-xs text-foreground hover:bg-muted"
+              className="h-7 rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted"
               onClick={() => send(reason.label)}
             >
               {reason.label}
             </Button>
           ))}
+          <Button
+            className="h-7 rounded-full bg-transparent px-2 text-xs text-muted-foreground hover:bg-muted"
+            onClick={() => setMode(null)}
+          >
+            Cancelar
+          </Button>
         </div>
       )}
     </Card>

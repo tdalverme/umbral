@@ -17,7 +17,7 @@ describe("ProposalCard", () => {
     const onDecision = vi.fn();
     render(<ProposalCard decision={DECISION} onDecision={onDecision} busy={false} />);
     expect(screen.getByText(/cambio propuesto en tu radar/i)).toBeTruthy();
-    expect(screen.getByText("900")).toBeTruthy();
+    expect(screen.getByText(/900/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Aprobar" }));
     expect(onDecision).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "approve" }),
