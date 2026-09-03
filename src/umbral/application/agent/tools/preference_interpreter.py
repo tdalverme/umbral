@@ -14,7 +14,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+import logging
+
 from umbral.application.agent.ports import ModelGateway
+
+logger = logging.getLogger(__name__)
 
 
 class PreferenceInterpretationError(ValueError):
@@ -75,6 +79,14 @@ def resolve_concept(
         for concept in concepts
     ]
     allowed_keys = [c.key for c in concepts]
+    logger.info(
+        "preference_interpreter.catalog",
+        extra={
+            "phrase": phrase[:120],
+            "catalog_keys": allowed_keys[:30],
+            "catalog_size": len(allowed_keys),
+        },
+    )
     schema: dict[str, object] = {
         "resolution": "string",
         "reason": "string",
@@ -178,6 +190,10 @@ def _interpretation_from_data(
         )
     concept = next((c for c in catalog if c.get("key") == concept_key), None)
     if concept is None:
+        logger.info(
+            "preference_interpreter.unresolved_not_published",
+            extra={"concept_key": concept_key, "catalog_keys": [c.get("key") for c in catalog[:20]]},
+        )
         return PreferenceInterpretation(
             kind="unresolved", reason=f"concepto {concept_key} no publicado"
         )

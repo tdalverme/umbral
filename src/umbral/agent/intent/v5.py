@@ -9,10 +9,13 @@ authorized refs, and rejects malformed output. It never synthesizes an act.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import asdict
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 from typing import Literal, cast
 
@@ -85,6 +88,14 @@ class InterpretationCompilerV5:
         context: TurnContextV5,
         correlation_id: object | None = None,
     ) -> TurnInterpretationV5:
+        logger.info(
+            "v5.interpret.request",
+            extra={
+                "phrase": message_text[:150],
+                "active_desires": len(context.active_desires),
+                "has_pending": context.pending_action is not None,
+            },
+        )
         result = self.gateway.generate_structured(
             messages=(
                 {"role": "system", "content": _system_message(context)},
@@ -96,10 +107,34 @@ class InterpretationCompilerV5:
             model_version=self.model_version,
         )
         if result.status != "success" or result.content is None:
+            logger.info(
+                "v5.interpret.gateway_failed",
+                extra={"phrase": message_text[:120], "status": result.status, "error": result.error_code},
+            )
             raise InterpretationContractFailed(
                 result.error_code or "provider_failure"
             )
-        return self._compile(result.content, message_text, context)
+        try:
+            compiled = self._compile(result.content, message_text, context)
+        except InterpretationContractFailed as exc:
+            logger.info(
+                "v5.interpret.compile_failed",
+                extra={"phrase": message_text[:120], "reason": exc.reason, "raw": str(result.content)[:500]},
+            )
+            raise
+        logger.info(
+            "v5.interpret.success",
+            extra={
+                "phrase": message_text[:120],
+                "acts": [a.kind for a in compiled.acts],
+                "concept_links": [
+                    getattr(a, "concept_links", ())
+                    for a in compiled.acts
+                    if hasattr(a, "concept_links")
+                ],
+            },
+        )
+        return compiled
 
     def _compile(
         self,

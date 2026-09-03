@@ -8,9 +8,12 @@ structural problems in the contract raise ``PreferenceVocabularyInvalid``.
 
 from __future__ import annotations
 
+import logging
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +56,15 @@ class PreferenceVocabularySpec:
         if intent is None:
             intent = self._resolve_embedded(key)
         if intent is None:
+            # Log registry snapshot for debugging (preview) — no PII, only phrase y catálogo
+            available = sorted({e.intent.concept_key for e in self.entries})
+            logger.info(
+                "preference.unknown_concept phrase=%r normalized=%r available=%s entries=%d",
+                phrase,
+                key,
+                available,
+                len(self.entries),
+            )
             raise PreferenceUnknownConcept(phrase)
         return intent
 

@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import UUID
 
+import logging
+
 from umbral.agent.tools.contracts import ToolError, ToolRunContext
 from umbral.agent.tools.executor import ToolImplementation
 from umbral.application.agent.tools.contracts import ProposalError
@@ -15,6 +17,8 @@ from umbral.application.agent.tools.preferences import (
     PreferenceVocabularyError,
     PreferenceVocabularySpec,
 )
+
+logger = logging.getLogger(__name__)
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.criteria.contracts import Compilation, PreferenceFact
 from umbral.application.feedback.contracts import (
@@ -263,6 +267,14 @@ def _propose_preference(services: ToolServices) -> ToolImplementation:
         try:
             intent: PreferenceIntent = services.vocabulary.resolve(phrase)
         except PreferenceVocabularyError as error:
+            logger.info(
+                "vocabulary.resolve_failed",
+                extra={
+                    "phrase": phrase[:120],
+                    "code": error.code,
+                    "vocab_keys": [e.intent.concept_key for e in services.vocabulary.entries[:30]],
+                },
+            )
             raise ToolError(code=error.code) from error
         if intent.requires_value and intent.value is None:
             raise ToolError(code="preference.value_required")

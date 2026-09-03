@@ -568,11 +568,40 @@ def _build_preference_service(session_factory: SessionFactory) -> PreferenceServ
     bindings = SqlAlchemyBindingRepository(session_factory)
     concepts = SqlAlchemyConceptRepository(session_factory)
 
+    _logged_registry = False
+
     class _ConceptReader:
         def get(self, key: str) -> PreferenceConcept | None:
+            nonlocal _logged_registry
+            if not _logged_registry:
+                try:
+                    # loguea el registry real de la DB una sola vez por worker
+                    import logging
+
+                    _logger = logging.getLogger(__name__)
+                    # intentar listar algunas keys para debug (no abre sesion larga)
+                    _logger.info(
+                        "concept_registry.db_check",
+                        extra={"lookup_key": key, "has_proximidad_cafes": concepts.get("proximidad_cafes") is not None},
+                    )
+                except Exception:
+                    pass
+                _logged_registry = True
             concept = concepts.get(key)
             if concept is None:
+                import logging
+
+                logging.getLogger(__name__).info(
+                    "concept_registry.miss",
+                    extra={"key": key},
+                )
                 return None
+            import logging
+
+            logging.getLogger(__name__).info(
+                "concept_registry.hit",
+                extra={"key": key, "computable": bool((concept.compute_policy or {}).get("computable", False))},
+            )
             return PreferenceConcept(
                 key=concept.key,
                 matcher_type=concept.matcher_type,
@@ -615,6 +644,9 @@ def _interpret_preference(
         / "v1"
         / "concepts-seed-v1.json"
     )
+    import logging
+
+    logger = logging.getLogger(__name__)
     raw = json.loads(seed_path.read_text(encoding="utf-8"))
     # Cargar vocabulario como few-shot examples para el LLM (no como allowlist dura)
     vocab_aliases: dict[str, list[str]] = {}
@@ -630,6 +662,15 @@ def _interpret_preference(
             vocab_aliases.setdefault(key, []).extend(list(entry.aliases))
     except Exception:
         vocab_aliases = {}
+    logger.info(
+        "concept_registry.catalog",
+        extra={
+            "concepts": [str(c.get("key")) for c in raw.get("concepts", [])[:40]],
+            "has_proximidad_cafes": any(c.get("key") == "proximidad_cafes" for c in raw.get("concepts", [])),
+            "vocab_has_cafes": "proximidad_cafes" in vocab_aliases,
+            "cafes_aliases": vocab_aliases.get("proximidad_cafes", [])[:6],
+        },
+    )
     options = tuple(
         ConceptOption(
             key=str(concept["key"]),
