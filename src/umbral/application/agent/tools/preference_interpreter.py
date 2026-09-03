@@ -114,8 +114,17 @@ def resolve_concept(
         model_version=model_version,
     )
     if result.status != "success" or result.content is None:
+        logger.warning("preference_interpreter.gateway_failed phrase=%r status=%s", phrase[:80], result.status)
         return None
-    return _interpretation_from_data(result.content, catalog)
+    interp = _interpretation_from_data(result.content, catalog)
+    logger.warning(
+        "preference_interpreter.result phrase=%r kind=%s concept_key=%s reason=%r",
+        phrase[:80],
+        getattr(interp, "kind", None),
+        getattr(interp, "concept_key", None),
+        getattr(interp, "reason", "")[:80],
+    )
+    return interp
 
 
 _INSTRUCTIONS = (
