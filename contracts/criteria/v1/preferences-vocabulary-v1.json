@@ -94,7 +94,14 @@
       "value": null
     },
     {
-      "aliases": ["buen transporte", "bien conectado", "cerca del transporte"],
+      "aliases": [
+        "buen transporte",
+        "bien conectado",
+        "cerca del transporte",
+        "buen acceso al transporte",
+        "con buen acceso al transporte",
+        "acceso al transporte"
+      ],
       "concept_key": "acceso_transporte",
       "polarity": "positive",
       "value": null
