@@ -662,6 +662,13 @@ def _interpret_preference(
             vocab_aliases.setdefault(key, []).extend(list(entry.aliases))
     except Exception:
         vocab_aliases = {}
+    # Few-shot extra para que el LLM generalice sin alias literales en el vocab determinístico
+    for k, v in {
+        "proximidad_cafes": ["cafes cerca", "cafe cerca", "cafeterias cerca"],
+        "calma_residencial": ["poco ruido", "con poco ruido", "silencioso"],
+        "acceso_transporte": ["buen acceso al transporte", "con buen acceso al transporte"],
+    }.items():
+        vocab_aliases.setdefault(k, []).extend(v)
     logger.info(
         "concept_registry.catalog",
         extra={

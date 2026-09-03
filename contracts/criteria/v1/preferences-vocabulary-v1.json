@@ -77,31 +77,13 @@
       "value": null
     },
     {
-      "aliases": [
-        "cerca de cafes",
-        "con cafes cerca",
-        "cerca de un cafe",
-        "cafes cerca",
-        "cafe cerca",
-        "cerca de cafes lindos",
-        "con cafes lindos cerca",
-        "cafeterias cerca",
-        "con cafeterias cerca",
-        "cerca de cafeterias"
-      ],
+      "aliases": ["cerca de cafes", "con cafes cerca", "cerca de un cafe"],
       "concept_key": "proximidad_cafes",
       "polarity": "positive",
       "value": null
     },
     {
-      "aliases": [
-        "buen transporte",
-        "bien conectado",
-        "cerca del transporte",
-        "buen acceso al transporte",
-        "con buen acceso al transporte",
-        "acceso al transporte"
-      ],
+      "aliases": ["buen transporte", "bien conectado", "cerca del transporte"],
       "concept_key": "acceso_transporte",
       "polarity": "positive",
       "value": null
@@ -137,18 +119,7 @@
       "value": null
     },
     {
-      "aliases": [
-        "barrio tranquilo",
-        "zona tranquila",
-        "sin ruido",
-        "tranquilo",
-        "tranquilidad",
-        "poco ruido",
-        "con poco ruido",
-        "poco ruidoso",
-        "silencioso",
-        "calmo"
-      ],
+      "aliases": ["barrio tranquilo", "zona tranquila", "sin ruido", "tranquilo", "tranquilidad"],
       "concept_key": "calma_residencial",
       "polarity": "positive",
       "value": null
