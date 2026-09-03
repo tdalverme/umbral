@@ -392,37 +392,63 @@ foreach ($service in $serviceArtifacts.Keys) {
         Start-Sleep -Seconds 10
     }
     if ([string]::IsNullOrWhiteSpace($deploymentId)) {
-        Write-Host "No new deployment detected for ${service}. Gathering Railway diagnostics..."
-        $artifact = $manifest.artifacts.($serviceArtifacts[$service])
-        Write-Host ("Target image: {0}@{1}" -f $artifact.image, $artifact.digest)
+        # Si la imagen no cambió (web en cambios solo de runtime), Railway puede no crear deployment nuevo
+        # pero las variables sí se actualizaron. Revalidar si el servicio ya está en target y reusar el deployment actual.
+        $recheckConfig = $null
         try {
-            $rawConfig = & npx @railway/cli@5.27.2 environment config -e $Environment --json
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "=== Environment config ==="
-                Write-Host ($rawConfig | Out-String)
-            } else {
-                Write-Host "environment config failed (exit $LASTEXITCODE)"
+            $recheckRaw = & npx @railway/cli@5.27.2 environment config -e $Environment --json
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($recheckRaw)) {
+                $recheckConfig = $recheckRaw | ConvertFrom-Json
             }
-        } catch { Write-Host ("environment config failed: {0}" -f $_.Exception.Message) }
-        try {
-            $rawStatus = & npx @railway/cli@5.27.2 service status --all -e $Environment --json
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "=== Service status ==="
-                Write-Host ($rawStatus | Out-String)
-            } else {
-                Write-Host "service status failed (exit $LASTEXITCODE)"
-            }
-        } catch { Write-Host ("service status failed: {0}" -f $_.Exception.Message) }
-        try {
-            $rawList = & npx @railway/cli@5.27.2 deployment list -e $Environment --service $service --json
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "=== Deployment list for ${service} ==="
-                Write-Host ($rawList | Out-String)
-            } else {
-                Write-Host "deployment list failed (exit $LASTEXITCODE)"
-            }
-        } catch { Write-Host ("deployment list failed: {0}" -f $_.Exception.Message) }
-        throw ("Railway did not create a new deployment for {0} after applying the image change." -f $service)
+        } catch {}
+        $recheckSvcConfig = $null
+        if ($null -ne $recheckConfig) {
+            $recheckSvcConfig = $recheckConfig.services.($serviceIdByName[$service])
+        }
+        $isNowAtTarget = $false
+        if ($null -ne $recheckSvcConfig) {
+            $isNowAtTarget = Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $recheckSvcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars
+        }
+        if ($isNowAtTarget) {
+            $currentId = [string]$statusByName[$service].deploymentId
+            # Releer deployment list por si el ID cambió sin que lo detectáramos como "nuevo"
+            $latestIds = @(Get-RailwayDeploymentIds -Service $service -Environment $Environment)
+            if ($latestIds.Count -gt 0) { $currentId = [string]$latestIds[0] }
+            Write-Host "No new deployment for ${service} but config already at target (image unchanged). Reusing deployment: $currentId"
+            $deploymentId = $currentId
+        } else {
+            Write-Host "No new deployment detected for ${service}. Gathering Railway diagnostics..."
+            $artifact = $manifest.artifacts.($serviceArtifacts[$service])
+            Write-Host ("Target image: {0}@{1}" -f $artifact.image, $artifact.digest)
+            try {
+                $rawConfig = & npx @railway/cli@5.27.2 environment config -e $Environment --json
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "=== Environment config ==="
+                    Write-Host ($rawConfig | Out-String)
+                } else {
+                    Write-Host "environment config failed (exit $LASTEXITCODE)"
+                }
+            } catch { Write-Host ("environment config failed: {0}" -f $_.Exception.Message) }
+            try {
+                $rawStatus = & npx @railway/cli@5.27.2 service status --all -e $Environment --json
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "=== Service status ==="
+                    Write-Host ($rawStatus | Out-String)
+                } else {
+                    Write-Host "service status failed (exit $LASTEXITCODE)"
+                }
+            } catch { Write-Host ("service status failed: {0}" -f $_.Exception.Message) }
+            try {
+                $rawList = & npx @railway/cli@5.27.2 deployment list -e $Environment --service $service --json
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "=== Deployment list for ${service} ==="
+                    Write-Host ($rawList | Out-String)
+                } else {
+                    Write-Host "deployment list failed (exit $LASTEXITCODE)"
+                }
+            } catch { Write-Host ("deployment list failed: {0}" -f $_.Exception.Message) }
+            throw ("Railway did not create a new deployment for {0} after applying the image change." -f $service)
+        }
     }
     $deploymentIds[$service] = $deploymentId
     Write-Host "New deployment for ${service}: $deploymentId"
