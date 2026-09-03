@@ -79,13 +79,11 @@ def resolve_concept(
         for concept in concepts
     ]
     allowed_keys = [c.key for c in concepts]
-    logger.info(
-        "preference_interpreter.catalog",
-        extra={
-            "phrase": phrase[:120],
-            "catalog_keys": allowed_keys[:30],
-            "catalog_size": len(allowed_keys),
-        },
+    logger.warning(
+        "preference_interpreter.catalog phrase=%r catalog_keys=%s size=%d",
+        phrase[:120],
+        allowed_keys[:30],
+        len(allowed_keys),
     )
     schema: dict[str, object] = {
         "resolution": "string",
@@ -190,9 +188,10 @@ def _interpretation_from_data(
         )
     concept = next((c for c in catalog if c.get("key") == concept_key), None)
     if concept is None:
-        logger.info(
-            "preference_interpreter.unresolved_not_published",
-            extra={"concept_key": concept_key, "catalog_keys": [c.get("key") for c in catalog[:20]]},
+        logger.warning(
+            "preference_interpreter.unresolved_not_published concept_key=%r catalog_keys=%s",
+            concept_key,
+            [c.get("key") for c in catalog[:20]],
         )
         return PreferenceInterpretation(
             kind="unresolved", reason=f"concepto {concept_key} no publicado"

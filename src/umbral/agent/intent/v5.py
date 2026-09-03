@@ -88,13 +88,11 @@ class InterpretationCompilerV5:
         context: TurnContextV5,
         correlation_id: object | None = None,
     ) -> TurnInterpretationV5:
-        logger.info(
-            "v5.interpret.request",
-            extra={
-                "phrase": message_text[:150],
-                "active_desires": len(context.active_desires),
-                "has_pending": context.pending_action is not None,
-            },
+        logger.warning(
+            "v5.interpret.request phrase=%r active_desires=%d has_pending=%s",
+            message_text[:150],
+            len(context.active_desires),
+            context.pending_action is not None,
         )
         result = self.gateway.generate_structured(
             messages=(
@@ -107,9 +105,11 @@ class InterpretationCompilerV5:
             model_version=self.model_version,
         )
         if result.status != "success" or result.content is None:
-            logger.info(
-                "v5.interpret.gateway_failed",
-                extra={"phrase": message_text[:120], "status": result.status, "error": result.error_code},
+            logger.warning(
+                "v5.interpret.gateway_failed phrase=%r status=%s error=%s",
+                message_text[:120],
+                result.status,
+                result.error_code,
             )
             raise InterpretationContractFailed(
                 result.error_code or "provider_failure"
@@ -117,22 +117,22 @@ class InterpretationCompilerV5:
         try:
             compiled = self._compile(result.content, message_text, context)
         except InterpretationContractFailed as exc:
-            logger.info(
-                "v5.interpret.compile_failed",
-                extra={"phrase": message_text[:120], "reason": exc.reason, "raw": str(result.content)[:500]},
+            logger.warning(
+                "v5.interpret.compile_failed phrase=%r reason=%s raw=%s",
+                message_text[:120],
+                exc.reason,
+                str(result.content)[:500],
             )
             raise
-        logger.info(
-            "v5.interpret.success",
-            extra={
-                "phrase": message_text[:120],
-                "acts": [a.kind for a in compiled.acts],
-                "concept_links": [
-                    getattr(a, "concept_links", ())
-                    for a in compiled.acts
-                    if hasattr(a, "concept_links")
-                ],
-            },
+        logger.warning(
+            "v5.interpret.success phrase=%r acts=%s concept_links=%s",
+            message_text[:120],
+            [a.kind for a in compiled.acts],
+            [
+                getattr(a, "concept_links", ())
+                for a in compiled.acts
+                if hasattr(a, "concept_links")
+            ],
         )
         return compiled
 

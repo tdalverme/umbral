@@ -58,7 +58,7 @@ class PreferenceVocabularySpec:
         if intent is None:
             # Log registry snapshot for debugging (preview) — no PII, only phrase y catálogo
             available = sorted({e.intent.concept_key for e in self.entries})
-            logger.info(
+            logger.warning(
                 "preference.unknown_concept phrase=%r normalized=%r available=%s entries=%d",
                 phrase,
                 key,
