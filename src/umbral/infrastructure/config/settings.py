@@ -347,7 +347,7 @@ class Settings(BaseSettings):
         default=1500, validation_alias="AGENT_EVALS_LATENCY_THRESHOLD_MS"
     )
     agent_graph_release_id: str = Field(
-        default="graph-release-001", validation_alias="AGENT_GRAPH_RELEASE_ID"
+        default="graph-release-005", validation_alias="AGENT_GRAPH_RELEASE_ID"
     )
     agent_v5_activation_evidence: str = Field(
         default="", validation_alias="AGENT_V5_ACTIVATION_EVIDENCE"
