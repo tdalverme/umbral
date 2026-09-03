@@ -430,10 +430,33 @@ def _binding_drafts(
 ) -> tuple[BindingDraft, ...]:
     if not concept_links:
         return (BindingDraft.unresolved("no_structured_evidence"),)
-    return tuple(
-        BindingDraft.unresolved(f"concept_link:{link.concept_ref}")
-        for link in concept_links
-    )
+    drafts: list[BindingDraft] = []
+    for link in concept_links:
+        # Soft urban/luminosidad concepts auto-aplican sin HITL; hard filters siguen por proposals.
+        # Mapeo mínimo: urbanos y lifestyle usan signal_score, resto usa semantic_feature si no se conoce.
+        # El PreferenceService validará contra el registry y rechazará si el matcher no coincide.
+        concept_key = link.concept_ref
+        # Heurística: proximidad/acceso/vida/caminabilidad/calma/ruido -> signal_score; luminosidad/moderno -> semantic_feature; balcon etc -> categorical
+        if concept_key.startswith(("proximidad_", "acceso_", "vida_", "zona_", "caminabilidad", "calma_", "ruido_")):
+            matcher: str = "signal_score"
+        elif concept_key in {"luminosidad", "moderno", "estado_general"}:
+            matcher = "semantic_feature"
+        elif concept_key in {"balcon", "mascotas", "amoblado", "ascensor", "cochera", "piscina", "dormitorios", "banos"}:
+            matcher = "categorical"
+        else:
+            matcher = "signal_score"
+        drafts.append(
+            BindingDraft.structured(
+                concept_key=concept_key,
+                matcher_type=matcher,  # type: ignore[arg-type]
+                params={},
+                confidence=link.confidence,
+                mode="soft",
+                evidence_refs=(),
+                limitations=(),
+            )
+        )
+    return tuple(drafts)
 
 
 def _current_value(context: TurnContextV5, filter_key: str) -> object | None:
