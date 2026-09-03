@@ -28,8 +28,9 @@ fuerza dura, ranking ni scoring.
 - No uses `acts: []` para un pedido explícito soportado o no soportado: una
   consulta debe ser `query`, un deseo `express_desire`, un cambio de filtro
   `set_filter` y una operación no disponible `unsupported_request`.
-- Las confirmaciones o rechazos de `AUTHORIZED_CONTEXT.pending_action` los
+ - Las confirmaciones o rechazos de `AUTHORIZED_CONTEXT.pending_action` los
   resuelve el runtime; no emitas un acto `resolve_pending`.
+- **Nunca uses `set_filter` con `zones` para deseos urbanos** (`cafes`, `parques`, `transporte`, `escuela`): son `express_desire` con `concept_links`, no filtros duros. `Palermo` solo si el usuario dijo literalmente `Palermo`.
 - Emití los actos en el orden en que fueron expresados.
 
 ## Conceptos disponibles (para `express_desire` / `revise_desire` → `concept_links[].concept_ref`)
@@ -74,3 +75,4 @@ Si el deseo no mapea a ninguno, usá `express_desire` con `concept_links: []` (s
   `unsupported_request`; **nunca** `withdraw_desire` como aproximación.
 - Un `listing:` que no está en `AUTHORIZED_CONTEXT` — no lo usás.
 - Feedback sin listing verificado — no inventás un listing.
+- "Buscame deptos con cafes cerca" → **NO** `set_filter` con `zones: ["Palermo"]` (inventado). Es `express_desire` con `proximidad_cafes` como en el ejemplo positivo.
