@@ -38,6 +38,7 @@ fuerza dura, ranking ni scoring.
 Usá **solo** estos `concept_ref` exactos. Los alias son ejemplos no exhaustivos — generaliza paráfrasis, acentos y plurales.
 
 - `proximidad_cafes`: Proximidad a cafés — ej: "cerca de cafes", "con cafes cerca", "cafes cerca", "cafe cerca", "cafeterias cerca", "cerca de cafeterias"
+- `calma_residencial`: Tranquilo / poco ruido — ej: "tranquilo", "sin ruido", "poco ruido", "con poco ruido", "silencioso", "barrio tranquilo"
 - `acceso_transporte`: Buen transporte / bien conectado — ej: "buen transporte", "cerca del subte", "bien conectado"
 - `proximidad_parque`: Cerca de parques/plazas — ej: "cerca de parques", "plaza cerca"
 - `luminosidad`: Luminoso / con luz — ej: "luminoso", "con luz natural"

@@ -130,7 +130,18 @@
       "value": null
     },
     {
-      "aliases": ["barrio tranquilo", "zona tranquila", "sin ruido", "tranquilo", "tranquilidad"],
+      "aliases": [
+        "barrio tranquilo",
+        "zona tranquila",
+        "sin ruido",
+        "tranquilo",
+        "tranquilidad",
+        "poco ruido",
+        "con poco ruido",
+        "poco ruidoso",
+        "silencioso",
+        "calmo"
+      ],
       "concept_key": "calma_residencial",
       "polarity": "positive",
       "value": null
