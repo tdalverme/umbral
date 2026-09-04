@@ -394,20 +394,27 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ([string]::IsNullOrWhiteSpace($deploymentId)) {
         # Si la imagen no cambió (web en cambios solo de runtime), Railway puede no crear deployment nuevo
         # pero las variables sí se actualizaron. Revalidar si el servicio ya está en target y reusar el deployment actual.
-        $recheckConfig = $null
-        try {
-            $recheckRaw = & npx @railway/cli@5.27.2 environment config -e $Environment --json
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($recheckRaw)) {
-                $recheckConfig = $recheckRaw | ConvertFrom-Json
-            }
-        } catch {}
-        $recheckSvcConfig = $null
-        if ($null -ne $recheckConfig) {
-            $recheckSvcConfig = $recheckConfig.services.($serviceIdByName[$service])
-        }
         $isNowAtTarget = $false
-        if ($null -ne $recheckSvcConfig) {
-            $isNowAtTarget = Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $recheckSvcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars
+        $recheckAttempts = 0
+        while ($recheckAttempts -lt 3 -and -not $isNowAtTarget) {
+            Start-Sleep -Seconds 5
+            $recheckAttempts++
+            $recheckConfig = $null
+            try {
+                $recheckRaw = & npx @railway/cli@5.27.2 environment config -e $Environment --json
+                if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($recheckRaw)) {
+                    $recheckConfig = $recheckRaw | ConvertFrom-Json
+                }
+            } catch {}
+            $recheckSvcConfig = $null
+            if ($null -ne $recheckConfig) {
+                $recheckSvcConfig = $recheckConfig.services.($serviceIdByName[$service])
+            }
+            if ($null -ne $recheckSvcConfig) {
+                $isNowAtTarget = Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $recheckSvcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars
+                if ($isNowAtTarget) { break }
+                Write-Host "Recheck $recheckAttempts for ${service}: not yet at target (release_id=$($recheckSvcConfig.variables.UMBRAL_RELEASE_ID.value) vs $($manifest.release_id))"
+            }
         }
         if ($isNowAtTarget) {
             $currentId = [string]$statusByName[$service].deploymentId
