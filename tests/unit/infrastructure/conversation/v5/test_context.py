@@ -7,6 +7,7 @@ from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
+from tests.fakes.preferences import FakeConceptReader, FakePreferenceStore
 from tests.support.chat import (
     FixedProfileStatusReader,
     InMemoryChatMessageRepository,
@@ -30,8 +31,11 @@ from umbral.application.preferences.contracts import (
     BindingDraft,
     PreferenceAuthority,
     PreferenceChange,
+    PreferenceConcept,
+    PreferencePolicySpec,
     PreferenceView,
 )
+from umbral.application.preferences.service import PreferenceService
 from umbral.application.radar.contracts import RadarError
 from umbral.application.radar.service import RadarService
 from umbral.infrastructure.conversation.v5.context import ContextAssemblerV5
@@ -353,6 +357,84 @@ def test_active_desire_context_reloads_the_persisted_negative_essential_binding(
         ConceptLinkV5(
             concept_ref="calma_residencial", confidence=0.9,
             polarity="negative", intensity="essential", evidence_spans=(), force="soft",
+        ),
+    )
+
+
+def test_context_projects_params_persisted_by_preference_service() -> None:
+    radar_ctx = RadarTestContext(default_runtime=False)
+    user_id = uuid4()
+    profile, _ = radar_ctx.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    store = FakePreferenceStore()
+    preferences = PreferenceService(
+        expressions=store,
+        bindings=store,
+        mutations=store,
+        concepts=FakeConceptReader(
+            {
+                "calma_residencial": PreferenceConcept(
+                    key="calma_residencial",
+                    matcher_type="signal_score",
+                    computable=True,
+                )
+            }
+        ),
+        policy=PreferencePolicySpec.v1(),
+        clock=lambda: _NOW,
+    )
+    preferences.set_explicit_preference(
+        profile_id=profile.profile_id,
+        source_message_id=None,
+        concept_key="calma_residencial",
+        raw_text="No quiero ruido",
+        binding_draft=BindingDraft.structured(
+            concept_key="calma_residencial",
+            matcher_type="signal_score",
+            params={
+                "polarity": "negative",
+                "intensity": "essential",
+                "weight": 1.0,
+                "intensity_policy_version": "preference-intensity-v1",
+            },
+            confidence=0.9,
+        ),
+        correlation_id=uuid4(),
+    )
+    chat, session_id = _bound_session(
+        radar_ctx, user_id=user_id, profile_id=profile.profile_id
+    )
+    assembler = ContextAssemblerV5(
+        chat=chat,
+        radar=radar_ctx.service,
+        preferences=preferences,
+        pending=_FakePendingReader(None),
+        focus=_FakeFocusReader(None),
+        clock=lambda: _NOW,
+    )
+
+    context = assembler.load(
+        user_id=user_id, session_id=session_id, correlation_id=uuid4()
+    )
+
+    assert context.active_desires[0].concept_links == (
+        ConceptLinkV5(
+            concept_ref="calma_residencial",
+            confidence=0.9,
+            polarity="negative",
+            intensity="essential",
+            evidence_spans=(),
+            force="soft",
         ),
     )
 

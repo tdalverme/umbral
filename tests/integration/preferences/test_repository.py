@@ -109,6 +109,63 @@ def test_repository_persists_superseded_chain_in_one_mutation(
     assert retired_bindings[original.bindings[1].binding_id].superseded_by is None
 
 
+def test_set_explicit_preference_supersedes_the_prior_binding_and_fact(
+    preference_stack: PreferenceStack,
+) -> None:
+    """Replacing low with essential leaves exactly one active fact lineage."""
+    low = preference_stack.service.set_explicit_preference(
+        profile_id=preference_stack.profile_id,
+        source_message_id=None,
+        concept_key="calma_residencial",
+        raw_text="Busco poco ruido",
+        binding_draft=BindingDraft.structured(
+            concept_key="calma_residencial",
+            matcher_type="signal_score",
+            params={
+                "polarity": "positive",
+                "intensity": "low",
+                "weight": 0.25,
+                "intensity_policy_version": "preference-intensity-v1",
+            },
+            confidence=0.9,
+        ),
+        correlation_id=uuid4(),
+    )
+    essential = preference_stack.service.set_explicit_preference(
+        profile_id=preference_stack.profile_id,
+        source_message_id=None,
+        concept_key="calma_residencial",
+        raw_text="Es esencial que sea silencioso",
+        binding_draft=BindingDraft.structured(
+            concept_key="calma_residencial",
+            matcher_type="signal_score",
+            params={
+                "polarity": "positive",
+                "intensity": "essential",
+                "weight": 1.0,
+                "intensity_policy_version": "preference-intensity-v1",
+            },
+            confidence=0.9,
+        ),
+        correlation_id=uuid4(),
+    )
+
+    with preference_stack.factory() as session:
+        old_binding = session.get(CriterionBinding, low.bindings[0].binding_id)
+        old_fact = session.get(PreferenceFact, low.fact_ids[0])
+        new_fact = session.get(PreferenceFact, essential.fact_ids[0])
+
+    assert old_binding is not None
+    assert old_binding.status == "superseded"
+    assert old_binding.superseded_by == essential.bindings[0].binding_id
+    assert old_fact is not None
+    assert old_fact.state == "superseded"
+    assert old_fact.superseded_by == essential.fact_ids[0]
+    assert new_fact is not None
+    assert new_fact.state == "active"
+    assert new_fact.criterion_binding_id == essential.bindings[0].binding_id
+
+
 def test_repository_rolls_back_expression_and_bindings_when_fact_insert_fails(
     preference_stack: PreferenceStack,
 ) -> None:

@@ -133,7 +133,12 @@ def preference_stack(
             {
                 "balcon": PreferenceConcept(
                     key="balcon", matcher_type="categorical", computable=True
-                )
+                ),
+                "calma_residencial": PreferenceConcept(
+                    key="calma_residencial",
+                    matcher_type="signal_score",
+                    computable=True,
+                ),
             }
         ),
         policy=PreferencePolicySpec.v1(),
