@@ -56,6 +56,20 @@ class _ProposalRepo:
     def latest_pending_for_profile(self, search_profile_id, session_id):
         return None
 
+    def pending_for_profile(self, search_profile_id, session_id):
+        return tuple(sorted(
+            (proposal for proposal in self.proposals.values()
+             if proposal.search_profile_id == search_profile_id
+             and proposal.session_id == session_id
+             and proposal.state == "pending"),
+            key=lambda proposal: proposal.queue_ordinal,
+        ))
+
+    def list_for_profile(self, search_profile_id, state):
+        return tuple(proposal for proposal in self.proposals.values()
+                     if proposal.search_profile_id == search_profile_id
+                     and proposal.state == state)
+
     def mark_approved(self, proposal_id, key, *, profile_version=None, run_id=None):
         proposal = self.proposals.get(proposal_id)
         if proposal is None:
@@ -77,6 +91,26 @@ class _ProposalRepo:
         updated = replace(proposal, state="rejected", rejection_reason=reason)
         self.proposals[proposal_id] = updated
         return updated
+
+    def mark_superseded(self, proposal_id, successor_id, rejection_at):
+        proposal = self.proposals.get(proposal_id)
+        if proposal is None:
+            return None
+        updated = replace(
+            proposal, state="rejected", rejection_reason="edited",
+            superseded_by_proposal_id=successor_id,
+        )
+        self.proposals[proposal_id] = updated
+        return updated
+
+    def rebase_pending_for_queue(self, search_profile_id, session_id, version):
+        for proposal_id, proposal in tuple(self.proposals.items()):
+            if (proposal.search_profile_id == search_profile_id
+                    and proposal.session_id == session_id
+                    and proposal.state == "pending"):
+                self.proposals[proposal_id] = replace(
+                    proposal, base_profile_version=version
+                )
 
     def expire_pending(self, expired_before) -> int:
         return 0
@@ -215,6 +249,62 @@ def test_propose_creates_pending_durable_proposal_with_base_version() -> None:
     assert any(
         e.event_type == "search_profile.update_proposed.v1" for e in events.events
     )
+
+
+def test_pending_proposals_keep_original_act_order() -> None:
+    service, repo, _, _ = _make_service()
+    zones = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+        source_act_id="zones",
+    )
+    budget = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+        source_act_id="budget",
+    )
+
+    assert [(item.source_act_id, item.queue_ordinal) for item in repo.pending_for_profile(PROFILE_ID, SESSION_ID)] == [
+        ("zones", 1), ("budget", 2)
+    ]
+    assert zones.queue_ordinal == 1
+    assert budget.queue_ordinal == 2
+
+
+def test_approving_a_queue_step_rebases_only_the_remaining_steps() -> None:
+    service, repo, _, _ = _make_service()
+    first = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+    )
+    second = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+    )
+
+    service.apply(**_base_args(first.proposal_id))
+
+    assert repo.proposals[first.proposal_id].state == "approved"
+    assert repo.proposals[second.proposal_id].state == "pending"
+    assert repo.proposals[second.proposal_id].base_profile_version == 4
+
+
+def test_correction_derives_a_traceable_proposal_at_the_same_queue_position() -> None:
+    service, repo, _, _ = _make_service()
+    original = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+        source_act_id="palermo",
+    )
+    corrected = service.derive(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        proposal_id=original.proposal_id, change={"zones": ["belgrano"]},
+        correlation_id=CORRELATION_ID, source_act_id="belgrano",
+    )
+
+    assert repo.proposals[original.proposal_id].superseded_by_proposal_id == corrected.proposal_id
+    assert corrected.queue_ordinal == original.queue_ordinal == 1
+    assert corrected.source_act_id == "belgrano"
 
 
 def test_propose_rejects_unknown_change_fields() -> None:

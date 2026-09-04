@@ -175,7 +175,7 @@ class ConversationTurnV5:
                 outcomes=outcomes,
             )
 
-            for act in acts:
+            for act in sorted(acts, key=_execution_priority):
                 act_id = act.act_id
                 if any(outcome.act_id == act_id for outcome in outcomes):
                     continue
@@ -204,8 +204,6 @@ class ConversationTurnV5:
                             decision.reason_code,
                         )
                     )
-                    if decision.status == "pending":
-                        break
                     continue
                 key = self._idempotency_key(session_id, message_id, act_id)
                 result = execute_with_receipt(
@@ -218,7 +216,7 @@ class ConversationTurnV5:
                 )
                 executed.append(result)
                 outcomes.append(self._outcome_for(result))
-                if result.status in ("pending", "needs_clarification"):
+                if result.status == "needs_clarification":
                     break
 
             for act in acts:
@@ -232,7 +230,7 @@ class ConversationTurnV5:
             interpretation=interpretation,
             plan=plan,
             executed=tuple(executed),
-            outcomes=tuple(outcomes),
+            outcomes=_outcomes_in_act_order(interpretation.acts, outcomes),
         )
         return self._record_audit(turn_result, interpretation)
 
@@ -362,6 +360,22 @@ def _decision_map(plan: TurnPlanV5) -> dict[str, ActDecisionV5]:
 
 def _commands_by_act(plan: TurnPlanV5) -> dict[str, CommandV5]:
     return {command.act_id: command for command in plan.commands}
+
+
+def _execution_priority(act: ConversationActV5) -> int:
+    """Persist soft desires before creating every hard-filter proposal."""
+    if act.kind in {"express_desire", "revise_desire", "withdraw_desire"}:
+        return 0
+    if act.kind in {"set_filter", "clear_filter"}:
+        return 1
+    return 2
+
+
+def _outcomes_in_act_order(
+    acts: tuple[ConversationActV5, ...], outcomes: list[ActOutcomeV5]
+) -> tuple[ActOutcomeV5, ...]:
+    by_act = {outcome.act_id: outcome for outcome in outcomes}
+    return tuple(by_act[act.act_id] for act in acts if act.act_id in by_act)
 
 
 def _is_provider_error(error: Exception) -> bool:

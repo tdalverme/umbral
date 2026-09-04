@@ -32,6 +32,10 @@ class ProposalRepository(Protocol):
         self, search_profile_id: UUID, session_id: UUID
     ) -> Proposal | None: ...
 
+    def pending_for_profile(
+        self, search_profile_id: UUID, session_id: UUID
+    ) -> tuple[Proposal, ...]: ...
+
     def list_for_profile(
         self,
         search_profile_id: UUID,
@@ -67,6 +71,10 @@ class ProposalRepository(Protocol):
         rejection_at: datetime,
     ) -> Proposal | None:
         """Mark the original as rejected('edited') and link its successor."""
+
+    def rebase_pending_for_queue(
+        self, search_profile_id: UUID, session_id: UUID, base_profile_version: int
+    ) -> None: ...
 
     def expire_pending(self, expired_before: datetime) -> int:
         """Mark every pending proposal past the window as rejected('expired').

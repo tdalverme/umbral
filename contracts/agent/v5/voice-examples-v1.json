@@ -72,7 +72,7 @@
       "pattern": "confirmacion_pendiente",
       "source": "voice-guide.md:7.6",
       "outcomes": [
-        { "act_id": "a1", "status": "pending", "reason_code": "filter.changes_existing_hard_filter" }
+        { "act_id": "a1", "status": "pending", "reason_code": "filter.requires_confirmation" }
       ],
       "text": "Querés subir el presupuesto a 1.200.000; confirmame si está bien y lo aplico.",
       "verdict": "PASS",
@@ -239,7 +239,7 @@
       "pattern": "borderline_sin_voseo",
       "source": "voice-guide.md:6",
       "outcomes": [
-        { "act_id": "a1", "status": "pending", "reason_code": "filter.changes_existing_hard_filter" }
+        { "act_id": "a1", "status": "pending", "reason_code": "filter.requires_confirmation" }
       ],
       "text": "Usted desea aumentar el presupuesto a 1.200.000. Por favor confirme si desea proceder.",
       "verdict": "BORDERLINE",

@@ -235,6 +235,25 @@ class SqlAlchemyProposalRepository:
             )
             return _to_proposal(model) if model is not None else None
 
+    def pending_for_profile(
+        self, search_profile_id: UUID, session_id: UUID
+    ) -> tuple[Proposal, ...]:
+        with self.session_factory() as current:
+            models = current.scalars(
+                select(SearchProfileUpdateProposal)
+                .where(
+                    SearchProfileUpdateProposal.search_profile_id
+                    == search_profile_id,
+                    SearchProfileUpdateProposal.session_id == session_id,
+                    SearchProfileUpdateProposal.state == "pending",
+                )
+                .order_by(
+                    SearchProfileUpdateProposal.queue_ordinal.asc(),
+                    SearchProfileUpdateProposal.created_at.asc(),
+                )
+            )
+            return tuple(_to_proposal(model) for model in models)
+
     def list_for_profile(
         self,
         search_profile_id: UUID,
@@ -308,6 +327,22 @@ class SqlAlchemyProposalRepository:
             current.commit()
             return _to_proposal(model)
 
+    def rebase_pending_for_queue(
+        self, search_profile_id: UUID, session_id: UUID, base_profile_version: int
+    ) -> None:
+        with self.session_factory() as current:
+            current.execute(
+                update(SearchProfileUpdateProposal)
+                .where(
+                    SearchProfileUpdateProposal.search_profile_id
+                    == search_profile_id,
+                    SearchProfileUpdateProposal.session_id == session_id,
+                    SearchProfileUpdateProposal.state == "pending",
+                )
+                .values(base_profile_version=base_profile_version)
+            )
+            current.commit()
+
     def expire_pending(self, expired_before: datetime) -> int:
         with self.session_factory() as current:
             result = current.execute(
@@ -349,6 +384,8 @@ def _proposal_model(proposal: Proposal) -> SearchProfileUpdateProposal:
         applied_run_id=proposal.applied_run_id,
         rejection_note=proposal.rejection_note,
         superseded_by_proposal_id=proposal.superseded_by_proposal_id,
+        source_act_id=proposal.source_act_id,
+        queue_ordinal=proposal.queue_ordinal,
     )
 
 
@@ -369,4 +406,6 @@ def _to_proposal(model: SearchProfileUpdateProposal) -> Proposal:
         correlation_id=model.correlation_id,
         rejection_note=model.rejection_note,
         superseded_by_proposal_id=model.superseded_by_proposal_id,
+        source_act_id=model.source_act_id,
+        queue_ordinal=model.queue_ordinal,
     )

@@ -235,7 +235,7 @@ def test_confirm_then_add_balcony_reloads_context_and_executes_both_segments() -
     assert result.outcomes[1].status == "applied"
 
 
-def test_pending_act_stops_dependent_tail_but_keeps_prior_safe_act() -> None:
+def test_pending_filter_does_not_block_later_authorized_soft_desires() -> None:
     message = "Quiero balcón y subí el presupuesto a 1200"
     context = _context(
         filters=(HardFilterV5(filter_key="budget_max", value=800.0),)
@@ -277,10 +277,41 @@ def test_pending_act_stops_dependent_tail_but_keeps_prior_safe_act() -> None:
 
     assert result.outcomes[0].status == "applied"
     assert result.outcomes[1].status == "pending"
-    assert all(
-        item.status == "not_executed" for item in result.outcomes[2:]
-    )
+    assert result.outcomes[2].status == "applied"
     assert contexts.load_calls == 1
+
+
+def test_soft_desires_execute_before_all_hard_filter_proposals() -> None:
+    message = "Palermo, hasta 1200 y quiero mucha luz"
+    context = _context()
+    interpretation = _interpretation(
+        SetFilter(
+            act_id="zones", confidence=0.9,
+            evidence_spans=(_span(message, "Palermo"),),
+            filter_key="zones", value=("palermo",),
+        ),
+        ExpressDesire(
+            act_id="light", confidence=0.9,
+            evidence_spans=(_span(message, "mucha luz"),),
+            raw_text="mucha luz", subject_ref="luminosidad",
+        ),
+        SetFilter(
+            act_id="budget", confidence=0.9,
+            evidence_spans=(_span(message, "hasta 1200"),),
+            filter_key="budget_max", value=1200,
+        ),
+    )
+    service, _, executor, _ = _service(context=context, interpretation=interpretation)
+
+    result = service.process(
+        user_id=USER_ID, session_id=SESSION_ID, message_id=MESSAGE_ID,
+        message_text=message, correlation_id=CORRELATION_ID,
+    )
+
+    assert executor.calls == ["light", "zones", "budget"]
+    assert [(item.act_id, item.status) for item in result.outcomes] == [
+        ("zones", "pending"), ("light", "applied"), ("budget", "pending"),
+    ]
 
 
 def test_provider_failure_executes_nothing() -> None:

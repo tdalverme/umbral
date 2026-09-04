@@ -39,6 +39,8 @@ class Proposal:
     correlation_id: UUID | None = None
     rejection_note: str | None = None
     superseded_by_proposal_id: UUID | None = None
+    source_act_id: str = ""
+    queue_ordinal: int = 0
 
 
 @dataclass(frozen=True, slots=True)

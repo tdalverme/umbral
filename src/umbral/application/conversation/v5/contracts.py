@@ -57,6 +57,9 @@ class FocusedEntityV5:
 @dataclass(frozen=True, slots=True)
 class PendingActionV5:
     pending_ref: str
+    act_id: str = ""
+    ordinal: int = 1
+    total: int = 1
 
 
 @dataclass(frozen=True, slots=True)

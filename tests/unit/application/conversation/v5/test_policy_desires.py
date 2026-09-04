@@ -14,6 +14,7 @@ from umbral.application.conversation.v5.contracts import (
     TurnInterpretationV5,
     WithdrawDesire,
     WithdrawDesireCommand,
+    SetFilter,
 )
 from umbral.application.conversation.v5.policy import plan_turn_v5
 
@@ -81,7 +82,6 @@ def test_express_desire_with_zero_concept_links_plans_persistence() -> None:
             )
         ),
     )
-
     assert plan.decisions[0].status == "applied"
     assert plan.commands == (
         RecordDesireCommand(
@@ -92,6 +92,35 @@ def test_express_desire_with_zero_concept_links_plans_persistence() -> None:
         ),
     )
 
+
+def test_initial_hard_filters_always_require_confirmation() -> None:
+    message = "Palermo, 3 ambientes y hasta 1200"
+    plan = plan_turn_v5(
+        user_message=message,
+        context=_context(),
+        interpretation=_interpretation(
+            SetFilter(
+                act_id="zones", confidence=0.9,
+                evidence_spans=(EvidenceSpan(0, 7, "Palermo"),),
+                filter_key="zones", value=("palermo",),
+            ),
+            SetFilter(
+                act_id="rooms", confidence=0.9,
+                evidence_spans=(EvidenceSpan(9, 20, "3 ambientes"),),
+                filter_key="min_rooms", value=3,
+            ),
+            SetFilter(
+                act_id="budget", confidence=0.9,
+                evidence_spans=(EvidenceSpan(23, 33, "hasta 1200"),),
+                filter_key="budget_max", value=1200,
+            ),
+        ),
+    )
+    assert [(item.status, item.reason_code) for item in plan.decisions] == [
+        ("pending", "filter.requires_confirmation"),
+        ("pending", "filter.requires_confirmation"),
+        ("pending", "filter.requires_confirmation"),
+    ]
 
 def test_ambiguous_revision_requests_clarification() -> None:
     plan = plan_turn_v5(

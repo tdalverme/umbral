@@ -172,16 +172,22 @@ class ProposalsPendingReaderV5:
         if profile_id is None:
             return None
         repository = getattr(self.proposals, "repository", None)
-        latest = getattr(repository, "latest_pending_for_profile", None)
-        if latest is None:
+        pending_for_profile = getattr(repository, "pending_for_profile", None)
+        if pending_for_profile is None:
             return None
         try:
-            proposal = latest(profile_id, session_id)
+            queue = pending_for_profile(profile_id, session_id)
         except Exception:  # noqa: BLE001 - pending store unreadable
             return None
-        if proposal is None:
+        if not queue:
             return None
-        return PendingActionV5(pending_ref=f"pending:{proposal.proposal_id}")
+        proposal = queue[0]
+        return PendingActionV5(
+            pending_ref=f"pending:{proposal.proposal_id}",
+            act_id=proposal.source_act_id,
+            ordinal=proposal.queue_ordinal,
+            total=len(queue),
+        )
 
 
 def _filters_from_profile(profile: SearchProfile) -> tuple[HardFilterV5, ...]:

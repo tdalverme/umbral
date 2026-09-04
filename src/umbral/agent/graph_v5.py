@@ -328,7 +328,12 @@ def _context_from_dict(data: Mapping[str, object]) -> TurnContextV5:
             for item in _list(data.get("active_desires"))
         ),
         pending_action=(
-            PendingActionV5(pending_ref=str(data["pending_action"]["pending_ref"]))
+            PendingActionV5(
+                pending_ref=str(data["pending_action"]["pending_ref"]),
+                act_id=str(data["pending_action"].get("act_id", "")),
+                ordinal=int(data["pending_action"].get("ordinal", 1)),
+                total=int(data["pending_action"].get("total", 1)),
+            )
             if data.get("pending_action") is not None
             else None
         ),

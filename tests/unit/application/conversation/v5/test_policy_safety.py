@@ -199,10 +199,10 @@ def test_query_plus_mutation_is_not_guessed() -> None:
 
     assert plan.decisions[0].status == "needs_clarification"
     assert plan.decisions[0].reason_code == "act.query_with_mutation"
-    assert plan.decisions[1].status == "applied"
+    assert plan.decisions[1].status == "pending"
 
 
-def test_new_filter_applies_but_existing_filter_change_is_pending() -> None:
+def test_every_hard_filter_is_pending() -> None:
     new = plan_turn_v5(
         user_message="Subí el presupuesto a 900",
         context=_context(),
@@ -216,7 +216,7 @@ def test_new_filter_applies_but_existing_filter_change_is_pending() -> None:
             )
         ),
     )
-    assert new.decisions[0].status == "applied"
+    assert new.decisions[0].status == "pending"
     assert new.commands == (
         SetFilterCommand(
             act_id="a1",
@@ -242,7 +242,7 @@ def test_new_filter_applies_but_existing_filter_change_is_pending() -> None:
         ),
     )
     assert changed.decisions[0].status == "pending"
-    assert changed.decisions[0].reason_code == "filter.changes_existing_hard_filter"
+    assert changed.decisions[0].reason_code == "filter.requires_confirmation"
     assert len(changed.commands) == 1
 
 

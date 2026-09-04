@@ -109,10 +109,7 @@ def _decide(
                 value=act.value,
                 expected_profile_version=context.active_radar_version,
             )
-            current = _current_filter(context, act.filter_key)
-            if current is None or current == act.value:
-                return _applied(act.act_id), command
-            return _pending(act.act_id, "filter.changes_existing_hard_filter"), command
+            return _pending(act.act_id, "filter.requires_confirmation"), command
         case ClearFilter():
             if context.active_radar_ref is None:
                 return _rejected(act.act_id, "radar.not_bound"), None
@@ -123,7 +120,7 @@ def _decide(
                 filter_key=act.filter_key,
                 expected_profile_version=context.active_radar_version,
             )
-            return _pending(act.act_id, "filter.removes_hard_filter"), clear_command
+            return _pending(act.act_id, "filter.requires_confirmation"), clear_command
         case ExpressDesire():
             return (
                 _applied(act.act_id),

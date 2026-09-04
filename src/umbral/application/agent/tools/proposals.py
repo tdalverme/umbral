@@ -128,6 +128,7 @@ class SearchProfileUpdateProposals:
         search_profile_id: UUID,
         change: Mapping[str, object],
         correlation_id: UUID,
+        source_act_id: str = "",
     ) -> Proposal:
         profile_change = _normalize_change(change)
         profile = self._validate(
@@ -150,6 +151,8 @@ class SearchProfileUpdateProposals:
             state="pending",
             expires_at=self.clock() + timedelta(hours=self.ttl_hours),
             correlation_id=correlation_id,
+            source_act_id=source_act_id,
+            queue_ordinal=self._next_queue_ordinal(search_profile_id, session_id),
         )
         self.repository.insert(proposal)
         self._emit_server_event(
@@ -217,6 +220,9 @@ class SearchProfileUpdateProposals:
             profile_version=updated.version,
             run_id=run_id,
         )
+        rebase_pending = getattr(self.repository, "rebase_pending_for_queue", None)
+        if rebase_pending is not None:
+            rebase_pending(search_profile_id, session_id, updated.version)
         self._emit_server_event(
             event_type="search_profile.update_applied.v1",
             actor_id=user_id,
@@ -276,6 +282,7 @@ class SearchProfileUpdateProposals:
         proposal_id: UUID,
         change: Mapping[str, object],
         correlation_id: UUID,
+        source_act_id: str = "",
     ) -> Proposal:
         """Edit as a NEW derived proposal (clarification Q2, FR-014, R-05).
 
@@ -297,7 +304,7 @@ class SearchProfileUpdateProposals:
             proposal_id=uuid4(),
             session_id=session_id,
             search_profile_id=search_profile_id,
-            base_profile_version=original.base_profile_version,
+            base_profile_version=profile.version,
             diff=diff,
             impact={
                 "fields_changed": sorted(diff),
@@ -306,6 +313,8 @@ class SearchProfileUpdateProposals:
             state="pending",
             expires_at=self.clock() + timedelta(hours=self.ttl_hours),
             correlation_id=correlation_id,
+            source_act_id=source_act_id or original.source_act_id,
+            queue_ordinal=original.queue_ordinal,
         )
         self.repository.insert(derived)
         self.repository.mark_superseded(
@@ -322,6 +331,23 @@ class SearchProfileUpdateProposals:
             },
         )
         return derived
+
+    def _next_queue_ordinal(
+        self, search_profile_id: UUID, session_id: UUID
+    ) -> int:
+        pending_for_profile = getattr(self.repository, "pending_for_profile", None)
+        if pending_for_profile is not None:
+            entries = pending_for_profile(search_profile_id, session_id)
+        else:
+            list_for_profile = getattr(self.repository, "list_for_profile", None)
+            if list_for_profile is None:
+                return 1
+            entries = tuple(
+                proposal
+                for proposal in list_for_profile(search_profile_id, "pending")
+                if proposal.session_id == session_id
+            )
+        return max((proposal.queue_ordinal for proposal in entries), default=0) + 1
 
     def list(
         self,

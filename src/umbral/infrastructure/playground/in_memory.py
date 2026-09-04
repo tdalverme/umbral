@@ -191,6 +191,21 @@ class LocalProposalRepository:
             (item for item in self.proposals.values() if item.state == "pending"), None
         )
 
+    def pending_for_profile(
+        self, search_profile_id: UUID, session_id: UUID
+    ) -> tuple[Proposal, ...]:
+        return tuple(
+            sorted(
+                (
+                    item for item in self.proposals.values()
+                    if item.search_profile_id == search_profile_id
+                    and item.session_id == session_id
+                    and item.state == "pending"
+                ),
+                key=lambda item: item.queue_ordinal,
+            )
+        )
+
     def list_for_profile(
         self, search_profile_id: UUID, state: str
     ) -> tuple[Proposal, ...]:
@@ -249,6 +264,19 @@ class LocalProposalRepository:
         return self.mark_rejected(
             proposal_id, "edited", _rejection_at
         ) and self._replace_superseded(proposal_id, superseded_by_proposal_id)
+
+    def rebase_pending_for_queue(
+        self, search_profile_id: UUID, session_id: UUID, base_profile_version: int
+    ) -> None:
+        for proposal_id, proposal in tuple(self.proposals.items()):
+            if (
+                proposal.search_profile_id == search_profile_id
+                and proposal.session_id == session_id
+                and proposal.state == "pending"
+            ):
+                self.proposals[proposal_id] = replace(
+                    proposal, base_profile_version=base_profile_version
+                )
 
     def _replace_superseded(
         self, proposal_id: UUID, superseded_by_proposal_id: UUID

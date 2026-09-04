@@ -1,9 +1,8 @@
 """Explicit application adapters executing V5 radar commands.
 
 The executor routes typed commands to the existing application services only:
-it creates and binds a radar through ``ChatService``/``RadarService``, applies
-immediate new filters through ``RadarService.version_profile`` with the context
-version, and creates durable material-change proposals through
+it creates and binds a radar through ``ChatService``/``RadarService`` and
+creates durable hard-filter proposals through
 ``SearchProfileUpdateProposals.propose``. It never touches repositories
 directly and never caches idempotency in the agent.
 """
@@ -15,6 +14,7 @@ from uuid import UUID
 from umbral.application.agent.tools.proposals import (
     SearchProfileUpdateProposals,
 )
+from umbral.application.agent.tools.contracts import Proposal, ProposalNotFound
 from umbral.application.chat.service import ChatService
 from umbral.application.conversation.v5.contracts import (
     ClearFilterCommand,
@@ -37,7 +37,6 @@ from umbral.application.preferences.contracts import (
 from umbral.application.preferences.intensity import IntensityPolicy
 from umbral.application.preferences.ports import ConceptReader
 from umbral.application.radar.service import RadarService
-from umbral.domain.errors import ConcurrencyConflict
 from umbral.infrastructure.conversation.composition import PreferenceServiceLike
 
 
@@ -138,41 +137,13 @@ class EffectExecutorV5:
                 status="rejected",
                 reason_code="radar.not_bound",
             )
-        current = _current_value(context, command.filter_key)
-        if current is not None and current != command.value:
-            return self._propose(
-                command.act_id,
-                effect_key="filter.set",
-                context=context,
-                profile_id=profile_id,
-                change=_filter_change(command.filter_key, command.value),
-                reason_code="filter.changes_existing_hard_filter",
-            )
-        if current == command.value:
-            return ExecutedActV5(
-                act_id=command.act_id,
-                effect_key="filter.set",
-                object_ref=f"radar:{profile_id}",
-            )
-        try:
-            self.radar.version_profile(
-                owner_id=UUID(context.user_id),
-                profile_id=profile_id,
-                expected_version=command.expected_profile_version or 0,
-                changes=_filter_change(command.filter_key, command.value),
-                correlation_id=UUID(context.correlation_id),
-            )
-        except ConcurrencyConflict:
-            return ExecutedActV5(
-                act_id=command.act_id,
-                effect_key="filter.set",
-                status="rejected",
-                reason_code="execution.stale_context",
-            )
-        return ExecutedActV5(
-            act_id=command.act_id,
+        return self._propose(
+            command.act_id,
             effect_key="filter.set",
-            object_ref=f"radar:{profile_id}",
+            context=context,
+            profile_id=profile_id,
+            change=_filter_change(command.filter_key, command.value),
+            reason_code="filter.requires_confirmation",
         )
 
     def _clear_filter(
@@ -192,7 +163,7 @@ class EffectExecutorV5:
             context=context,
             profile_id=profile_id,
             change=_clear_change(command.filter_key),
-            reason_code="filter.removes_hard_filter",
+            reason_code="filter.requires_confirmation",
         )
 
     def _record_desire(
@@ -420,12 +391,8 @@ class EffectExecutorV5:
         change: dict[str, object],
         reason_code: str,
     ) -> ExecutedActV5:
-        proposal = self.proposals.propose(
-            user_id=UUID(context.user_id),
-            session_id=UUID(context.session_id),
-            search_profile_id=profile_id,
-            change=change,
-            correlation_id=UUID(context.correlation_id),
+        proposal = self._correct_active_proposal(
+            act_id=act_id, context=context, profile_id=profile_id, change=change
         )
         return ExecutedActV5(
             act_id=act_id,
@@ -433,6 +400,44 @@ class EffectExecutorV5:
             status="pending",
             object_ref=f"proposal:{proposal.proposal_id}",
             reason_code=reason_code,
+        )
+
+    def _correct_active_proposal(
+        self,
+        *,
+        act_id: str,
+        context: TurnContextV5,
+        profile_id: UUID,
+        change: dict[str, object],
+    ) -> Proposal:
+        pending = context.pending_action
+        if pending is not None:
+            try:
+                current = self.proposals.get(
+                    user_id=UUID(context.user_id),
+                    session_id=UUID(context.session_id),
+                    search_profile_id=profile_id,
+                    proposal_id=_ref_uuid(pending.pending_ref, "pending"),
+                )
+            except ProposalNotFound:
+                current = None
+            if current is not None and set(current.diff) == set(change):
+                return self.proposals.derive(
+                    user_id=UUID(context.user_id),
+                    session_id=UUID(context.session_id),
+                    search_profile_id=profile_id,
+                    proposal_id=current.proposal_id,
+                    change=change,
+                    correlation_id=UUID(context.correlation_id),
+                    source_act_id=act_id,
+                )
+        return self.proposals.propose(
+            user_id=UUID(context.user_id),
+            session_id=UUID(context.session_id),
+            search_profile_id=profile_id,
+            change=change,
+            correlation_id=UUID(context.correlation_id),
+            source_act_id=act_id,
         )
 
 

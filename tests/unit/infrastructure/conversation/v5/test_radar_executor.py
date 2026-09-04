@@ -51,6 +51,16 @@ class _ProposalRepo:
     ) -> Proposal | None:
         return None
 
+    def pending_for_profile(
+        self, search_profile_id: UUID, session_id: UUID
+    ) -> tuple[Proposal, ...]:
+        return tuple(
+            item for item in self.proposals.values()
+            if item.search_profile_id == search_profile_id
+            and item.session_id == session_id
+            and item.state == "pending"
+        )
+
     def mark_approved(
         self,
         proposal_id: UUID,
@@ -193,7 +203,7 @@ def test_create_radar_binds_session_and_is_idempotent() -> None:
     assert first.object_ref == f"radar:{bound.search_profile_id}"
 
 
-def test_new_filter_applies_immediately_without_proposal() -> None:
+def test_new_filter_creates_pending_proposal_without_versioning_the_radar() -> None:
     radar_ctx = RadarTestContext(default_runtime=False)
     user_id = uuid4()
     profile, _ = radar_ctx.service.create_profile(
@@ -230,10 +240,11 @@ def test_new_filter_applies_immediately_without_proposal() -> None:
     )
 
     assert result.effect_key == "filter.set"
-    assert result.object_ref == f"radar:{profile.profile_id}"
-    assert result.reason_code is None
+    assert result.object_ref is not None
+    assert result.object_ref.startswith("proposal:")
+    assert result.reason_code == "filter.requires_confirmation"
     updated = radar_ctx.service.get_profile(user_id, profile.profile_id)
-    assert updated.budget_max == 900.0
+    assert updated.budget_max is None
 
 
 def test_existing_filter_change_creates_pending_proposal() -> None:
@@ -275,7 +286,7 @@ def test_existing_filter_change_creates_pending_proposal() -> None:
     assert result.effect_key == "filter.set"
     assert result.object_ref is not None
     assert result.object_ref.startswith("proposal:")
-    assert result.reason_code == "filter.changes_existing_hard_filter"
+    assert result.reason_code == "filter.requires_confirmation"
     updated = radar_ctx.service.get_profile(user_id, profile.profile_id)
     assert updated.budget_max == 800.0
 
@@ -318,12 +329,12 @@ def test_clear_filter_creates_pending_proposal_and_keeps_state() -> None:
     assert result.effect_key == "filter.cleared"
     assert result.object_ref is not None
     assert result.object_ref.startswith("proposal:")
-    assert result.reason_code == "filter.removes_hard_filter"
+    assert result.reason_code == "filter.requires_confirmation"
     updated = radar_ctx.service.get_profile(user_id, profile.profile_id)
     assert updated.zones == ("palermo",)
 
 
-def test_stale_context_version_maps_to_stale_context() -> None:
+def test_hard_filter_proposal_does_not_mutate_a_stale_radar() -> None:
     radar_ctx = RadarTestContext(default_runtime=False)
     user_id = uuid4()
     profile, _ = radar_ctx.service.create_profile(
@@ -367,5 +378,6 @@ def test_stale_context_version_maps_to_stale_context() -> None:
     )
 
     assert result.effect_key == "filter.set"
-    assert result.object_ref is None
-    assert result.reason_code == "execution.stale_context"
+    assert result.object_ref is not None
+    assert result.object_ref.startswith("proposal:")
+    assert result.reason_code == "filter.requires_confirmation"
