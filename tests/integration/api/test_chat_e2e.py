@@ -127,7 +127,7 @@ def _mixed_interpretation() -> TurnInterpretation:
     )
 
 
-def _build_runtime() -> tuple[ChatRuntime, UUID, UUID, RadarTestContext]:
+def _build_runtime() -> tuple[ChatRuntime, UUID, UUID, RadarTestContext, ChatService]:
     radar = RadarTestContext(default_runtime=False)
     user_id = uuid4()
     profile, _ = radar.service.create_profile(
@@ -208,17 +208,20 @@ def _build_runtime() -> tuple[ChatRuntime, UUID, UUID, RadarTestContext]:
         runs=InMemoryGraphRunRepository(),  # type: ignore[arg-type]
         clock=lambda: _NOW,
     )
-    return runtime, user_id, session.session_id, radar
+    return runtime, user_id, session.session_id, radar, chat
 
 
 def test_e2e_mixed_turn_applies_soft_and_confirms_hard() -> None:
-    runtime, user_id, session_id, radar = _build_runtime()
+    runtime, user_id, session_id, radar, chat = _build_runtime()
+    client_message_id = uuid4()
 
     first = runtime.run_turn(
         user_id=user_id,
         session_id=session_id,
         text="prefiero bien luminoso y 900",
         correlation_id=uuid4(),
+        client_message_id=client_message_id,
+        context={"entity": "listing", "id": "listing:1"},
     )
     assert first.status == "interrupted"
     assert first.interrupt is not None
@@ -235,3 +238,13 @@ def test_e2e_mixed_turn_applies_soft_and_confirms_hard() -> None:
     )
     assert second.run_id == first.run_id
     assert second.status == "completed"
+
+    history = chat.list_history(user_id=user_id, session_id=session_id)
+    assert [message.role for message in history] == ["user", "assistant"]
+    assert history[0].content["text"] == "prefiero bien luminoso y 900"
+    assert history[0].client_message_id == client_message_id
+    assert history[0].content["context"] == {
+        "entity": "listing",
+        "id": "listing:1",
+    }
+    assert "confirmado" in str(history[1].content["text"])

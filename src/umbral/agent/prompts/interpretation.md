@@ -35,6 +35,23 @@ fuerza dura, ranking ni scoring.
   con `concept_links: []` si no. `zones` solo representa una zona literal que
   la persona escribió, nunca una inferencia de cercanía, transporte, ruido,
   luz, parques, escuelas o comercios.
+- La `intensity` expresa cuánto pesa la preferencia para la persona; no es lo
+  mismo que `force` y nunca convierte un deseo cualitativo en filtro duro.
+  Elegila con esta escala, mirando las palabras que acompañan a cada deseo:
+  - `low`: gusto u opción conveniente, como "me gusta", "mejor si", "si se
+    puede", "sería lindo" o "no es prioritario".
+  - `medium`: preferencia clara pero negociable, como "prefiero", "me
+    gustaría", "valoro" o "busco".
+  - `high`: necesidad importante expresada como tal, como "quiero", "necesito"
+    o "es importante".
+  - `essential`: usalo únicamente cuando la persona lo marca explícitamente
+    como condición excluyente: "es esencial", "imprescindible",
+    "indispensable", "sí o sí", "no acepto" o "sin esto no sirve".
+  Si no hay un marcador claro, usá `medium`. Una negación o atenuante como
+  "aunque no es prioritario", "aunque no es esencial", "no es requisito" o
+  "no hace falta" tiene precedencia y baja ese deseo a `low`. Nunca uses
+  `essential` por la importancia aparente del concepto, por su polaridad
+  positiva ni por inferencia propia.
 - Emití los actos en el orden en que fueron expresados.
 
 ## Catálogo de conceptos dinámico

@@ -79,7 +79,6 @@ class ChatRuntime:
         client_message_id: UUID | None = None,
         context: Mapping[str, object] | None = None,
     ) -> RunOutcome:
-        del client_message_id, context
         session = self.conversation.assert_accepts_turn(
             user_id=user_id, session_id=session_id
         )
@@ -143,6 +142,14 @@ class ChatRuntime:
         compiled = self.graph.compiled
         try:
             if existing is None:
+                self.conversation.append_user_message(
+                    user_id=user_id,
+                    session_id=session.session_id,
+                    text=text,
+                    correlation_id=correlation_id,
+                    client_message_id=client_message_id,
+                    context=context,
+                )
                 stream_input: object = {
                     "contract_version": "5",
                     "schema_version": "conversation-state",
@@ -209,13 +216,23 @@ class ChatRuntime:
                     latency_ms=latency_ms,
                     error_code=str(error.get("code", "agent.failed")),
                 )
+            assistant_message = self.conversation.persist_assistant_message(
+                user_id=user_id,
+                session_id=session.session_id,
+                text=str(reply.get("text") or "")
+                if isinstance(reply, Mapping)
+                else "",
+                refs=_message_refs(reply),
+                graph_run_id=run_id,
+                correlation_id=correlation_id,
+            )
             self.runs.mark(
                 run_id,
                 status="completed",
                 finished_at=finished,
                 latency_ms=latency_ms,
             )
-            emit(RunCompleted(run_id=run_id, message_id=None))
+            emit(RunCompleted(run_id=run_id, message_id=assistant_message.message_id))
             return RunOutcome(run_id=run_id, status="completed", latency_ms=latency_ms)
         except Exception:
             finished = self.clock()
@@ -254,3 +271,26 @@ def _interrupt_from_chunk(chunk: object) -> dict[str, Any] | None:
 
 def _elapsed_ms(started_at: datetime, finished_at: datetime) -> int:
     return int((finished_at - started_at).total_seconds() * 1000)
+
+
+def _message_refs(reply: object) -> tuple[Mapping[str, str], ...]:
+    """Project reply refs into the narrower durable chat-message contract."""
+    if not isinstance(reply, Mapping):
+        return ()
+    raw_refs = reply.get("verified_refs")
+    if not isinstance(raw_refs, (list, tuple)):
+        return ()
+    refs: list[Mapping[str, str]] = []
+    for raw_ref in raw_refs:
+        if isinstance(raw_ref, Mapping):
+            entity = raw_ref.get("entity")
+            ref_id = raw_ref.get("id")
+        elif isinstance(raw_ref, str):
+            entity, separator, ref_id = raw_ref.partition(":")
+            if not separator:
+                continue
+        else:
+            continue
+        if entity in {"listing", "comparison"} and isinstance(ref_id, str) and ref_id:
+            refs.append({"entity": entity, "id": ref_id})
+    return tuple(refs)
