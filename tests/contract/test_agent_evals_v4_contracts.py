@@ -81,8 +81,8 @@ def test_policy_and_releases_load_with_expected_values() -> None:
     assert "graph-release-005" in by_id
     candidate = by_id["graph-release-005"]
     assert candidate.components.model_version == "gpt-4.1-mini"
-    assert "interpretation-v5" in candidate.components.prompt_versions
-    assert "reply-v5" in candidate.components.prompt_versions
+    assert "interpretation" in candidate.components.prompt_versions
+    assert "reply" in candidate.components.prompt_versions
     assert candidate.activation["status"] == "pending"
 
 
