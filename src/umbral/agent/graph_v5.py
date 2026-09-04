@@ -315,16 +315,16 @@ def build_graph_v5(
         return {}
 
     def _route_after_execute(state: ConversationGraphStateV5) -> str:
-        if state.get("failure_stage") is not None:
-            return "compose_reply"
-        outcomes = state.get("outcomes") or []
-        if any(item.get("status") == "pending" for item in outcomes):
-            return "require_confirmation"
         return "compose_reply"
 
     def _route_after_reload(state: ConversationGraphStateV5) -> str:
+        return "compose_reply"
+
+    def _route_after_reply(state: ConversationGraphStateV5) -> str:
         context = _context_from_dict(state.get("context") or {})
-        return "require_confirmation" if context.pending_action is not None else "compose_reply"
+        if context.pending_action is not None:
+            return "require_confirmation"
+        return "persist_turn"
 
     builder = StateGraph(ConversationGraphStateV5)
     builder.add_node("load_context", _load_context)
@@ -344,19 +344,24 @@ def build_graph_v5(
         "execute_segment",
         _route_after_execute,
         {
-            "reload_context": "reload_context",
-            "require_confirmation": "require_confirmation",
             "compose_reply": "compose_reply",
         },
     )
     builder.add_conditional_edges(
         "reload_context",
         _route_after_reload,
-        {"require_confirmation": "require_confirmation", "compose_reply": "compose_reply"},
+        {"compose_reply": "compose_reply"},
     )
     builder.add_edge("require_confirmation", "resolve_pending")
     builder.add_edge("resolve_pending", "reload_context")
-    builder.add_edge("compose_reply", "persist_turn")
+    builder.add_conditional_edges(
+        "compose_reply",
+        _route_after_reply,
+        {
+            "require_confirmation": "require_confirmation",
+            "persist_turn": "persist_turn",
+        },
+    )
     builder.add_edge("persist_turn", END)
     compiled = builder.compile(checkpointer=cast(Any, checkpointer))
     return compiled

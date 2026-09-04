@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
@@ -111,9 +112,11 @@ class _FakeTurn:
         self,
         result: ConversationTurnResultV5,
         result_after_resume: ConversationTurnResultV5 | None = None,
+        resolved_context: TurnContextV5 | None = None,
     ) -> None:
         self.result = result
         self.result_after_resume = result_after_resume or result
+        self.resolved_context = resolved_context
         self.execute_calls = 0
         self.load_calls = 0
         self.plans: list[TurnPlanV5] = []
@@ -124,7 +127,7 @@ class _FakeTurn:
     ) -> TurnContextV5:
         self.load_calls += 1
         if self.resolutions:
-            return _context()
+            return self.resolved_context or _context()
         if self.execute_calls and self.result.context.pending_action is not None:
             return self.result.context
         return _context()
@@ -181,8 +184,10 @@ class _FakeTurn:
 class _FakeReply:
     def __init__(self, reply: ReplyV5) -> None:
         self.reply = reply
+        self.results: list[ConversationTurnResultV5] = []
 
     def compose(self, result: ConversationTurnResultV5) -> ReplyV5:
+        self.results.append(result)
         return self.reply
 
 
@@ -303,7 +308,7 @@ def test_graph_interrupts_on_pending_and_resumes() -> None:
     graph = _graph(turn)
 
     first = graph.invoke(_state(), _config())
-    assert first.get("reply") is None
+    assert first["reply"] is not None
     assert first["outcomes"][0]["status"] == "pending"
 
     resumed = graph.invoke(
@@ -312,6 +317,41 @@ def test_graph_interrupts_on_pending_and_resumes() -> None:
     assert resumed.get("confirmation_payload") is not None
     assert resumed["reply"] is not None
     assert turn.execute_calls == 1
+
+
+@pytest.mark.parametrize("decision", ["approve", "reject"])
+def test_graph_composes_resolution_before_the_next_confirmation(
+    decision: str,
+) -> None:
+    first_head = PendingActionV5(
+        pending_ref="pending:zones", act_id="zones", ordinal=1, total=2
+    )
+    next_head = PendingActionV5(
+        pending_ref="pending:budget", act_id="budget", ordinal=2, total=2
+    )
+    initial = _pending_result()
+    initial = ConversationTurnResultV5(
+        context=replace(_context(), pending_action=first_head),
+        interpretation=initial.interpretation,
+        plan=initial.plan,
+        executed=initial.executed,
+        outcomes=initial.outcomes,
+    )
+    reply = _FakeReply(_reply())
+    turn = _FakeTurn(
+        initial,
+        resolved_context=replace(_context(), pending_action=next_head),
+    )
+    graph = _graph(turn, reply)
+
+    graph.invoke(_state(), _config())
+    resumed = graph.invoke(Command(resume={"decision": decision}), _config())
+
+    assert resumed["reply"] is not None
+    assert reply.results[-1].context.pending_action == next_head
+    assert reply.results[-1].outcomes[-1].status == (
+        "applied" if decision == "approve" else "rejected"
+    )
 
 
 def test_graph_resume_resolves_only_the_context_queue_head() -> None:

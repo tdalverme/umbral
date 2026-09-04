@@ -21,9 +21,27 @@ from umbral.application.agent.ports import ModelGateway
 from umbral.application.conversation.v5.contracts import (
     ConversationTurnResultV5,
     OutcomeStatusV5,
+    RecordDesireCommand,
 )
 
 ReplySourceV5 = Literal["managed", "deterministic_fallback"]
+ReplyEffectV5 = Literal[
+    "other",
+    "preference.applied",
+    "desire.remembered_unresolved",
+    "filter.requires_confirmation",
+    "filter.approved",
+    "filter.rejected",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class ReplyConceptV5:
+    """Trusted semantic detail that the reply may acknowledge."""
+
+    concept_ref: str
+    polarity: Literal["positive", "negative"]
+    intensity: Literal["low", "medium", "high", "essential"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +50,10 @@ class ReplyOutcomeV5:
     status: OutcomeStatusV5
     reason_code: str | None = None
     object_ref: str | None = None
+    effect: ReplyEffectV5 = "other"
+    concepts: tuple[ReplyConceptV5, ...] = ()
+    ordinal: int | None = None
+    total: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,15 +126,7 @@ class ReplyComposerV5:
         self._system_prompt = system_prompt or _load_reply_prompt()
 
     def compose(self, result: ConversationTurnResultV5) -> ReplyV5:
-        outcomes = tuple(
-            ReplyOutcomeV5(
-                act_id=item.act_id,
-                status=item.status,
-                reason_code=item.reason_code,
-                object_ref=item.object_ref,
-            )
-            for item in result.outcomes
-        )
+        outcomes = _reply_outcomes(result)
         verified_refs = _verified_refs(result)
         if result.failure_stage is not None:
             return ReplyV5(
@@ -211,6 +225,74 @@ def _verified_refs(result: ConversationTurnResultV5) -> tuple[str, ...]:
     return tuple(refs[:10])
 
 
+def _reply_outcomes(
+    result: ConversationTurnResultV5,
+) -> tuple[ReplyOutcomeV5, ...]:
+    """Project durable effects into the reply's least-authority context.
+
+    This projection uses only typed commands, execution receipts and the
+    reloaded pending head. It deliberately does not inspect the user message
+    or reinterpret an act's natural-language evidence.
+    """
+    executed_by_act = {item.act_id: item for item in result.executed}
+    commands_by_act = (
+        {item.act_id: item for item in result.plan.commands}
+        if result.plan is not None
+        else {}
+    )
+    projected: list[ReplyOutcomeV5] = []
+    for outcome in result.outcomes:
+        executed = executed_by_act.get(outcome.act_id)
+        effect: ReplyEffectV5 = "other"
+        concepts: tuple[ReplyConceptV5, ...] = ()
+        ordinal: int | None = None
+        total: int | None = None
+
+        if executed is not None and executed.effect_key == "desire.remembered":
+            command = commands_by_act.get(outcome.act_id)
+            if outcome.status == "applied" and isinstance(command, RecordDesireCommand):
+                concepts = tuple(
+                    ReplyConceptV5(
+                        concept_ref=link.concept_ref,
+                        polarity=link.polarity,
+                        intensity=link.intensity,
+                    )
+                    for link in command.concept_links
+                )
+                effect = (
+                    "preference.applied"
+                    if concepts
+                    else "desire.remembered_unresolved"
+                )
+        elif executed is not None and executed.effect_key == "pending.resolved":
+            if outcome.status == "applied":
+                effect = "filter.approved"
+            elif outcome.status == "rejected" and outcome.reason_code == "user":
+                effect = "filter.rejected"
+        elif (
+            outcome.status == "pending"
+            and outcome.reason_code == "filter.requires_confirmation"
+            and result.context.pending_action is not None
+        ):
+            effect = "filter.requires_confirmation"
+            ordinal = result.context.pending_action.ordinal
+            total = result.context.pending_action.total
+
+        projected.append(
+            ReplyOutcomeV5(
+                act_id=outcome.act_id,
+                status=outcome.status,
+                reason_code=outcome.reason_code,
+                object_ref=outcome.object_ref,
+                effect=effect,
+                concepts=concepts,
+                ordinal=ordinal,
+                total=total,
+            )
+        )
+    return tuple(projected)
+
+
 _REJECTION_TEXT = {
     "request.unsupported": (
         "No puedo realizar esa operación. Si querés, decime qué querés ajustar "
@@ -250,10 +332,33 @@ def _fallback_text(result: ConversationTurnResultV5) -> str:
     if result.failure_stage is not None:
         return "No pude procesar tu mensaje en este momento."
     lines: list[str] = []
-    for item in result.outcomes:
-        if item.status == "applied":
+    for item in _reply_outcomes(result):
+        if item.effect == "preference.applied":
+            lines.extend(_preference_lines(item.concepts))
+        elif item.effect == "desire.remembered_unresolved":
+            lines.append(
+                "Lo dejé registrado, pero por ahora no cambia el orden de las "
+                "oportunidades."
+            )
+        elif item.effect == "filter.approved":
+            lines.append("El cambio anterior quedó confirmado.")
+        elif item.effect == "filter.rejected":
+            lines.append("El cambio anterior quedó rechazado.")
+        elif item.effect == "filter.requires_confirmation":
+            lines.append(
+                "¿Confirmás este cambio del radar "
+                f"({item.ordinal or 1} de {item.total or 1})?"
+            )
+        elif item.status == "applied":
             lines.append("Listo.")
         elif item.status == "pending":
+            # A pending outcome that no longer has a durable head was resolved
+            # later in this same graph run, so it must not be asked again.
+            if any(
+                executed.effect_key == "pending.resolved"
+                for executed in result.executed
+            ):
+                continue
             lines.append("Quedó pendiente de tu confirmación.")
         elif item.status == "rejected":
             lines.append(
@@ -266,3 +371,27 @@ def _fallback_text(result: ConversationTurnResultV5) -> str:
         else:
             lines.append("Esa acción no se ejecutó.")
     return " ".join(lines) if lines else "No pude procesar tu mensaje."
+
+
+_INTENSITY_WORDS = {
+    "low": "leve",
+    "medium": "moderada",
+    "high": "alta",
+    "essential": "prioritaria",
+}
+
+
+def _preference_lines(concepts: tuple[ReplyConceptV5, ...]) -> list[str]:
+    lines: list[str] = []
+    for concept in concepts:
+        label = concept.concept_ref.replace("_", " ")
+        intensity = _INTENSITY_WORDS[concept.intensity]
+        if concept.polarity == "negative":
+            lines.append(
+                f"Voy a tener en cuenta evitar {label} como preferencia {intensity}."
+            )
+        else:
+            lines.append(
+                f"Voy a tener en cuenta {label} como preferencia {intensity}."
+            )
+    return lines

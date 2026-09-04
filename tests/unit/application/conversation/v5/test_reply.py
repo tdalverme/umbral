@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Literal, cast
+
+import pytest
 
 from umbral.application.agent.contracts import ModelResult
 from umbral.application.agent.ports import ModelGateway
 from umbral.application.conversation.v5.contracts import (
     ActOutcomeV5,
+    ConceptLinkV5,
     ConversationTurnResultV5,
+    ExecutedActV5,
+    PendingActionV5,
+    RecordDesireCommand,
     TurnContextV5,
+    TurnPlanV5,
 )
 from umbral.application.conversation.v5.reply import ReplyComposerV5
 
@@ -74,13 +82,16 @@ def _context() -> TurnContextV5:
 def _result(
     *,
     outcomes: tuple[ActOutcomeV5, ...] = (),
+    context: TurnContextV5 | None = None,
+    plan: TurnPlanV5 | None = None,
+    executed: tuple[ExecutedActV5, ...] = (),
     failure_stage: str | None = None,
 ) -> ConversationTurnResultV5:
     return ConversationTurnResultV5(
-        context=_context(),
+        context=context or _context(),
         interpretation=None,
-        plan=None,
-        executed=(),
+        plan=plan,
+        executed=executed,
         outcomes=outcomes,
         failure_stage=cast(Any, failure_stage),
     )
@@ -195,3 +206,123 @@ def test_fallback_text_reflects_pending_status() -> None:
     )
 
     assert "confirmación" in reply.text.casefold()
+
+
+def _desire_command(
+    *, concept: str, intensity: str
+) -> RecordDesireCommand:
+    return RecordDesireCommand(
+        act_id="a1",
+        raw_text="prefiero buen acceso al transporte",
+        subject_ref=concept,
+        concept_links=(
+            ConceptLinkV5(
+                concept_ref=concept,
+                confidence=0.9,
+                polarity="positive",
+                intensity=cast(Any, intensity),
+            ),
+        ),
+    )
+
+
+def test_applied_transport_preference_is_acknowledged_without_question() -> None:
+    composer = _composer(_FakeGateway(reply={}, status="error"))
+    command = _desire_command(concept="acceso_transporte", intensity="high")
+
+    reply = composer.compose(
+        _result(
+            plan=TurnPlanV5(decisions=(), commands=(command,)),
+            executed=(ExecutedActV5("a1", "desire.remembered"),),
+            outcomes=(ActOutcomeV5("a1", "applied"),),
+        )
+    )
+
+    assert "transporte" in reply.text.casefold()
+    assert "alta" in reply.text.casefold()
+    assert "?" not in reply.text
+
+
+def test_unresolved_desire_is_remembered_without_false_refusal() -> None:
+    composer = _composer(_FakeGateway(reply={}, status="error"))
+    command = RecordDesireCommand(
+        act_id="a1",
+        raw_text="que el edificio tenga buena onda",
+        subject_ref="edificio_buena_onda",
+    )
+
+    reply = composer.compose(
+        _result(
+            plan=TurnPlanV5(decisions=(), commands=(command,)),
+            executed=(ExecutedActV5("a1", "desire.remembered"),),
+            outcomes=(ActOutcomeV5("a1", "applied"),),
+        )
+    )
+
+    assert "registr" in reply.text.casefold()
+    assert "no cambia el orden" in reply.text.casefold()
+    assert "no puedo ayudarte" not in reply.text.casefold()
+
+
+def test_pending_hard_step_asks_one_question_with_ordinal() -> None:
+    composer = _composer(_FakeGateway(reply={}, status="error"))
+    context = _context()
+    context = replace(
+        context,
+        pending_action=PendingActionV5("pending:zones", "zones", 1, 2),
+    )
+
+    reply = composer.compose(
+        _result(
+            context=context,
+            outcomes=(
+                ActOutcomeV5(
+                    "zones", "pending", "filter.requires_confirmation"
+                ),
+            ),
+        )
+    )
+
+    assert "1 de 2" in reply.text
+    assert reply.text.count("?") == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "reason_code", "expected"),
+    [("applied", None, "confirmado"), ("rejected", "user", "rechazado")],
+)
+def test_resolution_describes_outcome_then_asks_next_hard_step(
+    status: str, reason_code: str | None, expected: str
+) -> None:
+    composer = _composer(_FakeGateway(reply={}, status="error"))
+    context = _context()
+    context = replace(
+        context,
+        pending_action=PendingActionV5("pending:budget", "budget", 2, 2),
+    )
+
+    reply = composer.compose(
+        _result(
+            context=context,
+            executed=(
+                ExecutedActV5(
+                    "resolve:zones:1",
+                    "pending.resolved",
+                    status=cast(Any, status),
+                    reason_code=reason_code,
+                ),
+            ),
+            outcomes=(
+                ActOutcomeV5("zones", "pending", "filter.requires_confirmation"),
+                ActOutcomeV5(
+                    "resolve:zones:1",
+                    cast(Any, status),
+                    reason_code,
+                ),
+            ),
+        )
+    )
+
+    assert expected in reply.text.casefold()
+    assert "2 de 2" in reply.text
+    assert reply.text.count("?") == 1
