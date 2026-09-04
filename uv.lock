@@ -1824,6 +1824,7 @@ dependencies = [
     { name = "boto3" },
     { name = "fastapi" },
     { name = "geoalchemy2" },
+    { name = "jsonschema" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
     { name = "opentelemetry-api" },
@@ -1861,7 +1862,6 @@ mypy = [
 pytest = [
     { name = "coverage" },
     { name = "httpx" },
-    { name = "jsonschema" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1877,6 +1877,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.43,<2" },
     { name = "fastapi", specifier = ">=0.138,<1" },
     { name = "geoalchemy2", specifier = ">=0.20,<0.21" },
+    { name = "jsonschema", specifier = ">=4,<5" },
     { name = "langgraph", specifier = ">=1.2.10" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=3.1.2" },
     { name = "opentelemetry-api", specifier = ">=1,<2" },
@@ -1909,7 +1910,6 @@ mypy = [
 pytest = [
     { name = "coverage", extras = ["toml"], specifier = ">=7,<8" },
     { name = "httpx", specifier = ">=0.28,<1" },
-    { name = "jsonschema", specifier = ">=4,<5" },
     { name = "pytest", specifier = ">=8,<9" },
     { name = "pytest-asyncio", specifier = ">=1,<2" },
     { name = "pytest-cov", specifier = ">=6,<7" },

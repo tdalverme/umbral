@@ -25,6 +25,7 @@ dependencies = [
     "resend>=2,<3",
     "langgraph>=1.2.10",
     "langgraph-checkpoint-postgres>=3.1.2",
+    "jsonschema>=4,<5",
 ]
 
 [project.optional-dependencies]
@@ -44,7 +45,6 @@ pytest = [
     "pytest>=8,<9",
     "pytest-asyncio>=1,<2",
     "pytest-cov>=6,<7",
-    "jsonschema>=4,<5",
     "testcontainers[postgres,redis]>=4,<5",
     "httpx>=0.28,<1",
     "coverage[toml]>=7,<8",
