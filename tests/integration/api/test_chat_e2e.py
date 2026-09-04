@@ -35,7 +35,7 @@ from umbral.application.chat.service import ChatService
 from umbral.infrastructure.agent.checkpointer import create_postgres_saver
 from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
 from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
-from umbral.infrastructure.agent.tools.preferences_loader import (
+from umbral.application.agent.tools.preferences import (
     load_preference_vocabulary,
 )
 from umbral.infrastructure.db.repositories.agent import (

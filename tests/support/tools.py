@@ -44,7 +44,7 @@ from umbral.application.scoring.contracts import (
     ExplanationRisk,
 )
 from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
-from umbral.infrastructure.agent.tools.preferences_loader import (
+from umbral.application.agent.tools.preferences import (
     load_preference_vocabulary,
 )
 

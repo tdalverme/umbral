@@ -36,6 +36,7 @@ from umbral.agent.tools.registry import ToolRegistry
 from umbral.agent.tools.tools import ToolServices, build_tool_implementations
 from umbral.application.agent.ports import ModelGateway
 from umbral.application.agent.service import RunRecorderService
+from umbral.application.agent.tools.preferences import load_preference_vocabulary
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.chat.service import ChatService
 from umbral.application.radar.service import RadarService
@@ -47,9 +48,6 @@ from umbral.infrastructure.agent.intent.interpretation_loader import (
 )
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
 from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
-from umbral.infrastructure.agent.tools.preferences_loader import (
-    load_preference_vocabulary,
-)
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.conversation.composition import (
     CopilotServices,
@@ -172,10 +170,6 @@ def build_production_agent_stack(
                 criteria=criteria,  # type: ignore[arg-type]
                 proposals=proposals,
                 vocabulary=load_preference_vocabulary(),
-                preferences=_build_preference_service(session_factory),
-                interpret_preference=_interpret_preference(
-                    gateway, settings, session_factory
-                ),
             )
         ),
         recorder=recorder,
@@ -487,13 +481,15 @@ def build_production_v5_stack(
     reply_schema = json.loads(
         (contracts_v5 / "reply-schema-v5.json").read_text(encoding="utf-8")
     )
+    preferences = _build_preference_service(session_factory)
+    concept_catalog = _build_v5_concept_catalog(session_factory)
     interpreter = _build_v5_interpreter(
         gateway=gateway,
         schema=interpretation_schema,
         prompt_version="interpretation-v5",
         model_version=settings.agent_model_name,
+        concept_catalog=concept_catalog,
     )
-    preferences = _build_preference_service(session_factory)
     from umbral.application.preferences.intensity import load_intensity_policy
 
     services = V5Services(
@@ -504,6 +500,7 @@ def build_production_v5_stack(
         feedback=cast(FeedbackRecorderV5, feedback),
         concepts=getattr(preferences, "concepts", None),
         intensity_policy=load_intensity_policy(),
+        concept_catalog=concept_catalog,
     )
     turn_service = build_conversation_v5_turn_service(
         services=services,
@@ -544,6 +541,7 @@ def _build_v5_interpreter(
     schema: Mapping[str, object],
     prompt_version: str,
     model_version: str,
+    concept_catalog: tuple[Mapping[str, object], ...],
 ) -> object:
     from umbral.agent.intent.v5 import InterpretationCompilerV5
 
@@ -552,6 +550,27 @@ def _build_v5_interpreter(
         schema=schema,
         prompt_version=prompt_version,
         model_version=model_version,
+        concept_catalog=concept_catalog,
+    )
+
+
+def _build_v5_concept_catalog(
+    session_factory: SessionFactory,
+) -> tuple[Mapping[str, object], ...]:
+    """Snapshot the published concept registry for one V5 interpreter."""
+    from umbral.infrastructure.db.repositories.criteria import (
+        SqlAlchemyConceptRepository,
+    )
+
+    return tuple(
+        {
+            "key": concept.key,
+            "description": concept.name,
+            "matcher_type": concept.matcher_type,
+            "computable": bool(concept.compute_policy.get("computable", False)),
+            "aliases": list(concept.aliases),
+        }
+        for concept in SqlAlchemyConceptRepository(session_factory).list_active()
     )
 
 
@@ -622,87 +641,6 @@ def _build_preference_service(session_factory: SessionFactory) -> PreferenceServ
         concepts=_ConceptReader(),
         policy=PreferencePolicySpec.v1(),
     )
-
-
-def _interpret_preference(
-    gateway: ModelGateway,
-    settings: Settings,
-    _session_factory: SessionFactory,
-) -> object:
-    """Build a phrase→PreferenceInterpretation callable for the preference tool.
-
-    The catalog is derived deterministically from the published concepts seed
-    (never from the DB), so the LLM only ever resolves to known concepts. Any
-    gateway failure or non-canonical resolution yields ``unresolved``, which
-    the tool persists as a durable, non-evaluable expression instead of
-    rejecting the user.
-    """
-    from umbral.application.agent.tools.preference_interpreter import (
-        ConceptOption,
-        resolve_concept,
-    )
-
-    seed_path = (
-        Path(__file__).resolve().parents[4]
-        / "contracts"
-        / "criteria"
-        / "v1"
-        / "concepts-seed-v1.json"
-    )
-    import logging
-
-    logger = logging.getLogger(__name__)
-    raw = json.loads(seed_path.read_text(encoding="utf-8"))
-    # Cargar vocabulario como few-shot examples para el LLM (no como allowlist dura)
-    vocab_aliases: dict[str, list[str]] = {}
-    try:
-        from umbral.infrastructure.agent.tools.preferences_loader import (
-            load_preference_vocabulary,
-        )
-
-        vocab = load_preference_vocabulary()
-        for entry in vocab.entries:
-            key = entry.intent.concept_key
-            # alias ya normalizado en spec, pero mostramos original para el prompt
-            vocab_aliases.setdefault(key, []).extend(list(entry.aliases))
-    except Exception:
-        vocab_aliases = {}
-    # Few-shot extra para que el LLM generalice sin alias literales en el vocab determinístico
-    for k, v in {
-        "proximidad_cafes": ["cafes cerca", "cafe cerca", "cafeterias cerca"],
-        "calma_residencial": ["poco ruido", "con poco ruido", "silencioso"],
-        "acceso_transporte": ["buen acceso al transporte", "con buen acceso al transporte"],
-    }.items():
-        vocab_aliases.setdefault(k, []).extend(v)
-    logger.info(
-        "concept_registry.catalog",
-        extra={
-            "concepts": [str(c.get("key")) for c in raw.get("concepts", [])[:40]],
-            "has_proximidad_cafes": any(c.get("key") == "proximidad_cafes" for c in raw.get("concepts", [])),
-            "vocab_has_cafes": "proximidad_cafes" in vocab_aliases,
-            "cafes_aliases": vocab_aliases.get("proximidad_cafes", [])[:6],
-        },
-    )
-    options = tuple(
-        ConceptOption(
-            key=str(concept["key"]),
-            description=str(concept.get("name") or concept["key"]),
-            matchers=(str(concept["matcher_type"]),),
-            aliases=tuple(vocab_aliases.get(str(concept["key"]), ())[:6]),
-        )
-        for concept in raw.get("concepts", [])
-    )
-
-    def interpret(phrase: str) -> object:
-        return resolve_concept(
-            phrase=phrase,
-            concepts=options,
-            gateway=gateway,
-            prompt_version=settings.agent_intent_prompt_version,
-            model_version=settings.agent_model_name,
-        )
-
-    return interpret
 
 
 _COPILOT_REPLY_SCHEMA: dict[str, object] = {

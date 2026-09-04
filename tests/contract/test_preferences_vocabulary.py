@@ -11,7 +11,7 @@ from umbral.application.agent.tools.preferences import (
     PreferenceVocabularyInvalid,
     parse_preference_vocabulary,
 )
-from umbral.infrastructure.agent.tools.preferences_loader import (
+from umbral.application.agent.tools.preferences import (
     load_preference_vocabulary,
 )
 

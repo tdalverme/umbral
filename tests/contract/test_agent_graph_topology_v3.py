@@ -29,7 +29,7 @@ from umbral.agent.tools.tools import ToolServices, build_tool_implementations
 from umbral.application.agent.contracts import ModelResult
 from umbral.application.agent.tools.ports import SessionScope
 from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
-from umbral.infrastructure.agent.tools.preferences_loader import (
+from umbral.application.agent.tools.preferences import (
     load_preference_vocabulary,
 )
 

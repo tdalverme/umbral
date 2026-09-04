@@ -59,6 +59,7 @@ class V5Services:
     feedback: FeedbackRecorderV5 | None = None
     concepts: ConceptReader | None = None
     intensity_policy: IntensityPolicy | None = None
+    concept_catalog: tuple[Mapping[str, object], ...] = ()
 
 
 def build_conversation_v5_turn_service(
@@ -123,6 +124,7 @@ def build_v5_graph(
         schema=interpretation_schema,
         prompt_version=prompt_version,
         model_version=model_version,
+        concept_catalog=services.concept_catalog,
     )
     turn = build_conversation_v5_turn_service(
         services=services,

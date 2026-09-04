@@ -21,7 +21,7 @@ from umbral.application.agent.tools.ports import (
 )
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.radar.contracts import SearchProfile
-from umbral.infrastructure.agent.tools.preferences_loader import (
+from umbral.application.agent.tools.preferences import (
     load_preference_vocabulary,
 )
 

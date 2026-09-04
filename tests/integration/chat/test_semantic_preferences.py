@@ -184,6 +184,62 @@ _SCENARIOS = (
         ),
         concept_keys=("luminosidad", "calma_residencial", "acceso_transporte"),
     ),
+    SemanticScenario(
+        message="Me encanta que entre el sol a la tarde",
+        output=_output(
+            _desire(
+                act_id="sun",
+                raw_text="entre el sol a la tarde",
+                concept_key="luminosidad",
+                evidence=EvidenceSpan(
+                    start=15, end=38, text="entre el sol a la tarde"
+                ),
+            )
+        ),
+        concept_keys=("luminosidad",),
+    ),
+    SemanticScenario(
+        message="Necesito descansar lejos del estruendo",
+        output=_output(
+            _desire(
+                act_id="quiet",
+                raw_text="lejos del estruendo",
+                concept_key="calma_residencial",
+                evidence=EvidenceSpan(
+                    start=19, end=38, text="lejos del estruendo"
+                ),
+            )
+        ),
+        concept_keys=("calma_residencial",),
+    ),
+    SemanticScenario(
+        message="Quiero llegar al subte caminando en minutos",
+        output=_output(
+            _desire(
+                act_id="subway",
+                raw_text="llegar al subte caminando",
+                concept_key="acceso_transporte",
+                evidence=EvidenceSpan(
+                    start=7, end=32, text="llegar al subte caminando"
+                ),
+            )
+        ),
+        concept_keys=("acceso_transporte",),
+    ),
+    SemanticScenario(
+        message="Busco verde a pocas cuadras",
+        output=_output(
+            _desire(
+                act_id="green",
+                raw_text="verde a pocas cuadras",
+                concept_key="proximidad_parque",
+                evidence=EvidenceSpan(
+                    start=6, end=27, text="verde a pocas cuadras"
+                ),
+            )
+        ),
+        concept_keys=("proximidad_parque",),
+    ),
 )
 
 
@@ -211,6 +267,11 @@ def _preference_service(store: FakePreferenceStore) -> PreferenceService:
                 ),
                 "calma_residencial": PreferenceConcept(
                     key="calma_residencial",
+                    matcher_type="signal_score",
+                    computable=True,
+                ),
+                "proximidad_parque": PreferenceConcept(
+                    key="proximidad_parque",
                     matcher_type="signal_score",
                     computable=True,
                 ),

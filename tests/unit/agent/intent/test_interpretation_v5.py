@@ -120,6 +120,19 @@ def _compiler(gateway: ModelGateway) -> InterpretationCompilerV5:
     )
 
 
+def _semantic_catalog(*keys: str) -> tuple[dict[str, object], ...]:
+    return tuple(
+        {
+            "key": key,
+            "description": key.replace("_", " "),
+            "matcher_type": "signal_score",
+            "computable": True,
+            "aliases": [key.replace("_", " ")],
+        }
+        for key in keys
+    )
+
+
 def _interpret(
     gateway: ModelGateway,
     *,
@@ -415,28 +428,277 @@ def test_compiler_preserves_closed_semantic_judgment_for_concept_links() -> None
                             "polarity": "positive",
                             "intensity": "high",
                         },
-                        {
-                            "concept_ref": "cocina_antigua",
-                            "confidence": 0.8,
-                            "polarity": "negative",
-                            "intensity": "medium",
-                        },
                     ],
                 }
             ]
         }
     )
 
-    result = _interpret(gateway, message=message)
+    result = InterpretationCompilerV5(
+        gateway=gateway,
+        schema={"type": "object"},
+        prompt_version="interpretation-v5",
+        model_version="gpt-4.1-mini",
+        concept_catalog=_semantic_catalog("balcon"),
+    ).interpret(
+        message_text=message, context=_context(), correlation_id=CORRELATION_ID
+    )
 
     assert [link.polarity for link in result.acts[0].concept_links] == [
         "positive",
-        "negative",
     ]
     assert [link.intensity for link in result.acts[0].concept_links] == [
         "high",
-        "medium",
     ]
+
+
+def test_compiler_sends_the_exact_catalog_snapshot_in_a_delimited_section() -> None:
+    message = "Quiero moverme fácil todos los días"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "mobility",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": message,
+                    "raw_text": message,
+                    "subject_ref": "movilidad",
+                    "concept_links": [
+                        {
+                            "concept_ref": "movilidad_cotidiana",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "high",
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    compiler = InterpretationCompilerV5(
+        gateway=gateway,
+        schema={
+            "$defs": {
+                "concept_link": {
+                    "properties": {"concept_ref": {"type": "string"}}
+                }
+            }
+        },
+        prompt_version="interpretation-v5",
+        model_version="gpt-4.1-mini",
+        concept_catalog=_semantic_catalog("movilidad_cotidiana"),
+    )
+
+    compiler.interpret(
+        message_text=message, context=_context(), correlation_id=CORRELATION_ID
+    )
+
+    system = cast(str, gateway.calls[0]["messages"][0]["content"])
+    catalog = system.split("\n\nCONCEPT_CATALOG\n", maxsplit=1)[1].split(
+        "\n\nAUTHORIZED_CONTEXT\n", maxsplit=1
+    )[0]
+    assert '"key": "movilidad_cotidiana"' in catalog
+    schema = cast(dict[str, object], gateway.calls[0]["schema"])
+    assert schema["$defs"] == {
+        "concept_link": {
+            "properties": {
+                "concept_ref": {
+                    "type": "string",
+                    "enum": ["movilidad_cotidiana"],
+                }
+            }
+        }
+    }
+
+
+def test_compiler_keeps_an_unmapped_desire_empty_linked_despite_catalog_alias() -> None:
+    message = "Quiero una casa que abrace"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "unmapped",
+                    "kind": "express_desire",
+                    "confidence": 0.8,
+                    "evidence_text": message,
+                    "raw_text": message,
+                    "subject_ref": "casa_acogedora",
+                    "concept_links": [],
+                }
+            ]
+        }
+    )
+    compiler = InterpretationCompilerV5(
+        gateway=gateway,
+        schema={"type": "object"},
+        prompt_version="interpretation-v5",
+        model_version="gpt-4.1-mini",
+        concept_catalog=(
+            {
+                "key": "casa_acogedora",
+                "description": "Casa acogedora",
+                "matcher_type": "semantic_feature",
+                "computable": True,
+                "aliases": ["casa que abrace"],
+            },
+        ),
+    )
+
+    result = compiler.interpret(
+        message_text=message, context=_context(), correlation_id=CORRELATION_ID
+    )
+
+    assert result.acts[0].concept_links == ()
+
+
+def test_compiler_preserves_order_evidence_and_intensity_for_multiple_desires() -> None:
+    message = "Quiero sol y cero ruido"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "light",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": "sol",
+                    "raw_text": "sol",
+                    "subject_ref": "luminosidad",
+                    "concept_links": [
+                        {
+                            "concept_ref": "luminosidad",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "medium",
+                        }
+                    ],
+                },
+                {
+                    "act_id": "quiet",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": "cero ruido",
+                    "raw_text": "cero ruido",
+                    "subject_ref": "calma",
+                    "concept_links": [
+                        {
+                            "concept_ref": "calma_residencial",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "essential",
+                        }
+                    ],
+                },
+            ]
+        }
+    )
+    compiler = InterpretationCompilerV5(
+        gateway=gateway,
+        schema={"type": "object"},
+        prompt_version="interpretation-v5",
+        model_version="gpt-4.1-mini",
+        concept_catalog=_semantic_catalog("luminosidad", "calma_residencial"),
+    )
+
+    result = compiler.interpret(
+        message_text=message, context=_context(), correlation_id=CORRELATION_ID
+    )
+
+    assert [act.act_id for act in result.acts] == ["light", "quiet"]
+    assert [act.evidence_spans[0].text for act in result.acts] == [
+        "sol",
+        "cero ruido",
+    ]
+    assert [act.concept_links[0].intensity for act in result.acts] == [
+        "medium",
+        "essential",
+    ]
+    assert [act.concept_links[0].evidence_spans[0].text for act in result.acts] == [
+        "sol",
+        "cero ruido",
+    ]
+
+
+def test_compiler_rejects_concept_ref_absent_from_catalog_snapshot() -> None:
+    message = "Quiero sol"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "invented",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": message,
+                    "raw_text": message,
+                    "subject_ref": "sol",
+                    "concept_links": [
+                        {
+                            "concept_ref": "concepto_inventado",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "medium",
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    compiler = InterpretationCompilerV5(
+        gateway=gateway,
+        schema={"type": "object"},
+        prompt_version="interpretation-v5",
+        model_version="gpt-4.1-mini",
+        concept_catalog=_semantic_catalog("luminosidad"),
+    )
+
+    with pytest.raises(InterpretationContractFailed, match="not published"):
+        compiler.interpret(
+            message_text=message, context=_context(), correlation_id=CORRELATION_ID
+        )
+
+
+def test_compiler_rejects_multiple_concepts_in_one_expressed_desire() -> None:
+    message = "Quiero sol y cero ruido"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "combined",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": message,
+                    "raw_text": message,
+                    "subject_ref": "casa",
+                    "concept_links": [
+                        {
+                            "concept_ref": "luminosidad",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "medium",
+                        },
+                        {
+                            "concept_ref": "calma_residencial",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "essential",
+                        },
+                    ],
+                }
+            ]
+        }
+    )
+    compiler = InterpretationCompilerV5(
+        gateway=gateway,
+        schema={"type": "object"},
+        prompt_version="interpretation-v5",
+        model_version="gpt-4.1-mini",
+        concept_catalog=_semantic_catalog("luminosidad", "calma_residencial"),
+    )
+
+    with pytest.raises(InterpretationContractFailed, match="one concept"):
+        compiler.interpret(
+            message_text=message, context=_context(), correlation_id=CORRELATION_ID
+        )
 
 
 def test_compiler_resolves_explicit_pending_confirmation_before_model_acts() -> None:

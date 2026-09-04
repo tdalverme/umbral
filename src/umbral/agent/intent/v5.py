@@ -13,7 +13,8 @@ import logging
 import re
 import unicodedata
 from collections.abc import Mapping
-from dataclasses import asdict
+from copy import deepcopy
+from dataclasses import asdict, replace
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
@@ -75,6 +76,7 @@ class InterpretationCompilerV5:
         model_version: str,
         interpretation_version: str = "conversation-interpretation-v5",
         max_acts: int = 6,
+        concept_catalog: tuple[Mapping[str, object], ...] = (),
     ) -> None:
         self.gateway = gateway
         self.schema = schema
@@ -82,6 +84,10 @@ class InterpretationCompilerV5:
         self.model_version = model_version
         self.interpretation_version = interpretation_version
         self.max_acts = max_acts
+        self.concept_catalog = _catalog_snapshot(concept_catalog)
+        self._concept_refs = frozenset(
+            _required_string(item, "key") for item in self.concept_catalog
+        )
 
     def interpret(
         self,
@@ -98,10 +104,13 @@ class InterpretationCompilerV5:
         )
         result = self.gateway.generate_structured(
             messages=(
-                {"role": "system", "content": _system_message(context)},
+                {
+                    "role": "system",
+                    "content": _system_message(context, self.concept_catalog),
+                },
                 {"role": "user", "content": message_text},
             ),
-            schema=dict(self.schema),
+            schema=_schema_with_catalog_refs(self.schema, self._concept_refs),
             schema_version=self.interpretation_version,
             prompt_version=self.prompt_version,
             model_version=self.model_version,
@@ -159,7 +168,9 @@ class InterpretationCompilerV5:
             # let the model duplicate or override the deterministic decision.
             if pending_act is not None and item.get("kind") == "resolve_pending":
                 continue
-            act = _compile_act(item, message_text, context)
+            act = _compile_act(
+                item, message_text, context, allowed_concept_refs=self._concept_refs
+            )
             if act.act_id in seen:
                 raise InterpretationContractFailed("duplicate act_id")
             seen.add(act.act_id)
@@ -175,7 +186,9 @@ class InterpretationCompilerV5:
         )
 
 
-def _system_message(context: TurnContextV5) -> str:
+def _system_message(
+    context: TurnContextV5, concept_catalog: tuple[dict[str, object], ...]
+) -> str:
     prompt = _interpretation_prompt()
     authorized_context = json.dumps(
         _authorized_context(context), ensure_ascii=False, sort_keys=True
@@ -185,6 +198,8 @@ def _system_message(context: TurnContextV5) -> str:
     )
     return (
         f"{prompt}\n\n"
+        "CONCEPT_CATALOG\n"
+        f"{json.dumps(concept_catalog, ensure_ascii=False, sort_keys=True)}"
         "\n\nAUTHORIZED_CONTEXT\n"
         f"{authorized_context}"
         "\n\nUNTRUSTED_CONTENT\n"
@@ -248,7 +263,8 @@ def _normalize_for_matching(value: str) -> str:
 
 
 def _compile_act(
-    item: Mapping[str, object], message_text: str, context: TurnContextV5
+    item: Mapping[str, object], message_text: str, context: TurnContextV5,
+    *, allowed_concept_refs: frozenset[str]
 ) -> ConversationActV5:
     act_id = _required_string(item, "act_id")
     kind = item.get("kind")
@@ -284,13 +300,22 @@ def _compile_act(
             filter_key=cast(FilterKeyV5, _filter_key(item)),
         )
     if kind == "express_desire":
+        concept_links = _concept_links(
+            item.get("concept_links"), allowed_concept_refs
+        )
+        if len(concept_links) > 1:
+            raise InterpretationContractFailed(
+                "express desire must link one concept"
+            )
         return ExpressDesire(
             act_id=act_id,
             confidence=confidence,
             evidence_spans=spans,
             raw_text=_required_string(item, "raw_text"),
             subject_ref=_required_string(item, "subject_ref"),
-            concept_links=_concept_links(item.get("concept_links")),
+            concept_links=tuple(
+                replace(link, evidence_spans=spans) for link in concept_links
+            ),
         )
     if kind == "revise_desire":
         desire_ref = _optional_string(item, "desire_ref")
@@ -302,7 +327,9 @@ def _compile_act(
             evidence_spans=spans,
             desire_ref=desire_ref,
             raw_text=_required_string(item, "raw_text"),
-            concept_links=_concept_links(item.get("concept_links")),
+            concept_links=_concept_links(
+                item.get("concept_links"), allowed_concept_refs
+            ),
         )
     if kind == "withdraw_desire":
         desire_ref = _optional_string(item, "desire_ref")
@@ -364,7 +391,9 @@ def _filter_value(filter_key: str, value: object) -> float | int | tuple[str, ..
     return value
 
 
-def _concept_links(value: object) -> tuple[ConceptLinkV5, ...]:
+def _concept_links(
+    value: object, allowed_concept_refs: frozenset[str]
+) -> tuple[ConceptLinkV5, ...]:
     if value is None:
         return ()
     if not isinstance(value, list):
@@ -374,6 +403,8 @@ def _concept_links(value: object) -> tuple[ConceptLinkV5, ...]:
         if not isinstance(item, Mapping):
             raise InterpretationContractFailed("invalid concept link shape")
         concept_ref = _required_string(item, "concept_ref")
+        if concept_ref not in allowed_concept_refs:
+            raise InterpretationContractFailed("concept ref is not published")
         polarity = _required_string(item, "polarity")
         if polarity not in _PREFERENCE_POLARITIES:
             raise InterpretationContractFailed("unknown concept link polarity")
@@ -395,6 +426,59 @@ def _concept_links(value: object) -> tuple[ConceptLinkV5, ...]:
             )
         )
     return tuple(links)
+
+
+def _catalog_snapshot(
+    catalog: tuple[Mapping[str, object], ...]
+) -> tuple[dict[str, object], ...]:
+    snapshot: list[dict[str, object]] = []
+    keys: set[str] = set()
+    for item in catalog:
+        key = _required_string(item, "key")
+        if key in keys:
+            raise InterpretationContractFailed("duplicate catalog key")
+        keys.add(key)
+        snapshot.append(
+            {
+                "key": key,
+                "description": _required_string(item, "description"),
+                "matcher_type": _required_string(item, "matcher_type"),
+                "computable": bool(item.get("computable")),
+                "aliases": _catalog_aliases(item.get("aliases")),
+            }
+        )
+    return tuple(snapshot)
+
+
+def _catalog_aliases(value: object) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)) or not all(
+        isinstance(alias, str) and alias for alias in value
+    ):
+        raise InterpretationContractFailed("catalog aliases invalid")
+    return list(value)
+
+
+def _schema_with_catalog_refs(
+    schema: Mapping[str, object], concept_refs: frozenset[str]
+) -> dict[str, object]:
+    """Publish the snapshot as an enum when the supplied JSON schema supports it."""
+    copied = deepcopy(dict(schema))
+    defs = copied.get("$defs")
+    if not isinstance(defs, dict):
+        return copied
+    concept_link = defs.get("concept_link")
+    if not isinstance(concept_link, dict):
+        return copied
+    properties = concept_link.get("properties")
+    if not isinstance(properties, dict):
+        return copied
+    concept_ref = properties.get("concept_ref")
+    if not isinstance(concept_ref, dict):
+        return copied
+    concept_ref["enum"] = sorted(concept_refs)
+    return copied
 
 
 def _evidence_spans(value: object, message_text: str) -> tuple[EvidenceSpan, ...]:

@@ -23,7 +23,7 @@ from tests.integration.chat.test_hitl_lifecycle import (
 
 from umbral.agent.intent.policy import validate_tool_calls
 from umbral.application.chat.contracts import ChatSessionNotFound
-from umbral.infrastructure.agent.tools.preferences_loader import (
+from umbral.application.agent.tools.preferences import (
     load_preference_vocabulary,
 )
 

@@ -30,26 +30,25 @@ fuerza dura, ranking ni scoring.
   `set_filter` y una operación no disponible `unsupported_request`.
  - Las confirmaciones o rechazos de `AUTHORIZED_CONTEXT.pending_action` los
   resuelve el runtime; no emitas un acto `resolve_pending`.
-- **Nunca uses `set_filter` con `zones` para deseos urbanos** (`cafes`, `parques`, `transporte`, `escuela`): son `express_desire` con `concept_links`, no filtros duros. `Palermo` solo si el usuario dijo literalmente `Palermo`.
+- Los deseos cualitativos o de entorno nunca son `set_filter`: emití un
+  `express_desire` con enlaces suaves si el `CONCEPT_CATALOG` lo respalda, o
+  con `concept_links: []` si no. `zones` solo representa una zona literal que
+  la persona escribió, nunca una inferencia de cercanía, transporte, ruido,
+  luz, parques, escuelas o comercios.
 - Emití los actos en el orden en que fueron expresados.
 
-## Conceptos disponibles (para `express_desire` / `revise_desire` → `concept_links[].concept_ref`)
+## Catálogo de conceptos dinámico
 
-Usá **solo** estos `concept_ref` exactos. Los alias son ejemplos no exhaustivos — generaliza paráfrasis, acentos y plurales.
+El bloque delimitado `CONCEPT_CATALOG` es el snapshot confiable para este
+turno. Cada entrada trae su clave canónica, descripción, metadata de matcher,
+si es computable y, opcionalmente, alias como ejemplos no exhaustivos. Usá
+solo sus claves exactas en `express_desire` / `revise_desire` →
+`concept_links[].concept_ref`; nunca uses alias como lookup determinístico ni
+inventes una clave.
 
-- `proximidad_cafes`: Proximidad a cafés — ej: "cerca de cafes", "con cafes cerca", "cafes cerca", "cafe cerca", "cafeterias cerca", "cerca de cafeterias"
-- `calma_residencial`: Tranquilo / poco ruido — ej: "tranquilo", "sin ruido", "poco ruido", "con poco ruido", "silencioso", "barrio tranquilo"
-- `acceso_transporte`: Buen transporte / bien conectado — ej: "buen transporte", "buen acceso al transporte", "con buen acceso al transporte", "cerca del subte", "bien conectado"
-- `proximidad_parque`: Cerca de parques/plazas — ej: "cerca de parques", "plaza cerca"
-- `luminosidad`: Luminoso / con luz — ej: "luminoso", "con luz natural"
-- `balcon`: Con balcón — ej: "con balcon", "balcon"
-- `estado_general`: Bien cuidado / buen estado — ej: "bien cuidado", "en buen estado"
-- `tipo_cocina`: Cocina integrada/separada — ej: "cocina integrada", "cocina separada"
-- `moderno`: Moderno / actual — ej: "moderno"
-- `mascotas`: Aceptan mascotas — ej: "aceptan mascotas"
-- `cochera` / `ascensor` / `piscina` / `amoblado` y otros urbanos (`acceso_escuela`, `acceso_deporte`, etc.) siguen el mismo patrón.
-
-Si el deseo no mapea a ninguno, usá `express_desire` con `concept_links: []` (se preserva igual).
+Si el deseo no mapea semánticamente a una entrada del snapshot, usá
+`express_desire` con `concept_links: []`: se preserva igual, sin rechazo de
+lista cerrada.
 
 ## Ejemplos positivos
 

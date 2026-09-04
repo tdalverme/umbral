@@ -8,12 +8,22 @@ structural problems in the contract raise ``PreferenceVocabularyInvalid``.
 
 from __future__ import annotations
 
+import json
 import logging
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_PREFERENCES_VOCABULARY_PATH = (
+    Path(__file__).resolve().parents[5]
+    / "contracts"
+    / "criteria"
+    / "v1"
+    / "preferences-vocabulary-v1.json"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +176,15 @@ def parse_preference_vocabulary(
         unsupported_notes=notes,
         _alias_to_intent=dict(alias_to_intent),
     )
+
+
+def load_preference_vocabulary(
+    path: Path | None = None,
+) -> PreferenceVocabularySpec:
+    """Load the legacy tool vocabulary at the application boundary."""
+    source = path or _PREFERENCES_VOCABULARY_PATH
+    data = json.loads(source.read_text(encoding="utf-8"))
+    return parse_preference_vocabulary(data)
 
 
 def _alias_key(phrase: str) -> str:
