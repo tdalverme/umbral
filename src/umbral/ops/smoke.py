@@ -224,9 +224,14 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         deadline = self._start_deadline(timeout_seconds)
         import psycopg
 
+        observed: tuple[dict[str, str], ...] = ()
         while True:
+            try:
+                connect_timeout = max(1, int(_remaining(deadline)))
+            except TimeoutError:
+                return observed
             with psycopg.connect(
-                self._database_url, connect_timeout=max(1, int(_remaining(deadline)))
+                self._database_url, connect_timeout=connect_timeout
             ) as connection:
                 with connection.cursor() as cursor:
                     cursor.execute(
@@ -1272,6 +1277,30 @@ def run_preview_identity_smoke(
         "runtime_identity",
         lambda: (None, _runtime_identity_matches(config, http, observer)),
     )
+    if not runtime_ok:
+        print(
+            "SMOKE runtime_identity failed; skipping dependent scenarios",
+            file=sys.stderr,
+        )
+        for scenario in (
+            "invitation",
+            "invited",
+            "scanner_prefetch",
+            "explicit_confirmation",
+            "single_use",
+            "repeat",
+            "non_invited",
+            "authorization",
+            "logout",
+            "idle_expiry",
+            "delivered",
+            "bounced",
+            "complained",
+            "redaction",
+        ):
+            check(scenario, lambda: (None, False))
+        return PreviewSmokeReport(tuple(checks))
+
     invitation_ok = check("invitation", lambda: (config.invitation_id, True))
 
     correlation_id = uuid4()

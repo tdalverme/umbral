@@ -210,12 +210,14 @@ function Test-ServiceAtTarget {
         [Parameter(Mandatory = $true)] $ServiceExtraVars,
         [Parameter(Mandatory = $true)] $AgentVars,
         [Parameter(Mandatory = $true)] $NotificationVars,
-        [Parameter(Mandatory = $true)] $ModelVars
+        [Parameter(Mandatory = $true)] $ModelVars,
+        [Parameter(Mandatory = $true)] [string]$TargetEnvironment
     )
     if ($null -eq $SvcConfig) { return $false }
     $artifact = $Manifest.artifacts.($ServiceArtifacts[$Service])
     $imageReference = "{0}@{1}" -f $artifact.image, $artifact.digest
     if ($null -eq $SvcConfig.source -or $null -eq $SvcConfig.source.image -or [string]$SvcConfig.source.image -ne $imageReference) { return $false }
+    if ($Service -in @("api", "worker", "scheduler") -and [string]$SvcConfig.variables.UMBRAL_ENV.value -ne $TargetEnvironment) { return $false }
     if ([string]$SvcConfig.variables.UMBRAL_RELEASE_ID.value -ne [string]$Manifest.release_id -or [string]$SvcConfig.variables.UMBRAL_RELEASE_DIGEST.value -ne [string]$artifact.digest) { return $false }
     $storedManifest = $null
     try { $storedManifest = [string]$SvcConfig.variables.UMBRAL_RELEASE_MANIFEST.value | ConvertFrom-Json } catch { return $false }
@@ -263,7 +265,7 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ($null -ne $currentConfig) {
         $svcConfig = $currentConfig.services.($serviceIdByName[$service])
     }
-    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars)
+    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars -TargetEnvironment $Environment)
 }
 
 $servicesToPatch = @($serviceArtifacts.Keys | Where-Object { $serviceNeedsPatch[$_] })
@@ -318,6 +320,9 @@ foreach ($service in $servicesToPatch) {
         if ($ProviderVars.Contains("PREVIEW_DEV_LOGIN_TOKEN")) {
             $serviceVariables["PREVIEW_DEV_LOGIN_TOKEN"] = [ordered]@{ value = $ProviderVars["PREVIEW_DEV_LOGIN_TOKEN"] }
         }
+    }
+    if ($service -in @("api", "worker", "scheduler")) {
+        $serviceVariables["UMBRAL_ENV"] = [ordered]@{ value = $Environment }
     }
     if ($service -eq "model") {
         foreach ($key in $ModelVars.Keys) {
@@ -421,7 +426,7 @@ foreach ($service in $serviceArtifacts.Keys) {
                 $recheckSvcConfig = $recheckConfig.services.($serviceIdByName[$service])
             }
             if ($null -ne $recheckSvcConfig) {
-                $isNowAtTarget = Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $recheckSvcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars
+                $isNowAtTarget = Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $recheckSvcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars -TargetEnvironment $Environment
                 if ($isNowAtTarget) { break }
                 Write-Host "Recheck $recheckAttempts for ${service}: not yet at target (release_id=$($recheckSvcConfig.variables.UMBRAL_RELEASE_ID.value) vs $($manifest.release_id))"
             }

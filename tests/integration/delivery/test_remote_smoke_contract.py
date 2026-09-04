@@ -457,6 +457,120 @@ def test_builtin_runtime_surfaces_retries_until_all_surfaces_are_ready(
     assert len(queries) == 2
 
 
+def test_builtin_runtime_surfaces_returns_last_snapshot_when_deadline_expires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = _surface_rows()
+    rows[0] = {**rows[0], "state": "starting"}
+    fields = (
+        "surface",
+        "state",
+        "release_id",
+        "manifest_sha256",
+        "artifact_digest",
+        "correlation_id",
+        "observed_at",
+    )
+
+    class Connection:
+        def __enter__(self) -> "Connection":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def cursor(self) -> "Connection":
+            return self
+
+        def execute(self, _query: str) -> None:
+            return None
+
+        def fetchall(self) -> list[tuple[object, ...]]:
+            return [
+                tuple(
+                    datetime.fromisoformat(row[field])
+                    if field == "observed_at"
+                    else row[field]
+                    for field in fields
+                )
+                for row in rows
+            ]
+
+    monkeypatch.setitem(sys.modules, "psycopg", SimpleNamespace(connect=lambda *_args, **_kwargs: Connection()))
+
+    from umbral.ops import smoke as smoke_module
+
+    remaining_calls = 0
+
+    def remaining(_deadline: float) -> float:
+        nonlocal remaining_calls
+        remaining_calls += 1
+        if remaining_calls > 1:
+            raise TimeoutError("preview smoke timed out")
+        return 1.0
+
+    monkeypatch.setattr(smoke_module, "_remaining", remaining)
+    monkeypatch.setattr(smoke_module, "_sleep_remaining", lambda _deadline: None)
+
+    observer = BuiltInPreviewObserver(
+        database_url="postgresql://preview.example.test/db",
+        observation_token="",
+        sender="sender@example.test",
+    )
+
+    observed = observer.runtime_surfaces(timeout_seconds=1)
+
+    assert len(observed) == len(rows)
+    assert {row["surface"] for row in observed} == {
+        "web",
+        "api",
+        "worker",
+        "scheduler",
+    }
+
+
+def test_preview_smoke_does_not_start_identity_flow_after_runtime_failure() -> None:
+    class NotReadyObserver(RecordingObserver):
+        def runtime_surfaces(self, *, timeout_seconds: int) -> tuple[dict[str, str], ...]:
+            raise TimeoutError("preview smoke timed out")
+
+    calls: list[str] = []
+
+    def http(method: str, url: str, body: bytes | None) -> PreviewHttpResponse:
+        del body
+        path = url.removeprefix("https://preview.example.test")
+        calls.append(f"{method} {path}")
+        if path == "/health":
+            return PreviewHttpResponse(200, {}, b'{"status":"alive"}')
+        if path == "/ready":
+            return PreviewHttpResponse(
+                200,
+                {},
+                b'{"surface":"web","state":"ready","release_id":"release-20260801"}',
+            )
+        if path == "/version":
+            return PreviewHttpResponse(
+                200,
+                {},
+                b'{"surface":"web","release_id":"release-20260801",'
+                b'"manifest_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",'
+                b'"artifact_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}',
+            )
+        raise AssertionError(path)
+
+    report = run_preview_identity_smoke(
+        _smoke_config(),
+        http=http,
+        observer=NotReadyObserver(),
+        now=lambda: datetime(2026, 8, 1, tzinfo=timezone.utc),
+    )
+
+    assert len(report.checks) == 15
+    assert report.checks[0].scenario == "runtime_identity"
+    assert report.checks[0].code == "smoke.failed"
+    assert "POST /api/auth/magic-link-requests" not in calls
+
+
 @pytest.mark.parametrize(
     "mutate",
     [
