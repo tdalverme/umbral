@@ -226,8 +226,18 @@ def _desire_command(
     )
 
 
+def _managed_reply(text: str) -> dict[str, object]:
+    return {
+        "contract_version": "5",
+        "text": text,
+        "outcomes": [],
+        "verified_refs": [],
+        "source": "managed",
+    }
+
+
 def test_applied_transport_preference_is_acknowledged_without_question() -> None:
-    composer = _composer(_FakeGateway(reply={}, status="error"))
+    composer = _composer(_FakeGateway(reply=_managed_reply("Listo.")))
     command = _desire_command(concept="acceso_transporte", intensity="high")
 
     reply = composer.compose(
@@ -241,10 +251,13 @@ def test_applied_transport_preference_is_acknowledged_without_question() -> None
     assert "transporte" in reply.text.casefold()
     assert "alta" in reply.text.casefold()
     assert "?" not in reply.text
+    assert reply.source == "deterministic_fallback"
 
 
 def test_unresolved_desire_is_remembered_without_false_refusal() -> None:
-    composer = _composer(_FakeGateway(reply={}, status="error"))
+    composer = _composer(
+        _FakeGateway(reply=_managed_reply("No puedo ayudarte con eso."))
+    )
     command = RecordDesireCommand(
         act_id="a1",
         raw_text="que el edificio tenga buena onda",
@@ -262,10 +275,11 @@ def test_unresolved_desire_is_remembered_without_false_refusal() -> None:
     assert "registr" in reply.text.casefold()
     assert "no cambia el orden" in reply.text.casefold()
     assert "no puedo ayudarte" not in reply.text.casefold()
+    assert reply.source == "deterministic_fallback"
 
 
 def test_pending_hard_step_asks_one_question_with_ordinal() -> None:
-    composer = _composer(_FakeGateway(reply={}, status="error"))
+    composer = _composer(_FakeGateway(reply=_managed_reply("Listo.")))
     context = _context()
     context = replace(
         context,
@@ -285,6 +299,7 @@ def test_pending_hard_step_asks_one_question_with_ordinal() -> None:
 
     assert "1 de 2" in reply.text
     assert reply.text.count("?") == 1
+    assert reply.source == "deterministic_fallback"
 
 
 @pytest.mark.parametrize(

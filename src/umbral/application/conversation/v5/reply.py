@@ -135,6 +135,13 @@ class ReplyComposerV5:
                 verified_refs,
                 "deterministic_fallback",
             )
+        if any(item.effect != "other" for item in outcomes):
+            return ReplyV5(
+                _fallback_text(result),
+                outcomes,
+                verified_refs,
+                "deterministic_fallback",
+            )
         text = self._managed_text(result, outcomes, verified_refs)
         if text is None:
             return ReplyV5(
@@ -241,6 +248,7 @@ def _reply_outcomes(
         else {}
     )
     projected: list[ReplyOutcomeV5] = []
+    has_active_pending = False
     for outcome in result.outcomes:
         executed = executed_by_act.get(outcome.act_id)
         effect: ReplyEffectV5 = "other"
@@ -273,10 +281,12 @@ def _reply_outcomes(
             outcome.status == "pending"
             and outcome.reason_code == "filter.requires_confirmation"
             and result.context.pending_action is not None
+            and outcome.act_id == result.context.pending_action.act_id
         ):
             effect = "filter.requires_confirmation"
             ordinal = result.context.pending_action.ordinal
             total = result.context.pending_action.total
+            has_active_pending = True
 
         projected.append(
             ReplyOutcomeV5(
@@ -288,6 +298,18 @@ def _reply_outcomes(
                 concepts=concepts,
                 ordinal=ordinal,
                 total=total,
+            )
+        )
+    pending = result.context.pending_action
+    if pending is not None and not has_active_pending:
+        projected.append(
+            ReplyOutcomeV5(
+                act_id=pending.act_id,
+                status="pending",
+                reason_code="filter.requires_confirmation",
+                effect="filter.requires_confirmation",
+                ordinal=pending.ordinal,
+                total=pending.total,
             )
         )
     return tuple(projected)
@@ -354,7 +376,7 @@ def _fallback_text(result: ConversationTurnResultV5) -> str:
         elif item.status == "pending":
             # A pending outcome that no longer has a durable head was resolved
             # later in this same graph run, so it must not be asked again.
-            if any(
+            if result.context.pending_action is not None or any(
                 executed.effect_key == "pending.resolved"
                 for executed in result.executed
             ):

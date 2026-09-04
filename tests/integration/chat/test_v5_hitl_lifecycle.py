@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import UUID, uuid4
 
 from tests.fakes.preferences import FakeConceptReader, FakePreferenceStore
@@ -15,6 +17,7 @@ from tests.support.chat import (
 )
 from tests.support.radar import RadarTestContext
 
+from umbral.application.agent.contracts import ModelResult
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.chat.service import ChatService
 from umbral.application.conversation.v5.contracts import (
@@ -29,6 +32,7 @@ from umbral.application.conversation.v5.contracts import (
 )
 from umbral.application.conversation.v5.ports import FocusedListingV5
 from umbral.application.conversation.v5.receipts import InMemoryCommandReceiptStore
+from umbral.application.conversation.v5.reply import ReplyComposerV5
 from umbral.application.conversation.v5.service import ConversationTurnV5
 from umbral.application.preferences.contracts import (
     PreferenceConcept,
@@ -49,6 +53,28 @@ from umbral.infrastructure.playground.in_memory import LocalProposalRepository
 from umbral.infrastructure.radar.contract_loader import load_events_registry
 
 _NOW = datetime(2026, 9, 4, 12, 0, tzinfo=timezone.utc)
+_ROOT = Path(__file__).resolve().parents[3]
+_REPLY_SCHEMA = json.loads(
+    (_ROOT / "contracts" / "agent" / "v5" / "reply-schema-v5.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+
+class _ManagedReply:
+    def generate_structured(self, **kwargs: object) -> ModelResult:
+        return ModelResult(
+            content={
+                "contract_version": "5",
+                "text": "Listo.",
+                "outcomes": [],
+                "verified_refs": [],
+                "source": "managed",
+            },
+            model_version="test",
+            status="success",
+            latency_ms=1,
+        )
 
 
 class _Focus:
@@ -290,6 +316,30 @@ def test_v5_mixed_soft_hard_then_approve_exposes_next_head() -> None:
     assert (
         second.context.pending_action.pending_ref == f"pending:{queue[1].proposal_id}"
     )
+
+
+def test_v5_turn_reply_keeps_effectful_turn_deterministic() -> None:
+    user_id, stack = _stack()
+    turn = _turn(stack, _Script((_mixed_interpretation(),)))
+
+    result = _process(
+        turn,
+        user_id=user_id,
+        session_id=stack.session_id,
+        message_id=uuid4(),
+        text="prefiero bien luminoso y 900",
+    )
+    reply = ReplyComposerV5(
+        gateway=_ManagedReply(),
+        schema=_REPLY_SCHEMA,
+        prompt_version="reply-v5",
+        model_version="test",
+    ).compose(result)
+
+    assert reply.source == "deterministic_fallback"
+    assert "luminosidad" in reply.text.casefold()
+    assert "1 de 2" in reply.text
+    assert reply.text.count("?") == 1
 
 
 def test_v5_reject_then_correct_active_head_preserves_lineage() -> None:
