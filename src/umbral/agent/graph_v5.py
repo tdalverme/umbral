@@ -285,7 +285,7 @@ def build_graph_v5(
         if pending is None or decision not in {"approve", "reject"}:
             return {"failure_stage": "execution_failure"}
         ids = _ids(config)
-        deps.turn.resolve_pending(
+        resolved = deps.turn.resolve_pending(
             act_id=f"resolve:{pending.act_id}:{pending.ordinal}",
             context=context,
             pending_ref=pending.pending_ref,
@@ -296,7 +296,11 @@ def build_graph_v5(
                 f"resolve:{pending.ordinal}"
             ),
         )
-        return {}
+        executed = list(state.get("executed") or [])
+        outcomes = list(state.get("outcomes") or [])
+        executed.append(_executed_to_dict(resolved))
+        outcomes.append(_outcome_to_dict(_outcome_from_executed(resolved)))
+        return {"executed": executed, "outcomes": outcomes}
 
     def _compose_reply(
         state: ConversationGraphStateV5, config: RunnableConfig
@@ -615,6 +619,15 @@ def _executed_to_dict(item: ExecutedActV5) -> dict[str, object]:
 
 def _outcome_to_dict(item: ActOutcomeV5) -> dict[str, object]:
     return asdict(item)
+
+
+def _outcome_from_executed(item: ExecutedActV5) -> ActOutcomeV5:
+    return ActOutcomeV5(
+        act_id=item.act_id,
+        status=item.status,
+        reason_code=item.reason_code,
+        object_ref=item.object_ref,
+    )
 
 
 def _result_from_state(state: ConversationGraphStateV5) -> ConversationTurnResultV5:

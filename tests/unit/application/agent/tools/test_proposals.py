@@ -50,6 +50,23 @@ class _ProposalRepo:
         self.proposals[proposal.proposal_id] = proposal
         return proposal
 
+    def enqueue_pending(self, proposal: Proposal) -> Proposal:
+        ordinal = max(
+            (item.queue_ordinal for item in self.proposals.values()
+             if item.search_profile_id == proposal.search_profile_id
+             and item.session_id == proposal.session_id
+             and item.state == "pending"),
+            default=0,
+        ) + 1
+        for proposal_id, item in tuple(self.proposals.items()):
+            if (item.search_profile_id == proposal.search_profile_id
+                    and item.session_id == proposal.session_id
+                    and item.state == "pending"):
+                self.proposals[proposal_id] = replace(item, queue_total=ordinal)
+        queued = replace(proposal, queue_ordinal=ordinal, queue_total=ordinal)
+        self.proposals[queued.proposal_id] = queued
+        return queued
+
     def get(self, proposal_id, session_id, user_id) -> Proposal | None:
         return self.proposals.get(proposal_id)
 
@@ -102,6 +119,17 @@ class _ProposalRepo:
         )
         self.proposals[proposal_id] = updated
         return updated
+
+    def supersede_and_insert(self, proposal_id, successor):
+        original = self.proposals.get(proposal_id)
+        if original is None or original.state != "pending":
+            return None
+        self.proposals[proposal_id] = replace(
+            original, state="rejected", rejection_reason="edited",
+            superseded_by_proposal_id=successor.proposal_id,
+        )
+        self.proposals[successor.proposal_id] = successor
+        return successor
 
     def rebase_pending_for_queue(self, search_profile_id, session_id, version):
         for proposal_id, proposal in tuple(self.proposals.items()):
@@ -264,7 +292,10 @@ def test_pending_proposals_keep_original_act_order() -> None:
         source_act_id="budget",
     )
 
-    assert [(item.source_act_id, item.queue_ordinal) for item in repo.pending_for_profile(PROFILE_ID, SESSION_ID)] == [
+    assert [
+        (item.source_act_id, item.queue_ordinal)
+        for item in repo.pending_for_profile(PROFILE_ID, SESSION_ID)
+    ] == [
         ("zones", 1), ("budget", 2)
     ]
     assert zones.queue_ordinal == 1
@@ -289,6 +320,46 @@ def test_approving_a_queue_step_rebases_only_the_remaining_steps() -> None:
     assert repo.proposals[second.proposal_id].base_profile_version == 4
 
 
+def test_queue_total_remains_coherent_after_consuming_the_head() -> None:
+    service, repo, _, _ = _make_service()
+    first = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+    )
+    second = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+    )
+
+    assert repo.proposals[first.proposal_id].queue_total == 2
+    assert second.queue_total == 2
+    service.apply(**_base_args(first.proposal_id))
+    remaining = repo.proposals[second.proposal_id]
+    assert remaining.queue_ordinal == 2
+    assert remaining.queue_total == 2
+
+
+def test_propose_uses_atomic_enqueue_port_when_available() -> None:
+    service, repo, _, _ = _make_service()
+    calls: list[Proposal] = []
+
+    def enqueue_pending(proposal: Proposal) -> Proposal:
+        calls.append(proposal)
+        queued = replace(proposal, queue_ordinal=7, queue_total=9)
+        repo.proposals[queued.proposal_id] = queued
+        return queued
+
+    repo.enqueue_pending = enqueue_pending  # type: ignore[attr-defined]
+    proposal = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+    )
+
+    assert calls
+    assert proposal.queue_ordinal == 7
+    assert proposal.queue_total == 9
+
+
 def test_correction_derives_a_traceable_proposal_at_the_same_queue_position() -> None:
     service, repo, _, _ = _make_service()
     original = service.propose(
@@ -302,9 +373,44 @@ def test_correction_derives_a_traceable_proposal_at_the_same_queue_position() ->
         correlation_id=CORRELATION_ID, source_act_id="belgrano",
     )
 
-    assert repo.proposals[original.proposal_id].superseded_by_proposal_id == corrected.proposal_id
+    assert (
+        repo.proposals[original.proposal_id].superseded_by_proposal_id
+        == corrected.proposal_id
+    )
     assert corrected.queue_ordinal == original.queue_ordinal == 1
     assert corrected.source_act_id == "belgrano"
+
+
+def test_correction_uses_atomic_supersession_port_when_available() -> None:
+    service, repo, _, _ = _make_service()
+    original = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+    )
+    calls: list[tuple[UUID, Proposal]] = []
+
+    def supersede_and_insert(original_id: UUID, successor: Proposal) -> Proposal:
+        calls.append((original_id, successor))
+        repo.proposals[original_id] = replace(
+            repo.proposals[original_id], state="rejected",
+            rejection_reason="edited",
+            superseded_by_proposal_id=successor.proposal_id,
+        )
+        repo.proposals[successor.proposal_id] = successor
+        return successor
+
+    repo.supersede_and_insert = supersede_and_insert  # type: ignore[attr-defined]
+    corrected = service.derive(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        proposal_id=original.proposal_id, change={"zones": ["belgrano"]},
+        correlation_id=CORRELATION_ID, source_act_id="belgrano",
+    )
+
+    assert calls and calls[0][0] == original.proposal_id
+    assert (
+        repo.proposals[original.proposal_id].superseded_by_proposal_id
+        == corrected.proposal_id
+    )
 
 
 def test_propose_rejects_unknown_change_fields() -> None:

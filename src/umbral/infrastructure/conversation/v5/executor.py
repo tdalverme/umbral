@@ -11,10 +11,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from umbral.application.agent.tools.contracts import Proposal, ProposalNotFound
 from umbral.application.agent.tools.proposals import (
     SearchProfileUpdateProposals,
 )
-from umbral.application.agent.tools.contracts import Proposal, ProposalNotFound
 from umbral.application.chat.service import ChatService
 from umbral.application.conversation.v5.contracts import (
     ClearFilterCommand,
@@ -481,7 +481,7 @@ class ProposalsPendingResolverV5:
                 effect_key="pending.resolved",
                 object_ref=f"radar:{profile_id}",
             )
-        self.proposals.reject(
+        rejected = self.proposals.reject(
             user_id=UUID(context.user_id),
             session_id=UUID(context.session_id),
             search_profile_id=profile_id,
@@ -492,7 +492,9 @@ class ProposalsPendingResolverV5:
         return ExecutedActV5(
             act_id=act_id,
             effect_key="pending.resolved",
+            status="rejected",
             object_ref=f"pending:{pending_id}",
+            reason_code=rejected.rejection_reason,
         )
 
 

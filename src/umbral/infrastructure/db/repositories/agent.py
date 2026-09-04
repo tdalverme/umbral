@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,7 @@ from umbral.infrastructure.db.models.agent import (
     AgentNodeRun,
     SearchProfileUpdateProposal,
 )
+from umbral.infrastructure.db.models.chat import ChatSession
 
 SessionFactory = Callable[[], Session]
 
@@ -206,6 +208,68 @@ class SqlAlchemyProposalRepository:
             current.commit()
         return proposal
 
+    def enqueue_pending(self, proposal: Proposal) -> Proposal:
+        """Assign queue metadata while holding the session row lock."""
+        with self.session_factory() as current:
+            current.execute(
+                select(ChatSession.id)
+                .where(ChatSession.id == proposal.session_id)
+                .with_for_update()
+            ).scalar_one()
+            max_ordinal = current.scalar(
+                select(func.max(SearchProfileUpdateProposal.queue_ordinal)).where(
+                    SearchProfileUpdateProposal.search_profile_id
+                    == proposal.search_profile_id,
+                    SearchProfileUpdateProposal.session_id == proposal.session_id,
+                    SearchProfileUpdateProposal.state == "pending",
+                )
+            ) or 0
+            ordinal = int(max_ordinal) + 1
+            current.execute(
+                update(SearchProfileUpdateProposal)
+                .where(
+                    SearchProfileUpdateProposal.search_profile_id
+                    == proposal.search_profile_id,
+                    SearchProfileUpdateProposal.session_id == proposal.session_id,
+                    SearchProfileUpdateProposal.state == "pending",
+                )
+                .values(queue_total=ordinal)
+            )
+            stored = replace(proposal, queue_ordinal=ordinal, queue_total=ordinal)
+            current.add(_proposal_model(stored))
+            current.commit()
+        return stored
+
+    def supersede_and_insert(
+        self, proposal_id: UUID, successor: Proposal
+    ) -> Proposal | None:
+        """Atomically mark the original edited and persist its successor."""
+        with self.session_factory() as current:
+            current.execute(
+                select(ChatSession.id)
+                .where(ChatSession.id == successor.session_id)
+                .with_for_update()
+            ).scalar_one()
+            original = current.scalar(
+                select(SearchProfileUpdateProposal)
+                .where(SearchProfileUpdateProposal.id == proposal_id)
+                .with_for_update()
+            )
+            if original is None or original.state != "pending":
+                return None
+            stored = replace(
+                successor,
+                queue_ordinal=original.queue_ordinal,
+                queue_total=max(original.queue_total, original.queue_ordinal),
+            )
+            original.state = "rejected"
+            original.rejection_reason = "edited"
+            original.superseded_by_proposal_id = stored.proposal_id
+            original.updated_at = datetime.now(timezone.utc)
+            current.add(_proposal_model(stored))
+            current.commit()
+        return stored
+
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
     ) -> Proposal | None:
@@ -384,8 +448,9 @@ def _proposal_model(proposal: Proposal) -> SearchProfileUpdateProposal:
         applied_run_id=proposal.applied_run_id,
         rejection_note=proposal.rejection_note,
         superseded_by_proposal_id=proposal.superseded_by_proposal_id,
-        source_act_id=proposal.source_act_id,
+        source_act_id=proposal.source_act_id or "legacy",
         queue_ordinal=proposal.queue_ordinal,
+        queue_total=proposal.queue_total,
     )
 
 
@@ -408,4 +473,5 @@ def _to_proposal(model: SearchProfileUpdateProposal) -> Proposal:
         superseded_by_proposal_id=model.superseded_by_proposal_id,
         source_act_id=model.source_act_id,
         queue_ordinal=model.queue_ordinal,
+        queue_total=model.queue_total,
     )

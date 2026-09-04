@@ -41,6 +41,7 @@ class Proposal:
     superseded_by_proposal_id: UUID | None = None
     source_act_id: str = "legacy"
     queue_ordinal: int = 1
+    queue_total: int = 1
 
 
 @dataclass(frozen=True, slots=True)

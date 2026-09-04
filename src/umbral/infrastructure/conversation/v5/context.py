@@ -184,7 +184,7 @@ class ProposalsPendingReaderV5:
             pending_ref=f"pending:{proposal.proposal_id}",
             act_id=proposal.source_act_id,
             ordinal=proposal.queue_ordinal,
-            total=len(queue),
+            total=proposal.queue_total,
         )
 
 

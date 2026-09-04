@@ -23,6 +23,14 @@ class ProposalRepository(Protocol):
 
     def insert(self, proposal: Proposal) -> Proposal: ...
 
+    def enqueue_pending(self, proposal: Proposal) -> Proposal:
+        """Insert a pending proposal and assign its queue position atomically."""
+
+    def supersede_and_insert(
+        self, proposal_id: UUID, successor: Proposal
+    ) -> Proposal | None:
+        """Atomically replace a pending proposal with its derived successor."""
+
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
     ) -> Proposal | None:

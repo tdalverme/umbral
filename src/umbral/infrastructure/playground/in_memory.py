@@ -176,6 +176,35 @@ class LocalProposalRepository:
         self.proposals[proposal.proposal_id] = proposal
         return proposal
 
+    def enqueue_pending(self, proposal: Proposal) -> Proposal:
+        pending = [
+            item for item in self.proposals.values()
+            if item.search_profile_id == proposal.search_profile_id
+            and item.session_id == proposal.session_id
+            and item.state == "pending"
+        ]
+        ordinal = max((item.queue_ordinal for item in pending), default=0) + 1
+        for item in pending:
+            self.proposals[item.proposal_id] = replace(item, queue_total=ordinal)
+        queued = replace(proposal, queue_ordinal=ordinal, queue_total=ordinal)
+        self.proposals[queued.proposal_id] = queued
+        return queued
+
+    def supersede_and_insert(
+        self, proposal_id: UUID, successor: Proposal
+    ) -> Proposal | None:
+        original = self.proposals.get(proposal_id)
+        if original is None or original.state != "pending":
+            return None
+        self.proposals[proposal_id] = replace(
+            original,
+            state="rejected",
+            rejection_reason="edited",
+            superseded_by_proposal_id=successor.proposal_id,
+        )
+        self.proposals[successor.proposal_id] = successor
+        return successor
+
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
     ) -> Proposal | None:

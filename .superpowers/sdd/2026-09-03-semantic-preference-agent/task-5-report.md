@@ -38,3 +38,18 @@ The required aggregate suite was invoked. Its unit and non-container chat tests 
 - The graph now interrupts with only the durable queue head and, on resume, calls the V5 pending resolver with the explicit approve/reject decision before reloading context. A remaining head causes the next interrupt; no old message is reinterpreted.
 - Migration 0023 now backfills nonempty legacy act ids and positive pending ordinals, with a database check constraint.
 - Focused verification: `tests/unit/agent/test_graph_v5.py`, `tests/contract/test_agent_contracts_v5.py`, and `tests/unit/infrastructure/test_db_model_contract.py` — 30 passed.
+
+## Review round 2
+
+- Proposal defaults now satisfy the durable database invariant (`legacy`, ordinal `1`).
+- Queue access is exposed as an explicit proposal-service reader; V5 context no longer reaches through a repository dynamically.
+- A turn reloads its authorized context after creating pending proposals, so its result and the graph confirmation payload observe the durable head.
+
+## Review round 3 / continuation
+
+- Added durable `queue_total` metadata and migration `0024_conversation_v5_proposal_total`; the repository updates all pending rows under the session lock so ordinal/total remains coherent after consuming a head.
+- Added transactional `enqueue_pending` and `supersede_and_insert` repository ports. PostgreSQL locks the durable chat-session row, covering empty-queue races and making correction lineage atomic. The local repository implements the same semantics for the playground.
+- Graph/context preserve the durable step metadata, and rejected pending resolutions now remain `rejected` outcomes (with `user` reason) for replies and audit.
+- RED: `$env:PYTHONPATH='src'; & '..\\..\\.venv\\Scripts\\python.exe' -m pytest tests/unit/application/agent/tools/test_proposals.py -q` — 3 failed, 20 passed; failures covered missing durable total and unused atomic ports.
+- GREEN: `PYTHONPATH=src ..\\..\\.venv\\Scripts\\python.exe -m pytest tests/unit/application/agent/tools/test_proposals.py tests/unit/infrastructure/conversation/v5/test_radar_executor.py tests/unit/agent/test_graph_v5.py tests/unit/application/conversation/v5 tests/unit/infrastructure/conversation/v5 tests/migrations/test_upgrade_and_drift.py tests/unit/infrastructure/test_db_model_contract.py tests/contract/test_agent_contracts_v5.py -q` — 126 passed, 2 warnings.
+- Alembic offline upgrade SQL and `git diff --check` passed. The Docker-backed `tests/integration/chat` suite remains unavailable in this environment (Docker engine pipe did not respond); no assertion result was claimed.

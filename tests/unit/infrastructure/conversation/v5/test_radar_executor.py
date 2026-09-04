@@ -23,11 +23,15 @@ from umbral.application.conversation.v5.contracts import (
     ClearFilterCommand,
     CreateRadarCommand,
     HardFilterV5,
+    PendingActionV5,
     SetFilterCommand,
     TurnContextV5,
 )
 from umbral.application.events.contracts import ProductEvent
-from umbral.infrastructure.conversation.v5.executor import EffectExecutorV5
+from umbral.infrastructure.conversation.v5.executor import (
+    EffectExecutorV5,
+    ProposalsPendingResolverV5,
+)
 from umbral.infrastructure.radar.contract_loader import load_events_registry
 
 _NOW = datetime(2026, 8, 26, tzinfo=timezone.utc)
@@ -83,7 +87,11 @@ class _ProposalRepo:
         return updated
 
     def mark_rejected(
-        self, proposal_id: UUID, reason: str, rejection_at: datetime
+        self,
+        proposal_id: UUID,
+        reason: str,
+        rejection_at: datetime,
+        rejection_note: str | None = None,
     ) -> Proposal | None:
         proposal = self.proposals.get(proposal_id)
         if proposal is None:
@@ -92,6 +100,7 @@ class _ProposalRepo:
             proposal,
             state="rejected",
             rejection_reason=reason,  # type: ignore[arg-type]
+            rejection_note=rejection_note,
         )
         self.proposals[proposal_id] = updated
         return updated
@@ -245,6 +254,60 @@ def test_new_filter_creates_pending_proposal_without_versioning_the_radar() -> N
     assert result.reason_code == "filter.requires_confirmation"
     updated = radar_ctx.service.get_profile(user_id, profile.profile_id)
     assert updated.budget_max is None
+
+
+def test_rejecting_pending_returns_a_rejected_resolution_outcome() -> None:
+    radar_ctx = RadarTestContext(default_runtime=False)
+    user_id = uuid4()
+    profile, _ = radar_ctx.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    chat = _chat_service()
+    session = chat.create_session(
+        user_id=user_id,
+        search_profile_id=profile.profile_id,
+        correlation_id=uuid4(),
+    )
+    proposals = _proposals(radar_ctx)
+    proposal = proposals.propose(
+        user_id=user_id,
+        session_id=session.session_id,
+        search_profile_id=profile.profile_id,
+        change={"budget_max": 900},
+        correlation_id=uuid4(),
+    )
+    context = _context(
+        profile_id=profile.profile_id,
+        version=profile.version,
+        filters=(),
+        user_id=user_id,
+        session_id=session.session_id,
+    )
+    context = replace(
+        context,
+        pending_action=PendingActionV5(pending_ref=f"pending:{proposal.proposal_id}"),
+    )
+
+    result = ProposalsPendingResolverV5(proposals=proposals).resolve(
+        act_id="resolve:a1",
+        context=context,
+        pending_ref=f"pending:{proposal.proposal_id}",
+        decision="reject",
+        correlation_id=uuid4(),
+        idempotency_key="decision:a1",
+    )
+
+    assert result.status == "rejected"
+    assert result.reason_code == "user"
 
 
 def test_existing_filter_change_creates_pending_proposal() -> None:

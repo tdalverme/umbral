@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -151,10 +152,22 @@ class SearchProfileUpdateProposals:
             state="pending",
             expires_at=self.clock() + timedelta(hours=self.ttl_hours),
             correlation_id=correlation_id,
-            source_act_id=source_act_id,
-            queue_ordinal=self._next_queue_ordinal(search_profile_id, session_id),
+            source_act_id=source_act_id or "legacy",
+            queue_ordinal=1,
+            queue_total=1,
         )
-        self.repository.insert(proposal)
+        enqueue = getattr(self.repository, "enqueue_pending", None)
+        if callable(enqueue):
+            proposal = enqueue(proposal)
+        else:
+            # Lightweight stores may not expose the transactional port.
+            proposal = replace(
+                proposal,
+                queue_ordinal=self._next_queue_ordinal(
+                    search_profile_id, session_id
+                ),
+            )
+            self.repository.insert(proposal)
         self._emit_server_event(
             event_type="search_profile.update_proposed.v1",
             actor_id=user_id,
@@ -315,11 +328,19 @@ class SearchProfileUpdateProposals:
             correlation_id=correlation_id,
             source_act_id=source_act_id or original.source_act_id,
             queue_ordinal=original.queue_ordinal,
+            queue_total=original.queue_total,
         )
-        self.repository.insert(derived)
-        self.repository.mark_superseded(
-            proposal_id, derived.proposal_id, self.clock()
-        )
+        supersede = getattr(self.repository, "supersede_and_insert", None)
+        if callable(supersede):
+            stored = supersede(proposal_id, derived)
+            if stored is None:
+                raise ProposalNotPending()
+            derived = stored
+        else:
+            self.repository.insert(derived)
+            self.repository.mark_superseded(
+                proposal_id, derived.proposal_id, self.clock()
+            )
         self._emit_server_event(
             event_type="search_profile.update_proposed.v1",
             actor_id=user_id,

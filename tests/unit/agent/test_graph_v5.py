@@ -21,6 +21,7 @@ from umbral.application.conversation.v5.contracts import (
     ConceptLinkV5,
     ConversationTurnResultV5,
     EvidenceSpan,
+    ExecutedActV5,
     ExpressDesire,
     PendingActionV5,
     RecordDesireCommand,
@@ -169,7 +170,12 @@ class _FakeTurn:
         decision: str, correlation_id: UUID, idempotency_key: str,
     ) -> object:
         self.resolutions.append((pending_ref, decision))
-        return object()
+        return ExecutedActV5(
+            act_id=act_id,
+            effect_key="pending.resolved",
+            status="rejected" if decision == "reject" else "applied",
+            reason_code="user" if decision == "reject" else None,
+        )
 
 
 class _FakeReply:
@@ -322,6 +328,8 @@ def test_graph_resume_resolves_only_the_context_queue_head() -> None:
     graph = _graph(turn)
 
     graph.invoke(_state(), _config())
-    graph.invoke(Command(resume={"decision": "reject"}), _config())
+    resumed = graph.invoke(Command(resume={"decision": "reject"}), _config())
 
     assert turn.resolutions == [("pending:head", "reject")]
+    assert resumed["outcomes"][-1]["status"] == "rejected"
+    assert resumed["outcomes"][-1]["reason_code"] == "user"
