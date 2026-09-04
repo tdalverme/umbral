@@ -17,6 +17,7 @@ from tests.support.radar import RadarTestContext
 
 from umbral.application.chat.service import ChatService
 from umbral.application.conversation.v5.contracts import (
+    ConceptLinkV5,
     DesireViewV5,
     HardFilterV5,
     PendingActionV5,
@@ -167,6 +168,11 @@ def _preference_view(
         status="active",
         binding_id=uuid4(),
         binding_kind="unresolved",
+        concept_key=None,
+        polarity=None,
+        intensity=None,
+        weight=None,
+        intensity_policy_version=None,
         mode=mode,  # type: ignore[arg-type]
         confidence=0.5,
         limitations=(),
@@ -300,6 +306,55 @@ def test_active_desires_are_exposed_as_authorized_refs() -> None:
         ),
     )
     assert context.authorizes(desire_ref)
+
+
+def test_active_desire_context_reloads_the_persisted_negative_essential_binding(
+) -> None:
+    radar_ctx = RadarTestContext(default_runtime=False)
+    user_id = uuid4()
+    profile, _ = radar_ctx.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    view = PreferenceView(
+        expression_id=uuid4(),
+        raw_text="No quiero ruido",
+        subject_key="cualquier_alias",
+        status="active",
+        binding_id=uuid4(),
+        binding_kind="structured",
+        concept_key="calma_residencial",
+        mode="soft",
+        confidence=0.9,
+        polarity="negative",
+        intensity="essential",
+        weight=1.0,
+        intensity_policy_version="preference-intensity-v1",
+        limitations=(),
+        evidence_refs=(),
+    )
+    chat, session_id = _bound_session(
+        radar_ctx, user_id=user_id, profile_id=profile.profile_id
+    )
+
+    context = _assembler(radar_ctx, chat=chat, views=(view,)).load(
+        user_id=user_id, session_id=session_id, correlation_id=uuid4()
+    )
+
+    assert context.active_desires[0].concept_links == (
+        ConceptLinkV5(
+            concept_ref="calma_residencial", confidence=0.9,
+            polarity="negative", intensity="essential", evidence_spans=(), force="soft",
+        ),
+    )
 
 
 def test_pending_action_is_attached_as_authorized_ref() -> None:

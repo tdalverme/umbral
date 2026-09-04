@@ -32,6 +32,8 @@ from umbral.application.conversation.v5.receipts import (
 )
 from umbral.application.conversation.v5.reply import ReplyComposerV5
 from umbral.application.conversation.v5.service import ConversationTurnV5
+from umbral.application.preferences.intensity import IntensityPolicy
+from umbral.application.preferences.ports import ConceptReader
 from umbral.application.radar.service import RadarService
 from umbral.infrastructure.conversation.composition import PreferenceServiceLike
 from umbral.infrastructure.conversation.v5.context import (
@@ -55,6 +57,8 @@ class V5Services:
     proposals: SearchProfileUpdateProposals
     preferences: PreferenceServiceLike | None = None
     feedback: FeedbackRecorderV5 | None = None
+    concepts: ConceptReader | None = None
+    intensity_policy: IntensityPolicy | None = None
 
 
 def build_conversation_v5_turn_service(
@@ -83,6 +87,8 @@ def build_conversation_v5_turn_service(
         proposals=services.proposals,
         preferences=services.preferences,
         feedback=services.feedback,
+        concepts=services.concepts,
+        intensity_policy=services.intensity_policy,
     )
     return ConversationTurnV5(
         contexts=contexts,

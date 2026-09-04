@@ -32,7 +32,12 @@ def preference_service() -> PreferenceService:
             {
                 "balcon": PreferenceConcept(
                     key="balcon", matcher_type="categorical", computable=True
-                )
+                ),
+                "calma_residencial": PreferenceConcept(
+                    key="calma_residencial",
+                    matcher_type="signal_score",
+                    computable=True,
+                ),
             }
         ),
         policy=PreferencePolicySpec.v1(),
@@ -223,3 +228,88 @@ def test_active_view_exposes_interpretation_but_not_query_embedding(
     assert view[0].raw_text == "quiero estar cerca de un parque"
     assert view[0].binding_kind == "semantic"
     assert not hasattr(view[0], "query_embedding")
+
+
+def test_explicit_preference_replaces_the_active_fact_for_its_canonical_concept(
+    preference_service: PreferenceService,
+) -> None:
+    """A repeated concept must supersede, rather than accumulate, its fact."""
+    profile_id = uuid4()
+    first = preference_service.set_explicit_preference(
+        profile_id=profile_id,
+        source_message_id=uuid4(),
+        concept_key="calma_residencial",
+        raw_text="Busco poco ruido",
+        binding_draft=BindingDraft.structured(
+            concept_key="calma_residencial",
+            matcher_type="signal_score",
+            params={
+                "polarity": "positive",
+                "intensity": "low",
+                "weight": 0.25,
+                "intensity_policy_version": "preference-intensity-v1",
+            },
+            confidence=0.9,
+        ),
+        correlation_id=uuid4(),
+    )
+
+    replacement = preference_service.set_explicit_preference(
+        profile_id=profile_id,
+        source_message_id=uuid4(),
+        concept_key="calma_residencial",
+        raw_text="Es esencial que sea silencioso",
+        binding_draft=BindingDraft.structured(
+            concept_key="calma_residencial",
+            matcher_type="signal_score",
+            params={
+                "polarity": "positive",
+                "intensity": "essential",
+                "weight": 1.0,
+                "intensity_policy_version": "preference-intensity-v1",
+            },
+            confidence=0.9,
+        ),
+        correlation_id=uuid4(),
+    )
+
+    retired = preference_service.expressions.get(first.expression.expression_id)
+    assert retired is not None
+    assert retired.status == "superseded"
+    assert retired.superseded_by == replacement.expression.expression_id
+    assert [
+        view.concept_key for view in preference_service.active_view(profile_id)
+    ] == [
+        "calma_residencial"
+    ]
+    assert preference_service.active_view(profile_id)[0].intensity == "essential"
+    assert preference_service.active_view(profile_id)[0].weight == 1.0
+
+
+def test_explicit_preference_replaces_polarity_for_the_same_canonical_concept(
+    preference_service: PreferenceService,
+) -> None:
+    profile_id = uuid4()
+    for polarity in ("positive", "negative"):
+        preference_service.set_explicit_preference(
+            profile_id=profile_id,
+            source_message_id=uuid4(),
+            concept_key="calma_residencial",
+            raw_text=f"{polarity} calma",
+            binding_draft=BindingDraft.structured(
+                concept_key="calma_residencial",
+                matcher_type="signal_score",
+                params={
+                    "polarity": polarity,
+                    "intensity": "high",
+                    "weight": 0.75,
+                    "intensity_policy_version": "preference-intensity-v1",
+                },
+                confidence=0.9,
+            ),
+            correlation_id=uuid4(),
+        )
+
+    views = preference_service.active_view(profile_id)
+    assert len(views) == 1
+    assert views[0].polarity == "negative"

@@ -200,14 +200,17 @@ def _desire_view(view: PreferenceView) -> DesireViewV5:
     if (
         view.binding_id is not None
         and view.mode == "soft"
-        and view.binding_kind in ("structured", "semantic")
+        and view.binding_kind == "structured"
+        and view.concept_key is not None
+        and view.polarity is not None
+        and view.intensity is not None
     ):
         concept_links = (
             ConceptLinkV5(
-                concept_ref=f"binding:{view.binding_id}",
+                concept_ref=view.concept_key,
                 confidence=view.confidence,
-                polarity="positive",
-                intensity="medium",
+                polarity=view.polarity,
+                intensity=view.intensity,
                 evidence_spans=(),
                 force="soft",
             ),

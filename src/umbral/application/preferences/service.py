@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -134,6 +134,57 @@ class PreferenceService:
         )
         return PreferenceChange(expression, bindings, result.fact_ids)
 
+    def set_explicit_preference(
+        self,
+        *,
+        profile_id: UUID,
+        source_message_id: UUID | None,
+        concept_key: str,
+        raw_text: str,
+        binding_draft: BindingDraft,
+        correlation_id: UUID,
+    ) -> PreferenceChange:
+        """Set one canonical explicit fact, preserving a successor lineage."""
+
+        if (
+            binding_draft.kind != "structured"
+            or binding_draft.concept_key != concept_key
+        ):
+            raise PreferenceValidationError(
+                ("preferences.structured_concept_mismatch",)
+            )
+        active = self.expressions.active_for_profile(profile_id)
+        active_bindings = self.bindings.active_for_expression_ids(
+            tuple(expression.expression_id for expression in active)
+        )
+        previous = next(
+            (
+                binding
+                for binding in active_bindings
+                if binding.kind == "structured" and binding.concept_key == concept_key
+            ),
+            None,
+        )
+        if previous is None:
+            return self.record_expression(
+                profile_id=profile_id,
+                source_message_id=source_message_id,
+                subject_key=concept_key,
+                raw_text=raw_text,
+                authority="explicit",
+                binding_drafts=(binding_draft,),
+                correlation_id=correlation_id,
+            )
+        return self.revise_expression(
+            profile_id=profile_id,
+            previous_expression_id=previous.expression_id,
+            source_message_id=source_message_id,
+            raw_text=raw_text,
+            authority="explicit",
+            binding_drafts=(binding_draft,),
+            correlation_id=correlation_id,
+        )
+
     def withdraw_expression(
         self,
         *,
@@ -181,8 +232,15 @@ class PreferenceService:
                 status=expression.status,
                 binding_id=binding.binding_id,
                 binding_kind=binding.kind,
+                concept_key=binding.concept_key,
                 mode=binding.mode,
                 confidence=binding.confidence,
+                polarity=_param_text(binding.params, "polarity"),
+                intensity=_param_text(binding.params, "intensity"),
+                weight=_param_weight(binding.params),
+                intensity_policy_version=_param_text(
+                    binding.params, "intensity_policy_version"
+                ),
                 limitations=binding.limitations,
                 evidence_refs=binding.evidence_refs,
             )
@@ -320,3 +378,15 @@ def _binding_evidence_refs(draft: BindingDraft) -> tuple[dict[str, object], ...]
 
 def _binding_identity(binding: CriterionBinding) -> BindingIdentity:
     return (binding.kind, binding.concept_key, binding.matcher_type, binding.mode)
+
+
+def _param_text(params: object, key: str) -> str | None:
+    value = params.get(key) if isinstance(params, Mapping) else None
+    return value if isinstance(value, str) else None
+
+
+def _param_weight(params: object) -> float | None:
+    value = params.get("weight") if isinstance(params, Mapping) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)

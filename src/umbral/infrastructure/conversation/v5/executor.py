@@ -30,7 +30,12 @@ from umbral.application.conversation.v5.contracts import (
     WithdrawDesireCommand,
 )
 from umbral.application.conversation.v5.ports import FeedbackRecorderV5
-from umbral.application.preferences.contracts import BindingDraft
+from umbral.application.preferences.contracts import (
+    BindingDraft,
+    PreferenceValidationError,
+)
+from umbral.application.preferences.intensity import IntensityPolicy
+from umbral.application.preferences.ports import ConceptReader
 from umbral.application.radar.service import RadarService
 from umbral.domain.errors import ConcurrencyConflict
 from umbral.infrastructure.conversation.composition import PreferenceServiceLike
@@ -47,6 +52,8 @@ class EffectExecutorV5:
         proposals: SearchProfileUpdateProposals,
         preferences: PreferenceServiceLike | None = None,
         feedback: FeedbackRecorderV5 | None = None,
+        concepts: ConceptReader | None = None,
+        intensity_policy: IntensityPolicy | None = None,
         radar_name: str = "Mi búsqueda",
     ) -> None:
         self.radar = radar
@@ -54,6 +61,8 @@ class EffectExecutorV5:
         self.proposals = proposals
         self.preferences = preferences
         self.feedback = feedback
+        self.concepts = concepts
+        self.intensity_policy = intensity_policy
         self.radar_name = radar_name
 
     def execute(
@@ -205,17 +214,42 @@ class EffectExecutorV5:
                 status="rejected",
                 reason_code="preferences.not_configured",
             )
-        try:
+        if not command.concept_links:
             change = preferences.record_expression(
                 profile_id=profile_id,
                 source_message_id=None,
                 subject_key=command.subject_ref,
                 raw_text=command.raw_text,
                 authority="explicit",
-                binding_drafts=_binding_drafts(command.concept_links),
+                binding_drafts=(BindingDraft.unresolved("no_structured_evidence"),),
                 correlation_id=UUID(context.correlation_id),
             )
-        except RuntimeError:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.remembered",
+                object_ref=f"desire:{change.expression.expression_id}",
+            )
+        drafts = self._binding_drafts(command.concept_links)
+        if drafts is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.remembered",
+                status="rejected",
+                reason_code="preferences.structured_concept_not_found",
+            )
+        try:
+            changes = tuple(
+                preferences.set_explicit_preference(
+                    profile_id=profile_id,
+                    source_message_id=None,
+                    concept_key=link.concept_ref,
+                    raw_text=command.raw_text,
+                    binding_draft=draft,
+                    correlation_id=UUID(context.correlation_id),
+                )
+                for link, draft in zip(command.concept_links, drafts, strict=True)
+            )
+        except (PreferenceValidationError, RuntimeError):
             return ExecutedActV5(
                 act_id=command.act_id,
                 effect_key="desire.remembered",
@@ -225,7 +259,7 @@ class EffectExecutorV5:
         return ExecutedActV5(
             act_id=command.act_id,
             effect_key="desire.remembered",
-            object_ref=f"desire:{change.expression.expression_id}",
+            object_ref=f"desire:{changes[-1].expression.expression_id}",
         )
 
     def _revise_desire(
@@ -247,13 +281,21 @@ class EffectExecutorV5:
                 status="rejected",
                 reason_code="preferences.not_configured",
             )
+        drafts = self._binding_drafts(command.concept_links)
+        if drafts is None:
+            return ExecutedActV5(
+                act_id=command.act_id,
+                effect_key="desire.revised",
+                status="rejected",
+                reason_code="preferences.structured_concept_not_found",
+            )
         change = preferences.revise_expression(
             profile_id=profile_id,
             previous_expression_id=_ref_uuid(command.desire_ref, "desire"),
             source_message_id=None,
             raw_text=command.raw_text,
             authority="explicit",
-            binding_drafts=_binding_drafts(command.concept_links),
+            binding_drafts=drafts,
             correlation_id=UUID(context.correlation_id),
         )
         return ExecutedActV5(
@@ -330,6 +372,43 @@ class EffectExecutorV5:
             effect_key="feedback.recorded",
             object_ref=f"listing:{command.listing_id}",
         )
+
+    def _binding_drafts(
+        self, concept_links: tuple[ConceptLinkV5, ...]
+    ) -> tuple[BindingDraft, ...] | None:
+        if not concept_links:
+            return (BindingDraft.unresolved("no_structured_evidence"),)
+        if self.concepts is None or self.intensity_policy is None:
+            return None
+        drafts: list[BindingDraft] = []
+        for link in concept_links:
+            concept = self.concepts.get(link.concept_ref)
+            if concept is None:
+                return None
+            drafts.append(
+                BindingDraft.structured(
+                    concept_key=concept.key,
+                    matcher_type=concept.matcher_type,
+                    params={
+                        "polarity": link.polarity,
+                        "intensity": link.intensity,
+                        "weight": self.intensity_policy.weight_for(link.intensity),
+                        "intensity_policy_version": self.intensity_policy.version,
+                    },
+                    confidence=link.confidence,
+                    mode="soft",
+                    evidence_refs=tuple(
+                        {
+                            "kind": "message_span",
+                            "start": span.start,
+                            "end": span.end,
+                            "text": span.text,
+                        }
+                        for span in link.evidence_spans
+                    ),
+                )
+            )
+        return tuple(drafts)
 
     def _propose(
         self,
@@ -423,40 +502,6 @@ def _profile_id(context: TurnContextV5) -> UUID | None:
 
 def _ref_uuid(ref: str, prefix: str) -> UUID:
     return UUID(ref.removeprefix(f"{prefix}:"))
-
-
-def _binding_drafts(
-    concept_links: tuple[ConceptLinkV5, ...],
-) -> tuple[BindingDraft, ...]:
-    if not concept_links:
-        return (BindingDraft.unresolved("no_structured_evidence"),)
-    drafts: list[BindingDraft] = []
-    for link in concept_links:
-        # Soft urban/luminosidad concepts auto-aplican sin HITL; hard filters siguen por proposals.
-        # Mapeo mínimo: urbanos y lifestyle usan signal_score, resto usa semantic_feature si no se conoce.
-        # El PreferenceService validará contra el registry y rechazará si el matcher no coincide.
-        concept_key = link.concept_ref
-        # Heurística: proximidad/acceso/vida/caminabilidad/calma/ruido -> signal_score; luminosidad/moderno -> semantic_feature; balcon etc -> categorical
-        if concept_key.startswith(("proximidad_", "acceso_", "vida_", "zona_", "caminabilidad", "calma_", "ruido_")):
-            matcher: str = "signal_score"
-        elif concept_key in {"luminosidad", "moderno", "estado_general"}:
-            matcher = "semantic_feature"
-        elif concept_key in {"balcon", "mascotas", "amoblado", "ascensor", "cochera", "piscina", "dormitorios", "banos"}:
-            matcher = "categorical"
-        else:
-            matcher = "signal_score"
-        drafts.append(
-            BindingDraft.structured(
-                concept_key=concept_key,
-                matcher_type=matcher,  # type: ignore[arg-type]
-                params={},
-                confidence=link.confidence,
-                mode="soft",
-                evidence_refs=(),
-                limitations=(),
-            )
-        )
-    return tuple(drafts)
 
 
 def _current_value(context: TurnContextV5, filter_key: str) -> object | None:

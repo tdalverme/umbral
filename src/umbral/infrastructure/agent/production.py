@@ -493,12 +493,17 @@ def build_production_v5_stack(
         prompt_version="interpretation-v5",
         model_version=settings.agent_model_name,
     )
+    preferences = _build_preference_service(session_factory)
+    from umbral.application.preferences.intensity import load_intensity_policy
+
     services = V5Services(
         chat=chat,
         radar=cast(RadarService, radar),
         proposals=proposals,
-        preferences=_build_preference_service(session_factory),
+        preferences=preferences,
         feedback=cast(FeedbackRecorderV5, feedback),
+        concepts=getattr(preferences, "concepts", None),
+        intensity_policy=load_intensity_policy(),
     )
     turn_service = build_conversation_v5_turn_service(
         services=services,

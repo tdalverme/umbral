@@ -9,6 +9,10 @@ from typing import Literal
 from uuid import UUID
 
 from umbral.application.criteria.contracts import MatcherType
+from umbral.application.preferences.intensity import (
+    PreferenceIntensity,
+    PreferencePolarity,
+)
 
 PreferenceAuthority = Literal["explicit", "deliberate_feedback", "passive"]
 BindingKind = Literal["structured", "semantic", "unresolved", "forbidden"]
@@ -252,6 +256,11 @@ class PreferenceView:
     confidence: float
     limitations: tuple[str, ...]
     evidence_refs: tuple[Mapping[str, object], ...]
+    concept_key: str | None = None
+    polarity: PreferencePolarity | None = None
+    intensity: PreferenceIntensity | None = None
+    weight: float | None = None
+    intensity_policy_version: str | None = None
 
 
 class PreferenceError(Exception):

@@ -70,6 +70,17 @@ class PreferenceServiceLike(Protocol):
         correlation_id: UUID,
     ) -> PreferenceChange: ...
 
+    def set_explicit_preference(
+        self,
+        *,
+        profile_id: UUID,
+        source_message_id: UUID | None,
+        concept_key: str,
+        raw_text: str,
+        binding_draft: BindingDraft,
+        correlation_id: UUID,
+    ) -> PreferenceChange: ...
+
     def withdraw_expression(
         self,
         *,

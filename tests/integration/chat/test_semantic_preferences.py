@@ -24,6 +24,7 @@ from umbral.application.preferences.contracts import (
     PreferenceConcept,
     PreferencePolicySpec,
 )
+from umbral.application.preferences.intensity import load_intensity_policy
 from umbral.application.preferences.service import PreferenceService
 from umbral.infrastructure.conversation.v5.executor import EffectExecutorV5
 
@@ -225,6 +226,7 @@ def _process(
 ) -> tuple[ConversationTurnResultV5, ScriptedSemanticGateway, FakePreferenceStore]:
     store = FakePreferenceStore()
     gateway = ScriptedSemanticGateway(scenario.output)
+    preferences = _preference_service(store)
     turn = ConversationTurnV5(
         contexts=_ContextReader(_context()),
         interpreter=gateway,
@@ -233,7 +235,9 @@ def _process(
             radar=None,  # type: ignore[arg-type]
             chat=None,  # type: ignore[arg-type]
             proposals=None,  # type: ignore[arg-type]
-            preferences=_preference_service(store),
+            preferences=preferences,
+            concepts=preferences.concepts,
+            intensity_policy=load_intensity_policy(),
         ),
         pending=_NoopPendingResolver(),  # type: ignore[arg-type]
         receipts=InMemoryCommandReceiptStore(),
@@ -268,6 +272,17 @@ def test_scripted_semantic_preferences_persist_as_medium_soft_bindings(
     )
     assert [binding.params.get("weight") for binding in store.bindings] == [
         0.50
+    ] * len(scenario.concept_keys)
+    assert [binding.params.get("polarity") for binding in store.bindings] == [
+        "positive"
+    ] * len(scenario.concept_keys)
+    assert [binding.params.get("intensity") for binding in store.bindings] == [
+        "medium"
+    ] * len(scenario.concept_keys)
+    assert [
+        binding.params.get("intensity_policy_version") for binding in store.bindings
+    ] == [
+        "preference-intensity-v1"
     ] * len(scenario.concept_keys)
     assert all(binding.evidence_refs for binding in store.bindings)
     assert len({repr(binding.evidence_refs) for binding in store.bindings}) == len(
