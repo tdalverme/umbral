@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-27T15:30:00.000Z",
+  "title": "Design System: Umbral",
+  "extensions": {
+    "colorMeta": {
+      "brand-forest": {
+        "role": "primary",
+        "displayName": "Bosque profundo",
+        "canonical": "#293F38",
+        "tonalRamp": ["#182521", "#304A42", "#486F63", "#619484", "#83AFA1", "#ACC3BC", "#D0DDD9", "#F3F6F5"]
+      },
+      "brand-linen": {
+        "role": "neutral",
+        "displayName": "Lino cálido",
+        "canonical": "#F4EFE6",
+        "tonalRamp": ["#2B2213", "#554425", "#806638", "#AA884B", "#C1A471", "#CDBEA2", "#E2DACA", "#F8F6F2"]
+      },
+      "brand-terracotta": {
+        "role": "primary",
+        "displayName": "Terracota",
+        "canonical": "#DE6D4A",
+        "tonalRamp": ["#341309", "#682713", "#9B3A1C", "#CF4E26", "#E07452", "#DEA391", "#EBCBC1", "#FAF2F0"]
+      },
+      "brand-sand": {
+        "role": "neutral",
+        "displayName": "Arena",
+        "canonical": "#D9C59F",
+        "tonalRamp": ["#2C2311", "#584523", "#846834", "#AF8B45", "#C5A76D", "#D0BF9F", "#E3DAC9", "#F8F6F2"]
+      },
+      "brand-ivory": {
+        "role": "neutral",
+        "displayName": "Marfil",
+        "canonical": "#FFFAF2",
+        "tonalRamp": ["#3D2600", "#7A4B00", "#B87100", "#F59700", "#FFB133", "#F0C57F", "#F5DDB8", "#FCF6EE"]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Background",
+        "canonical": "#F4EFE6",
+        "tonalRamp": ["#2B2213", "#554425", "#806638", "#AA884B", "#C1A471", "#CDBEA2", "#E2DACA", "#F8F6F2"]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Foreground",
+        "canonical": "#293F38",
+        "tonalRamp": ["#182521", "#304A42", "#486F63", "#619484", "#83AFA1", "#ACC3BC", "#D0DDD9", "#F3F6F5"]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card",
+        "canonical": "#FFFAF2",
+        "tonalRamp": ["#3D2600", "#7A4B00", "#B87100", "#F59700", "#FFB133", "#F0C57F", "#F5DDB8", "#FCF6EE"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "color-mix(in srgb, #D9C59F 22%, #FFFAF2)",
+        "tonalRamp": ["#363127", "#524D45", "#6E6A63", "#8A8780", "#A7A49E", "#C3C0BC", "#DFDDD9", "#FBFAF7"]
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Muted Foreground",
+        "canonical": "color-mix(in srgb, #293F38 68%, #F4EFE6)",
+        "tonalRamp": ["#182521", "#304A42", "#486F63", "#619484", "#83AFA1", "#ACC3BC", "#D0DDD9", "#F3F6F5"]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "canonical": "color-mix(in srgb, #D9C59F 55%, #FFFAF2)",
+        "tonalRamp": ["#363127", "#524D45", "#6E6A63", "#8A8780", "#A7A49E", "#C3C0BC", "#DFDDD9", "#FBFAF7"]
+      },
+      "input": {
+        "role": "neutral",
+        "displayName": "Input",
+        "canonical": "color-mix(in srgb, #D9C59F 65%, #F4EFE6)",
+        "tonalRamp": ["#363127", "#524D45", "#6E6A63", "#8A8780", "#A7A49E", "#C3C0BC", "#DFDDD9", "#FBFAF7"]
+      },
+      "ring": {
+        "role": "neutral",
+        "displayName": "Ring",
+        "canonical": "color-mix(in srgb, #293F38 78%, #D9C59F)",
+        "tonalRamp": ["#182521", "#304A42", "#486F63", "#619484", "#83AFA1", "#ACC3BC", "#D0DDD9", "#F3F6F5"]
+      },
+      "accent": {
+        "role": "neutral",
+        "displayName": "Accent",
+        "canonical": "color-mix(in srgb, #DE6D4A 18%, #FFFAF2)",
+        "tonalRamp": ["#341309", "#682713", "#9B3A1C", "#CF4E26", "#E07452", "#DEA391", "#EBCBC1", "#FAF2F0"]
+      },
+      "destructive": {
+        "role": "neutral",
+        "displayName": "Destructive",
+        "canonical": "oklch(0.52 0.18 25)",
+        "tonalRamp": ["#2B0A08", "#561410", "#802017", "#AA2A1E", "#CC4635", "#D47A6F", "#DCAFA8", "#F3E6E3"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Titulares de marketing y nombre de marca — Fraunces Semibold, uso escaso editorial." },
+      "headline": { "displayName": "Headline", "purpose": "CardTitle y títulos de sheet — Fraunces Semibold contenido." },
+      "title": { "displayName": "Title", "purpose": "Encabezados de sección Por qué encaja / Concesiones — DM Sans Semibold." },
+      "body": { "displayName": "Body", "purpose": "Párrafos y descripciones — DM Sans Regular 14px/1.6." },
+      "label": { "displayName": "Label", "purpose": "Etiquetas, tabs y texto técnico — DM Sans Medium 12px tracking 0.06em." }
+    },
+    "shadows": [
+      { "name": "shadow-xs", "value": "0 1px 2px rgba(0,0,0,0.05)", "purpose": "Botones primarios y textarea en reposo — casi imperceptible." },
+      { "name": "shadow-sm", "value": "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)", "purpose": "Cards estándar y mini-cards del chat." },
+      { "name": "shadow-lg", "value": "0 8px 24px rgba(41,63,56,0.12)", "purpose": "Floating list y OpportunityDetailSheet sobre el mapa." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Transición por defecto de color y elevación (150ms)." },
+      { "name": "duration-fast", "value": "120ms", "purpose": "Hover y focus de botones/chips." },
+      { "name": "duration-medium", "value": "200ms", "purpose": "Apertura de sheets y pin seleccionado en mapa." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción primaria bosque — la única que compite por atención.",
+      "html": "<button class=\"ds-btn-primary\">Enviar</button>",
+      "css": ".ds-btn-primary { display:inline-flex; min-height:40px; align-items:center; justify-content:center; gap:8px; border-radius:10px; background:#293F38; color:#FFFAF2; padding:8px 16px; font-family:var(--font-sans, 'DM Sans', Arial, sans-serif); font-size:14px; font-weight:500; line-height:1; border:none; box-shadow:0 1px 2px rgba(0,0,0,0.05); transition: background 150ms cubic-bezier(0.4,0,0.2,1), transform 150ms cubic-bezier(0.4,0,0.2,1); cursor:pointer; } .ds-btn-primary:hover { background:color-mix(in srgb, #293F38 90%, black); } .ds-btn-primary:focus-visible { outline:none; box-shadow:0 0 0 2px #F4EFE6, 0 0 0 4px color-mix(in srgb, #293F38 78%, #D9C59F); } .ds-btn-primary:disabled { opacity:0.5; pointer-events:none; }"
+    },
+    {
+      "name": "Muted Button",
+      "kind": "button",
+      "refersTo": "button-muted",
+      "description": "Acción secundaria — Rechazar, Descartar, Guardar, tabs no seleccionados.",
+      "html": "<button class=\"ds-btn-muted\">Rechazar</button>",
+      "css": ".ds-btn-muted { display:inline-flex; min-height:32px; align-items:center; justify-content:center; border-radius:10px; background:color-mix(in srgb, #D9C59F 22%, #FFFAF2); color:#293F38; padding:8px 12px; font-family:var(--font-sans, 'DM Sans', Arial, sans-serif); font-size:12px; font-weight:500; border:none; transition: background 120ms ease; cursor:pointer; } .ds-btn-muted:hover { background:color-mix(in srgb, #D9C59F 28%, #FFFAF2); } .ds-btn-muted:focus-visible { outline:none; box-shadow:0 0 0 2px #F4EFE6, 0 0 0 4px color-mix(in srgb, #293F38 78%, #D9C59F); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Superficie elevada marfil sobre lino — contenedor por defecto.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Oportunidad — Palermo — $650.000</h3><p class=\"ds-card-desc\">14 m2 · 2 amb · Zonaprop</p></div>",
+      "css": ".ds-card { background:#FFFAF2; color:#293F38; border:1px solid color-mix(in srgb, #D9C59F 55%, #FFFAF2); border-radius:16px; padding:24px; box-shadow:0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06); } .ds-card-title { font-family:var(--font-sans, 'DM Sans', Arial, sans-serif); font-size:18px; font-weight:600; line-height:1.2; letter-spacing:-0.01em; margin:0 0 4px 0; } .ds-card-desc { font-family:var(--font-sans); font-size:14px; line-height:1.6; color:color-mix(in srgb, #293F38 68%, #F4EFE6); margin:0; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo de texto bosque sobre lino — foco con ring.",
+      "html": "<input class=\"ds-input\" placeholder=\"Escribile a Umbral...\" />",
+      "css": ".ds-input { width:100%; height:40px; border-radius:10px; border:1px solid color-mix(in srgb, #D9C59F 65%, #F4EFE6); background:#F4EFE6; color:#293F38; padding:8px 12px; font-family:var(--font-sans, 'DM Sans', Arial, sans-serif); font-size:14px; line-height:1.4; outline:none; box-shadow:0 1px 2px rgba(0,0,0,0.05); transition: box-shadow 120ms ease, border-color 120ms ease; } .ds-input::placeholder { color:color-mix(in srgb, #293F38 68%, #F4EFE6); } .ds-input:focus { border-color:color-mix(in srgb, #293F38 78%, #D9C59F); box-shadow:0 0 0 2px #F4EFE6, 0 0 0 4px color-mix(in srgb, #293F38 78%, #D9C59F); } .ds-input:disabled { opacity:0.5; cursor:not-allowed; }"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "refersTo": "button-muted",
+      "description": "Ítem del sidebar de radares — hover y seleccionado en muted.",
+      "html": "<a class=\"ds-nav-item ds-nav-item--active\" href=\"#\">Alquiler CABA <span>activo</span></a>",
+      "css": ".ds-nav-item { display:flex; align-items:center; justify-content:space-between; border-radius:8px; padding:8px 12px; font-family:var(--font-sans); font-size:14px; color:#293F38; text-decoration:none; transition: background 120ms ease; } .ds-nav-item:hover { background:color-mix(in srgb, #D9C59F 22%, #FFFAF2); } .ds-nav-item--active { background:color-mix(in srgb, #D9C59F 22%, #FFFAF2); font-weight:500; } .ds-nav-item span { font-size:12px; color:color-mix(in srgb, #293F38 68%, #F4EFE6); }"
+    },
+    {
+      "name": "Chip / Pill",
+      "kind": "chip",
+      "refersTo": "button-muted",
+      "description": "Sugerencias del chat y razones de feedback — pill envolvente.",
+      "html": "<span class=\"ds-chip\">Busco 2 amb en Palermo con balcón</span>",
+      "css": ".ds-chip { display:inline-flex; align-items:center; border-radius:9999px; background:#F4EFE6; color:#293F38; border:1px solid color-mix(in srgb, #D9C59F 55%, #FFFAF2); padding:4px 12px; font-family:var(--font-sans); font-size:12px; line-height:1.4; box-shadow:0 1px 2px rgba(0,0,0,0.05); } .ds-chip + .ds-chip { margin-left:8px; }"
+    },
+    {
+      "name": "Alert",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Alerta informativa — incertidumbres en detalle.",
+      "html": "<div class=\"ds-alert\"><h5 class=\"ds-alert-title\">Incertidumbres</h5><p class=\"ds-alert-desc\">No sabemos sobre luz natural — punto para consultar.</p></div>",
+      "css": ".ds-alert { border:1px solid color-mix(in srgb, #D9C59F 55%, #FFFAF2); background:#FFFAF2; border-radius:12px; padding:16px; } .ds-alert-title { font-family:var(--font-sans); font-size:14px; font-weight:500; color:#293F38; margin:0 0 4px 0; letter-spacing:-0.01em; } .ds-alert-desc { font-family:var(--font-sans); font-size:14px; line-height:1.6; color:color-mix(in srgb, #293F38 68%, #F4EFE6); margin:0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Luz serena",
+    "overview": "Luz serena es una calidez editorial con claridad digital. La luz que se cuela por el umbral — el arco — organiza todo: el fondo lino respira, el bosque sostiene, y un punto terracota aparece solo cuando hay una oportunidad que merece atención. Es adulta y luminosa sin volverse fría (nada de startup de IA) ni caricaturesca (nada de inmobiliaria tradicional con llaves en primer plano).\n\nEl sistema es sereno y nítido por defecto: pocas oportunidades por pantalla, ritmo tranquilo, nada de urgencia artificial. La densidad es baja en marketing y media-baja en producto; el chat acompaña al radar, no lo reemplaza. El mapa y la lista son la fuente de verdad, el chat traduce intención en criterios con voseo rioplatense natural y sin lunfardo forzado.",
+    "keyCharacteristics": [
+      "Luminosa pero contenida: lino/ivory como campo, bosque como estructura",
+      "Selectiva, no sentenciosa: explica coincidencias, concesiones y no sabemos en cada card",
+      "Tonal antes que sombría: profundidad por color y borde, no por sombra dura",
+      "Serenamente interactiva: transiciones cortas (120–200ms), foco visible siempre"
+    ],
+    "rules": [
+      { "name": "The Terracota Is Opportunity Rule", "body": "Terracota aparece en ≤8% de cualquier pantalla — pin seleccionado, dot de pulso, badge de novedad. Si compite con bosque, pierde; la rareza es su valor. No usar para error, warning ni CTA primario.", "section": "colors" },
+      { "name": "The Linen Field Rule", "body": "Toda pagina y todo mapa descansan sobre lino (#F4EFE6). Marfil solo eleva. Nunca invertir el campo a blanco puro en light mode.", "section": "colors" },
+      { "name": "The Fraunces Rarely Rule", "body": "Fraunces es para el momento editorial, no para el dato. UI densa (filtros, tablas, comparador) siempre en DM Sans.", "section": "typography" },
+      { "name": "The One Weight Up Rule", "body": "La jerarquía se construye subiendo un peso (400→500→600), no agrandando todo. Evitar exclamaciones y emojis; la voz ya es cercana por sintaxis.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Superficies planas en reposo; la sombra aparece solo en hover, selección o overlay. Si una card ya se distingue por tono y borde, no añadir sombra extra.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do usar bosque para acciones primarias y terracota solo para novedad seleccionada — la rareza es la señal.",
+      "Do mantener lino como campo y marfil para elevar; el tono separa antes que la sombra.",
+      "Do reservar Fraunces para momentos editoriales (logo, bienvenida, hito) y sostener toda la UI densa en DM Sans.",
+      "Do distinguir visual y verbalmente coincide / no coincide / no sabemos en cada oportunidad.",
+      "Do usar un solo ring de foco (2px color-mix bosque/arena) y skip-link visible; respetar prefers-reduced-motion.",
+      "Do repetir OSM attribution globalmente (— OpenStreetMap contributors) y en provisión de señales urbanas."
+    ],
+    "donts": [
+      "Don't usar terracota para error, warning o fondos grandes — pertenece a la oportunidad que aparece.",
+      "Don't convertir Fraunces en fuente de interfaz ni en tablas/filtros/comparaciones.",
+      "Don't transformar el chat en catálogo: los listings viven en el radar/mapa como objetos persistentes, no solo como burbujas.",
+      "Don't inventar casa literal, lupa, pin, robot o radar genérico en el símbolo; el arco abierto ya es Umbral.",
+      "Don't crear urgencia artificial, contadores falsos ni FOMO; los estados vacíos ofrecen calma y un próximo paso.",
+      "Don't declarar una propiedad “perfecta/ideal/imperdible”; explicar razones con evidencia y confianza.",
+      "Don't añadir sombra dura a cards que ya se separan por tono y borde; flat-by-default."
+    ]
+  }
+}

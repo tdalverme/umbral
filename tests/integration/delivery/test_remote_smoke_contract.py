@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
+from types import SimpleNamespace
 from typing import cast
 from uuid import UUID
 
@@ -12,6 +14,7 @@ import pytest
 
 from umbral.ops.identity import main as identity_main
 from umbral.ops.smoke import (
+    BuiltInPreviewObserver,
     CookieHttpClient,
     ObservedPreviewMessage,
     PreviewHttpResponse,
@@ -383,6 +386,75 @@ def test_preview_smoke_redacts_nested_observer_evidence() -> None:
 
 def test_runtime_surfaces_accept_exactly_four_fresh_matching_rows() -> None:
     assert _runtime_surfaces_match(_smoke_config(), _SurfaceObserver(_surface_rows()))
+
+
+def test_builtin_runtime_surfaces_retries_until_all_surfaces_are_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = _surface_rows()
+    not_ready = [dict(row) for row in rows]
+    not_ready[1]["state"] = "not_ready"
+    snapshots = [not_ready, rows]
+    queries: list[str] = []
+    fields = (
+        "surface",
+        "state",
+        "release_id",
+        "manifest_sha256",
+        "artifact_digest",
+        "correlation_id",
+        "observed_at",
+    )
+
+    class Connection:
+        def __init__(self, snapshot: list[dict[str, str]]) -> None:
+            self.snapshot = snapshot
+
+        def __enter__(self) -> "Connection":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def cursor(self) -> "Connection":
+            return self
+
+        def execute(self, query: str) -> None:
+            queries.append(query)
+
+        def fetchall(self) -> list[tuple[object, ...]]:
+            return [
+                tuple(
+                    datetime.fromisoformat(row[field])
+                    if field == "observed_at"
+                    else row[field]
+                    for field in fields
+                )
+                for row in self.snapshot
+            ]
+
+    connection_index = 0
+
+    def connect(*_args: object, **_kwargs: object) -> Connection:
+        nonlocal connection_index
+        snapshot = snapshots[min(connection_index, len(snapshots) - 1)]
+        connection_index += 1
+        return Connection(snapshot)
+
+    monkeypatch.setitem(sys.modules, "psycopg", SimpleNamespace(connect=connect))
+
+    from umbral.ops import smoke as smoke_module
+
+    monkeypatch.setattr(smoke_module, "_sleep_remaining", lambda _deadline: None)
+
+    observer = BuiltInPreviewObserver(
+        database_url="postgresql://preview.example.test/db",
+        observation_token="",
+        sender="sender@example.test",
+    )
+
+    assert observer.runtime_surfaces(timeout_seconds=1)[1]["state"] == "ready"
+    assert len(queries) == 2
 
 
 @pytest.mark.parametrize(

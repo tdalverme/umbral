@@ -224,28 +224,39 @@ class BuiltInPreviewObserver(PreviewSmokeObserver):
         deadline = self._start_deadline(timeout_seconds)
         import psycopg
 
-        with psycopg.connect(
-            self._database_url, connect_timeout=max(1, int(_remaining(deadline)))
-        ) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT surface, state, release_id, manifest_sha256, artifact_digest, correlation_id, observed_at "
-                    "FROM runtime_surface_status WHERE environment = 'preview' "
-                    "AND observed_at >= NOW() - INTERVAL '10 minutes'"
-                )
-                rows = cursor.fetchall()
-        return tuple(
-            {
-                "surface": str(surface),
-                "state": str(state),
-                "release_id": str(release_id),
-                "manifest_sha256": str(checksum),
-                "artifact_digest": str(digest),
-                "correlation_id": str(correlation_id),
-                "observed_at": _utc(observed_at).isoformat(),
-            }
-            for surface, state, release_id, checksum, digest, correlation_id, observed_at in rows
-        )
+        while True:
+            with psycopg.connect(
+                self._database_url, connect_timeout=max(1, int(_remaining(deadline)))
+            ) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT surface, state, release_id, manifest_sha256, artifact_digest, correlation_id, observed_at "
+                        "FROM runtime_surface_status WHERE environment = 'preview' "
+                        "AND observed_at >= NOW() - INTERVAL '10 minutes'"
+                    )
+                    rows = cursor.fetchall()
+            observed = tuple(
+                {
+                    "surface": str(surface),
+                    "state": str(state),
+                    "release_id": str(release_id),
+                    "manifest_sha256": str(checksum),
+                    "artifact_digest": str(digest),
+                    "correlation_id": str(correlation_id),
+                    "observed_at": _utc(observed_at).isoformat(),
+                }
+                for surface, state, release_id, checksum, digest, correlation_id, observed_at in rows
+            )
+            if (
+                len(observed) == len(REQUIRED_SURFACES)
+                and {row["surface"] for row in observed} == set(REQUIRED_SURFACES)
+                and all(row["state"] == "ready" for row in observed)
+            ):
+                return observed
+            try:
+                _sleep_remaining(deadline)
+            except TimeoutError:
+                return observed
 
     def wait_for_magic_link(
         self,

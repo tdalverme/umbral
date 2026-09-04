@@ -21,6 +21,10 @@ permissions:
   actions: read
   contents: read
 
+concurrency:
+  group: promote-${{ inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
   promote:
     environment: ${{ inputs.environment }}
