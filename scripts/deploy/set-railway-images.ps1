@@ -380,6 +380,16 @@ foreach ($service in $serviceArtifacts.Keys) {
         Write-Host "Reusing deployment for ${service}: $($deploymentIds[$service])"
         continue
     }
+    # Si es web y la imagen no cambió, no hace falta esperar deployment nuevo — las variables ya se actualizaron
+    $artifactDigestForService = $manifest.artifacts.($serviceArtifacts[$service]).digest
+    $currentDigest = $null
+    try { $currentDigest = [string]$statusByName[$service].source.image.Split("@")[1] } catch {}
+    $isWebImageUnchanged = ($service -eq "web" -and $artifactDigestForService -eq $currentDigest)
+    if ($isWebImageUnchanged) {
+        Write-Host "Web image unchanged ($artifactDigestForService) — reusing current deployment without waiting for new one."
+        $deploymentIds[$service] = [string]$statusByName[$service].deploymentId
+        continue
+    }
     $deadline = [DateTime]::UtcNow.AddSeconds(120)
     $deploymentId = $null
     while ([DateTime]::UtcNow -lt $deadline) {
@@ -424,6 +434,7 @@ foreach ($service in $serviceArtifacts.Keys) {
             Write-Host "No new deployment for ${service} but config already at target (image unchanged). Reusing deployment: $currentId"
             $deploymentId = $currentId
         } else {
+            Write-Host "Recheck final for ${service}: still not at target. Current UMBRAL_RELEASE_ID=$($recheckSvcConfig.variables.UMBRAL_RELEASE_ID.value) vs manifest $($manifest.release_id), image=$($recheckSvcConfig.source.image) vs $($manifest.artifacts.($serviceArtifacts[$service]).image)@$($manifest.artifacts.($serviceArtifacts[$service]).digest)"
             Write-Host "No new deployment detected for ${service}. Gathering Railway diagnostics..."
             $artifact = $manifest.artifacts.($serviceArtifacts[$service])
             Write-Host ("Target image: {0}@{1}" -f $artifact.image, $artifact.digest)
