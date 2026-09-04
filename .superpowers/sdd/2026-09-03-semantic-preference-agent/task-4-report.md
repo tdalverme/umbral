@@ -138,4 +138,4 @@ alias fallback, or V3 resolver deletion. The remaining concern is that the
 local smoke requires managed-model environment variables and was validated at
 the script-contract level rather than against a live provider.
 
-Round 1 fix commit: `18655e1 fix: close task 4 semantic interpreter review findings`.
+Round 1 fix commit: `5942871 fix: close task 4 semantic interpreter review findings`.
