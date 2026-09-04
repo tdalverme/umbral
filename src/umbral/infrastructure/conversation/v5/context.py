@@ -171,12 +171,10 @@ class ProposalsPendingReaderV5:
     ) -> PendingActionV5 | None:
         if profile_id is None:
             return None
-        repository = getattr(self.proposals, "repository", None)
-        pending_for_profile = getattr(repository, "pending_for_profile", None)
-        if pending_for_profile is None:
-            return None
         try:
-            queue = pending_for_profile(profile_id, session_id)
+            queue = self.proposals.pending_for_session(
+                search_profile_id=profile_id, session_id=session_id
+            )
         except Exception:  # noqa: BLE001 - pending store unreadable
             return None
         if not queue:

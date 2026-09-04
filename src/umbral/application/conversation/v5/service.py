@@ -245,6 +245,10 @@ class ConversationTurnV5:
         except Exception:
             return self._failed_result(context, "execution_failure")
 
+        if any(result.status == "pending" for result in executed):
+            context = self.contexts.load(
+                user_id=user_id, session_id=session_id, correlation_id=correlation_id
+            )
         turn_result = ConversationTurnResultV5(
             context=context,
             interpretation=interpretation,

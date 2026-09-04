@@ -335,19 +335,14 @@ class SearchProfileUpdateProposals:
     def _next_queue_ordinal(
         self, search_profile_id: UUID, session_id: UUID
     ) -> int:
-        pending_for_profile = getattr(self.repository, "pending_for_profile", None)
-        if pending_for_profile is not None:
-            entries = pending_for_profile(search_profile_id, session_id)
-        else:
-            list_for_profile = getattr(self.repository, "list_for_profile", None)
-            if list_for_profile is None:
-                return 1
-            entries = tuple(
-                proposal
-                for proposal in list_for_profile(search_profile_id, "pending")
-                if proposal.session_id == session_id
-            )
+        entries = self.repository.pending_for_profile(search_profile_id, session_id)
         return max((proposal.queue_ordinal for proposal in entries), default=0) + 1
+
+    def pending_for_session(
+        self, *, search_profile_id: UUID, session_id: UUID
+    ) -> tuple[Proposal, ...]:
+        """Return the durable confirmation queue in its published order."""
+        return self.repository.pending_for_profile(search_profile_id, session_id)
 
     def list(
         self,

@@ -278,7 +278,7 @@ def test_pending_filter_does_not_block_later_authorized_soft_desires() -> None:
     assert result.outcomes[0].status == "applied"
     assert result.outcomes[1].status == "pending"
     assert result.outcomes[2].status == "applied"
-    assert contexts.load_calls == 1
+    assert contexts.load_calls == 2
 
 
 def test_soft_desires_execute_before_all_hard_filter_proposals() -> None:
