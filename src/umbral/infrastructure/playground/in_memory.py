@@ -220,6 +220,21 @@ class LocalProposalRepository:
         self.proposals[proposal_id] = updated
         return updated
 
+    def reject_pending(
+        self, proposal_id, rejection_reason, rejection_at, rejection_note=None
+    ):
+        current = self.proposals.get(proposal_id)
+        if current is None or current.state != "pending":
+            return current
+        updated = replace(
+            current,
+            state="rejected",
+            rejection_reason=rejection_reason,
+            rejection_note=rejection_note,
+        )
+        self.proposals[proposal_id] = updated
+        return updated
+
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
     ) -> Proposal | None:

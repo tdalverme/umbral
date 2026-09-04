@@ -309,6 +309,43 @@ class SqlAlchemyProposalRepository:
             current.commit()
             return _to_proposal(model)
 
+    def reject_pending(
+        self,
+        proposal_id: UUID,
+        rejection_reason: str,
+        rejection_at: datetime,
+        rejection_note: str | None = None,
+    ) -> Proposal | None:
+        """Conditionally reject while holding the same queue locks."""
+        with self.session_factory() as current:
+            session_id = current.scalar(
+                select(SearchProfileUpdateProposal.session_id).where(
+                    SearchProfileUpdateProposal.id == proposal_id
+                )
+            )
+            if session_id is None:
+                return None
+            current.execute(
+                select(ChatSession.id)
+                .where(ChatSession.id == session_id)
+                .with_for_update()
+            ).scalar_one()
+            model = current.scalar(
+                select(SearchProfileUpdateProposal)
+                .where(SearchProfileUpdateProposal.id == proposal_id)
+                .with_for_update()
+            )
+            if model is None:
+                return None
+            if model.state != "pending":
+                return _to_proposal(model)
+            model.state = "rejected"
+            model.rejection_reason = rejection_reason
+            model.rejection_note = rejection_note
+            model.updated_at = rejection_at
+            current.commit()
+            return _to_proposal(model)
+
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
     ) -> Proposal | None:

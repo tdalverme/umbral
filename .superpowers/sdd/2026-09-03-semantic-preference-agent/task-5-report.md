@@ -63,3 +63,11 @@ The required aggregate suite was invoked. Its unit and non-container chat tests 
 - RED: `pytest tests/unit/application/agent/tools/test_proposals.py::test_apply_uses_atomic_pending_resolution_port -q` failed because the service bypassed the atomic port.
 - GREEN: targeted Task 5 suite — 182 passed, 2 Alembic deprecation warnings. Docker-backed concurrency tests were added but cannot execute until the Docker engine is available.
 - Final checks: `compileall`, Alembic offline upgrade SQL, `ruff check` on touched production/tests, and `git diff --check` all passed.
+
+## Review round 5 / final race and acceptance closure
+
+- Rejection now uses the mandatory `reject_pending` atomic repository port with the same chat-session/proposal lock order as approval and correction. The V5 resolver returns the durable state actually observed, including an approval that wins a reject race and a rejection that wins an approve race; no losing operation can mutate the radar.
+- PostgreSQL enqueue acceptance now distinguishes returned snapshots (`(1, 1)`, `(2, 2)`) from reloaded durable rows, whose shared total is asserted as `2` after both transactions commit.
+- Added productive V5 integration coverage over `ConversationTurnV5`, `ContextAssemblerV5`, `EffectExecutorV5`, `SearchProfileUpdateProposals`, and the production playground proposal repository: mixed soft+hard acts, approve-to-next-head, reject-to-next-head, correction lineage, and receipt replay without duplicate proposals.
+- Added a resolver race acceptance test and PostgreSQL correction-vs-rejection concurrency test. Docker-backed tests collect structurally (3 tests) but cannot run because Docker Desktop's `//./pipe/docker_engine` is unavailable.
+- GREEN: non-Docker Task 5 suite — 183 passed, 2 Alembic deprecation warnings; V5/chat integration scenarios — 13 passed. Ruff on touched files, `compileall`, Alembic offline upgrade SQL, and `git diff --check` passed.

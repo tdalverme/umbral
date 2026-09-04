@@ -49,8 +49,12 @@ def test_concurrent_enqueue_assigns_unique_order_and_shared_total(
     with ThreadPoolExecutor(max_workers=2) as pool:
         stored = list(pool.map(repo.enqueue_pending, proposals))
 
-    assert sorted(item.queue_ordinal for item in stored) == [1, 2]
-    assert {item.queue_total for item in stored} == {2}
+    assert sorted(
+        (item.queue_ordinal, item.queue_total) for item in stored
+    ) == [(1, 1), (2, 2)]
+    durable = repo.pending_for_profile(profile.profile_id, session.session_id)
+    assert [item.queue_ordinal for item in durable] == [1, 2]
+    assert {item.queue_total for item in durable} == {2}
 
 
 def test_correction_and_resolution_are_serialized(agent_backend) -> None:
@@ -98,5 +102,47 @@ def test_correction_and_resolution_are_serialized(agent_backend) -> None:
         assert stored_original.state == "rejected"
         assert stored_original.superseded_by_proposal_id == successor.proposal_id
         assert resolved is not None and resolved.state == "rejected"
+        successor_stored = repo.get(successor.proposal_id, session.session_id, user_id)
+        assert successor_stored is not None and successor_stored.state == "pending"
+
+
+def test_correction_and_rejection_are_serialized(agent_backend) -> None:
+    factory, _url = agent_backend
+    user_id = seed_user(factory)
+    profile = seed_profile(factory, user_id)
+    session = build_chat(factory).create_session(
+        user_id=user_id,
+        search_profile_id=profile.profile_id,
+        correlation_id=uuid4(),
+    )
+    repo = SqlAlchemyProposalRepository(factory)
+    original = repo.enqueue_pending(
+        _proposal(session, profile, diff={"zones": ["palermo"]}, act_id="palermo")
+    )
+    successor = _proposal(
+        session, profile, diff={"zones": ["belgrano"]}, act_id="belgrano"
+    )
+
+    def correct():
+        return repo.supersede_and_insert(original.proposal_id, successor)
+
+    def reject():
+        return repo.reject_pending(
+            original.proposal_id, "user", _NOW, rejection_note="no longer wanted"
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        corrected, rejected = pool.map(lambda fn: fn(), (correct, reject))
+
+    stored_original = repo.get(original.proposal_id, session.session_id, user_id)
+    assert stored_original is not None
+    assert stored_original.state == "rejected"
+    if corrected is None:
+        assert stored_original.rejection_reason == "user"
+        assert rejected is not None and rejected.state == "rejected"
+    else:
+        assert stored_original.rejection_reason == "edited"
+        assert stored_original.superseded_by_proposal_id == successor.proposal_id
+        assert rejected is not None and rejected.state == "rejected"
         successor_stored = repo.get(successor.proposal_id, session.session_id, user_id)
         assert successor_stored is not None and successor_stored.state == "pending"

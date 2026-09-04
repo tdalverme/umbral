@@ -197,7 +197,7 @@ class SearchProfileUpdateProposals:
         if proposal.state != "pending":
             raise ProposalNotPending()
         if proposal.expires_at < self.clock():
-            self.repository.mark_rejected(proposal_id, "expired", self.clock())
+            self.repository.reject_pending(proposal_id, "expired", self.clock())
             raise ProposalExpired()
         if proposal.applied_idempotency_key is not None:
             raise ProposalIdempotencyMismatch()
@@ -218,7 +218,7 @@ class SearchProfileUpdateProposals:
                 proposal_id, idempotency_key, update_radar
             )
         except ConcurrencyConflict as exc:
-            self.repository.mark_rejected(proposal_id, "obsolete", self.clock())
+            self.repository.reject_pending(proposal_id, "obsolete", self.clock())
             raise ProposalStale() from exc
         if stored is None:
             raise ProposalNotFound()
@@ -228,9 +228,9 @@ class SearchProfileUpdateProposals:
             raise ProposalIdempotencyMismatch()
         profile_version = stored.applied_profile_version or 0
         run_id = stored.applied_run_id
-        rebase_pending = getattr(self.repository, "rebase_pending_for_queue", None)
-        if rebase_pending is not None:
-            rebase_pending(search_profile_id, session_id, profile_version)
+        self.repository.rebase_pending_for_queue(
+            search_profile_id, session_id, profile_version
+        )
         self._emit_server_event(
             event_type="search_profile.update_applied.v1",
             actor_id=user_id,
@@ -273,13 +273,15 @@ class SearchProfileUpdateProposals:
         proposal = self._get_scoped(user_id, session_id, search_profile_id, proposal_id)
         if proposal.state != "pending":
             raise ProposalNotPending()
-        self.repository.mark_rejected(
+        stored = self.repository.reject_pending(
             proposal_id,
             "user",
             self.clock(),
             rejection_note=(note[:200] if note else None),
         )
-        return self._get_scoped(user_id, session_id, search_profile_id, proposal_id)
+        if stored is None:
+            raise ProposalNotFound()
+        return stored
 
     def derive(
         self,

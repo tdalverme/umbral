@@ -39,6 +39,15 @@ class ProposalRepository(Protocol):
     ) -> Proposal | None:
         """Apply and approve while holding the proposal/session lock."""
 
+    def reject_pending(
+        self,
+        proposal_id: UUID,
+        rejection_reason: str,
+        rejection_at: datetime,
+        rejection_note: str | None = None,
+    ) -> Proposal | None:
+        """Reject conditionally while holding the proposal/session lock."""
+
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
     ) -> Proposal | None:

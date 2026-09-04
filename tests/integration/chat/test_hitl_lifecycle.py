@@ -23,12 +23,12 @@ from umbral.agent.tools.tools import ToolServices, build_tool_implementations
 from umbral.application.agent.contracts import ModelResult
 from umbral.application.agent.tools.contracts import Proposal
 from umbral.application.agent.tools.ports import SessionScope
-from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
-from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
-from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
 from umbral.application.agent.tools.preferences import (
     load_preference_vocabulary,
 )
+from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
+from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
+from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
 from umbral.infrastructure.radar.contract_loader import load_events_registry
 
 USER_ID = UUID(int=1)
@@ -85,6 +85,11 @@ class _Repo:
         self.proposals[proposal_id] = updated
         return updated
 
+    def rebase_pending_for_queue(
+        self, search_profile_id, session_id, base_profile_version
+    ):
+        return None
+
     def get(self, proposal_id, session_id, user_id):
         return self.proposals.get(proposal_id)
 
@@ -120,6 +125,12 @@ class _Repo:
         )
         self.proposals[proposal_id] = updated
         return updated
+
+    def reject_pending(self, proposal_id, reason, rejection_at, rejection_note=None):
+        proposal = self.proposals.get(proposal_id)
+        if proposal is None or proposal.state != "pending":
+            return proposal
+        return self.mark_rejected(proposal_id, reason, rejection_at, rejection_note)
 
     def mark_superseded(self, proposal_id, superseded_by, rejection_at):
         proposal = self.proposals[proposal_id]

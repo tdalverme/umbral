@@ -1,4 +1,4 @@
-﻿# mypy: disable-error-code="no-untyped-def,no-untyped-call"
+# mypy: disable-error-code="no-untyped-def,no-untyped-call"
 """Proposal service lifecycle tests (FR-007..FR-012, T020)."""
 
 from __future__ import annotations
@@ -51,17 +51,25 @@ class _ProposalRepo:
         return proposal
 
     def enqueue_pending(self, proposal: Proposal) -> Proposal:
-        ordinal = max(
-            (item.queue_ordinal for item in self.proposals.values()
-             if item.search_profile_id == proposal.search_profile_id
-             and item.session_id == proposal.session_id
-             and item.state == "pending"),
-            default=0,
-        ) + 1
-        for proposal_id, item in tuple(self.proposals.items()):
-            if (item.search_profile_id == proposal.search_profile_id
+        ordinal = (
+            max(
+                (
+                    item.queue_ordinal
+                    for item in self.proposals.values()
+                    if item.search_profile_id == proposal.search_profile_id
                     and item.session_id == proposal.session_id
-                    and item.state == "pending"):
+                    and item.state == "pending"
+                ),
+                default=0,
+            )
+            + 1
+        )
+        for proposal_id, item in tuple(self.proposals.items()):
+            if (
+                item.search_profile_id == proposal.search_profile_id
+                and item.session_id == proposal.session_id
+                and item.state == "pending"
+            ):
                 self.proposals[proposal_id] = replace(item, queue_total=ordinal)
         queued = replace(proposal, queue_ordinal=ordinal, queue_total=ordinal)
         self.proposals[queued.proposal_id] = queued
@@ -74,18 +82,26 @@ class _ProposalRepo:
         return None
 
     def pending_for_profile(self, search_profile_id, session_id):
-        return tuple(sorted(
-            (proposal for proposal in self.proposals.values()
-             if proposal.search_profile_id == search_profile_id
-             and proposal.session_id == session_id
-             and proposal.state == "pending"),
-            key=lambda proposal: proposal.queue_ordinal,
-        ))
+        return tuple(
+            sorted(
+                (
+                    proposal
+                    for proposal in self.proposals.values()
+                    if proposal.search_profile_id == search_profile_id
+                    and proposal.session_id == session_id
+                    and proposal.state == "pending"
+                ),
+                key=lambda proposal: proposal.queue_ordinal,
+            )
+        )
 
     def list_for_profile(self, search_profile_id, state):
-        return tuple(proposal for proposal in self.proposals.values()
-                     if proposal.search_profile_id == search_profile_id
-                     and proposal.state == state)
+        return tuple(
+            proposal
+            for proposal in self.proposals.values()
+            if proposal.search_profile_id == search_profile_id
+            and proposal.state == state
+        )
 
     def mark_approved(self, proposal_id, key, *, profile_version=None, run_id=None):
         proposal = self.proposals.get(proposal_id)
@@ -129,12 +145,20 @@ class _ProposalRepo:
         self.proposals[proposal_id] = updated
         return updated
 
+    def reject_pending(self, proposal_id, reason, rejection_at, rejection_note=None):
+        proposal = self.proposals.get(proposal_id)
+        if proposal is None or proposal.state != "pending":
+            return proposal
+        return self.mark_rejected(proposal_id, reason, rejection_at, rejection_note)
+
     def mark_superseded(self, proposal_id, successor_id, rejection_at):
         proposal = self.proposals.get(proposal_id)
         if proposal is None:
             return None
         updated = replace(
-            proposal, state="rejected", rejection_reason="edited",
+            proposal,
+            state="rejected",
+            rejection_reason="edited",
             superseded_by_proposal_id=successor_id,
         )
         self.proposals[proposal_id] = updated
@@ -145,7 +169,9 @@ class _ProposalRepo:
         if original is None or original.state != "pending":
             return None
         self.proposals[proposal_id] = replace(
-            original, state="rejected", rejection_reason="edited",
+            original,
+            state="rejected",
+            rejection_reason="edited",
             superseded_by_proposal_id=successor.proposal_id,
         )
         self.proposals[successor.proposal_id] = successor
@@ -153,9 +179,11 @@ class _ProposalRepo:
 
     def rebase_pending_for_queue(self, search_profile_id, session_id, version):
         for proposal_id, proposal in tuple(self.proposals.items()):
-            if (proposal.search_profile_id == search_profile_id
-                    and proposal.session_id == session_id
-                    and proposal.state == "pending"):
+            if (
+                proposal.search_profile_id == search_profile_id
+                and proposal.session_id == session_id
+                and proposal.state == "pending"
+            ):
                 self.proposals[proposal_id] = replace(
                     proposal, base_profile_version=version
                 )
@@ -302,22 +330,26 @@ def test_propose_creates_pending_durable_proposal_with_base_version() -> None:
 def test_pending_proposals_keep_original_act_order() -> None:
     service, repo, _, _ = _make_service()
     zones = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]},
+        correlation_id=CORRELATION_ID,
         source_act_id="zones",
     )
     budget = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200},
+        correlation_id=CORRELATION_ID,
         source_act_id="budget",
     )
 
     assert [
         (item.source_act_id, item.queue_ordinal)
         for item in repo.pending_for_profile(PROFILE_ID, SESSION_ID)
-    ] == [
-        ("zones", 1), ("budget", 2)
-    ]
+    ] == [("zones", 1), ("budget", 2)]
     assert zones.queue_ordinal == 1
     assert budget.queue_ordinal == 2
 
@@ -325,12 +357,18 @@ def test_pending_proposals_keep_original_act_order() -> None:
 def test_approving_a_queue_step_rebases_only_the_remaining_steps() -> None:
     service, repo, _, _ = _make_service()
     first = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]},
+        correlation_id=CORRELATION_ID,
     )
     second = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200},
+        correlation_id=CORRELATION_ID,
     )
 
     service.apply(**_base_args(first.proposal_id))
@@ -343,12 +381,18 @@ def test_approving_a_queue_step_rebases_only_the_remaining_steps() -> None:
 def test_rejecting_a_queue_step_exposes_the_next_head() -> None:
     service, repo, _, _ = _make_service()
     first = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]},
+        correlation_id=CORRELATION_ID,
     )
     second = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200},
+        correlation_id=CORRELATION_ID,
     )
 
     service.reject(
@@ -369,12 +413,18 @@ def test_rejecting_a_queue_step_exposes_the_next_head() -> None:
 def test_queue_total_remains_coherent_after_consuming_the_head() -> None:
     service, repo, _, _ = _make_service()
     first = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]},
+        correlation_id=CORRELATION_ID,
     )
     second = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200},
+        correlation_id=CORRELATION_ID,
     )
 
     assert repo.proposals[first.proposal_id].queue_total == 2
@@ -388,8 +438,11 @@ def test_queue_total_remains_coherent_after_consuming_the_head() -> None:
 def test_apply_uses_atomic_pending_resolution_port() -> None:
     service, repo, radar, _ = _make_service()
     proposal = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200},
+        correlation_id=CORRELATION_ID,
     )
     calls: list[Proposal] = []
 
@@ -426,8 +479,11 @@ def test_propose_uses_atomic_enqueue_port_when_available() -> None:
 
     repo.enqueue_pending = enqueue_pending  # type: ignore[attr-defined]
     proposal = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200},
+        correlation_id=CORRELATION_ID,
     )
 
     assert calls
@@ -438,14 +494,21 @@ def test_propose_uses_atomic_enqueue_port_when_available() -> None:
 def test_correction_derives_a_traceable_proposal_at_the_same_queue_position() -> None:
     service, repo, _, _ = _make_service()
     original = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]},
+        correlation_id=CORRELATION_ID,
         source_act_id="palermo",
     )
     corrected = service.derive(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        proposal_id=original.proposal_id, change={"zones": ["belgrano"]},
-        correlation_id=CORRELATION_ID, source_act_id="belgrano",
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        proposal_id=original.proposal_id,
+        change={"zones": ["belgrano"]},
+        correlation_id=CORRELATION_ID,
+        source_act_id="belgrano",
     )
 
     assert (
@@ -459,15 +522,19 @@ def test_correction_derives_a_traceable_proposal_at_the_same_queue_position() ->
 def test_correction_uses_atomic_supersession_port_when_available() -> None:
     service, repo, _, _ = _make_service()
     original = service.propose(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]},
+        correlation_id=CORRELATION_ID,
     )
     calls: list[tuple[UUID, Proposal]] = []
 
     def supersede_and_insert(original_id: UUID, successor: Proposal) -> Proposal:
         calls.append((original_id, successor))
         repo.proposals[original_id] = replace(
-            repo.proposals[original_id], state="rejected",
+            repo.proposals[original_id],
+            state="rejected",
             rejection_reason="edited",
             superseded_by_proposal_id=successor.proposal_id,
         )
@@ -476,9 +543,13 @@ def test_correction_uses_atomic_supersession_port_when_available() -> None:
 
     repo.supersede_and_insert = supersede_and_insert  # type: ignore[attr-defined]
     corrected = service.derive(
-        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
-        proposal_id=original.proposal_id, change={"zones": ["belgrano"]},
-        correlation_id=CORRELATION_ID, source_act_id="belgrano",
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        proposal_id=original.proposal_id,
+        change={"zones": ["belgrano"]},
+        correlation_id=CORRELATION_ID,
+        source_act_id="belgrano",
     )
 
     assert calls and calls[0][0] == original.proposal_id
@@ -521,9 +592,7 @@ def test_propose_normalizes_zone_names_accents_and_case() -> None:
         change={"zona": ["Nuñez", "VILLA CRESPO", "San Nicolás"]},
         correlation_id=CORRELATION_ID,
     )
-    assert proposal.diff == {
-        "zones": ["nunez", "villa_crespo", "san_nicolas"]
-    }
+    assert proposal.diff == {"zones": ["nunez", "villa_crespo", "san_nicolas"]}
 
 
 def test_propose_translates_budget_ambientes_superficie() -> None:
@@ -741,4 +810,3 @@ def test_apply_scope_denied_for_other_profile() -> None:
     args["search_profile_id"] = UUID(int=999)
     with pytest.raises(ProposalNotFound):
         service.apply(**args)
-

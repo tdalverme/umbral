@@ -41,12 +41,19 @@ class _Repo:
         return proposal
 
     def enqueue_pending(self, proposal: Proposal) -> Proposal:
-        ordinal = max(
-            (p.queue_ordinal for p in self.proposals.values()
-             if p.search_profile_id == proposal.search_profile_id
-             and p.session_id == proposal.session_id and p.state == "pending"),
-            default=0,
-        ) + 1
+        ordinal = (
+            max(
+                (
+                    p.queue_ordinal
+                    for p in self.proposals.values()
+                    if p.search_profile_id == proposal.search_profile_id
+                    and p.session_id == proposal.session_id
+                    and p.state == "pending"
+                ),
+                default=0,
+            )
+            + 1
+        )
         queued = replace(proposal, queue_ordinal=ordinal, queue_total=ordinal)
         self.proposals[queued.proposal_id] = queued
         return queued
@@ -56,7 +63,9 @@ class _Repo:
         if original is None or original.state != "pending":
             return None
         self.proposals[proposal_id] = replace(
-            original, state="rejected", rejection_reason="edited",
+            original,
+            state="rejected",
+            rejection_reason="edited",
             superseded_by_proposal_id=successor.proposal_id,
         )
         self.proposals[successor.proposal_id] = successor
@@ -68,11 +77,19 @@ class _Repo:
             return proposal
         version, run_id = operation(proposal)
         updated = replace(
-            proposal, state="approved", applied_idempotency_key=key,
-            applied_profile_version=version, applied_run_id=run_id,
+            proposal,
+            state="approved",
+            applied_idempotency_key=key,
+            applied_profile_version=version,
+            applied_run_id=run_id,
         )
         self.proposals[proposal_id] = updated
         return updated
+
+    def rebase_pending_for_queue(
+        self, search_profile_id, session_id, base_profile_version
+    ):
+        return None
 
     def get(self, proposal_id, session_id, user_id):
         return self.proposals.get(proposal_id)
@@ -100,6 +117,12 @@ class _Repo:
         )
         self.proposals[proposal_id] = updated
         return updated
+
+    def reject_pending(self, proposal_id, reason, rejection_at, rejection_note=None):
+        proposal = self.proposals.get(proposal_id)
+        if proposal is None or proposal.state != "pending":
+            return proposal
+        return self.mark_rejected(proposal_id, reason, rejection_at, rejection_note)
 
     def mark_superseded(self, proposal_id, superseded_by, rejection_at):
         proposal = self.proposals[proposal_id]

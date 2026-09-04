@@ -50,12 +50,19 @@ class _ProposalRepo:
         return proposal
 
     def enqueue_pending(self, proposal: Proposal) -> Proposal:
-        ordinal = max(
-            (p.queue_ordinal for p in self.proposals.values()
-             if p.search_profile_id == proposal.search_profile_id
-             and p.session_id == proposal.session_id and p.state == "pending"),
-            default=0,
-        ) + 1
+        ordinal = (
+            max(
+                (
+                    p.queue_ordinal
+                    for p in self.proposals.values()
+                    if p.search_profile_id == proposal.search_profile_id
+                    and p.session_id == proposal.session_id
+                    and p.state == "pending"
+                ),
+                default=0,
+            )
+            + 1
+        )
         queued = replace(proposal, queue_ordinal=ordinal, queue_total=ordinal)
         self.proposals[queued.proposal_id] = queued
         return queued
@@ -65,7 +72,9 @@ class _ProposalRepo:
         if original is None or original.state != "pending":
             return None
         self.proposals[proposal_id] = replace(
-            original, state="rejected", rejection_reason="edited",
+            original,
+            state="rejected",
+            rejection_reason="edited",
             superseded_by_proposal_id=successor.proposal_id,
         )
         self.proposals[successor.proposal_id] = successor
@@ -77,11 +86,19 @@ class _ProposalRepo:
             return proposal
         version, run_id = operation(proposal)
         updated = replace(
-            proposal, state="approved", applied_idempotency_key=key,
-            applied_profile_version=version, applied_run_id=run_id,
+            proposal,
+            state="approved",
+            applied_idempotency_key=key,
+            applied_profile_version=version,
+            applied_run_id=run_id,
         )
         self.proposals[proposal_id] = updated
         return updated
+
+    def rebase_pending_for_queue(
+        self, search_profile_id, session_id, base_profile_version
+    ):
+        return None
 
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
@@ -97,7 +114,8 @@ class _ProposalRepo:
         self, search_profile_id: UUID, session_id: UUID
     ) -> tuple[Proposal, ...]:
         return tuple(
-            item for item in self.proposals.values()
+            item
+            for item in self.proposals.values()
             if item.search_profile_id == search_profile_id
             and item.session_id == session_id
             and item.state == "pending"
@@ -142,6 +160,12 @@ class _ProposalRepo:
         )
         self.proposals[proposal_id] = updated
         return updated
+
+    def reject_pending(self, proposal_id, reason, rejection_at, rejection_note=None):
+        proposal = self.proposals.get(proposal_id)
+        if proposal is None or proposal.state != "pending":
+            return proposal
+        return self.mark_rejected(proposal_id, reason, rejection_at, rejection_note)
 
     def expire_pending(self, expired_before: datetime) -> int:
         return 0
@@ -209,9 +233,7 @@ def _context(
     )
 
 
-def _executor(
-    radar_ctx: RadarTestContext, chat: ChatService
-) -> EffectExecutorV5:
+def _executor(radar_ctx: RadarTestContext, chat: ChatService) -> EffectExecutorV5:
     return EffectExecutorV5(
         radar=radar_ctx.service,
         chat=chat,
@@ -348,6 +370,67 @@ def test_rejecting_pending_returns_a_rejected_resolution_outcome() -> None:
 
     assert result.status == "rejected"
     assert result.reason_code == "user"
+
+
+def test_rejection_resolution_reports_concurrent_approval() -> None:
+    class _ApprovalRaceRepo(_ProposalRepo):
+        def reject_pending(
+            self, proposal_id, reason, rejection_at, rejection_note=None
+        ):
+            return self.mark_approved(proposal_id, "concurrent-approval")
+
+    radar_ctx = RadarTestContext(default_runtime=False)
+    user_id = uuid4()
+    profile, _ = radar_ctx.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    chat = _chat_service()
+    session = chat.create_session(
+        user_id=user_id,
+        search_profile_id=profile.profile_id,
+        correlation_id=uuid4(),
+    )
+    repo = _ApprovalRaceRepo()
+    proposals = _proposals(radar_ctx, repo)
+    proposal = proposals.propose(
+        user_id=user_id,
+        session_id=session.session_id,
+        search_profile_id=profile.profile_id,
+        change={"budget_max": 900},
+        correlation_id=uuid4(),
+    )
+    context = replace(
+        _context(
+            profile_id=profile.profile_id,
+            version=profile.version,
+            filters=(),
+            user_id=user_id,
+            session_id=session.session_id,
+        ),
+        pending_action=PendingActionV5(pending_ref=f"pending:{proposal.proposal_id}"),
+    )
+
+    result = ProposalsPendingResolverV5(proposals=proposals).resolve(
+        act_id="resolve:racing-approval",
+        context=context,
+        pending_ref=f"pending:{proposal.proposal_id}",
+        decision="reject",
+        correlation_id=uuid4(),
+        idempotency_key="decision:racing-approval",
+    )
+
+    assert result.status == "applied"
+    assert result.reason_code is None
+    assert repo.proposals[proposal.proposal_id].state == "approved"
 
 
 def test_receipt_replay_does_not_duplicate_a_pending_proposal() -> None:
@@ -522,8 +605,7 @@ def test_filter_correction_supersedes_the_active_proposal() -> None:
     assert corrected.queue_ordinal == original.queue_ordinal
     assert repo.proposals[original.proposal_id].state == "rejected"
     assert (
-        repo.proposals[original.proposal_id].superseded_by_proposal_id
-        == corrected_id
+        repo.proposals[original.proposal_id].superseded_by_proposal_id == corrected_id
     )
 
 

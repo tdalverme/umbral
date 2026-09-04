@@ -11,7 +11,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from umbral.application.agent.tools.contracts import Proposal, ProposalNotFound
+from umbral.application.agent.tools.contracts import (
+    Proposal,
+    ProposalNotFound,
+    ProposalNotPending,
+)
 from umbral.application.agent.tools.proposals import (
     SearchProfileUpdateProposals,
 )
@@ -467,15 +471,30 @@ class ProposalsPendingResolverV5:
             )
         pending_id = _ref_uuid(pending_ref, "pending")
         if decision == "approve":
-            self.proposals.apply(
-                user_id=UUID(context.user_id),
-                session_id=UUID(context.session_id),
-                search_profile_id=profile_id,
-                proposal_id=pending_id,
-                confirmation=True,
-                idempotency_key=idempotency_key,
-                correlation_id=correlation_id,
-            )
+            try:
+                self.proposals.apply(
+                    user_id=UUID(context.user_id),
+                    session_id=UUID(context.session_id),
+                    search_profile_id=profile_id,
+                    proposal_id=pending_id,
+                    confirmation=True,
+                    idempotency_key=idempotency_key,
+                    correlation_id=correlation_id,
+                )
+            except ProposalNotPending:
+                current = self.proposals.get(
+                    user_id=UUID(context.user_id),
+                    session_id=UUID(context.session_id),
+                    search_profile_id=profile_id,
+                    proposal_id=pending_id,
+                )
+                return ExecutedActV5(
+                    act_id=act_id,
+                    effect_key="pending.resolved",
+                    status=("rejected" if current.state == "rejected" else "applied"),
+                    object_ref=f"pending:{pending_id}",
+                    reason_code=current.rejection_reason,
+                )
             return ExecutedActV5(
                 act_id=act_id,
                 effect_key="pending.resolved",
@@ -492,7 +511,7 @@ class ProposalsPendingResolverV5:
         return ExecutedActV5(
             act_id=act_id,
             effect_key="pending.resolved",
-            status="rejected",
+            status="rejected" if rejected.state == "rejected" else "applied",
             object_ref=f"pending:{pending_id}",
             reason_code=rejected.rejection_reason,
         )
