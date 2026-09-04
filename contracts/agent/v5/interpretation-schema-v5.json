@@ -15,10 +15,13 @@
     "concept_link": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["concept_ref", "confidence"],
+      "required": ["concept_ref", "confidence", "polarity", "intensity"],
       "properties": {
         "concept_ref": {"type": "string", "minLength": 1},
-        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "polarity": {"enum": ["positive", "negative"]},
+        "intensity": {"enum": ["low", "medium", "high", "essential"]},
+        "force": {"const": "soft"}
       }
     },
     "act": {

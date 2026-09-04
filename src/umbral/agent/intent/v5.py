@@ -42,6 +42,8 @@ from umbral.application.conversation.v5.contracts import (
 
 _FILTER_KEYS = ("budget_max", "zones", "min_rooms")
 _FEEDBACK_TYPES = ("like", "dislike", "save", "dismiss", "contacted")
+_PREFERENCE_POLARITIES = ("positive", "negative")
+_PREFERENCE_INTENSITIES = ("low", "medium", "high", "essential")
 _PENDING_REJECT = re.compile(
     r"\b(?:rechazo|desapruebo|cancelo|cancelar)\b"
     r"|^\s*no(?:\s*[,!.?]|$)"
@@ -372,6 +374,12 @@ def _concept_links(value: object) -> tuple[ConceptLinkV5, ...]:
         if not isinstance(item, Mapping):
             raise InterpretationContractFailed("invalid concept link shape")
         concept_ref = _required_string(item, "concept_ref")
+        polarity = _required_string(item, "polarity")
+        if polarity not in _PREFERENCE_POLARITIES:
+            raise InterpretationContractFailed("unknown concept link polarity")
+        intensity = _required_string(item, "intensity")
+        if intensity not in _PREFERENCE_INTENSITIES:
+            raise InterpretationContractFailed("unknown concept link intensity")
         force = item.get("force", "soft")
         if force != "soft":
             raise InterpretationContractFailed("concept links must be soft")
@@ -379,6 +387,10 @@ def _concept_links(value: object) -> tuple[ConceptLinkV5, ...]:
             ConceptLinkV5(
                 concept_ref=concept_ref,
                 confidence=_confidence(item.get("confidence")),
+                polarity=cast(Literal["positive", "negative"], polarity),
+                intensity=cast(
+                    Literal["low", "medium", "high", "essential"], intensity
+                ),
                 force="soft",
             )
         )

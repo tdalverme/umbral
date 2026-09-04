@@ -150,6 +150,64 @@ def test_express_desire_without_raw_text_is_invalid() -> None:
         jsonschema.validate(payload, schema)
 
 
+@pytest.mark.parametrize(
+    "concept_link",
+    [
+        {"concept_ref": "balcon", "confidence": 0.9, "intensity": "medium"},
+        {"concept_ref": "balcon", "confidence": 0.9, "polarity": "positive"},
+        {
+            "concept_ref": "balcon",
+            "confidence": 0.9,
+            "polarity": "neutral",
+            "intensity": "medium",
+        },
+        {
+            "concept_ref": "balcon",
+            "confidence": 0.9,
+            "polarity": "positive",
+            "intensity": "urgent",
+        },
+    ],
+)
+def test_computable_concept_links_require_closed_semantic_judgment(
+    concept_link: dict[str, object],
+) -> None:
+    """A link without closed judgment cannot deterministically rank a soft desire."""
+    schema = _schema("interpretation-schema-v5.json")
+    payload = _interpretation(
+        _act(
+            "express_desire",
+            raw_text="Quiero balcón",
+            subject_ref="balcon",
+            concept_links=[concept_link],
+        )
+    )
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(payload, schema)
+
+
+def test_computable_concept_link_accepts_closed_semantic_judgment() -> None:
+    schema = _schema("interpretation-schema-v5.json")
+    payload = _interpretation(
+        _act(
+            "express_desire",
+            raw_text="Quiero balcón",
+            subject_ref="balcon",
+            concept_links=[
+                {
+                    "concept_ref": "balcon",
+                    "confidence": 0.9,
+                    "polarity": "positive",
+                    "intensity": "high",
+                }
+            ],
+        )
+    )
+
+    jsonschema.validate(payload, schema)
+
+
 def test_revision_without_target_is_valid_for_policy_clarification() -> None:
     schema = _schema("interpretation-schema-v5.json")
     payload = _interpretation(

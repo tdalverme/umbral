@@ -361,6 +361,11 @@ def _desire_from_dict(data: Mapping[str, object]) -> DesireViewV5:
             ConceptLinkV5(
                 concept_ref=str(item["concept_ref"]),
                 confidence=float(item["confidence"]),
+                polarity=cast(Literal["positive", "negative"], item["polarity"]),
+                intensity=cast(
+                    Literal["low", "medium", "high", "essential"],
+                    item["intensity"],
+                ),
                 evidence_spans=_spans(item.get("evidence_spans")),
                 force="soft",
             )
@@ -458,6 +463,10 @@ def _links(value: object) -> tuple[ConceptLinkV5, ...]:
         ConceptLinkV5(
             concept_ref=str(item["concept_ref"]),
             confidence=float(item["confidence"]),
+            polarity=cast(Literal["positive", "negative"], item["polarity"]),
+            intensity=cast(
+                Literal["low", "medium", "high", "essential"], item["intensity"]
+            ),
             evidence_spans=_spans(item.get("evidence_spans")),
             force="soft",
         )

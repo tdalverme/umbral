@@ -396,6 +396,49 @@ def test_compiler_preserves_unresolved_desire_revision_for_policy() -> None:
     assert result.acts[0].desire_ref is None
 
 
+def test_compiler_preserves_closed_semantic_judgment_for_concept_links() -> None:
+    message = "Quiero balcón, pero no una cocina antigua"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "a1",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": message,
+                    "raw_text": message,
+                    "subject_ref": "balcon",
+                    "concept_links": [
+                        {
+                            "concept_ref": "balcon",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "high",
+                        },
+                        {
+                            "concept_ref": "cocina_antigua",
+                            "confidence": 0.8,
+                            "polarity": "negative",
+                            "intensity": "medium",
+                        },
+                    ],
+                }
+            ]
+        }
+    )
+
+    result = _interpret(gateway, message=message)
+
+    assert [link.polarity for link in result.acts[0].concept_links] == [
+        "positive",
+        "negative",
+    ]
+    assert [link.intensity for link in result.acts[0].concept_links] == [
+        "high",
+        "medium",
+    ]
+
+
 def test_compiler_resolves_explicit_pending_confirmation_before_model_acts() -> None:
     message = "Sí, confirmo, y además quiero balcón"
     gateway = _FakeGateway(

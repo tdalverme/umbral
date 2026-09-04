@@ -9,6 +9,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from umbral.application.conversation.v5.contracts import (
+    ConceptLinkV5,
     ExecutedActV5,
     RecordDesireCommand,
 )
@@ -59,6 +60,14 @@ def _command() -> RecordDesireCommand:
         act_id="a1",
         raw_text="Quiero algo moderno",
         subject_ref="moderno",
+        concept_links=(
+            ConceptLinkV5(
+                concept_ref="moderno",
+                confidence=0.9,
+                polarity="positive",
+                intensity="medium",
+            ),
+        ),
     )
 
 

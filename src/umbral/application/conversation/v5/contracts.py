@@ -6,6 +6,11 @@ from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 from uuid import UUID
 
+from umbral.application.preferences.intensity import (
+    PreferenceIntensity,
+    PreferencePolarity,
+)
+
 FilterKeyV5: TypeAlias = Literal["budget_max", "zones", "min_rooms"]
 FeedbackTypeV5: TypeAlias = Literal["like", "dislike", "save", "dismiss", "contacted"]
 DecisionStatusV5: TypeAlias = Literal[
@@ -58,6 +63,8 @@ class PendingActionV5:
 class ConceptLinkV5:
     concept_ref: str
     confidence: float
+    polarity: PreferencePolarity
+    intensity: PreferenceIntensity
     evidence_spans: tuple[EvidenceSpan, ...] = ()
     force: Literal["soft"] = "soft"
 

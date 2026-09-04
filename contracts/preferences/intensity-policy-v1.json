@@ -1,0 +1,9 @@
+{
+  "version": "preference-intensity-v1",
+  "weights": {
+    "low": 0.25,
+    "medium": 0.50,
+    "high": 0.75,
+    "essential": 1.00
+  }
+}

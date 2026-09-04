@@ -121,6 +121,8 @@ def _desire(
             ConceptLinkV5(
                 concept_ref=concept_key,
                 confidence=0.90,
+                polarity="positive",
+                intensity="medium",
                 evidence_spans=(evidence,),
             ),
         ),

@@ -206,6 +206,8 @@ def _desire_view(view: PreferenceView) -> DesireViewV5:
             ConceptLinkV5(
                 concept_ref=f"binding:{view.binding_id}",
                 confidence=view.confidence,
+                polarity="positive",
+                intensity="medium",
                 evidence_spans=(),
                 force="soft",
             ),

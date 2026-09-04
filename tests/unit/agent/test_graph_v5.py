@@ -17,9 +17,11 @@ from umbral.agent.graph_v5 import (
 )
 from umbral.application.conversation.v5.contracts import (
     ActOutcomeV5,
+    ConceptLinkV5,
     ConversationTurnResultV5,
     EvidenceSpan,
     ExpressDesire,
+    RecordDesireCommand,
     TurnContextV5,
     TurnInterpretationV5,
     TurnPlanV5,
@@ -67,13 +69,38 @@ def _interpretation() -> TurnInterpretationV5:
                 evidence_spans=(EvidenceSpan(start=0, end=11, text="quiero balcón"),),
                 raw_text="quiero balcón",
                 subject_ref="balcon",
+                concept_links=(
+                    ConceptLinkV5(
+                        concept_ref="balcon",
+                        confidence=0.9,
+                        polarity="positive",
+                        intensity="high",
+                    ),
+                ),
             ),
         ),
     )
 
 
 def _plan() -> TurnPlanV5:
-    return TurnPlanV5(decisions=(), commands=())
+    return TurnPlanV5(
+        decisions=(),
+        commands=(
+            RecordDesireCommand(
+                act_id="a1",
+                raw_text="quiero balcón",
+                subject_ref="balcon",
+                concept_links=(
+                    ConceptLinkV5(
+                        concept_ref="balcon",
+                        confidence=0.9,
+                        polarity="positive",
+                        intensity="high",
+                    ),
+                ),
+            ),
+        ),
+    )
 
 
 class _FakeTurn:
@@ -86,6 +113,7 @@ class _FakeTurn:
         self.result_after_resume = result_after_resume or result
         self.execute_calls = 0
         self.load_calls = 0
+        self.plans: list[TurnPlanV5] = []
 
     def load_context(
         self, *, user_id: UUID, session_id: UUID, correlation_id: UUID
@@ -124,6 +152,7 @@ class _FakeTurn:
         plan: TurnPlanV5,
     ) -> ConversationTurnResultV5:
         self.execute_calls += 1
+        self.plans.append(plan)
         if self.execute_calls == 1:
             return self.result
         return self.result_after_resume
@@ -236,6 +265,12 @@ def test_graph_runs_a_full_turn_and_produces_reply() -> None:
     assert final["reply"]["source"] == "managed"
     assert final["outcomes"][0]["status"] == "applied"
     assert turn.execute_calls == 1
+    concept_link = final["interpretation"]["acts"][0]["concept_links"][0]
+    assert concept_link["polarity"] == "positive"
+    assert concept_link["intensity"] == "high"
+    command_link = turn.plans[0].commands[0].concept_links[0]
+    assert command_link.polarity == "positive"
+    assert command_link.intensity == "high"
 
 
 def test_graph_interrupts_on_pending_and_resumes() -> None:
