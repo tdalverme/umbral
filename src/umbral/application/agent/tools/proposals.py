@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Callable, Mapping
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -156,18 +155,7 @@ class SearchProfileUpdateProposals:
             queue_ordinal=1,
             queue_total=1,
         )
-        enqueue = getattr(self.repository, "enqueue_pending", None)
-        if callable(enqueue):
-            proposal = enqueue(proposal)
-        else:
-            # Lightweight stores may not expose the transactional port.
-            proposal = replace(
-                proposal,
-                queue_ordinal=self._next_queue_ordinal(
-                    search_profile_id, session_id
-                ),
-            )
-            self.repository.insert(proposal)
+        proposal = self.repository.enqueue_pending(proposal)
         self._emit_server_event(
             event_type="search_profile.update_proposed.v1",
             actor_id=user_id,
@@ -213,29 +201,36 @@ class SearchProfileUpdateProposals:
             raise ProposalExpired()
         if proposal.applied_idempotency_key is not None:
             raise ProposalIdempotencyMismatch()
-        try:
+        def update_radar(current: Proposal) -> tuple[int, UUID | None]:
             updated, run = self.radar.update_profile(
                 owner_id=user_id,
                 profile_id=search_profile_id,
-                expected_version=proposal.base_profile_version,
-                changes=proposal.diff,
+                expected_version=current.base_profile_version,
+                changes=current.diff,
                 correlation_id=correlation_id,
                 actor_kind="user",
                 actor_id=str(user_id),
             )
+            return updated.version, getattr(run, "run_id", None)
+
+        try:
+            stored = self.repository.apply_pending(
+                proposal_id, idempotency_key, update_radar
+            )
         except ConcurrencyConflict as exc:
             self.repository.mark_rejected(proposal_id, "obsolete", self.clock())
             raise ProposalStale() from exc
-        run_id = getattr(run, "run_id", None)
-        self.repository.mark_approved(
-            proposal_id,
-            idempotency_key,
-            profile_version=updated.version,
-            run_id=run_id,
-        )
+        if stored is None:
+            raise ProposalNotFound()
+        if stored.state != "approved":
+            raise ProposalNotPending()
+        if stored.applied_idempotency_key != idempotency_key:
+            raise ProposalIdempotencyMismatch()
+        profile_version = stored.applied_profile_version or 0
+        run_id = stored.applied_run_id
         rebase_pending = getattr(self.repository, "rebase_pending_for_queue", None)
         if rebase_pending is not None:
-            rebase_pending(search_profile_id, session_id, updated.version)
+            rebase_pending(search_profile_id, session_id, profile_version)
         self._emit_server_event(
             event_type="search_profile.update_applied.v1",
             actor_id=user_id,
@@ -243,13 +238,13 @@ class SearchProfileUpdateProposals:
             payload={
                 "proposal_id": str(proposal_id),
                 "search_profile_id": str(search_profile_id),
-                "profile_version": updated.version,
+                "profile_version": profile_version,
             },
         )
         return AppliedProposal(
             proposal_id=proposal_id,
             state="approved",
-            profile_version=updated.version,
+            profile_version=profile_version,
             run_id=run_id,
         )
 
@@ -330,17 +325,10 @@ class SearchProfileUpdateProposals:
             queue_ordinal=original.queue_ordinal,
             queue_total=original.queue_total,
         )
-        supersede = getattr(self.repository, "supersede_and_insert", None)
-        if callable(supersede):
-            stored = supersede(proposal_id, derived)
-            if stored is None:
-                raise ProposalNotPending()
-            derived = stored
-        else:
-            self.repository.insert(derived)
-            self.repository.mark_superseded(
-                proposal_id, derived.proposal_id, self.clock()
-            )
+        stored = self.repository.supersede_and_insert(proposal_id, derived)
+        if stored is None:
+            raise ProposalNotPending()
+        derived = stored
         self._emit_server_event(
             event_type="search_profile.update_proposed.v1",
             actor_id=user_id,

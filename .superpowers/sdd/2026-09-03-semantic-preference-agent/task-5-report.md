@@ -53,3 +53,13 @@ The required aggregate suite was invoked. Its unit and non-container chat tests 
 - RED: `$env:PYTHONPATH='src'; & '..\\..\\.venv\\Scripts\\python.exe' -m pytest tests/unit/application/agent/tools/test_proposals.py -q` — 3 failed, 20 passed; failures covered missing durable total and unused atomic ports.
 - GREEN: `PYTHONPATH=src ..\\..\\.venv\\Scripts\\python.exe -m pytest tests/unit/application/agent/tools/test_proposals.py tests/unit/infrastructure/conversation/v5/test_radar_executor.py tests/unit/agent/test_graph_v5.py tests/unit/application/conversation/v5 tests/unit/infrastructure/conversation/v5 tests/migrations/test_upgrade_and_drift.py tests/unit/infrastructure/test_db_model_contract.py tests/contract/test_agent_contracts_v5.py -q` — 126 passed, 2 warnings.
 - Alembic offline upgrade SQL and `git diff --check` passed. The Docker-backed `tests/integration/chat` suite remains unavailable in this environment (Docker engine pipe did not respond); no assertion result was claimed.
+
+## Review round 4 / race closure
+
+- Resolution now uses mandatory `ProposalRepository.apply_pending`: PostgreSQL locks the proposal row while the radar update callback runs and conditionally records approval, so correction cannot supersede a proposal that has already begun resolution. A losing correction returns no successor and a losing resolution performs no radar mutation.
+- `enqueue_pending` and `supersede_and_insert` are now mandatory service ports; incoherent read/insert and insert/mark fallbacks were removed. Playground and all proposal test repositories implement the same ports.
+- Pending rejection returns a rejected execution outcome, preserving the decision in graph state, reply grounding, and audit.
+- Added PostgreSQL concurrency tests for enqueue-vs-enqueue and correction-vs-resolution, plus focused atomic resolution and rejection acceptance coverage.
+- RED: `pytest tests/unit/application/agent/tools/test_proposals.py::test_apply_uses_atomic_pending_resolution_port -q` failed because the service bypassed the atomic port.
+- GREEN: targeted Task 5 suite — 182 passed, 2 Alembic deprecation warnings. Docker-backed concurrency tests were added but cannot execute until the Docker engine is available.
+- Final checks: `compileall`, Alembic offline upgrade SQL, `ruff check` on touched production/tests, and `git diff --check` all passed.

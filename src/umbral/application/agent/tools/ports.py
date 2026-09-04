@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -30,6 +30,14 @@ class ProposalRepository(Protocol):
         self, proposal_id: UUID, successor: Proposal
     ) -> Proposal | None:
         """Atomically replace a pending proposal with its derived successor."""
+
+    def apply_pending(
+        self,
+        proposal_id: UUID,
+        applied_idempotency_key: str,
+        operation: Callable[[Proposal], tuple[int, UUID | None]],
+    ) -> Proposal | None:
+        """Apply and approve while holding the proposal/session lock."""
 
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID

@@ -27,6 +27,10 @@ from umbral.application.conversation.v5.contracts import (
     SetFilterCommand,
     TurnContextV5,
 )
+from umbral.application.conversation.v5.receipts import (
+    InMemoryCommandReceiptStore,
+    execute_with_receipt,
+)
 from umbral.application.events.contracts import ProductEvent
 from umbral.infrastructure.conversation.v5.executor import (
     EffectExecutorV5,
@@ -44,6 +48,40 @@ class _ProposalRepo:
     def insert(self, proposal: Proposal) -> Proposal:
         self.proposals[proposal.proposal_id] = proposal
         return proposal
+
+    def enqueue_pending(self, proposal: Proposal) -> Proposal:
+        ordinal = max(
+            (p.queue_ordinal for p in self.proposals.values()
+             if p.search_profile_id == proposal.search_profile_id
+             and p.session_id == proposal.session_id and p.state == "pending"),
+            default=0,
+        ) + 1
+        queued = replace(proposal, queue_ordinal=ordinal, queue_total=ordinal)
+        self.proposals[queued.proposal_id] = queued
+        return queued
+
+    def supersede_and_insert(self, proposal_id, successor):
+        original = self.proposals.get(proposal_id)
+        if original is None or original.state != "pending":
+            return None
+        self.proposals[proposal_id] = replace(
+            original, state="rejected", rejection_reason="edited",
+            superseded_by_proposal_id=successor.proposal_id,
+        )
+        self.proposals[successor.proposal_id] = successor
+        return successor
+
+    def apply_pending(self, proposal_id, key, operation):
+        proposal = self.proposals.get(proposal_id)
+        if proposal is None or proposal.state != "pending":
+            return proposal
+        version, run_id = operation(proposal)
+        updated = replace(
+            proposal, state="approved", applied_idempotency_key=key,
+            applied_profile_version=version, applied_run_id=run_id,
+        )
+        self.proposals[proposal_id] = updated
+        return updated
 
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
@@ -117,9 +155,11 @@ class _Events:
         self.events.append(event)
 
 
-def _proposals(radar_ctx: RadarTestContext) -> SearchProfileUpdateProposals:
+def _proposals(
+    radar_ctx: RadarTestContext, repo: _ProposalRepo | None = None
+) -> SearchProfileUpdateProposals:
     return SearchProfileUpdateProposals(
-        repository=cast(ProposalRepository, _ProposalRepo()),
+        repository=cast(ProposalRepository, repo or _ProposalRepo()),
         radar=radar_ctx.service,
         events=_Events(),
         events_registry=load_events_registry(),
@@ -310,6 +350,67 @@ def test_rejecting_pending_returns_a_rejected_resolution_outcome() -> None:
     assert result.reason_code == "user"
 
 
+def test_receipt_replay_does_not_duplicate_a_pending_proposal() -> None:
+    radar_ctx = RadarTestContext(default_runtime=False)
+    user_id = uuid4()
+    profile, _ = radar_ctx.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    chat = _chat_service()
+    session = chat.create_session(
+        user_id=user_id,
+        search_profile_id=profile.profile_id,
+        correlation_id=uuid4(),
+    )
+    repo = _ProposalRepo()
+    proposals = _proposals(radar_ctx, repo)
+    effect_executor = EffectExecutorV5(
+        radar=radar_ctx.service, chat=chat, proposals=proposals
+    )
+    context = _context(
+        profile_id=profile.profile_id,
+        version=profile.version,
+        filters=(),
+        user_id=user_id,
+        session_id=session.session_id,
+    )
+    command = SetFilterCommand(
+        act_id="a1",
+        filter_key="budget_max",
+        value=900,
+        expected_profile_version=profile.version,
+    )
+    receipts = InMemoryCommandReceiptStore()
+
+    first = execute_with_receipt(
+        store=receipts,
+        executor=effect_executor,
+        command=command,
+        context=context,
+        idempotency_key="turn:a1",
+    )
+    second = execute_with_receipt(
+        store=receipts,
+        executor=effect_executor,
+        command=command,
+        context=context,
+        idempotency_key="turn:a1",
+    )
+
+    assert first == second
+    assert first.status == "pending"
+    assert len(repo.proposals) == 1
+
+
 def test_existing_filter_change_creates_pending_proposal() -> None:
     radar_ctx = RadarTestContext(default_runtime=False)
     user_id = uuid4()
@@ -352,6 +453,78 @@ def test_existing_filter_change_creates_pending_proposal() -> None:
     assert result.reason_code == "filter.requires_confirmation"
     updated = radar_ctx.service.get_profile(user_id, profile.profile_id)
     assert updated.budget_max == 800.0
+
+
+def test_filter_correction_supersedes_the_active_proposal() -> None:
+    radar_ctx = RadarTestContext(default_runtime=False)
+    user_id = uuid4()
+    profile, _ = radar_ctx.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    chat = _chat_service()
+    session = chat.create_session(
+        user_id=user_id,
+        search_profile_id=profile.profile_id,
+        correlation_id=uuid4(),
+    )
+    repo = _ProposalRepo()
+    proposals = _proposals(radar_ctx, repo)
+    original = proposals.propose(
+        user_id=user_id,
+        session_id=session.session_id,
+        search_profile_id=profile.profile_id,
+        change={"zones": ["palermo"]},
+        correlation_id=uuid4(),
+        source_act_id="palermo",
+    )
+    context = _context(
+        profile_id=profile.profile_id,
+        version=profile.version,
+        filters=(),
+        user_id=user_id,
+        session_id=session.session_id,
+    )
+    context = replace(
+        context,
+        pending_action=PendingActionV5(
+            pending_ref=f"pending:{original.proposal_id}",
+            act_id="palermo",
+            ordinal=original.queue_ordinal,
+            total=original.queue_total,
+        ),
+    )
+    result = EffectExecutorV5(
+        radar=radar_ctx.service, chat=chat, proposals=proposals
+    ).execute(
+        command=SetFilterCommand(
+            act_id="belgrano",
+            filter_key="zones",
+            value=("belgrano",),
+            expected_profile_version=profile.version,
+        ),
+        context=context,
+        idempotency_key="turn:belgrano",
+    )
+
+    corrected_id = UUID(str(result.object_ref).removeprefix("proposal:"))
+    corrected = repo.proposals[corrected_id]
+    assert corrected_id != original.proposal_id
+    assert corrected.diff == {"zones": ["belgrano"]}
+    assert corrected.queue_ordinal == original.queue_ordinal
+    assert repo.proposals[original.proposal_id].state == "rejected"
+    assert (
+        repo.proposals[original.proposal_id].superseded_by_proposal_id
+        == corrected_id
+    )
 
 
 def test_clear_filter_creates_pending_proposal_and_keeps_state() -> None:

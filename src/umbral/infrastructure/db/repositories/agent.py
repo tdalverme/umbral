@@ -270,6 +270,45 @@ class SqlAlchemyProposalRepository:
             current.commit()
         return stored
 
+    def apply_pending(
+        self,
+        proposal_id: UUID,
+        applied_idempotency_key: str,
+        operation: Callable[[Proposal], tuple[int, UUID | None]],
+    ) -> Proposal | None:
+        """Run the profile mutation while holding the session-row lock."""
+        with self.session_factory() as current:
+            session_id = current.scalar(
+                select(SearchProfileUpdateProposal.session_id).where(
+                    SearchProfileUpdateProposal.id == proposal_id
+                )
+            )
+            if session_id is None:
+                return None
+            current.execute(
+                select(ChatSession.id)
+                .where(ChatSession.id == session_id)
+                .with_for_update()
+            ).scalar_one()
+            model = current.scalar(
+                select(SearchProfileUpdateProposal)
+                .where(SearchProfileUpdateProposal.id == proposal_id)
+                .with_for_update()
+            )
+            if model is None:
+                return None
+            if model.state != "pending":
+                return _to_proposal(model)
+            version, run_id = operation(_to_proposal(model))
+            model.state = "approved"
+            model.applied_idempotency_key = applied_idempotency_key
+            model.rejection_reason = None
+            model.applied_profile_version = version
+            model.applied_run_id = run_id
+            model.updated_at = datetime.now(timezone.utc)
+            current.commit()
+            return _to_proposal(model)
+
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
     ) -> Proposal | None:
@@ -367,6 +406,8 @@ class SqlAlchemyProposalRepository:
             model = current.get(SearchProfileUpdateProposal, proposal_id)
             if model is None:
                 return None
+            if model.state != "pending":
+                return _to_proposal(model)
             model.state = "rejected"
             model.rejection_reason = rejection_reason
             model.rejection_note = rejection_note

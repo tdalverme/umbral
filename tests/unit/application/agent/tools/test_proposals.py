@@ -101,11 +101,31 @@ class _ProposalRepo:
         self.proposals[proposal_id] = updated
         return updated
 
-    def mark_rejected(self, proposal_id, reason, rejection_at):
+    def mark_rejected(self, proposal_id, reason, rejection_at, rejection_note=None):
         proposal = self.proposals.get(proposal_id)
         if proposal is None:
             return None
-        updated = replace(proposal, state="rejected", rejection_reason=reason)
+        updated = replace(
+            proposal,
+            state="rejected",
+            rejection_reason=reason,
+            rejection_note=rejection_note,
+        )
+        self.proposals[proposal_id] = updated
+        return updated
+
+    def apply_pending(self, proposal_id, key, operation):
+        proposal = self.proposals.get(proposal_id)
+        if proposal is None or proposal.state != "pending":
+            return proposal
+        profile_version, run_id = operation(proposal)
+        updated = replace(
+            proposal,
+            state="approved",
+            applied_idempotency_key=key,
+            applied_profile_version=profile_version,
+            applied_run_id=run_id,
+        )
         self.proposals[proposal_id] = updated
         return updated
 
@@ -320,6 +340,32 @@ def test_approving_a_queue_step_rebases_only_the_remaining_steps() -> None:
     assert repo.proposals[second.proposal_id].base_profile_version == 4
 
 
+def test_rejecting_a_queue_step_exposes_the_next_head() -> None:
+    service, repo, _, _ = _make_service()
+    first = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"zones": ["palermo"]}, correlation_id=CORRELATION_ID,
+    )
+    second = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+    )
+
+    service.reject(
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        proposal_id=first.proposal_id,
+        note="no",
+        correlation_id=CORRELATION_ID,
+    )
+
+    remaining = repo.pending_for_profile(PROFILE_ID, SESSION_ID)
+    assert remaining == (repo.proposals[second.proposal_id],)
+    assert remaining[0].queue_ordinal == 2
+    assert remaining[0].queue_total == 2
+
+
 def test_queue_total_remains_coherent_after_consuming_the_head() -> None:
     service, repo, _, _ = _make_service()
     first = service.propose(
@@ -337,6 +383,35 @@ def test_queue_total_remains_coherent_after_consuming_the_head() -> None:
     remaining = repo.proposals[second.proposal_id]
     assert remaining.queue_ordinal == 2
     assert remaining.queue_total == 2
+
+
+def test_apply_uses_atomic_pending_resolution_port() -> None:
+    service, repo, radar, _ = _make_service()
+    proposal = service.propose(
+        user_id=USER_ID, session_id=SESSION_ID, search_profile_id=PROFILE_ID,
+        change={"budget_max": 1200}, correlation_id=CORRELATION_ID,
+    )
+    calls: list[Proposal] = []
+
+    def apply_pending(proposal_id, key, operation):
+        current = repo.proposals[proposal_id]
+        calls.append(current)
+        version, run_id = operation(current)
+        updated = replace(
+            current,
+            state="approved",
+            applied_idempotency_key=key,
+            applied_profile_version=version,
+            applied_run_id=run_id,
+        )
+        repo.proposals[proposal_id] = updated
+        return updated
+
+    repo.apply_pending = apply_pending  # type: ignore[attr-defined]
+    service.apply(**_base_args(proposal.proposal_id))
+
+    assert calls == [proposal]
+    assert len(radar.applied) == 1
 
 
 def test_propose_uses_atomic_enqueue_port_when_available() -> None:

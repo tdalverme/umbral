@@ -205,6 +205,21 @@ class LocalProposalRepository:
         self.proposals[successor.proposal_id] = successor
         return successor
 
+    def apply_pending(self, proposal_id, applied_idempotency_key, operation):
+        current = self.proposals.get(proposal_id)
+        if current is None or current.state != "pending":
+            return current
+        profile_version, run_id = operation(current)
+        updated = replace(
+            current,
+            state="approved",
+            applied_idempotency_key=applied_idempotency_key,
+            applied_profile_version=profile_version,
+            applied_run_id=run_id,
+        )
+        self.proposals[proposal_id] = updated
+        return updated
+
     def get(
         self, proposal_id: UUID, session_id: UUID, user_id: UUID
     ) -> Proposal | None:
