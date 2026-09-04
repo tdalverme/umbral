@@ -12,6 +12,21 @@ import type {
   StreamStatus,
 } from "@/lib/chat/types";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isProposalDecision(value: unknown): value is ProposalDecision {
+  if (!isRecord(value)) return false;
+  return (
+    value.type === "proposal_decision" &&
+    typeof value.proposal_id === "string" &&
+    isRecord(value.diff) &&
+    isRecord(value.impact) &&
+    typeof value.expires_at === "string"
+  );
+}
+
 /** Owns the single chat panel of a radar (Q3): session resume/create, SSE
  * streaming with dedupe and reconnection (R-11/R-13). */
 export function useChatStream(searchProfileId: string) {
@@ -81,9 +96,9 @@ export function useChatStream(searchProfileId: string) {
           setStatus("running");
           break;
         case "chat.interrupt_waiting": {
-          const interrupt = data.interrupt as ProposalDecision;
+          const interrupt = data.interrupt;
           waitingRef.current = true;
-          setPendingDecision(interrupt);
+          setPendingDecision(isProposalDecision(interrupt) ? interrupt : null);
           setStatus("waiting_decision");
           break;
         }

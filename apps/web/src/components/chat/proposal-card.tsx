@@ -92,7 +92,7 @@ export function ProposalCard({ decision, onDecision, busy }: ProposalCardProps):
   }
 
   const isPreference = decision.kind === "preference";
-  const diff = decision.diff as Record<string, unknown>;
+  const diff = decision.diff ?? {};
   const isRemoval = diff.operation === "remove";
   const fields = Object.entries(diff).filter(([key]) => key in FIELD_LABELS);
   const impact = decision.impact as Record<string, unknown> | undefined;

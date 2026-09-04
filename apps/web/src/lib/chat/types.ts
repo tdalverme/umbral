@@ -31,7 +31,7 @@ export type ChatStreamEvent =
   | { event: "chat.run_started"; data: { run_id: string; session_id: string } }
   | { event: "chat.reply_fragment"; data: { run_id: string; delta: string } }
   | { event: "chat.tool_activity"; data: { run_id: string; tool: string; status: string } }
-  | { event: "chat.interrupt_waiting"; data: { run_id: string; interrupt: ProposalDecision } }
+  | { event: "chat.interrupt_waiting"; data: { run_id: string; interrupt: unknown } }
   | { event: "chat.run_completed"; data: { run_id: string; message_id: string } }
   | { event: "chat.run_failed"; data: { run_id: string; error_code: string } }
   | { event: "chat.run_interrupted"; data: { run_id: string } };

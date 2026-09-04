@@ -13,6 +13,25 @@ const DECISION: ProposalDecision = {
 };
 
 describe("ProposalCard", () => {
+  it("no crashea si el payload de confirmación no trae diff", () => {
+    const incompleteDecision = {
+      type: "proposal_decision",
+      proposal_id: "p-1",
+      impact: {},
+      expires_at: "2026-08-11T00:00:00Z",
+    } as ProposalDecision;
+
+    render(
+      <ProposalCard
+        decision={incompleteDecision}
+        onDecision={vi.fn()}
+        busy={false}
+      />,
+    );
+
+    expect(screen.getByText("Sin campos detallados.")).toBeTruthy();
+  });
+
   it("muestra el diff y emite approve", () => {
     const onDecision = vi.fn();
     render(<ProposalCard decision={DECISION} onDecision={onDecision} busy={false} />);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseStream } from "@/lib/chat/client";
+import { isProposalDecision } from "@/lib/chat/use-chat-stream";
 import type { ChatStreamEvent } from "@/lib/chat/types";
 
 function toStream(payload: string): ReadableStream<Uint8Array> {
@@ -21,6 +22,16 @@ async function collect(payload: string): Promise<ChatStreamEvent[]> {
 }
 
 describe("chat stream parsing", () => {
+  it("no trata una confirmación corta como una propuesta renderizable", () => {
+    expect(
+      isProposalDecision({
+        type: "conversation_confirmation",
+        pending_ref: "pending:p-1",
+        act_id: "a1",
+      }),
+    ).toBe(false);
+  });
+
   it("parsea eventos SSE tipados", async () => {
     const body = [
       "event: chat.run_started",
