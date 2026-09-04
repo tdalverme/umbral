@@ -49,38 +49,49 @@ Write-Host "  Frase: `"$Phrase`"`n" -ForegroundColor White
 
 $env:PYTHONPATH = "src"
 $script = @"
-import json, pathlib
-from umbral.application.agent.tools.preference_interpreter import ConceptOption, resolve_concept
+import json
+from umbral.agent.intent.v5 import InterpretationCompilerV5
+from umbral.application.conversation.v5.contracts import TurnContextV5
+from umbral.infrastructure.criteria.contract_loader import load_concepts_seed
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
 from pathlib import Path
 
-# Cargar conceptos + vocabulario como hace production.py
-seed = json.loads(Path("contracts/criteria/v1/concepts-seed-v1.json").read_text(encoding="utf-8"))
-from umbral.infrastructure.agent.tools.preferences_loader import load_preference_vocabulary
-vocab = load_preference_vocabulary()
-vocab_map = {}
-for e in vocab.entries:
-    vocab_map.setdefault(e.intent.concept_key, []).extend(list(e.aliases))
-
-concepts = tuple(
-    ConceptOption(
-        key=str(c["key"]),
-        description=str(c.get("name") or c["key"]),
-        matchers=(str(c["matcher_type"]),),
-        aliases=tuple(vocab_map.get(str(c["key"]), ())[:6]),
-    )
-    for c in seed.get("concepts", [])
+# Cargar el snapshot de conceptos que consume el intérprete V5.
+seed = load_concepts_seed()
+concept_catalog = tuple(
+    {
+        "key": concept.key,
+        "description": concept.name,
+        "matcher_type": concept.matcher_type,
+        "computable": bool(concept.compute_policy.get("computable", True)),
+        "aliases": list(concept.aliases),
+    }
+    for concept in seed.concepts
 )
+schema = json.loads(Path("contracts/agent/v5/interpretation-schema-v5.json").read_text(encoding="utf-8"))
 
 import os
 gw = ManagedModelGateway(endpoint=os.environ["AGENT_MANAGED_ENDPOINT"], api_key=os.environ["AGENT_MANAGED_API_KEY"], model=os.environ["AGENT_MODEL_NAME"], timeout_seconds=30)
-res = resolve_concept(phrase="$Phrase", concepts=concepts, gateway=gw, prompt_version="test-local", model_version=os.environ["AGENT_MODEL_NAME"])
+interpreter = InterpretationCompilerV5(
+    gateway=gw,
+    schema=schema,
+    prompt_version="test-local",
+    model_version=os.environ["AGENT_MODEL_NAME"],
+    concept_catalog=concept_catalog,
+)
+context = TurnContextV5(
+    user_id="smoke-user", session_id="smoke-session", active_radar_ref="radar:smoke",
+    active_radar_version=1, current_filters=(), active_desires=(), pending_action=None,
+    focused_entity=None, verified_listing_refs=(),
+    allowed_capabilities=("express_desire", "set_filter", "query", "unsupported_request"),
+    untrusted_content=(), context_schema_version="5", correlation_id="smoke-correlation",
+)
+res = interpreter.interpret(message_text="$Phrase", context=context)
 print("---RESULTADO---")
-print(f"kind={getattr(res,'kind',None)} concept_key={getattr(res,'concept_key',None)} polarity={getattr(res,'polarity',None)} confidence={getattr(res,'confidence',None)} reason={getattr(res,'reason','')[:120]}")
-if res and res.kind=="structured":
-    print("✓ MAPEO OK ->", res.concept_key)
-else:
-    print("✗ NO MAPEO - revisa catalog/alias")
+for act in res.acts:
+    print(f"kind={act.kind} evidence={[span.text for span in act.evidence_spans]}")
+    if hasattr(act, "concept_links"):
+        print("concept_refs=", [link.concept_ref for link in act.concept_links])
 "@
 
 # Escapar comillas para PowerShell

@@ -62,6 +62,7 @@ from umbral.application.preferences.contracts import (
     PreferenceView,
 )
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
+from umbral.infrastructure.criteria.contract_loader import load_concepts_seed
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.conversation.v5.composition import (
     V5Services,
@@ -74,6 +75,20 @@ _REPLY_MARKER = "outcomes"
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _eval_concept_catalog() -> tuple[Mapping[str, object], ...]:
+    """Use the published concept snapshot for every V5 eval interpretation."""
+    return tuple(
+        {
+            "key": concept.key,
+            "description": concept.name,
+            "matcher_type": concept.matcher_type,
+            "computable": bool(concept.compute_policy.get("computable", False)),
+            "aliases": list(concept.aliases),
+        }
+        for concept in load_concepts_seed().concepts
+    )
 
 
 def _settings_from_environment() -> Settings:
@@ -275,6 +290,7 @@ class V5EvalTrialExecutor:
         self.reply_schema = _read_json(
             contracts_dir / "agent" / "v5" / "reply-schema-v5.json"
         )
+        self.concept_catalog = _eval_concept_catalog()
 
     def execute(
         self,
@@ -301,6 +317,7 @@ class V5EvalTrialExecutor:
             schema=self.interpretation_schema,
             prompt_version=release.components.prompt_versions[0],
             model_version=release.components.model_version,
+            concept_catalog=self.concept_catalog,
         )
         turn_service = build_conversation_v5_turn_service(
             services=V5Services(

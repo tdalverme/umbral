@@ -22,7 +22,9 @@ from umbral.infrastructure.agent_evals.v4_flow import (
     compare_releases,
     run_v4_suite,
 )
+from umbral.infrastructure.agent_evals import v4_flow
 from umbral.infrastructure.config.settings import Settings
+from umbral.infrastructure.criteria.contract_loader import load_concepts_seed
 
 ROOT = Path(__file__).resolve().parents[3]
 V4_DIR = ROOT / "contracts" / "agent-evals" / "v4"
@@ -81,6 +83,49 @@ def test_scripted_and_managed_v5_use_the_same_graph_builder() -> None:
     from umbral.agent.graph_v5 import build_graph_v5
 
     assert executor.graph_factory is build_graph_v5
+
+
+def test_eval_executor_passes_the_published_catalog_to_v5_interpreter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = load_dataset(V4_DIR / "conversation-trajectories-v4.json")
+    releases = load_releases(V4_DIR / "graph-releases-v3.json")
+    case = next(item for item in dataset.cases if item.id == "v4.desire_preservation")
+    release = next(
+        item for item in releases.releases if item.id == "graph-release-005"
+    )
+    received: dict[str, object] = {}
+    compiler = v4_flow.InterpretationCompilerV5
+
+    def record_catalog(**kwargs: object) -> object:
+        received["catalog"] = kwargs["concept_catalog"]
+        return compiler(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(v4_flow, "InterpretationCompilerV5", record_catalog)
+
+    V5EvalTrialExecutor(contracts_dir=ROOT / "contracts").execute(
+        case=case,
+        release=release,
+        adapter=ScriptedEvalModelAdapterV4(),
+        trial_index=0,
+        attempt_index=0,
+    )
+
+    catalog = received["catalog"]
+    assert isinstance(catalog, tuple)
+    published = load_concepts_seed().concepts
+    assert {item["key"] for item in catalog} == {concept.key for concept in published}
+    assert {item["key"] for item in catalog} >= {
+        "balcon",
+        "luminosidad",
+        "proximidad_cafes",
+        "acceso_escuela",
+        "acceso_salud",
+    }
+    assert all(
+        {"description", "matcher_type", "computable", "aliases"} <= set(item)
+        for item in catalog
+    )
 
 
 def test_managed_adapter_injects_declared_provider_failure() -> None:

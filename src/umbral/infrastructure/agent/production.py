@@ -562,7 +562,7 @@ def _build_v5_concept_catalog(
         SqlAlchemyConceptRepository,
     )
 
-    return tuple(
+    catalog = tuple(
         {
             "key": concept.key,
             "description": concept.name,
@@ -572,6 +572,9 @@ def _build_v5_concept_catalog(
         }
         for concept in SqlAlchemyConceptRepository(session_factory).list_active()
     )
+    if not catalog:
+        raise ValueError("v5 active concept registry is empty")
+    return catalog
 
 
 def _build_preference_service(session_factory: SessionFactory) -> PreferenceServiceLike:

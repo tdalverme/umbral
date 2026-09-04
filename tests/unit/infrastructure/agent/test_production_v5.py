@@ -121,3 +121,23 @@ def test_v3_stack_wires_pending_proposals_to_graph_runs(
     )
 
     assert captured["waiting_runs"] is graph_runs
+
+
+def test_v5_catalog_loader_rejects_an_empty_active_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from umbral.infrastructure.db.repositories import criteria
+
+    class _EmptyConceptRepository:
+        def __init__(self, _session_factory: object) -> None:
+            pass
+
+        def list_active(self) -> tuple[object, ...]:
+            return ()
+
+    monkeypatch.setattr(
+        criteria, "SqlAlchemyConceptRepository", _EmptyConceptRepository
+    )
+
+    with pytest.raises(ValueError, match="active concept registry is empty"):
+        production._build_v5_concept_catalog(lambda: None)  # type: ignore[arg-type]

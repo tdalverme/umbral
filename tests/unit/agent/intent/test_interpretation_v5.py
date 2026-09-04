@@ -701,6 +701,69 @@ def test_compiler_rejects_multiple_concepts_in_one_expressed_desire() -> None:
         )
 
 
+def test_compiler_keeps_a_qualitative_environment_desire_out_of_hard_filters() -> None:
+    message = "Quiero mucha luz y un entorno tranquilo"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "light",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": "mucha luz",
+                    "raw_text": "mucha luz",
+                    "subject_ref": "luminosidad",
+                    "concept_links": [
+                        {
+                            "concept_ref": "luminosidad",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "high",
+                        }
+                    ],
+                },
+                {
+                    "act_id": "quiet",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": "entorno tranquilo",
+                    "raw_text": "entorno tranquilo",
+                    "subject_ref": "calma",
+                    "concept_links": [
+                        {
+                            "concept_ref": "calma_residencial",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "high",
+                        }
+                    ],
+                },
+            ]
+        }
+    )
+
+    result = InterpretationCompilerV5(
+        gateway=gateway,
+        schema={"type": "object"},
+        prompt_version="interpretation-v5",
+        model_version="gpt-4.1-mini",
+        concept_catalog=_semantic_catalog("luminosidad", "calma_residencial"),
+    ).interpret(
+        message_text=message, context=_context(), correlation_id=CORRELATION_ID
+    )
+
+    assert gateway.calls
+    call = gateway.calls[0]
+    messages = call["messages"]
+    assert messages[-1] == {"role": "user", "content": message}
+    assert "Los deseos cualitativos o de entorno nunca son `set_filter`" in messages[0]["content"]
+    assert [act.kind for act in result.acts] == [
+        "express_desire",
+        "express_desire",
+    ]
+    assert all(link.force == "soft" for act in result.acts for link in act.concept_links)
+
+
 def test_compiler_resolves_explicit_pending_confirmation_before_model_acts() -> None:
     message = "Sí, confirmo, y además quiero balcón"
     gateway = _FakeGateway(
