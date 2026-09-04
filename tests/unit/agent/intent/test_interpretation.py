@@ -452,6 +452,83 @@ def test_compiler_preserves_closed_semantic_judgment_for_concept_links() -> None
     ]
 
 
+def test_compiler_treats_explicit_null_force_as_soft() -> None:
+    message = "Prefiero deptos con poco ruido"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "1",
+                    "kind": "express_desire",
+                    "confidence": 0.95,
+                    "evidence_text": message,
+                    "raw_text": "poco ruido",
+                    "subject_ref": "poco ruido",
+                    "concept_links": [
+                        {
+                            "concept_ref": "ruido_ambiental",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "essential",
+                            "force": None,
+                        },
+                    ],
+                }
+            ]
+        }
+    )
+
+    result = InterpretationCompiler(
+        gateway=gateway,
+        schema={"type": "object"},
+        prompt_version="interpretation",
+        model_version="gpt-4.1-mini",
+        concept_catalog=_semantic_catalog("ruido_ambiental"),
+    ).interpret(
+        message_text=message, context=_context(), correlation_id=CORRELATION_ID
+    )
+
+    assert [link.force for link in result.acts[0].concept_links] == ["soft"]
+
+
+def test_compiler_still_rejects_non_soft_force() -> None:
+    message = "Prefiero deptos con poco ruido"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "1",
+                    "kind": "express_desire",
+                    "confidence": 0.95,
+                    "evidence_text": message,
+                    "raw_text": "poco ruido",
+                    "subject_ref": "poco ruido",
+                    "concept_links": [
+                        {
+                            "concept_ref": "ruido_ambiental",
+                            "confidence": 0.9,
+                            "polarity": "positive",
+                            "intensity": "essential",
+                            "force": "hard",
+                        },
+                    ],
+                }
+            ]
+        }
+    )
+
+    with pytest.raises(InterpretationContractFailed):
+        InterpretationCompiler(
+            gateway=gateway,
+            schema={"type": "object"},
+            prompt_version="interpretation",
+            model_version="gpt-4.1-mini",
+            concept_catalog=_semantic_catalog("ruido_ambiental"),
+        ).interpret(
+            message_text=message, context=_context(), correlation_id=CORRELATION_ID
+        )
+
+
 def test_compiler_sends_the_exact_catalog_snapshot_in_a_delimited_section() -> None:
     message = "Quiero moverme fácil todos los días"
     gateway = _FakeGateway(

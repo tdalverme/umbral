@@ -411,7 +411,10 @@ def _concept_links(
         intensity = _required_string(item, "intensity")
         if intensity not in _PREFERENCE_INTENSITIES:
             raise InterpretationContractFailed("unknown concept link intensity")
-        force = item.get("force", "soft")
+        # An explicit null carries no force information and behaves like an
+        # absent field; anything else must stay soft (qualitative desires
+        # never become hard filters).
+        force = item.get("force") or "soft"
         if force != "soft":
             raise InterpretationContractFailed("concept links must be soft")
         links.append(
