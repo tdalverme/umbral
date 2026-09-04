@@ -322,7 +322,7 @@ def build_graph_v5(
 
     def _route_after_reply(state: ConversationGraphStateV5) -> str:
         context = _context_from_dict(state.get("context") or {})
-        if context.pending_action is not None:
+        if _turn_requires_confirmation(state, context):
             return "require_confirmation"
         return "persist_turn"
 
@@ -369,6 +369,22 @@ def build_graph_v5(
 
 def _context_to_dict(context: TurnContextV5) -> dict[str, object]:
     return asdict(context)
+
+
+def _turn_requires_confirmation(
+    state: ConversationGraphStateV5,
+    context: TurnContextV5,
+) -> bool:
+    """Require confirmation only for a pending effect of this graph turn."""
+    pending = context.pending_action
+    if pending is None:
+        return False
+    if any(item.get("status") == "pending" for item in state.get("outcomes") or []):
+        return True
+    return any(
+        item.get("effect_key") == "pending.resolved"
+        for item in state.get("executed") or []
+    )
 
 
 def _context_from_dict(data: Mapping[str, object]) -> TurnContextV5:

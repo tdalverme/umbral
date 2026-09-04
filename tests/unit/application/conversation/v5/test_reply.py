@@ -302,6 +302,24 @@ def test_pending_hard_step_asks_one_question_with_ordinal() -> None:
     assert reply.source == "deterministic_fallback"
 
 
+def test_pure_query_with_existing_queue_keeps_managed_reply() -> None:
+    composer = _composer(_FakeGateway(reply=_managed_reply("Te muestro opciones.")))
+    context = replace(
+        _context(),
+        pending_action=PendingActionV5("pending:zones", "zones", 1, 2),
+    )
+
+    reply = composer.compose(
+        _result(
+            context=context,
+            outcomes=(ActOutcomeV5("query", "applied"),),
+        )
+    )
+
+    assert reply.source == "managed"
+    assert reply.text == "Te muestro opciones."
+
+
 @pytest.mark.parametrize(
     ("status", "reason_code", "expected"),
     [("applied", None, "confirmado"), ("rejected", "user", "rechazado")],

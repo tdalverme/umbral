@@ -25,6 +25,7 @@ from umbral.application.conversation.v5.contracts import (
     ExecutedActV5,
     ExpressDesire,
     PendingActionV5,
+    Query,
     RecordDesireCommand,
     TurnContextV5,
     TurnInterpretationV5,
@@ -352,6 +353,34 @@ def test_graph_composes_resolution_before_the_next_confirmation(
     assert reply.results[-1].outcomes[-1].status == (
         "applied" if decision == "approve" else "rejected"
     )
+
+
+def test_graph_does_not_interrupt_pure_query_for_an_existing_queue() -> None:
+    pending = PendingActionV5(
+        pending_ref="pending:zones", act_id="zones", ordinal=1, total=2
+    )
+    query = Query(
+        act_id="query",
+        confidence=1,
+        evidence_spans=(EvidenceSpan(0, 13, "mostrá opciones"),),
+        query_text="mostrá opciones",
+    )
+    result = ConversationTurnResultV5(
+        context=replace(_context(), pending_action=pending),
+        interpretation=TurnInterpretationV5(
+            model_version="test", prompt_version="test", acts=(query,)
+        ),
+        plan=TurnPlanV5(decisions=()),
+        executed=(),
+        outcomes=(ActOutcomeV5("query", "applied"),),
+    )
+    graph = _graph(_FakeTurn(result))
+
+    updates = tuple(
+        graph.stream(_state("mostrá opciones"), _config(), stream_mode="updates")
+    )
+
+    assert not any("__interrupt__" in update for update in updates)
 
 
 def test_graph_resume_resolves_only_the_context_queue_head() -> None:

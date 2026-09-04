@@ -301,7 +301,15 @@ def _reply_outcomes(
             )
         )
     pending = result.context.pending_action
-    if pending is not None and not has_active_pending:
+    created_pending = any(item.status == "pending" for item in result.outcomes)
+    resolved_pending = any(
+        item.effect_key == "pending.resolved" for item in result.executed
+    )
+    if (
+        pending is not None
+        and (created_pending or resolved_pending)
+        and not has_active_pending
+    ):
         projected.append(
             ReplyOutcomeV5(
                 act_id=pending.act_id,
