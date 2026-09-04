@@ -102,6 +102,26 @@ class ConversationTurnV5:
             interpretation=interpretation,
         )
 
+    def resolve_pending(
+        self,
+        *,
+        act_id: str,
+        context: TurnContextV5,
+        pending_ref: str,
+        decision: str,
+        correlation_id: UUID,
+        idempotency_key: str,
+    ) -> ExecutedActV5:
+        """Resolve exactly the context-authorized queue head."""
+        return self.pending.resolve(
+            act_id=act_id,
+            context=context,
+            pending_ref=pending_ref,
+            decision=decision,
+            correlation_id=correlation_id,
+            idempotency_key=idempotency_key,
+        )
+
     def process(
         self,
         *,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import text
@@ -152,6 +152,7 @@ class SearchProfileUpdateProposal(IdentityAuditMixin, Base):
         Index("ix_proposals_session", "session_id"),
         Index("ix_proposals_session_queue", "session_id", "state", "queue_ordinal"),
         Index("ix_proposals_superseded_by", "superseded_by_proposal_id"),
+        CheckConstraint("queue_ordinal >= 1", name="ck_proposals_queue_ordinal_positive"),
     )
 
     session_id: Mapped[UUID] = mapped_column(
@@ -189,5 +190,5 @@ class SearchProfileUpdateProposal(IdentityAuditMixin, Base):
         ForeignKey("search_profile_update_proposals.id", ondelete="SET NULL"),
         nullable=True,
     )
-    source_act_id: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    queue_ordinal: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_act_id: Mapped[str] = mapped_column(String(120), nullable=False, default="legacy")
+    queue_ordinal: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

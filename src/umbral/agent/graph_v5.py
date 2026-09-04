@@ -111,6 +111,17 @@ class TurnServiceLikeV5(Protocol):
         plan: TurnPlanV5,
     ) -> ConversationTurnResultV5: ...
 
+    def resolve_pending(
+        self,
+        *,
+        act_id: str,
+        context: TurnContextV5,
+        pending_ref: str,
+        decision: str,
+        correlation_id: UUID,
+        idempotency_key: str,
+    ) -> ExecutedActV5: ...
+
 
 class ReplyComposerV5Like(Protocol):
     def compose(self, result: ConversationTurnResultV5) -> ReplyV5: ...
@@ -214,8 +225,15 @@ def build_graph_v5(
             interpretation=interpretation,
             plan=plan,
         )
+        context_after_execution = result.context
+        if any(outcome.status == "pending" for outcome in result.outcomes):
+            context_after_execution = deps.turn.load_context(
+                user_id=ids["user_id"],
+                session_id=ids["session_id"],
+                correlation_id=ids["correlation_id"],
+            )
         return {
-            "context": _context_to_dict(result.context),
+            "context": _context_to_dict(context_after_execution),
             "interpretation": (
                 _interpretation_to_dict(result.interpretation)
                 if result.interpretation is not None
@@ -241,16 +259,44 @@ def build_graph_v5(
     def _require_confirmation(
         state: ConversationGraphStateV5, config: RunnableConfig
     ) -> dict[str, object]:
+        context = _context_from_dict(state.get("context") or {})
+        pending = context.pending_action
+        if pending is None:
+            return {}
         payload: dict[str, object] = {
             "type": "conversation_confirmation",
-            "outcomes": [
-                dict(item)
-                for item in (state.get("outcomes") or [])
-                if item.get("status") == "pending"
-            ],
+            "pending_ref": pending.pending_ref,
+            "act_id": pending.act_id,
+            "ordinal": pending.ordinal,
+            "total": pending.total,
         }
         decision = interrupt(payload)
         return {"confirmation_payload": {"decision": decision}}
+
+    def _resolve_pending(
+        state: ConversationGraphStateV5, config: RunnableConfig
+    ) -> dict[str, object]:
+        context = _context_from_dict(state.get("context") or {})
+        pending = context.pending_action
+        raw = cast(Mapping[str, object], state.get("confirmation_payload") or {})
+        decision = raw.get("decision")
+        if isinstance(decision, Mapping):
+            decision = decision.get("decision")
+        if pending is None or decision not in {"approve", "reject"}:
+            return {"failure_stage": "execution_failure"}
+        ids = _ids(config)
+        deps.turn.resolve_pending(
+            act_id=f"resolve:{pending.act_id}:{pending.ordinal}",
+            context=context,
+            pending_ref=pending.pending_ref,
+            decision=cast(str, decision),
+            correlation_id=ids["correlation_id"],
+            idempotency_key=(
+                f"conversation-v5:{ids['session_id']}:{state['message_id']}:"
+                f"resolve:{pending.ordinal}"
+            ),
+        )
+        return {}
 
     def _compose_reply(
         state: ConversationGraphStateV5, config: RunnableConfig
@@ -272,6 +318,10 @@ def build_graph_v5(
             return "require_confirmation"
         return "compose_reply"
 
+    def _route_after_reload(state: ConversationGraphStateV5) -> str:
+        context = _context_from_dict(state.get("context") or {})
+        return "require_confirmation" if context.pending_action is not None else "compose_reply"
+
     builder = StateGraph(ConversationGraphStateV5)
     builder.add_node("load_context", _load_context)
     builder.add_node("interpret_turn", _interpret_turn)
@@ -279,6 +329,7 @@ def build_graph_v5(
     builder.add_node("execute_segment", _execute_segment)
     builder.add_node("reload_context", _reload_context)
     builder.add_node("require_confirmation", _require_confirmation)
+    builder.add_node("resolve_pending", _resolve_pending)
     builder.add_node("compose_reply", _compose_reply)
     builder.add_node("persist_turn", _persist_turn)
     builder.add_edge(START, "load_context")
@@ -294,8 +345,13 @@ def build_graph_v5(
             "compose_reply": "compose_reply",
         },
     )
-    builder.add_edge("reload_context", "plan_segment")
-    builder.add_edge("require_confirmation", "reload_context")
+    builder.add_conditional_edges(
+        "reload_context",
+        _route_after_reload,
+        {"require_confirmation": "require_confirmation", "compose_reply": "compose_reply"},
+    )
+    builder.add_edge("require_confirmation", "resolve_pending")
+    builder.add_edge("resolve_pending", "reload_context")
     builder.add_edge("compose_reply", "persist_turn")
     builder.add_edge("persist_turn", END)
     compiled = builder.compile(checkpointer=cast(Any, checkpointer))

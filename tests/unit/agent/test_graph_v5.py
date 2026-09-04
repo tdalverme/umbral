@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -21,6 +22,7 @@ from umbral.application.conversation.v5.contracts import (
     ConversationTurnResultV5,
     EvidenceSpan,
     ExpressDesire,
+    PendingActionV5,
     RecordDesireCommand,
     TurnContextV5,
     TurnInterpretationV5,
@@ -114,11 +116,16 @@ class _FakeTurn:
         self.execute_calls = 0
         self.load_calls = 0
         self.plans: list[TurnPlanV5] = []
+        self.resolutions: list[tuple[str, str]] = []
 
     def load_context(
         self, *, user_id: UUID, session_id: UUID, correlation_id: UUID
     ) -> TurnContextV5:
         self.load_calls += 1
+        if self.resolutions:
+            return _context()
+        if self.execute_calls and self.result.context.pending_action is not None:
+            return self.result.context
         return _context()
 
     def interpret(
@@ -157,6 +164,13 @@ class _FakeTurn:
             return self.result
         return self.result_after_resume
 
+    def resolve_pending(
+        self, *, act_id: str, context: TurnContextV5, pending_ref: str,
+        decision: str, correlation_id: UUID, idempotency_key: str,
+    ) -> object:
+        self.resolutions.append((pending_ref, decision))
+        return object()
+
 
 class _FakeReply:
     def __init__(self, reply: ReplyV5) -> None:
@@ -179,7 +193,12 @@ def _applied_result() -> ConversationTurnResultV5:
 
 def _pending_result() -> ConversationTurnResultV5:
     return ConversationTurnResultV5(
-        context=_context(),
+        context=replace(
+            _context(),
+            pending_action=PendingActionV5(
+                pending_ref="pending:head", act_id="a1", ordinal=1, total=1
+            ),
+        ),
         interpretation=_interpretation(),
         plan=_plan(),
         executed=(),
@@ -286,4 +305,23 @@ def test_graph_interrupts_on_pending_and_resumes() -> None:
     )
     assert resumed.get("confirmation_payload") is not None
     assert resumed["reply"] is not None
-    assert turn.execute_calls == 2
+    assert turn.execute_calls == 1
+
+
+def test_graph_resume_resolves_only_the_context_queue_head() -> None:
+    pending = PendingActionV5(
+        pending_ref="pending:head", act_id="zones", ordinal=1, total=2
+    )
+    result = _pending_result()
+    result = ConversationTurnResultV5(
+        context=replace(_context(), pending_action=pending),
+        interpretation=result.interpretation, plan=result.plan,
+        executed=result.executed, outcomes=result.outcomes,
+    )
+    turn = _FakeTurn(result, _applied_result())
+    graph = _graph(turn)
+
+    graph.invoke(_state(), _config())
+    graph.invoke(Command(resume={"decision": "reject"}), _config())
+
+    assert turn.resolutions == [("pending:head", "reject")]

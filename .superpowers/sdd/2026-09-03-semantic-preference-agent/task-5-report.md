@@ -32,3 +32,9 @@
 ## Concerns
 
 The required aggregate suite was invoked. Its unit and non-container chat tests passed, but six `test_session_repo.py` integration tests could not start because Docker Desktop's `//./pipe/docker_engine` was unavailable. This is an environment prerequisite, not an assertion failure.
+
+## Review round 1
+
+- The graph now interrupts with only the durable queue head and, on resume, calls the V5 pending resolver with the explicit approve/reject decision before reloading context. A remaining head causes the next interrupt; no old message is reinterpreted.
+- Migration 0023 now backfills nonempty legacy act ids and positive pending ordinals, with a database check constraint.
+- Focused verification: `tests/unit/agent/test_graph_v5.py`, `tests/contract/test_agent_contracts_v5.py`, and `tests/unit/infrastructure/test_db_model_contract.py` — 30 passed.
