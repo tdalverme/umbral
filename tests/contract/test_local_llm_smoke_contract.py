@@ -10,8 +10,8 @@ def test_local_llm_smoke_builds_the_v5_interpreter_contract() -> None:
         Path(__file__).resolve().parents[2] / "scripts" / "local-llm-smoke.ps1"
     ).read_text(encoding="utf-8")
 
-    assert "InterpretationCompilerV5" in script
-    assert "TurnContextV5" in script
+    assert "InterpretationCompiler" in script
+    assert "TurnContext" in script
     assert "load_concepts_seed" in script
     assert "concepts-seed-v1.json" not in script
     assert "preference_interpreter" not in script

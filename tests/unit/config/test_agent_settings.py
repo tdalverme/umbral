@@ -1,4 +1,4 @@
-"""Agent/chat settings registration and defaults (T005, R-08)."""
+"""Agent/chat settings registration and defaults for the single stack."""
 
 from __future__ import annotations
 
@@ -25,34 +25,16 @@ def test_agent_settings_have_safe_defaults() -> None:
     assert settings.agent_model_name == "local-fake"
     assert settings.agent_model_timeout_seconds == 30.0
     assert settings.agent_model_max_retries == 2
-    assert settings.agent_state_schema_version == 1
-    assert settings.agent_graph_topology_version == 1
     assert settings.agent_checkpoint_retention_days == 30
     assert settings.agent_strict_msgpack is True
     assert settings.chat_message_max_length == 4000
-    assert settings.agent_tools_state_schema_version == 2
-    assert settings.agent_tools_topology_version == 2
-    assert settings.agent_tools_contract_version == "v1"
-    assert settings.agent_tools_max_calls_per_turn == 5
-    assert settings.agent_tools_timeout_seconds == 10.0
-    assert settings.agent_tools_output_max_items == 20
     assert settings.agent_proposal_ttl_hours == 24
-    assert settings.agent_chat_state_schema_version == 3
-    assert settings.agent_chat_topology_version == 3
-    assert settings.agent_intent_schema_version == "intent-v3"
-    assert settings.agent_intent_prompt_version == "agent-intent-v1"
-    assert settings.agent_reply_prompt_version == "agent-reply-v2"
-    assert settings.agent_clarification_min_confidence == 0.6
-    assert settings.agent_clarification_max_rounds == 2
-    assert settings.agent_reply_max_refs == 10
-    assert settings.agent_reply_chunk_words == 8
     assert settings.agent_evals_dataset_version == "conversations-golden-v1"
     assert settings.agent_evals_releases_version == "graph-releases-v1"
     assert settings.agent_evals_price_table_version == "price-table-v1"
     assert settings.agent_evals_gate_enabled is True
     assert settings.agent_evals_cost_threshold_pct == 20.0
     assert settings.agent_evals_latency_threshold_ms == 1500
-    assert settings.agent_graph_release_id == "graph-release-001"
     assert settings.agent_budget_window_hours == 24
     assert settings.agent_budget_session_token_cap == 150000
     assert settings.agent_budget_user_token_cap == 500000
@@ -62,33 +44,47 @@ def test_agent_settings_have_safe_defaults() -> None:
     assert settings.agent_budget_warning_ratio == 0.8
 
 
+def test_agent_generation_settings_are_no_longer_accepted() -> None:
+    for key in (
+        "AGENT_STATE_SCHEMA_VERSION",
+        "AGENT_GRAPH_TOPOLOGY_VERSION",
+        "AGENT_PROMPT_VERSION",
+        "AGENT_REPLY_SCHEMA_VERSION",
+        "AGENT_TOOLS_STATE_SCHEMA_VERSION",
+        "AGENT_TOOLS_TOPOLOGY_VERSION",
+        "AGENT_TOOLS_CONTRACT_VERSION",
+        "AGENT_TOOLS_MAX_CALLS_PER_TURN",
+        "AGENT_CHAT_STATE_SCHEMA_VERSION",
+        "AGENT_CHAT_TOPOLOGY_VERSION",
+        "AGENT_INTENT_SCHEMA_VERSION",
+        "AGENT_INTENT_PROMPT_VERSION",
+        "AGENT_REPLY_PROMPT_VERSION",
+        "AGENT_CLARIFICATION_MIN_CONFIDENCE",
+        "AGENT_CLARIFICATION_MAX_ROUNDS",
+        "AGENT_REPLY_MAX_REFS",
+        "AGENT_REPLY_CHUNK_WORDS",
+        "AGENT_GRAPH_RELEASE_ID",
+        "AGENT_V5_ACTIVATION_EVIDENCE",
+        "COPILOT_ENABLED",
+    ):
+        values = dict(_LOCAL_BASE)
+        values[key] = "x"
+        with pytest.raises(SettingsValidationError) as excinfo:
+            Settings.from_environment(values)
+        assert excinfo.value.rule_code == "CONFIG_UNKNOWN_SETTING"
+
+
 def test_agent_tools_overrides_are_accepted() -> None:
     values = dict(_LOCAL_BASE)
     values.update(
         {
-            "AGENT_TOOLS_STATE_SCHEMA_VERSION": "3",
-            "AGENT_TOOLS_TOPOLOGY_VERSION": "3",
-            "AGENT_TOOLS_CONTRACT_VERSION": "v2",
-            "AGENT_TOOLS_MAX_CALLS_PER_TURN": "10",
-            "AGENT_TOOLS_TIMEOUT_SECONDS": "5",
-            "AGENT_TOOLS_OUTPUT_MAX_ITEMS": "50",
             "AGENT_PROPOSAL_TTL_HOURS": "48",
-            "AGENT_CHAT_STATE_SCHEMA_VERSION": "3",
-            "AGENT_CHAT_TOPOLOGY_VERSION": "3",
-            "AGENT_INTENT_SCHEMA_VERSION": "intent-v4",
-            "AGENT_INTENT_PROMPT_VERSION": "agent-intent-v2",
-            "AGENT_REPLY_PROMPT_VERSION": "agent-reply-v3",
-            "AGENT_CLARIFICATION_MIN_CONFIDENCE": "0.8",
-            "AGENT_CLARIFICATION_MAX_ROUNDS": "3",
-            "AGENT_REPLY_MAX_REFS": "5",
-            "AGENT_REPLY_CHUNK_WORDS": "4",
             "AGENT_EVALS_DATASET_VERSION": "conversations-golden-v2",
             "AGENT_EVALS_RELEASES_VERSION": "graph-releases-v2",
             "AGENT_EVALS_PRICE_TABLE_VERSION": "price-table-v2",
             "AGENT_EVALS_GATE_ENABLED": "false",
             "AGENT_EVALS_COST_THRESHOLD_PCT": "30",
             "AGENT_EVALS_LATENCY_THRESHOLD_MS": "3000",
-            "AGENT_GRAPH_RELEASE_ID": "graph-release-002",
             "AGENT_BUDGET_WINDOW_HOURS": "48",
             "AGENT_BUDGET_SESSION_TOKEN_CAP": "100000",
             "AGENT_BUDGET_USER_TOKEN_CAP": "300000",
@@ -99,29 +95,13 @@ def test_agent_tools_overrides_are_accepted() -> None:
         }
     )
     settings = Settings.from_environment(values)
-    assert settings.agent_tools_state_schema_version == 3
-    assert settings.agent_tools_topology_version == 3
-    assert settings.agent_tools_contract_version == "v2"
-    assert settings.agent_tools_max_calls_per_turn == 10
-    assert settings.agent_tools_timeout_seconds == 5.0
-    assert settings.agent_tools_output_max_items == 50
     assert settings.agent_proposal_ttl_hours == 48
-    assert settings.agent_chat_state_schema_version == 3
-    assert settings.agent_chat_topology_version == 3
-    assert settings.agent_intent_schema_version == "intent-v4"
-    assert settings.agent_intent_prompt_version == "agent-intent-v2"
-    assert settings.agent_reply_prompt_version == "agent-reply-v3"
-    assert settings.agent_clarification_min_confidence == 0.8
-    assert settings.agent_clarification_max_rounds == 3
-    assert settings.agent_reply_max_refs == 5
-    assert settings.agent_reply_chunk_words == 4
     assert settings.agent_evals_dataset_version == "conversations-golden-v2"
     assert settings.agent_evals_releases_version == "graph-releases-v2"
     assert settings.agent_evals_price_table_version == "price-table-v2"
     assert settings.agent_evals_gate_enabled is False
     assert settings.agent_evals_cost_threshold_pct == 30.0
     assert settings.agent_evals_latency_threshold_ms == 3000
-    assert settings.agent_graph_release_id == "graph-release-002"
     assert settings.agent_budget_window_hours == 48
     assert settings.agent_budget_session_token_cap == 100000
     assert settings.agent_budget_user_token_cap == 300000

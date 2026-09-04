@@ -256,18 +256,6 @@ class Settings(BaseSettings):
         validation_alias="AGENT_MANAGED_API_KEY",
         repr=False,
     )
-    agent_state_schema_version: int = Field(
-        default=1, validation_alias="AGENT_STATE_SCHEMA_VERSION"
-    )
-    agent_graph_topology_version: int = Field(
-        default=1, validation_alias="AGENT_GRAPH_TOPOLOGY_VERSION"
-    )
-    agent_prompt_version: str = Field(
-        default="agent-chat-v1", validation_alias="AGENT_PROMPT_VERSION"
-    )
-    agent_reply_schema_version: str = Field(
-        default="reply-v1", validation_alias="AGENT_REPLY_SCHEMA_VERSION"
-    )
     agent_checkpoint_retention_days: int = Field(
         default=30, validation_alias="AGENT_CHECKPOINT_RETENTION_DAYS"
     )
@@ -277,53 +265,8 @@ class Settings(BaseSettings):
     chat_message_max_length: int = Field(
         default=4000, validation_alias="CHAT_MESSAGE_MAX_LENGTH"
     )
-    agent_tools_state_schema_version: int = Field(
-        default=2, validation_alias="AGENT_TOOLS_STATE_SCHEMA_VERSION"
-    )
-    agent_tools_topology_version: int = Field(
-        default=2, validation_alias="AGENT_TOOLS_TOPOLOGY_VERSION"
-    )
-    agent_tools_contract_version: str = Field(
-        default="v1", validation_alias="AGENT_TOOLS_CONTRACT_VERSION"
-    )
-    agent_tools_max_calls_per_turn: int = Field(
-        default=5, validation_alias="AGENT_TOOLS_MAX_CALLS_PER_TURN"
-    )
-    agent_tools_timeout_seconds: float = Field(
-        default=10.0, validation_alias="AGENT_TOOLS_TIMEOUT_SECONDS"
-    )
-    agent_tools_output_max_items: int = Field(
-        default=20, validation_alias="AGENT_TOOLS_OUTPUT_MAX_ITEMS"
-    )
     agent_proposal_ttl_hours: int = Field(
         default=24, validation_alias="AGENT_PROPOSAL_TTL_HOURS"
-    )
-    agent_chat_state_schema_version: int = Field(
-        default=3, validation_alias="AGENT_CHAT_STATE_SCHEMA_VERSION"
-    )
-    agent_chat_topology_version: int = Field(
-        default=3, validation_alias="AGENT_CHAT_TOPOLOGY_VERSION"
-    )
-    agent_intent_schema_version: str = Field(
-        default="intent-v3", validation_alias="AGENT_INTENT_SCHEMA_VERSION"
-    )
-    agent_intent_prompt_version: str = Field(
-        default="agent-intent-v1", validation_alias="AGENT_INTENT_PROMPT_VERSION"
-    )
-    agent_reply_prompt_version: str = Field(
-        default="agent-reply-v2", validation_alias="AGENT_REPLY_PROMPT_VERSION"
-    )
-    agent_clarification_min_confidence: float = Field(
-        default=0.6, validation_alias="AGENT_CLARIFICATION_MIN_CONFIDENCE"
-    )
-    agent_clarification_max_rounds: int = Field(
-        default=2, validation_alias="AGENT_CLARIFICATION_MAX_ROUNDS"
-    )
-    agent_reply_max_refs: int = Field(
-        default=10, validation_alias="AGENT_REPLY_MAX_REFS"
-    )
-    agent_reply_chunk_words: int = Field(
-        default=8, validation_alias="AGENT_REPLY_CHUNK_WORDS"
     )
     agent_evals_dataset_version: str = Field(
         default="conversations-golden-v1",
@@ -345,15 +288,6 @@ class Settings(BaseSettings):
     )
     agent_evals_latency_threshold_ms: int = Field(
         default=1500, validation_alias="AGENT_EVALS_LATENCY_THRESHOLD_MS"
-    )
-    agent_graph_release_id: str = Field(
-        default="graph-release-005", validation_alias="AGENT_GRAPH_RELEASE_ID"
-    )
-    agent_v5_activation_evidence: str = Field(
-        default="", validation_alias="AGENT_V5_ACTIVATION_EVIDENCE"
-    )
-    copilot_enabled: bool = Field(
-        default=False, validation_alias="COPILOT_ENABLED"
     )
     agent_budget_window_hours: int = Field(
         default=24, validation_alias="AGENT_BUDGET_WINDOW_HOURS"
@@ -488,37 +422,16 @@ class Settings(BaseSettings):
             "AGENT_MODEL_MAX_RETRIES",
             "AGENT_MANAGED_ENDPOINT",
             "AGENT_MANAGED_API_KEY",
-            "AGENT_STATE_SCHEMA_VERSION",
-            "AGENT_GRAPH_TOPOLOGY_VERSION",
-            "AGENT_PROMPT_VERSION",
-            "AGENT_REPLY_SCHEMA_VERSION",
             "AGENT_CHECKPOINT_RETENTION_DAYS",
             "AGENT_STRICT_MSGPACK",
             "CHAT_MESSAGE_MAX_LENGTH",
-            "AGENT_TOOLS_STATE_SCHEMA_VERSION",
-            "AGENT_TOOLS_TOPOLOGY_VERSION",
-            "AGENT_TOOLS_CONTRACT_VERSION",
-            "AGENT_TOOLS_MAX_CALLS_PER_TURN",
-            "AGENT_TOOLS_TIMEOUT_SECONDS",
-            "AGENT_TOOLS_OUTPUT_MAX_ITEMS",
             "AGENT_PROPOSAL_TTL_HOURS",
-            "AGENT_CHAT_STATE_SCHEMA_VERSION",
-            "AGENT_CHAT_TOPOLOGY_VERSION",
-            "AGENT_INTENT_SCHEMA_VERSION",
-            "AGENT_INTENT_PROMPT_VERSION",
-            "AGENT_REPLY_PROMPT_VERSION",
-            "AGENT_CLARIFICATION_MIN_CONFIDENCE",
-            "AGENT_CLARIFICATION_MAX_ROUNDS",
-            "AGENT_REPLY_MAX_REFS",
-            "AGENT_REPLY_CHUNK_WORDS",
             "AGENT_EVALS_DATASET_VERSION",
             "AGENT_EVALS_RELEASES_VERSION",
             "AGENT_EVALS_PRICE_TABLE_VERSION",
             "AGENT_EVALS_GATE_ENABLED",
             "AGENT_EVALS_COST_THRESHOLD_PCT",
             "AGENT_EVALS_LATENCY_THRESHOLD_MS",
-            "AGENT_GRAPH_RELEASE_ID",
-            "AGENT_V5_ACTIVATION_EVIDENCE",
             "AGENT_BUDGET_WINDOW_HOURS",
             "AGENT_BUDGET_SESSION_TOKEN_CAP",
             "AGENT_BUDGET_USER_TOKEN_CAP",

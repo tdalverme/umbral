@@ -1,321 +1,247 @@
-"""Deterministic turn planning for the conversational copilot.
+"""Pure, deterministic V5 policy: authorization and planning.
 
-Turns acts into planned effects and routing decisions with no model authority:
-soft, additive and reversible effects apply immediately; material or hard
-changes to existing filters require a single confirmation (FR-011..FR-013,
-FR-022, FR-024). This module is pure and never performs I/O.
+The policy consumes typed acts from ``TurnInterpretation`` and returns one
+decision per act plus the planned command payloads. It never inspects generic
+dictionaries, never guesses targets, and produces no durable commands for
+``Query`` or ``UnsupportedRequest``.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from uuid import UUID
 
 from umbral.application.conversation.contracts import (
+    ActDecision,
+    ClearFilter,
+    ClearFilterCommand,
+    Command,
     ConversationAct,
-    ConversationContradiction,
-    ConversationTurnContext,
-    RoutingDecision,
-    TurnEffect,
+    CreateRadar,
+    CreateRadarCommand,
+    ExpressDesire,
+    Query,
+    RecordDesireCommand,
+    RecordFeedback,
+    RecordFeedbackCommand,
+    ResolvePending,
+    ReviseDesire,
+    ReviseDesireCommand,
+    SetFilter,
+    SetFilterCommand,
+    TurnContext,
     TurnInterpretation,
-    is_known_act_kind,
+    TurnPlan,
+    UnsupportedRequest,
+    WithdrawDesire,
+    WithdrawDesireCommand,
 )
 
-# Effect keys published by the reply schema v4 (status applied/pending/...).
-EFFECT_RADAR_CREATED = "radar.created"
-EFFECT_FILTER_SET = "filter.set"
-EFFECT_FILTER_CLEARED = "filter.cleared"
-EFFECT_PREFERENCE_REMEMBERED = "preference.remembered"
-EFFECT_PREFERENCE_REVISED = "preference.revised"
-EFFECT_PREFERENCE_WITHDRAWN = "preference.withdrawn"
-EFFECT_FEEDBACK_RECORDED = "feedback.recorded"
-EFFECT_PENDING_RESOLVED = "pending.resolved"
-EFFECT_QUERY = "query"
-
-
-@dataclass(frozen=True, slots=True)
-class TurnPlan:
-    """Planned effects, routing decision and optional single question."""
-
-    effects: tuple[TurnEffect, ...]
-    routing: RoutingDecision
-    question: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class _ActPlan:
-    effects: tuple[TurnEffect, ...] = ()
-    refresh_required: bool = False
-    confirmation_required: bool = False
-    question: str | None = None
-    applied_filters: Mapping[str, Mapping[str, object]] | None = None
+_MUTATION_KINDS = frozenset(
+    {
+        "create_radar",
+        "set_filter",
+        "clear_filter",
+        "express_desire",
+        "revise_desire",
+        "withdraw_desire",
+        "record_feedback",
+        "resolve_pending",
+    }
+)
 
 
 def plan_turn(
     *,
+    user_message: str,
+    context: TurnContext,
     interpretation: TurnInterpretation,
-    context: ConversationTurnContext,
 ) -> TurnPlan:
-    """Plan effects deterministically from validated acts.
-
-    The planner never asks the model how to route; every branch below is fixed.
-    """
-    effects: list[TurnEffect] = []
-    refresh_required = False
-    confirmation_required = False
-    question: str | None = None
-    conflicts: list[str] = []
-
-    seen_filters: dict[str, Mapping[str, object]] = dict(context.radar_filters or {})
+    """Plan every typed act into exactly one deterministic decision."""
+    decisions: list[ActDecision] = []
+    commands: list[Command] = []
     for act in interpretation.acts:
-        plan = _plan_act(
-            act=act,
-            context=context,
-            seen_filters=seen_filters,
-            conflicts=conflicts,
-        )
-        effects.extend(plan.effects)
-        refresh_required = refresh_required or plan.refresh_required
-        confirmation_required = confirmation_required or plan.confirmation_required
-        if plan.question is not None and question is None:
-            question = plan.question
-        if plan.applied_filters is not None:
-            seen_filters.update(plan.applied_filters)
+        decision, command = _decide(act, user_message, context, interpretation.acts)
+        decisions.append(decision)
+        if command is not None:
+            commands.append(command)
+    return TurnPlan(decisions=tuple(decisions), commands=tuple(commands))
 
-    if conflicts:
-        raise ConversationContradiction(",".join(conflicts))
 
-    return TurnPlan(
-        effects=tuple(effects),
-        routing=RoutingDecision(
-            refresh_required=refresh_required,
-            confirmation_required=confirmation_required,
-        ),
-        question=question,
+def _decide(
+    act: ConversationAct,
+    user_message: str,
+    context: TurnContext,
+    acts: tuple[ConversationAct, ...],
+) -> tuple[ActDecision, Command | None]:
+    if act.kind not in context.allowed_capabilities:
+        return _rejected(act.act_id, "capability.not_allowed"), None
+    if _has_untrusted_evidence(act, context):
+        return _rejected(act.act_id, "act.untrusted_evidence"), None
+    if not _has_explicit_evidence(act, user_message):
+        return _rejected(act.act_id, "act.missing_evidence"), None
+    match act:
+        case Query():
+            if _has_mutation(acts):
+                return (
+                    ActDecision(
+                        act.act_id,
+                        "needs_clarification",
+                        "act.query_with_mutation",
+                    ),
+                    None,
+                )
+            return _applied(act.act_id), None
+        case UnsupportedRequest():
+            return _rejected(act.act_id, "request.unsupported"), None
+        case CreateRadar():
+            if context.active_radar_ref is not None:
+                return _rejected(act.act_id, "radar.already_bound"), None
+            return (
+                _applied(act.act_id),
+                CreateRadarCommand(act_id=act.act_id, name=act.name),
+            )
+        case SetFilter():
+            if context.active_radar_ref is None:
+                return _rejected(act.act_id, "radar.not_bound"), None
+            command = SetFilterCommand(
+                act_id=act.act_id,
+                filter_key=act.filter_key,
+                value=act.value,
+                expected_profile_version=context.active_radar_version,
+            )
+            return _pending(act.act_id, "filter.requires_confirmation"), command
+        case ClearFilter():
+            if context.active_radar_ref is None:
+                return _rejected(act.act_id, "radar.not_bound"), None
+            if _current_filter(context, act.filter_key) is None:
+                return _rejected(act.act_id, "filter.not_active"), None
+            clear_command = ClearFilterCommand(
+                act_id=act.act_id,
+                filter_key=act.filter_key,
+                expected_profile_version=context.active_radar_version,
+            )
+            return _pending(act.act_id, "filter.requires_confirmation"), clear_command
+        case ExpressDesire():
+            return (
+                _applied(act.act_id),
+                RecordDesireCommand(
+                    act_id=act.act_id,
+                    raw_text=act.raw_text,
+                    subject_ref=act.subject_ref,
+                    concept_links=act.concept_links,
+                ),
+            )
+        case ReviseDesire():
+            target = _resolve_desire_ref(act.desire_ref, context)
+            if target is None:
+                return _rejected(act.act_id, "desire.not_active"), None
+            if target == _AMBIGUOUS:
+                return (
+                    ActDecision(
+                        act.act_id, "needs_clarification", "desire.ambiguous"
+                    ),
+                    None,
+                )
+            return (
+                _applied(act.act_id),
+                ReviseDesireCommand(
+                    act_id=act.act_id,
+                    desire_ref=target,
+                    raw_text=act.raw_text,
+                    concept_links=act.concept_links,
+                ),
+            )
+        case WithdrawDesire():
+            target = _resolve_desire_ref(act.desire_ref, context)
+            if target is None:
+                return _rejected(act.act_id, "desire.not_active"), None
+            if target == _AMBIGUOUS:
+                return (
+                    ActDecision(
+                        act.act_id, "needs_clarification", "desire.ambiguous"
+                    ),
+                    None,
+                )
+            return (
+                _applied(act.act_id),
+                WithdrawDesireCommand(act_id=act.act_id, desire_ref=target),
+            )
+        case RecordFeedback():
+            if not context.authorizes(act.listing_ref):
+                return _rejected(act.act_id, "feedback.listing_not_authorized"), None
+            return (
+                _applied(act.act_id),
+                RecordFeedbackCommand(
+                    act_id=act.act_id,
+                    listing_id=UUID(act.listing_ref.removeprefix("listing:")),
+                    feedback_type=act.feedback_type,
+                    raw_text=act.raw_text,
+                ),
+            )
+        case ResolvePending():
+            if not context.authorizes(act.pending_ref):
+                return _rejected(act.act_id, "pending.not_found"), None
+            return _applied(act.act_id), None
+    return _rejected(act.act_id, "act.unknown_kind"), None
+
+
+def _applied(act_id: str) -> ActDecision:
+    return ActDecision(act_id, "applied")
+
+
+def _rejected(act_id: str, reason_code: str) -> ActDecision:
+    return ActDecision(act_id, "rejected", reason_code)
+
+
+def _pending(act_id: str, reason_code: str) -> ActDecision:
+    return ActDecision(act_id, "pending", reason_code)
+
+
+def _has_untrusted_evidence(act: ConversationAct, context: TurnContext) -> bool:
+    untrusted = tuple(
+        item.text for item in context.untrusted_content if item.text
+    )
+    return any(
+        span.text == content or content in span.text
+        for span in act.evidence_spans
+        for content in untrusted
     )
 
 
-def _plan_act(
-    *,
-    act: ConversationAct,
-    context: ConversationTurnContext,
-    seen_filters: Mapping[str, Mapping[str, object]],
-    conflicts: list[str],
-) -> _ActPlan:
-    kind = act.kind
-    if not is_known_act_kind(kind):
-        conflicts.append(f"act.unknown_kind:{kind}")
-        return _ActPlan(
-            effects=(
-                TurnEffect(
-                    effect_key="act.rejected",
-                    act_id=act.act_id,
-                    status="rejected",
-                    reason_code="act.unknown_kind",
-                ),
-            )
-        )
-    if kind == "resolve_pending":
-        if context.pending_action is None:
-            return _ActPlan(
-                effects=(
-                    TurnEffect(
-                        effect_key="pending.resolved",
-                        act_id=act.act_id,
-                        status="rejected",
-                        reason_code="pending.action_not_found",
-                    ),
-                )
-            )
-        return _ActPlan(
-            effects=(
-                TurnEffect(
-                    effect_key=EFFECT_PENDING_RESOLVED,
-                    act_id=act.act_id,
-                    status="applied",
-                    detail={
-                        "action_id": context.pending_action.action_id,
-                        "kind": context.pending_action.kind,
-                    },
-                ),
-            ),
-            refresh_required=True,
-        )
-    if kind == "create_radar":
-        if context.verified_profile_id is not None:
-            return _ActPlan(
-                effects=(
-                    TurnEffect(
-                        effect_key=EFFECT_RADAR_CREATED,
-                        act_id=act.act_id,
-                        status="rejected",
-                        reason_code="radar.already_bound",
-                    ),
-                ),
-                refresh_required=False,
-            )
-        return _ActPlan(
-            effects=(
-                TurnEffect(
-                    effect_key=EFFECT_RADAR_CREATED,
-                    act_id=act.act_id,
-                    status="applied",
-                    object_type="radar",
-                ),
-            ),
-            refresh_required=True,
-        )
-    if kind == "set_filter":
-        key = str(act.payload.get("key") or "")
-        value = act.payload.get("value")
-        if not key or value is None:
-            return _ActPlan(
-                effects=(
-                    TurnEffect(
-                        effect_key=EFFECT_FILTER_SET,
-                        act_id=act.act_id,
-                        status="rejected",
-                        reason_code="filter.missing_value",
-                    ),
-                )
-            )
-        existing = seen_filters.get(key)
-        if existing is None:
-            return _ActPlan(
-                effects=(
-                    TurnEffect(
-                        effect_key=EFFECT_FILTER_SET,
-                        act_id=act.act_id,
-                        status="applied",
-                        object_type="radar",
-                        detail={"key": key, "value": value},
-                    ),
-                ),
-                refresh_required=True,
-                applied_filters={key: {"value": value}},
-            )
-        if existing.get("value") == value:
-            return _ActPlan(
-                effects=(
-                    TurnEffect(
-                        effect_key=EFFECT_FILTER_SET,
-                        act_id=act.act_id,
-                        status="applied",
-                        object_type="radar",
-                        detail={"key": key, "value": value},
-                    ),
-                ),
-                # Same value: no material change, but refresh reflects intent.
-                refresh_required=False,
-            )
-        # Changing an existing hard filter is material (FR-013).
-        return _ActPlan(
-            effects=(
-                TurnEffect(
-                    effect_key=EFFECT_FILTER_SET,
-                    act_id=act.act_id,
-                    status="pending",
-                    object_type="radar",
-                    detail={"key": key, "value": value},
-                    reason_code="filter.changes_existing_hard_filter",
-                ),
-            ),
-            confirmation_required=True,
-        )
-    if kind == "clear_filter":
-        key = str(act.payload.get("key") or "")
-        if not key:
-            return _ActPlan(
-                effects=(
-                    TurnEffect(
-                        effect_key=EFFECT_FILTER_CLEARED,
-                        act_id=act.act_id,
-                        status="rejected",
-                        reason_code="filter.missing_key",
-                    ),
-                )
-            )
-        if key not in seen_filters:
-            return _ActPlan(
-                effects=(
-                    TurnEffect(
-                        effect_key=EFFECT_FILTER_CLEARED,
-                        act_id=act.act_id,
-                        status="rejected",
-                        reason_code="filter.not_active",
-                    ),
-                )
-            )
-        # Removing an active hard filter is material (FR-013).
-        return _ActPlan(
-            effects=(
-                TurnEffect(
-                    effect_key=EFFECT_FILTER_CLEARED,
-                    act_id=act.act_id,
-                    status="pending",
-                    object_type="radar",
-                    detail={"key": key},
-                    reason_code="filter.removes_hard_filter",
-                ),
-            ),
-            confirmation_required=True,
-        )
-    if kind in {"express_preference", "revise_preference", "withdraw_preference"}:
-        subject_key = str(act.payload.get("subject_key") or "")
-        if not subject_key:
-            return _ActPlan(
-                effects=(
-                    TurnEffect(
-                        effect_key=f"preference.{kind}",
-                        act_id=act.act_id,
-                        status="rejected",
-                        reason_code="preference.missing_subject_key",
-                    ),
-                )
-            )
-        applied_key = (
-            EFFECT_PREFERENCE_REMEMBERED
-            if kind == "express_preference"
-            else EFFECT_PREFERENCE_REVISED
-            if kind == "revise_preference"
-            else EFFECT_PREFERENCE_WITHDRAWN
-        )
-        return _ActPlan(
-            effects=(
-                TurnEffect(
-                    effect_key=applied_key,
-                    act_id=act.act_id,
-                    status="applied",
-                    object_type="preference",
-                    detail={"subject_key": subject_key},
-                ),
-            ),
-            refresh_required=True,
-        )
-    if kind == "record_feedback":
-        listing_id = act.payload.get("listing_id")
-        return _ActPlan(
-            effects=(
-                TurnEffect(
-                    effect_key=EFFECT_FEEDBACK_RECORDED,
-                    act_id=act.act_id,
-                    status="applied",
-                    object_type="listing",
-                    object_id=str(listing_id) if listing_id else None,
-                ),
-            ),
-            # Feedback may adjust soft preference weight; a refresh reflects it.
-            refresh_required=True,
-        )
-    if kind == "query":
-        return _ActPlan(
-            effects=(
-                TurnEffect(
-                    effect_key=EFFECT_QUERY,
-                    act_id=act.act_id,
-                    status="applied",
-                ),
-            )
-        )
-    # Defensive: unknown kinds already rejected above.
-    return _ActPlan()
+def _has_explicit_evidence(act: ConversationAct, user_message: str) -> bool:
+    if not act.evidence_spans:
+        return False
+    return all(
+        0 <= span.start <= span.end <= len(user_message)
+        and user_message[span.start : span.end] == span.text
+        for span in act.evidence_spans
+    )
+
+
+def _has_mutation(acts: tuple[ConversationAct, ...]) -> bool:
+    return any(act.kind in _MUTATION_KINDS for act in acts)
+
+
+_AMBIGUOUS = "__ambiguous__"
+
+
+def _resolve_desire_ref(
+    desire_ref: str | None, context: TurnContext
+) -> str | None:
+    if desire_ref is not None:
+        return desire_ref if context.authorizes(desire_ref) else None
+    active = tuple(desire.desire_ref for desire in context.active_desires)
+    if len(active) == 1:
+        return active[0]
+    if len(active) > 1:
+        return _AMBIGUOUS
+    return None
+
+
+def _current_filter(
+    context: TurnContext, filter_key: str
+) -> object | None:
+    for filter_view in context.current_filters:
+        if filter_view.filter_key == filter_key:
+            return filter_view.value
+    return None

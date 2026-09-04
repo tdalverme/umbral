@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reply-schema.json",
+  "title": "Reply",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "text", "outcomes", "verified_refs", "source"],
+  "properties": {
+    "contract_version": {"const": "5"}, "text": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "outcomes": {"type": "array", "items": {"$ref": "#/$defs/outcome"}}, "verified_refs": {"type": "array", "maxItems": 10, "items": {"type": "string", "minLength": 1}},
+    "source": {"enum": ["managed", "deterministic_fallback"]}
+  },
+  "$defs": {
+    "outcome": {"type": "object", "additionalProperties": false, "required": ["act_id", "status", "reason_code"], "properties": {"act_id": {"type": "string", "minLength": 1}, "status": {"enum": ["applied", "pending", "rejected", "needs_clarification", "not_executed"]}, "reason_code": {"type": ["string", "null"]}, "object_ref": {"type": ["string", "null"]}}}
+  }
+}

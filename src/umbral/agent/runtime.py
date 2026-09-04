@@ -1,4 +1,4 @@
-"""Conversational runtime: run, stream, resume and deduplicate (UM-H4-005)."""
+"""Single semantic conversation runtime: run, stream, resume and deduplicate."""
 
 from __future__ import annotations
 
@@ -13,21 +13,14 @@ from langgraph.types import Command
 from umbral.agent.events import (
     BudgetWarning,
     InterruptWaiting,
+    ReplyFragment,
     RunCompleted,
     RunFailed,
     RunInterrupted,
     RunStarted,
     RuntimeEvent,
 )
-from umbral.agent.graph import (
-    TOPOLOGY_VERSION,
-    AgentGraph,
-    AgentGraphV2,
-    AgentGraphV3,
-    AgentGraphV4,
-    build_input_state,
-)
-from umbral.agent.state import STATE_SCHEMA_VERSION
+from umbral.agent.graph import AgentGraph
 from umbral.application.agent.budgets import BudgetGate
 from umbral.application.agent.contracts import (
     AgentBudgetExhausted,
@@ -41,8 +34,6 @@ from umbral.application.chat.ports import ConversationGateway
 
 Clock = Callable[[], datetime]
 
-GraphLike = AgentGraph | AgentGraphV2 | AgentGraphV3 | AgentGraphV4
-
 
 @dataclass(frozen=True, slots=True)
 class RunOutcome:
@@ -54,18 +45,16 @@ class RunOutcome:
 
 
 class ChatRuntime:
-    """Owns one run at a time per session, with typed events and resume."""
+    """Owns one run at a time per session over the single agent graph."""
 
     def __init__(
         self,
         *,
-        graph: GraphLike,
+        graph: AgentGraph,
         conversation: ConversationGateway,
         runs: GraphRunRepository,
-        recorder: RunRecorder,
+        recorder: RunRecorder | None = None,
         clock: Clock | None = None,
-        state_schema_version: int = STATE_SCHEMA_VERSION,
-        topology_version: int = TOPOLOGY_VERSION,
         release_id: str | None = None,
         budget_gate: BudgetGate | None = None,
     ) -> None:
@@ -74,8 +63,6 @@ class ChatRuntime:
         self.runs = runs
         self.recorder = recorder
         self.clock = clock or (lambda: datetime.now(timezone.utc))
-        self.state_schema_version = state_schema_version
-        self.topology_version = topology_version
         self.release_id = release_id
         self.budget_gate = budget_gate
 
@@ -92,12 +79,12 @@ class ChatRuntime:
         client_message_id: UUID | None = None,
         context: Mapping[str, object] | None = None,
     ) -> RunOutcome:
+        del client_message_id, context
         session = self.conversation.assert_accepts_turn(
             user_id=user_id, session_id=session_id
         )
         started_at = self.clock()
-        self.graph.deps.sinks.emit = consumer or (lambda _event: None)
-        emit = self.graph.deps.sinks.emit
+        emit = consumer or (lambda _event: None)
         if self.budget_gate is not None:
             verdict = self.budget_gate.check(user_id=user_id, session_id=session_id)
             if verdict.level == "exhausted":
@@ -120,8 +107,8 @@ class ChatRuntime:
         run = GraphRun(
             run_id=run_id,
             session_id=session.session_id,
-            state_schema_version=self.state_schema_version,
-            topology_version=self.topology_version,
+            state_schema_version=1,
+            topology_version=1,
             status="running",
             attempt=attempt,
             correlation_id=correlation_id,
@@ -138,7 +125,6 @@ class ChatRuntime:
         else:
             self.runs.mark(run_id, status="running", attempt=attempt)
 
-        emit = self.graph.deps.sinks.emit
         emit(
             RunStarted(
                 run_id=run_id,
@@ -146,39 +132,36 @@ class ChatRuntime:
                 correlation_id=correlation_id,
             )
         )
-        config = {"configurable": {"thread_id": str(run_id)}}
+        config = {
+            "configurable": {
+                "thread_id": str(run_id),
+                "user_id": str(user_id),
+                "session_id": str(session.session_id),
+                "correlation_id": str(correlation_id),
+            }
+        }
+        compiled = self.graph.compiled
         try:
             if existing is None:
-                stream_input: object = build_input_state(
-                    run_id=run_id,
-                    session_id=session.session_id,
-                    user_id=user_id,
-                    correlation_id=correlation_id,
-                    user_message_text=text,
-                    schema_version=self.state_schema_version,
-                    search_profile_id=(
-                        str(session.search_profile_id)
-                        if session.search_profile_id is not None
-                        else None
-                    ),
-                    client_message_id=(
-                        str(client_message_id) if client_message_id else None
-                    ),
-                    user_message_context=context,
-                )
+                stream_input: object = {
+                    "contract_version": "5",
+                    "schema_version": "conversation-state",
+                    "message_id": str(run_id),
+                    "message_text": text,
+                }
             elif decision is not None:
                 stream_input = Command(resume=dict(decision))
             else:
                 stream_input = None
             interrupt_payload: dict[str, Any] | None = None
-            for chunk in self.graph.compiled.stream(
+            for chunk in compiled.stream(
                 stream_input, config, stream_mode="updates"
             ):
                 interrupt = _interrupt_from_chunk(chunk)
                 if interrupt is not None:
                     interrupt_payload = interrupt
                     break
-            values = self.graph.compiled.get_state(config).values
+            values = compiled.get_state(config).values
             if interrupt_payload is not None:
                 finished = self.clock()
                 latency_ms = _elapsed_ms(run.started_at, finished)
@@ -196,26 +179,13 @@ class ChatRuntime:
                     latency_ms=latency_ms,
                     interrupt=interrupt_payload,
                 )
-            if values.get("schema_version") != self.state_schema_version:
-                finished = self.clock()
-                latency_ms = _elapsed_ms(run.started_at, finished)
-                self.runs.mark(
-                    run_id,
-                    status="failed",
-                    finished_at=finished,
-                    latency_ms=latency_ms,
-                    error_summary={"code": "agent.state_incompatible"},
-                )
-                emit(RunFailed(run_id=run_id, error_code="agent.state_incompatible"))
-                return RunOutcome(
-                    run_id=run_id,
-                    status="failed",
-                    latency_ms=latency_ms,
-                    error_code="agent.state_incompatible",
-                )
             errors = list(values.get("errors") or [])
-            context = dict(values.get("context") or {})
-            usage = dict(context.get("token_usage") or {})
+            failure_stage = values.get("failure_stage")
+            if failure_stage is not None:
+                errors = errors or [{"code": f"agent.{failure_stage}"}]
+            reply = values.get("reply")
+            if isinstance(reply, Mapping) and str(reply.get("text") or ""):
+                emit(ReplyFragment(run_id=run_id, delta=str(reply.get("text"))))
             finished = self.clock()
             latency_ms = _elapsed_ms(run.started_at, finished)
             if errors:
@@ -226,7 +196,6 @@ class ChatRuntime:
                     finished_at=finished,
                     latency_ms=latency_ms,
                     error_summary=error,
-                    token_usage=usage or None,
                 )
                 emit(
                     RunFailed(
@@ -245,15 +214,8 @@ class ChatRuntime:
                 status="completed",
                 finished_at=finished,
                 latency_ms=latency_ms,
-                token_usage=usage or None,
             )
-            message_id = context.get("assistant_message_id")
-            emit(
-                RunCompleted(
-                    run_id=run_id,
-                    message_id=UUID(str(message_id)) if message_id else None,
-                )
-            )
+            emit(RunCompleted(run_id=run_id, message_id=None))
             return RunOutcome(run_id=run_id, status="completed", latency_ms=latency_ms)
         except Exception:
             finished = self.clock()
@@ -275,12 +237,7 @@ class ChatRuntime:
 
 
 def _interrupt_from_chunk(chunk: object) -> dict[str, Any] | None:
-    """Extract the interrupt payload from a stream chunk, if any.
-
-    With ``stream_mode="updates"`` an interrupt yields
-    ``{"__interrupt__": (Interrupt(value=...),)}``; the value is the payload
-    the graph node passed to ``interrupt(...)``.
-    """
+    """Extract the interrupt payload from a stream chunk, if any."""
     if not isinstance(chunk, Mapping):
         return None
     raw = chunk.get("__interrupt__")

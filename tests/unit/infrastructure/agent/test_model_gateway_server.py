@@ -115,8 +115,7 @@ def test_v5_interpretation_schema_translates_to_provider_compatible_union() -> N
         Path(__file__).parents[4]
         / "contracts"
         / "agent"
-        / "v5"
-        / "interpretation-schema-v5.json"
+        / "interpretation-schema.json"
     )
     schema = json.loads(contract_path.read_text(encoding="utf-8"))
 

@@ -8,15 +8,13 @@ $testPaths = @(
     "tests\unit\agent",
     "tests\unit\application\chat",
     "tests\unit\application\agent",
+    "tests\unit\application\agent\tools",
     "tests\unit\infrastructure\agent",
     "tests\unit\config\test_agent_settings.py",
-    "tests\contract\test_agent_state_schema.py",
-    "tests\contract\test_agent_graph_topology.py",
-    "tests\contract\test_agent_reply_schema.py",
+    "tests\contract\test_agent_contracts.py",
     "tests\contract\test_agent_chat_events.py",
-    "tests\contract\test_agent_harness.py",
     "tests\architecture\test_agent_boundaries.py",
-    "tests\integration\agent",
+    "tests\architecture\test_single_agent_generation.py",
     "tests\integration\chat",
     "tests\migrations\test_0009_langgraph_runtime.py"
 )
@@ -36,4 +34,4 @@ finally {
     $env:PYTHONPATH = $previousPythonPath
     Pop-Location
 }
-Write-Host "[PASS] Checks agent runtime (state, topology, gateway, chat, runs, resume, retention, migration 0009)"
+Write-Host "[PASS] Checks single semantic agent (contracts, intent, graph, runtime, chat, migration 0009)"

@@ -1,6 +1,6 @@
 """V4 eval flow: scripted and managed suites over the production V5 graph.
 
-Both fidelities traverse the same ``build_graph_v5`` production path; the
+Both fidelities traverse the same ``build_graph`` production path; the
 scripted adapter only replaces the interpreter seam (and optionally forces
 provider or reply failures). Context assembly, deterministic policy, command
 execution, receipts, reply composition, and audit run unmodified. Durable
@@ -24,8 +24,8 @@ from uuid import UUID, uuid4
 
 from langgraph.checkpoint.memory import MemorySaver
 
-from umbral.agent.graph_v5 import GraphDepsV5, build_graph_v5
-from umbral.agent.intent.v5 import InterpretationCompilerV5
+from umbral.agent.graph import GraphDeps, build_graph
+from umbral.agent.intent import InterpretationCompiler
 from umbral.application.agent.contracts import ModelResult
 from umbral.application.agent.ports import ModelGateway
 from umbral.application.agent_evals.v4.contracts import (
@@ -46,14 +46,14 @@ from umbral.application.agent_evals.v4.loader import (
     load_policy,
     load_releases,
 )
-from umbral.application.conversation.v5.contracts import (
-    ConversationTurnResultV5,
+from umbral.application.conversation.contracts import (
+    ConversationTurnResult,
 )
-from umbral.application.conversation.v5.ports import (
-    FeedbackRecorderV5,
-    FocusedListingV5,
+from umbral.application.conversation.ports import (
+    FeedbackRecorder,
+    FocusedListing,
 )
-from umbral.application.conversation.v5.reply import ReplyComposerV5
+from umbral.application.conversation.reply import ReplyComposer
 from umbral.application.preferences.contracts import (
     BindingDraft,
     PreferenceAuthority,
@@ -62,12 +62,12 @@ from umbral.application.preferences.contracts import (
     PreferenceView,
 )
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
-from umbral.infrastructure.criteria.contract_loader import load_concepts_seed
 from umbral.infrastructure.config.settings import Settings
-from umbral.infrastructure.conversation.v5.composition import (
-    V5Services,
-    build_conversation_v5_turn_service,
+from umbral.infrastructure.conversation.composition import (
+    ConversationServices,
+    build_conversation_turn_service,
 )
+from umbral.infrastructure.criteria.contract_loader import load_concepts_seed
 
 _NOW = datetime(2026, 8, 26, tzinfo=timezone.utc)
 _REPLY_MARKER = "outcomes"
@@ -158,7 +158,7 @@ class _ScriptedGatewayV4:
     ) -> ModelResult:
         del schema, schema_version, tools
         is_interpretation = prompt_version.startswith("interpretation")
-        if not is_interpretation and prompt_version != "reply-v5":
+        if not is_interpretation and prompt_version != "reply":
             return _error_result(model_version, f"unknown_prompt:{prompt_version}")
         if is_interpretation:
             user_text = _user_text(messages)
@@ -264,7 +264,7 @@ class _InjectedFailureGateway:
             self.behavior == "provider_failure"
             and prompt_version.startswith("interpretation")
         ) or (
-            self.behavior == "reply_failure" and prompt_version == "reply-v5"
+            self.behavior == "reply_failure" and prompt_version == "reply"
         ):
             return _error_result(model_version, "provider.timeout")
         return self.delegate.generate_structured(
@@ -280,15 +280,15 @@ class _InjectedFailureGateway:
 class V5EvalTrialExecutor:
     """Runs one V5 trial through the production graph with in-memory stores."""
 
-    graph_factory = staticmethod(build_graph_v5)
+    graph_factory = staticmethod(build_graph)
 
     def __init__(self, *, contracts_dir: Path) -> None:
         self.contracts_dir = contracts_dir
         self.interpretation_schema = _read_json(
-            contracts_dir / "agent" / "v5" / "interpretation-schema-v5.json"
+            contracts_dir / "agent" / "interpretation-schema.json"
         )
         self.reply_schema = _read_json(
-            contracts_dir / "agent" / "v5" / "reply-schema-v5.json"
+            contracts_dir / "agent" / "reply-schema.json"
         )
         self.concept_catalog = _eval_concept_catalog()
 
@@ -301,7 +301,7 @@ class V5EvalTrialExecutor:
         trial_index: int,
         attempt_index: int,
     ) -> TrialEvidenceV4:
-        if release.components.interpretation_schema_version != "interpretation-schema-v5":
+        if release.components.interpretation_schema_version != "interpretation-schema":
             raise ValueError(
                 "agent_evals_v5.requires_v5_release:"
                 "V5EvalTrialExecutor cannot execute legacy releases"
@@ -312,34 +312,34 @@ class V5EvalTrialExecutor:
         gateway = adapter.gateway_for(
             case=case, release=release, trial_index=trial_index, attempt_index=0
         )
-        interpreter = InterpretationCompilerV5(
+        interpreter = InterpretationCompiler(
             gateway=gateway,
             schema=self.interpretation_schema,
             prompt_version=release.components.prompt_versions[0],
             model_version=release.components.model_version,
             concept_catalog=self.concept_catalog,
         )
-        turn_service = build_conversation_v5_turn_service(
-            services=V5Services(
+        turn_service = build_conversation_turn_service(
+            services=ConversationServices(
                 chat=cast(Any, services.chat),
                 radar=cast(Any, services.radar),
                 proposals=cast(Any, services.proposals),
                 preferences=services.preferences,
-                feedback=cast(FeedbackRecorderV5, services.feedback),
+                feedback=cast(FeedbackRecorder, services.feedback),
             ),
             focus=services.focus,
             interpreter=interpreter,
             clock=_now,
         )
         services.turn_service = turn_service
-        reply = ReplyComposerV5(
+        reply = ReplyComposer(
             gateway=gateway,
             schema=self.reply_schema,
             prompt_version=release.components.prompt_versions[1],
             model_version=release.components.model_version,
         )
         graph = self.graph_factory(
-            dependencies=GraphDepsV5(turn=turn_service, reply=reply),
+            dependencies=GraphDeps(turn=turn_service, reply=reply),
             checkpointer=MemorySaver(),
         )
         turn_evidence: list[TurnEvidenceV4] = []
@@ -557,7 +557,7 @@ class _EvalServices:
                 "applied_key": None,
             }
 
-    def run_stale_turn(self, turn: object) -> ConversationTurnResultV5:
+    def run_stale_turn(self, turn: object) -> ConversationTurnResult:
         service = cast(Any, self.turn_service)
         context = service.load_context(
             user_id=self.user_id,
@@ -571,7 +571,7 @@ class _EvalServices:
                 correlation_id=self.correlation_id,
             )
         except Exception as error:
-            from umbral.application.conversation.v5.service import _is_provider_error
+            from umbral.application.conversation.service import _is_provider_error
 
             stage = (
                 "provider_failure"
@@ -721,6 +721,30 @@ class _FakeProposals:
             row["state"] = "rejected"
         return SimpleNamespace(proposal_id=proposal_id)
 
+    def pending_for_session(
+        self, *, search_profile_id: UUID, session_id: UUID
+    ) -> tuple[SimpleNamespace, ...]:
+        del session_id
+        rows = sorted(
+            (
+                row
+                for row in self.services.proposal_rows.values()
+                if row.get("state") == "pending"
+                and row.get("search_profile_id") == search_profile_id
+            ),
+            key=lambda row: str(row["proposal_id"]),
+        )
+        return tuple(
+            SimpleNamespace(
+                proposal_id=row["proposal_id"],
+                source_act_id=str(row.get("source_act_id", "")),
+                queue_ordinal=index + 1,
+                queue_total=len(rows),
+                diff=dict(row.get("diff") or {}),
+            )
+            for index, row in enumerate(rows)
+        )
+
 
 class _ProposalRepo:
     def __init__(self, services: _EvalServices) -> None:
@@ -849,11 +873,11 @@ class _FakeFocus:
 
     def verified_focus(
         self, *, user_id: UUID, session_id: UUID
-    ) -> FocusedListingV5 | None:
+    ) -> FocusedListing | None:
         if self.services.focused is None:
             return None
         listing_id, text = self.services.focused
-        return FocusedListingV5(listing_id=listing_id, text=text)
+        return FocusedListing(listing_id=listing_id, text=text)
 
 
 def _change(
@@ -894,7 +918,7 @@ def _invoke_graph(
         message_id = str(uuid4())
     state: dict[str, object] = {
         "contract_version": "5",
-        "schema_version": "conversation-state-v5",
+        "schema_version": "conversation-state",
         "message_id": message_id,
         "message_text": cast(Any, turn).user,
     }
@@ -906,19 +930,19 @@ def _invoke_graph(
             "correlation_id": str(UUID(int=300)),
         }
     }
-    final = graph.invoke(state, config)
+    final = graph.compiled.invoke(state, config)
     return cast(dict[str, object], final)
 
 
-def _result_from_state(state: Mapping[str, object]) -> ConversationTurnResultV5:
-    from umbral.agent.graph_v5 import _result_from_state as rebuild
+def _result_from_state(state: Mapping[str, object]) -> ConversationTurnResult:
+    from umbral.agent.graph import _result_from_state as rebuild
 
     return rebuild(cast(Any, state))
 
 
 def _turn_evidence(
     turn: object,
-    result: ConversationTurnResultV5,
+    result: ConversationTurnResult,
 ) -> TurnEvidenceV4:
     context = asdict(result.context)
     return TurnEvidenceV4(
@@ -947,7 +971,7 @@ def _turn_evidence(
 
 def _matches_expected(
     expected: ExpectedV4,
-    result: ConversationTurnResultV5,
+    result: ConversationTurnResult,
     reply_source: str,
 ) -> tuple[bool, bool]:
     observed_statuses = [outcome.status for outcome in result.outcomes]

@@ -1,3 +1,5 @@
+"""Local playground runner over the single semantic graph."""
+
 from __future__ import annotations
 
 from umbral.application.playground.contracts import ConversationRequest
@@ -6,36 +8,36 @@ from umbral.infrastructure.playground.conversation import (
 )
 
 
-def test_each_fake_run_gets_a_fresh_profile_copy() -> None:
+def test_playground_budget_turn_interrupts_and_approves() -> None:
     runner = build_local_conversation_runner()
-    request = ConversationRequest(
-        fixture_id="demo",
-        turns=("bajá el presupuesto a 1000",),
-        model_mode="fake",
+    fixture_id = runner.fixtures.items[0].fixture_id
+
+    trace = runner.run(
+        ConversationRequest(
+            fixture_id=fixture_id,
+            turns=("quiero presupuesto 900", "confirmo"),
+            model_mode="fake",
+        )
     )
 
-    first = runner.run(request)
-    second = runner.run(request)
+    assert trace.error is None
+    assert [turn["status"] for turn in trace.turns] == ["interrupted", "completed"]
+    assert trace.turns[0]["interrupt"] is not None
+    assert trace.state_after.get("budget_max") == 900.0
 
-    assert first.state_after == second.state_after
-    assert first.run_id != second.run_id
 
-
-def test_fake_run_records_profile_proposal_tool_and_state_change() -> None:
+def test_playground_unknown_turn_answers_without_effects() -> None:
     runner = build_local_conversation_runner()
-    request = ConversationRequest(
-        fixture_id="demo",
-        turns=("bajá el presupuesto a 1000", "confirmo"),
-        model_mode="fake",
+    fixture_id = runner.fixtures.items[0].fixture_id
+
+    trace = runner.run(
+        ConversationRequest(
+            fixture_id=fixture_id,
+            turns=("mostrame mis matches",),
+            model_mode="fake",
+        )
     )
 
-    result = runner.run(request)
-
-    assert result.error is None
-    assert result.turns[0]["tool_calls"] == [
-        {"tool": "propose_search_profile_update", "status": "ok"}
-    ]
-    assert result.turns[1]["tool_calls"] == [
-        {"tool": "apply_search_profile_update", "status": "ok"}
-    ]
-    assert result.state_after["budget_max"] == 1000
+    assert trace.error is None
+    assert trace.turns[0]["status"] == "completed"
+    assert trace.turns[0]["reply"] is not None

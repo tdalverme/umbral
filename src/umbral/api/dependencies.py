@@ -62,18 +62,11 @@ def _build_agent_stack(
     if getattr(settings, "agent_model_provider", None) is None:
         return {}
     session_provider = SessionProvider(settings.database_url)
-    from umbral.infrastructure.agent.production import (
-        build_production_agent_stack,
-        build_production_copilot_stack,
-    )
+    from umbral.agent.runtime import ChatRuntime
+    from umbral.infrastructure.agent.production import build_production_stack
 
     try:
-        builder = (
-            build_production_copilot_stack
-            if getattr(settings, "copilot_enabled", False)
-            else build_production_agent_stack
-        )
-        stack = builder(
+        stack = build_production_stack(
             settings=settings,
             session_factory=session_provider.session_factory,
             database_url=settings.database_url,
@@ -82,13 +75,18 @@ def _build_agent_stack(
             feedback=getattr(composition, "feedback", None),
             criteria=getattr(composition, "criteria", None),
         )
+        runtime = ChatRuntime(
+            graph=stack.graph,  # type: ignore[arg-type]
+            conversation=stack.chat,
+            runs=stack.graph_runs,
+        )
     except Exception:  # noqa: BLE001 - Postgres down locally degrades the chat
         if getattr(settings, "environment", "local") != "local":
             raise
         return {}
     return {
         "chat": stack.chat,
-        "agent_runtime": stack.runtime,
+        "agent_runtime": runtime,
         "proposals": stack.proposals,
         "graph_runs": stack.graph_runs,
         "ops_overview": _build_ops_overview(settings),

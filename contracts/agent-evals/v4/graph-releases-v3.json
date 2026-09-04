@@ -5,7 +5,10 @@
     {
       "id": "graph-release-003",
       "components": {
-        "prompt_versions": ["interpretation-v4", "reply-v4"],
+        "prompt_versions": [
+          "interpretation-v4",
+          "reply-v4"
+        ],
         "model_version": "gpt-4.1-mini",
         "state_schema_version": "chat-state-v4",
         "topology_version": "chat-topology-v4",
@@ -27,11 +30,14 @@
     {
       "id": "graph-release-005",
       "components": {
-        "prompt_versions": ["interpretation-v5", "reply-v5"],
+        "prompt_versions": [
+          "interpretation",
+          "reply"
+        ],
         "model_version": "gpt-4.1-mini",
         "state_schema_version": "conversation-state-v5",
         "topology_version": "conversation-topology-v5",
-        "interpretation_schema_version": "interpretation-schema-v5",
+        "interpretation_schema_version": "interpretation-schema",
         "reply_schema_version": "conversation-reply-v5",
         "tool_contract_version": null,
         "price_table_version": "price-table-v1"

@@ -9,24 +9,24 @@ from uuid import UUID
 import pytest
 from tests.fakes.preferences import FakeConceptReader, FakePreferenceStore
 
-from umbral.application.conversation.v5.contracts import (
-    ConceptLinkV5,
-    ConversationTurnResultV5,
+from umbral.application.conversation.contracts import (
+    ConceptLink,
+    ConversationTurnResult,
     EvidenceSpan,
     ExpressDesire,
-    TurnContextV5,
-    TurnInterpretationV5,
+    TurnContext,
+    TurnInterpretation,
 )
-from umbral.application.conversation.v5.policy import plan_turn_v5
-from umbral.application.conversation.v5.receipts import InMemoryCommandReceiptStore
-from umbral.application.conversation.v5.service import ConversationTurnV5
+from umbral.application.conversation.policy import plan_turn
+from umbral.application.conversation.receipts import InMemoryCommandReceiptStore
+from umbral.application.conversation.service import ConversationTurn
 from umbral.application.preferences.contracts import (
     PreferenceConcept,
     PreferencePolicySpec,
 )
 from umbral.application.preferences.intensity import load_intensity_policy
 from umbral.application.preferences.service import PreferenceService
-from umbral.infrastructure.conversation.v5.executor import EffectExecutorV5
+from umbral.infrastructure.conversation.executor import EffectExecutor
 
 USER_ID = UUID(int=1)
 SESSION_ID = UUID(int=2)
@@ -39,23 +39,23 @@ PROFILE_ID = UUID(int=5)
 class ScriptedSemanticGateway:
     """Returns supplied semantic output without inspecting the user message."""
 
-    output: TurnInterpretationV5
+    output: TurnInterpretation
     calls: int = 0
 
     def interpret(
         self,
         *,
         message_text: str,
-        context: TurnContextV5,
+        context: TurnContext,
         correlation_id: UUID,
-    ) -> TurnInterpretationV5:
+    ) -> TurnInterpretation:
         self.calls += 1
         return self.output
 
 
 @dataclass(frozen=True)
 class _ContextReader:
-    context: TurnContextV5
+    context: TurnContext
 
     def load(
         self,
@@ -63,7 +63,7 @@ class _ContextReader:
         user_id: UUID,
         session_id: UUID,
         correlation_id: UUID,
-    ) -> TurnContextV5:
+    ) -> TurnContext:
         return self.context
 
 
@@ -75,12 +75,12 @@ class _NoopPendingResolver:
 @dataclass(frozen=True)
 class SemanticScenario:
     message: str
-    output: TurnInterpretationV5
+    output: TurnInterpretation
     concept_keys: tuple[str, ...]
 
 
-def _context() -> TurnContextV5:
-    return TurnContextV5(
+def _context() -> TurnContext:
+    return TurnContext(
         user_id=str(USER_ID),
         session_id=str(SESSION_ID),
         active_radar_ref=f"radar:{PROFILE_ID}",
@@ -97,8 +97,8 @@ def _context() -> TurnContextV5:
     )
 
 
-def _output(*acts: ExpressDesire) -> TurnInterpretationV5:
-    return TurnInterpretationV5(
+def _output(*acts: ExpressDesire) -> TurnInterpretation:
+    return TurnInterpretation(
         model_version="semantic-gateway-scripted",
         prompt_version="semantic-preferences-regression",
         acts=acts,
@@ -119,7 +119,7 @@ def _desire(
         raw_text=raw_text,
         subject_ref=concept_key,
         concept_links=(
-            ConceptLinkV5(
+            ConceptLink(
                 concept_ref=concept_key,
                 confidence=0.90,
                 polarity="positive",
@@ -284,15 +284,15 @@ def _preference_service(store: FakePreferenceStore) -> PreferenceService:
 
 def _process(
     scenario: SemanticScenario,
-) -> tuple[ConversationTurnResultV5, ScriptedSemanticGateway, FakePreferenceStore]:
+) -> tuple[ConversationTurnResult, ScriptedSemanticGateway, FakePreferenceStore]:
     store = FakePreferenceStore()
     gateway = ScriptedSemanticGateway(scenario.output)
     preferences = _preference_service(store)
-    turn = ConversationTurnV5(
+    turn = ConversationTurn(
         contexts=_ContextReader(_context()),
         interpreter=gateway,
-        policy=plan_turn_v5,
-        executor=EffectExecutorV5(
+        policy=plan_turn,
+        executor=EffectExecutor(
             radar=None,  # type: ignore[arg-type]
             chat=None,  # type: ignore[arg-type]
             proposals=None,  # type: ignore[arg-type]

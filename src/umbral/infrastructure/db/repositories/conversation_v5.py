@@ -9,12 +9,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from umbral.application.conversation.v5.contracts import (
-    CommandV5,
-    ExecutedActV5,
-    OutcomeStatusV5,
+from umbral.application.conversation.contracts import (
+    Command,
+    ExecutedAct,
+    OutcomeStatus,
 )
-from umbral.application.conversation.v5.receipts import (
+from umbral.application.conversation.receipts import (
     ReceiptStart,
 )
 from umbral.infrastructure.db.models.conversation_v5 import (
@@ -23,7 +23,7 @@ from umbral.infrastructure.db.models.conversation_v5 import (
 
 SessionFactory = Callable[[], Session]
 
-_KEY_PREFIX = "conversation-v5:"
+_KEY_PREFIX = "conversation:"
 
 
 def _now() -> datetime:
@@ -38,7 +38,7 @@ class SqlAlchemyCommandReceiptStore:
 
     def start(
         self,
-        command: CommandV5,
+        command: Command,
         idempotency_key: str,
         *,
         correlation_id: UUID | None = None,
@@ -69,7 +69,7 @@ class SqlAlchemyCommandReceiptStore:
             current.commit()
             return ReceiptStart("new", None)
 
-    def complete(self, idempotency_key: str, result: ExecutedActV5) -> None:
+    def complete(self, idempotency_key: str, result: ExecutedAct) -> None:
         with self.session_factory() as current:
             model = current.get(ConversationV5CommandReceipt, idempotency_key)
             if model is None:
@@ -96,7 +96,7 @@ def _ids_from_key(idempotency_key: str) -> tuple[UUID, UUID]:
     return UUID(session_id), UUID(message_id)
 
 
-def _serialize_result(result: ExecutedActV5) -> dict[str, object]:
+def _serialize_result(result: ExecutedAct) -> dict[str, object]:
     return {
         "act_id": result.act_id,
         "effect_key": result.effect_key,
@@ -106,11 +106,11 @@ def _serialize_result(result: ExecutedActV5) -> dict[str, object]:
     }
 
 
-def _result_from(data: Mapping[str, object]) -> ExecutedActV5:
-    return ExecutedActV5(
+def _result_from(data: Mapping[str, object]) -> ExecutedAct:
+    return ExecutedAct(
         act_id=str(data["act_id"]),
         effect_key=str(data["effect_key"]),
-        status=cast(OutcomeStatusV5, data["status"]),
+        status=cast(OutcomeStatus, data["status"]),
         object_ref=cast(str | None, data.get("object_ref")),
         reason_code=cast(str | None, data.get("reason_code")),
     )

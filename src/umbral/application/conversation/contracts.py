@@ -1,163 +1,380 @@
-"""Pure values and errors for the conversational copilot turn orchestrator.
-
-The orchestrator is the durable seam between the chat and the explicit
-mutation services: it loads verified context, plans deterministic effects from
-ordered multi-acts and decides routing (refresh / confirmation) without the
-model deciding ranking, hard filters or durable state (constitution).
-"""
+"""Immutable, closed contracts for the V5 conversation boundary."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Literal
+from typing import Literal, TypeAlias
 from uuid import UUID
 
-ActKind = Literal[
-    "resolve_pending",
-    "create_radar",
-    "set_filter",
-    "clear_filter",
-    "express_preference",
-    "revise_preference",
-    "withdraw_preference",
-    "record_feedback",
-    "query",
-]
-
-EffectStatus = Literal["applied", "pending", "remembered", "rejected"]
-
-KNOWN_ACT_KINDS: frozenset[str] = frozenset(
-    {
-        "resolve_pending",
-        "create_radar",
-        "set_filter",
-        "clear_filter",
-        "express_preference",
-        "revise_preference",
-        "withdraw_preference",
-        "record_feedback",
-        "query",
-    }
+from umbral.application.preferences.intensity import (
+    PreferenceIntensity,
+    PreferencePolarity,
 )
 
-
-@dataclass(frozen=True, slots=True)
-class ConversationAct:
-    """One ordered act of a validated conversation interpretation."""
-
-    act_id: str
-    kind: str
-    target: Mapping[str, str] = field(default_factory=dict)
-    payload: Mapping[str, object] = field(default_factory=dict)
-    confidence: float = 1.0
-
-
-@dataclass(frozen=True, slots=True)
-class TurnInterpretation:
-    """Validated multi-act interpretation of one user message."""
-
-    acts: tuple[ConversationAct, ...]
-    ambiguity: Mapping[str, object] | None = None
+FilterKey: TypeAlias = Literal["budget_max", "zones", "min_rooms"]
+FeedbackType: TypeAlias = Literal["like", "dislike", "save", "dismiss", "contacted"]
+DecisionStatus: TypeAlias = Literal[
+    "applied", "pending", "rejected", "needs_clarification"
+]
+OutcomeStatus: TypeAlias = DecisionStatus | Literal["not_executed"]
+FailureStage: TypeAlias = Literal[
+    "context_failure",
+    "interpretation_failure",
+    "policy_failure",
+    "execution_failure",
+    "reply_failure",
+    "provider_failure",
+    "contract_or_fixture_failure",
+]
+FilterValue: TypeAlias = float | int | tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class TurnEffect:
-    """A planned or applied durable effect with its public status."""
+class EvidenceSpan:
+    start: int
+    end: int
+    text: str
 
-    effect_key: str
-    act_id: str
-    status: EffectStatus
-    object_type: str | None = None
-    object_id: str | None = None
-    reason_code: str | None = None
-    detail: Mapping[str, object] = field(default_factory=dict)
+    def __post_init__(self) -> None:
+        if self.start < 0 or self.end < 0:
+            raise ValueError("evidence span offsets must be non-negative")
+        if self.end < self.start:
+            raise ValueError("evidence span end must not precede start")
 
 
 @dataclass(frozen=True, slots=True)
-class RoutingDecision:
-    """Deterministic branch after safe effects: refresh and/or confirmation."""
+class UntrustedContent:
+    source: str
+    text: str
+    may_supply_evidence: Literal[False] = False
 
-    refresh_required: bool
-    confirmation_required: bool
 
-
-def resolve_routing(
-    *,
-    refresh_required: bool,
-    confirmation_required: bool,
-) -> RoutingDecision:
-    return RoutingDecision(
-        refresh_required=refresh_required,
-        confirmation_required=confirmation_required,
-    )
+@dataclass(frozen=True, slots=True)
+class FocusedEntity:
+    entity_ref: str
 
 
 @dataclass(frozen=True, slots=True)
 class PendingAction:
-    """A durable action awaiting confirmation."""
-
-    kind: str
-    action_id: str
-    diff: Mapping[str, object] = field(default_factory=dict)
-    impact: Mapping[str, object] = field(default_factory=dict)
-    expires_at: datetime | None = None
+    pending_ref: str
+    act_id: str = ""
+    ordinal: int = 1
+    total: int = 1
 
 
 @dataclass(frozen=True, slots=True)
-class ConversationTurnContext:
-    """The verified active context used to interpret the next message.
+class ConceptLink:
+    concept_ref: str
+    confidence: float
+    polarity: PreferencePolarity
+    intensity: PreferenceIntensity
+    evidence_spans: tuple[EvidenceSpan, ...] = ()
+    force: Literal["soft"] = "soft"
 
-    ``verified_profile_id`` is the durable radar bound to the session after
-    context loading; ``radar_filters`` mirrors the current hard-filter snapshot
-    used only to decide the deterministic routing of this turn.
-    """
 
-    user_id: UUID
-    session_id: UUID
-    verified_profile_id: UUID | None = None
-    profile_name: str | None = None
-    pending_action: PendingAction | None = None
-    answered_slots: tuple[str, ...] = ()
-    radar_filters: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
-    correlation_id: UUID | None = None
+@dataclass(frozen=True, slots=True)
+class DesireView:
+    desire_ref: str
+    raw_text: str
+    subject_ref: str
+    concept_links: tuple[ConceptLink, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class HardFilter:
+    filter_key: FilterKey
+    value: FilterValue
+    force: Literal["hard"] = "hard"
+
+    def __post_init__(self) -> None:
+        _validate_filter_value(self.filter_key, self.value)
+
+
+@dataclass(frozen=True, slots=True)
+class TurnContext:
+    user_id: str
+    session_id: str
+    active_radar_ref: str | None
+    active_radar_version: int | None
+    current_filters: tuple[HardFilter, ...]
+    active_desires: tuple[DesireView, ...]
+    pending_action: PendingAction | None
+    focused_entity: FocusedEntity | None
+    verified_listing_refs: tuple[str, ...]
+    allowed_capabilities: tuple[str, ...]
+    untrusted_content: tuple[UntrustedContent, ...]
+    context_schema_version: Literal["5"]
+    correlation_id: str
+
+    def authorizes(self, ref: str) -> bool:
+        """Return whether this snapshot explicitly contains an opaque reference."""
+        if ref == self.active_radar_ref:
+            return True
+        if ref in self.verified_listing_refs:
+            return True
+        if any(desire.desire_ref == ref for desire in self.active_desires):
+            return True
+        if self.pending_action is not None and ref == self.pending_action.pending_ref:
+            return True
+        return self.focused_entity is not None and ref == self.focused_entity.entity_ref
+
+
+@dataclass(frozen=True, slots=True)
+class CreateRadar:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    name: str | None = None
+    kind: Literal["create_radar"] = field(init=False, default="create_radar")
+
+
+@dataclass(frozen=True, slots=True)
+class SetFilter:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    filter_key: FilterKey
+    value: FilterValue
+    force: Literal["hard"] = field(init=False, default="hard")
+    kind: Literal["set_filter"] = field(init=False, default="set_filter")
+
+    def __post_init__(self) -> None:
+        _validate_filter_value(self.filter_key, self.value)
+
+
+@dataclass(frozen=True, slots=True)
+class ClearFilter:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    filter_key: FilterKey
+    kind: Literal["clear_filter"] = field(init=False, default="clear_filter")
+
+
+@dataclass(frozen=True, slots=True)
+class ExpressDesire:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    raw_text: str
+    subject_ref: str
+    concept_links: tuple[ConceptLink, ...] = ()
+    kind: Literal["express_desire"] = field(init=False, default="express_desire")
+
+
+@dataclass(frozen=True, slots=True)
+class ReviseDesire:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    desire_ref: str | None
+    raw_text: str
+    concept_links: tuple[ConceptLink, ...] = ()
+    kind: Literal["revise_desire"] = field(init=False, default="revise_desire")
+
+
+@dataclass(frozen=True, slots=True)
+class WithdrawDesire:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    desire_ref: str | None
+    kind: Literal["withdraw_desire"] = field(init=False, default="withdraw_desire")
+
+
+@dataclass(frozen=True, slots=True)
+class RecordFeedback:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    listing_ref: str
+    feedback_type: FeedbackType
+    raw_text: str | None = None
+    kind: Literal["record_feedback"] = field(init=False, default="record_feedback")
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvePending:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    pending_ref: str
+    decision: Literal["approve", "reject"]
+    kind: Literal["resolve_pending"] = field(init=False, default="resolve_pending")
+
+
+@dataclass(frozen=True, slots=True)
+class Query:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    query_text: str
+    kind: Literal["query"] = field(init=False, default="query")
+
+
+@dataclass(frozen=True, slots=True)
+class UnsupportedRequest:
+    act_id: str
+    confidence: float
+    evidence_spans: tuple[EvidenceSpan, ...]
+    request_text: str
+    kind: Literal["unsupported_request"] = field(
+        init=False, default="unsupported_request"
+    )
+
+
+ConversationAct = (
+    CreateRadar | SetFilter | ClearFilter | ExpressDesire | ReviseDesire |
+    WithdrawDesire | RecordFeedback | ResolvePending | Query |
+    UnsupportedRequest
+)
+
+
+@dataclass(frozen=True, slots=True)
+class TurnInterpretation:
+    model_version: str
+    prompt_version: str
+    acts: tuple[ConversationAct, ...]
+    contract_version: Literal["5"] = "5"
+    interpretation_version: Literal["conversation-interpretation"] = (
+        "conversation-interpretation"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ActDecision:
+    act_id: str
+    status: DecisionStatus
+    reason_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CreateRadarCommand:
+    act_id: str
+    name: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SetFilterCommand:
+    act_id: str
+    filter_key: FilterKey
+    value: FilterValue
+    expected_profile_version: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ClearFilterCommand:
+    act_id: str
+    filter_key: FilterKey
+    expected_profile_version: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RecordDesireCommand:
+    act_id: str
+    raw_text: str
+    subject_ref: str
+    concept_links: tuple[ConceptLink, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ReviseDesireCommand:
+    act_id: str
+    desire_ref: str
+    raw_text: str
+    concept_links: tuple[ConceptLink, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class WithdrawDesireCommand:
+    act_id: str
+    desire_ref: str
+
+
+@dataclass(frozen=True, slots=True)
+class RecordFeedbackCommand:
+    act_id: str
+    listing_id: UUID
+    feedback_type: FeedbackType
+    raw_text: str | None = None
+
+
+Command = (
+    CreateRadarCommand
+    | SetFilterCommand
+    | ClearFilterCommand
+    | RecordDesireCommand
+    | ReviseDesireCommand
+    | WithdrawDesireCommand
+    | RecordFeedbackCommand
+)
+
+
+@dataclass(frozen=True, slots=True)
+class TurnPlan:
+    decisions: tuple[ActDecision, ...]
+    commands: tuple[Command, ...] = ()
+
+    def __post_init__(self) -> None:
+        for command in self.commands:
+            if not isinstance(
+                command,
+                (
+                    CreateRadarCommand,
+                    SetFilterCommand,
+                    ClearFilterCommand,
+                    RecordDesireCommand,
+                    ReviseDesireCommand,
+                    WithdrawDesireCommand,
+                    RecordFeedbackCommand,
+                ),
+            ):
+                raise ValueError(
+                    "commands must be members of the closed command union"
+                )
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutedAct:
+    act_id: str
+    effect_key: str
+    status: OutcomeStatus = "applied"
+    object_ref: str | None = None
+    reason_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ActOutcome:
+    act_id: str
+    status: OutcomeStatus
+    reason_code: str | None = None
+    object_ref: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ConversationTurnResult:
-    """Outcome of one turn: durable effects, routing and reply inputs."""
-
-    effects: tuple[TurnEffect, ...]
-    routing: RoutingDecision
-    refreshed_objects: tuple[Mapping[str, object], ...] = field(default_factory=tuple)
-    question: str | None = None
-    reply_inputs: Mapping[str, object] = field(default_factory=dict)
-
-
-class ConversationError(Exception):
-    """Base class for sanitized copilot turn failures."""
-
-    code = "conversation.error"
+    context: TurnContext
+    interpretation: TurnInterpretation | None
+    plan: TurnPlan | None
+    executed: tuple[ExecutedAct, ...]
+    outcomes: tuple[ActOutcome, ...]
+    failure_stage: FailureStage | None = None
 
 
-class ConversationNotReady(ConversationError):
-    """A pre-condition of the active context is missing or invalid."""
-
-    code = "conversation.not_ready"
-
-
-class ConversationInterpretationFailed(ConversationError):
-    """The interpretation gateway did not produce a usable multi-act payload."""
-
-    code = "conversation.interpretation_failed"
-
-
-class ConversationContradiction(ConversationError):
-    """Two acts of the same turn contradict each other materially."""
-
-    code = "conversation.contradiction"
-
-
-def is_known_act_kind(value: str) -> bool:
-    return value in KNOWN_ACT_KINDS
+def _validate_filter_value(filter_key: FilterKey, value: object) -> None:
+    if filter_key == "budget_max":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("budget_max must be numeric")
+        return
+    if filter_key == "min_rooms":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("min_rooms must be an integer")
+        return
+    if filter_key != "zones":
+        raise ValueError("filter key is not published")
+    if (
+        not isinstance(value, tuple)
+        or len(value) > 15
+        or not all(isinstance(zone, str) and zone for zone in value)
+    ):
+        raise ValueError("zones must be a tuple of strings")

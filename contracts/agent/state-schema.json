@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "state-schema.json",
+  "title": "ConversationGraphState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "schema_version", "message_id", "message_text", "context", "interpretation", "plan", "executed", "outcomes", "reply", "failure_stage"],
+  "properties": {
+    "contract_version": {"const": "5"}, "schema_version": {"const": "conversation-state"}, "message_id": {"type": "string", "minLength": 1}, "message_text": {"type": "string"},
+    "context": {"type": ["object", "null"]}, "interpretation": {"type": ["object", "null"]}, "plan": {"type": ["object", "null"]},
+    "executed": {"type": "array", "items": {"type": "object"}}, "outcomes": {"type": "array", "items": {"type": "object"}}, "reply": {"type": ["object", "null"]},
+    "failure_stage": {"enum": ["context_failure", "interpretation_failure", "policy_failure", "execution_failure", "reply_failure", "provider_failure", "contract_or_fixture_failure", null]}
+  }
+}

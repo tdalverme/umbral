@@ -246,14 +246,14 @@
             ],
             "reason_codes": [
               null,
-              "filter.changes_existing_hard_filter"
+              "filter.requires_confirmation"
             ],
             "failure_stage": null,
             "effects": [
               "desire.remembered",
               "filter.set"
             ],
-            "reply_source": "managed"
+            "reply_source": "deterministic_fallback"
           }
         }
       ],
@@ -324,7 +324,7 @@
               "pending.resolved",
               "desire.remembered"
             ],
-            "reply_source": "managed"
+            "reply_source": "deterministic_fallback"
           }
         }
       ],
@@ -486,7 +486,7 @@
             "effects": [
               "desire.remembered"
             ],
-            "reply_source": "managed"
+            "reply_source": "deterministic_fallback"
           }
         },
         {
@@ -515,7 +515,7 @@
             "effects": [
               "desire.remembered"
             ],
-            "reply_source": "managed"
+            "reply_source": "deterministic_fallback"
           }
         }
       ],
@@ -562,10 +562,10 @@
           },
           "expected": {
             "outcome_statuses": [
-              "needs_clarification"
+              "pending"
             ],
             "reason_codes": [
-              "execution.stale_context"
+              "filter.requires_confirmation"
             ],
             "failure_stage": null,
             "effects": [
@@ -677,7 +677,7 @@
             "effects": [
               "desire.remembered"
             ],
-            "reply_source": "managed"
+            "reply_source": "deterministic_fallback"
           }
         }
       ],

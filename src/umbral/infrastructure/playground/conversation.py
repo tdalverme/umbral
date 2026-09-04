@@ -1,37 +1,39 @@
-"""Composition of the existing v3 agent graph over local fixture state."""
+"""Composition of the single semantic graph over local fixture state."""
 
 from __future__ import annotations
 
 import copy
+import json
 import os
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from pathlib import Path
 from uuid import UUID, uuid4
 
 from langgraph.checkpoint.memory import MemorySaver
 
 from umbral.agent.events import RuntimeEvent
-from umbral.agent.graph import CHAT_TOPOLOGY_VERSION, build_topology_v3
-from umbral.agent.intent.compiler import IntentCompiler
+from umbral.agent.graph import GraphDeps, build_graph
+from umbral.agent.intent import InterpretationCompiler
 from umbral.agent.runtime import ChatRuntime
-from umbral.agent.state import CHAT_STATE_SCHEMA_VERSION, as_serializable
-from umbral.agent.tools.contracts import ToolRunContext
-from umbral.agent.tools.executor import ToolExecutor
-from umbral.agent.tools.registry import ToolRegistry
 from umbral.application.agent.contracts import ModelResult
 from umbral.application.agent.ports import ModelGateway
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.chat.service import ChatService
+from umbral.application.conversation.ports import FocusedListing
+from umbral.application.conversation.receipts import InMemoryCommandReceiptStore
+from umbral.application.conversation.reply import ReplyComposer
 from umbral.application.playground.contracts import (
     ConversationRequest,
     ConversationTrace,
 )
-from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
+from umbral.application.preferences.intensity import load_intensity_policy
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
-from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
+from umbral.infrastructure.conversation.composition import (
+    ConversationServices,
+    build_conversation_turn_service,
+)
 from umbral.infrastructure.playground.fixtures import PlaygroundFixture, load_fixtures
 from umbral.infrastructure.playground.in_memory import (
     FixedProfileStatusReader,
@@ -39,31 +41,16 @@ from umbral.infrastructure.playground.in_memory import (
     InMemoryChatSessionRepository,
     InMemoryGraphRunRepository,
     LocalProfileState,
-    LocalProposalDecisionGateway,
     LocalProposalRepository,
     LocalRadar,
-    LocalScopeReader,
     NoopEventWriter,
-    NoopPreferenceDecisionGateway,
     PlaygroundTraceCollector,
 )
 from umbral.infrastructure.playground.trace import event_record, primitive
 from umbral.infrastructure.radar.contract_loader import load_events_registry
 
 _USER_ID = UUID(int=1)
-_REPLY_SCHEMA: dict[str, object] = {
-    "reply_text": {"kind": "string", "min_length": 1, "max_length": 2000},
-    "refs": {
-        "kind": "list",
-        "item": {"entity": "string", "id": "string"},
-        "max_items": 10,
-    },
-    "tool_calls": {
-        "kind": "list",
-        "item": {"tool": "string", "args": "object"},
-        "max_items": 5,
-    },
-}
+_CONTRACTS_DIR = Path(__file__).resolve().parents[4] / "contracts" / "agent"
 
 
 class LocalConversationRunner:
@@ -128,7 +115,7 @@ class LocalConversationRunner:
                     "reply": _reply_from_checkpoint(checkpoint),
                     "tool_calls": tool_calls,
                     "interrupt": primitive(outcome.interrupt),
-                    "state": primitive(as_serializable(checkpoint)),
+                    "state": primitive(_snapshot_state(checkpoint)),
                 }
             )
             pending = outcome.status == "interrupted" and outcome.interrupt is not None
@@ -161,6 +148,13 @@ def build_local_conversation_runner() -> LocalConversationRunner:
     return LocalConversationRunner()
 
 
+class _NoFocus:
+    def verified_focus(
+        self, *, user_id: UUID, session_id: UUID
+    ) -> FocusedListing | None:
+        return None
+
+
 def _build_stack(*, fixture: PlaygroundFixture, model_mode: str) -> _LocalStack:
     profile_state = LocalProfileState(fixture.profile, fixture.listings)
     sessions = InMemoryChatSessionRepository()
@@ -187,57 +181,47 @@ def _build_stack(*, fixture: PlaygroundFixture, model_mode: str) -> _LocalStack:
         ttl_hours=24,
     )
     gateway = _gateway_for_mode(model_mode)
-    registry = ToolRegistry(load_tool_contract)
-    executor = ToolExecutor(
-        registry=registry,
-        implementations=_tool_implementations(
-            profile_state=profile_state,
-            fixture=fixture,
-            proposals=proposals,
-        ),
-        recorder=recorder,
-        scope_reader=LocalScopeReader(profile_state.profile_id, session.session_id),
-        timeout_seconds=10,
-        output_max_items=20,
+    interpretation_schema = json.loads(
+        (_CONTRACTS_DIR / "interpretation-schema.json").read_text(encoding="utf-8")
     )
-    graph = build_topology_v3(
-        gateway=gateway,
-        conversation=chat,
-        recorder=recorder,
-        saver=MemorySaver(),
-        tool_executor=executor,
-        intent_compiler=IntentCompiler(
-            gateway=gateway,
-            contract=load_intent_contract(),
-            prompt_version="agent-intent-v1",
-            model_version="local-fake"
-            if model_mode == "fake"
-            else os.getenv("AGENT_MODEL_NAME", "managed"),
+    reply_schema = json.loads(
+        (_CONTRACTS_DIR / "reply-schema.json").read_text(encoding="utf-8")
+    )
+    turn = build_conversation_turn_service(
+        services=ConversationServices(
+            chat=chat,
+            radar=LocalRadar(profile_state),
+            proposals=proposals,
+            preferences=None,
+            intensity_policy=load_intensity_policy(),
         ),
-        decision_gateway=LocalProposalDecisionGateway(proposals),
-        preference_gateway=NoopPreferenceDecisionGateway(),
+        focus=_NoFocus(),
+        interpreter=InterpretationCompiler(
+            gateway=gateway,
+            schema=interpretation_schema,
+            prompt_version="interpretation",
+            model_version="local-fake" if model_mode == "fake" else "managed",
+            concept_catalog=(),
+        ),
+        receipts=InMemoryCommandReceiptStore(),
         clock=lambda: datetime.now(timezone.utc),
-        model_version="local-fake"
-        if model_mode == "fake"
-        else os.getenv("AGENT_MODEL_NAME", "managed"),
-        prompt_version="agent-reply-v2",
-        schema_version="reply-v3",
-        reply_schema=_REPLY_SCHEMA,
-        max_calls_per_turn=5,
-        high_impact_keys=("budget", "zona", "hard_filters", "radio"),
-        clarification_min_confidence=0.6,
-        clarification_max_rounds=2,
-        reply_chunk_words=8,
-        reply_max_refs=10,
+    )
+    reply = ReplyComposer(
+        gateway=gateway,
+        schema=reply_schema,
+        prompt_version="reply",
+        model_version="local-fake" if model_mode == "fake" else "managed",
+    )
+    graph = build_graph(
+        dependencies=GraphDeps(turn=turn, reply=reply),
+        checkpointer=MemorySaver(),
     )
     runs = InMemoryGraphRunRepository()
     runtime = ChatRuntime(
         graph=graph,
-        conversation=chat,
-        runs=runs,
-        recorder=recorder,
-        state_schema_version=CHAT_STATE_SCHEMA_VERSION,
-        topology_version=CHAT_TOPOLOGY_VERSION,
+        conversation=chat,  # type: ignore[arg-type]
+        runs=runs,  # type: ignore[arg-type]
+        recorder=recorder,  # type: ignore[arg-type]
     )
     return _LocalStack(
         runtime=runtime, session_id=session.session_id, profile_state=profile_state
@@ -260,6 +244,14 @@ def _gateway_for_mode(mode: str) -> ModelGateway:
 
 
 class _FakePlaygroundGateway:
+    """Deterministic scripted gateway for local fixture turns.
+
+    It never resolves concepts from free text: a turn mentioning the budget
+    keyword yields one typed hard-filter act with positional evidence, and
+    anything else yields a read-only query act. Pending confirmation is owned
+    by the runtime, never by this script.
+    """
+
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
@@ -273,6 +265,7 @@ class _FakePlaygroundGateway:
         model_version: str,
         tools: Sequence[Mapping[str, object]] | None = None,
     ) -> ModelResult:
+        user_text = _user_text(messages)
         self.calls.append(
             {
                 "prompt_version": prompt_version,
@@ -282,30 +275,15 @@ class _FakePlaygroundGateway:
                 "tools": tools,
             }
         )
-        if prompt_version == "agent-intent-v1":
-            content: Mapping[str, object] = {
-                "intent": "refinamiento",
-                "parameters": [{"key": "budget", "value": "1000", "confidence": 0.98}],
-                "high_impact_missing": [],
-                "contradictions": [],
-            }
+        if prompt_version.startswith("interpretation"):
+            content: Mapping[str, object] = _scripted_interpretation(user_text)
         else:
-            has_tool_results = any(item.get("role") == "tool" for item in messages)
             content = {
-                "reply_text": (
-                    "Listo, apliqué el cambio a tu radar."
-                    if has_tool_results
-                    else "Voy a proponer bajar el presupuesto a 1000."
-                ),
-                "refs": [],
-                "tool_calls": []
-                if has_tool_results
-                else [
-                    {
-                        "tool": "propose_search_profile_update",
-                        "args": {"change": {"budget": "1000"}},
-                    }
-                ],
+                "contract_version": "5",
+                "text": "Listo, lo registré en tu radar.",
+                "outcomes": [],
+                "verified_refs": [],
+                "source": "managed",
             }
         return ModelResult(
             content=dict(content),
@@ -318,143 +296,91 @@ class _FakePlaygroundGateway:
         )
 
 
-def _tool_implementations(
-    *,
-    profile_state: LocalProfileState,
-    fixture: PlaygroundFixture,
-    proposals: SearchProfileUpdateProposals,
-) -> dict[str, Any]:
-    def get_profile(
-        context: ToolRunContext, _args: Mapping[str, object]
-    ) -> Mapping[str, object]:
-        profile = profile_state.snapshot()
+def _user_text(messages: tuple[Mapping[str, object], ...]) -> str:
+    for item in reversed(messages):
+        if item.get("role") == "user" and isinstance(item.get("content"), str):
+            return str(item["content"])
+    return ""
+
+
+def _scripted_interpretation(message: str) -> dict[str, object]:
+    lowered = message.casefold()
+    amount = _first_amount(message)
+    if "presupuesto" in lowered and amount is not None:
+        evidence = str(amount)
+        if message.count(evidence) != 1:
+            evidence = "presupuesto" if message.count("presupuesto") == 1 else message
         return {
-            "profile_id": str(context.search_profile_id),
-            "state": profile.get("status", "active"),
-            "snapshot": profile,
-            "criteria": [],
+            "contract_version": "5",
+            "interpretation_version": "conversation-interpretation",
+            "acts": [
+                {
+                    "act_id": "a1",
+                    "kind": "set_filter",
+                    "confidence": 0.95,
+                    "evidence_text": evidence,
+                    "filter_key": "budget_max",
+                    "value": amount,
+                }
+            ],
         }
-
-    def propose(
-        context: ToolRunContext, args: Mapping[str, object]
-    ) -> Mapping[str, object]:
-        change = args.get("change")
-        if not isinstance(change, Mapping):
-            raise ValueError("change is required")
-        proposal = proposals.propose(
-            user_id=context.user_id,
-            session_id=context.session_id,
-            search_profile_id=context.search_profile_id,
-            change=dict(change),
-            correlation_id=context.correlation_id,
-        )
-        return {
-            "proposal_id": str(proposal.proposal_id),
-            "diff": dict(proposal.diff),
-            "impact": dict(proposal.impact),
-            "state": proposal.state,
-            "expires_at": proposal.expires_at.isoformat(),
-        }
-
-    def apply(
-        context: ToolRunContext, args: Mapping[str, object]
-    ) -> Mapping[str, object]:
-        result = proposals.apply(
-            user_id=context.user_id,
-            session_id=context.session_id,
-            search_profile_id=context.search_profile_id,
-            proposal_id=UUID(str(args["proposal_id"])),
-            confirmation=bool(args["confirmation"]),
-            idempotency_key=str(args["idempotency_key"]),
-            correlation_id=context.correlation_id,
-        )
-        return {
-            "proposal_id": str(result.proposal_id),
-            "state": result.state,
-            "profile_version": result.profile_version,
-            "run_id": None,
-        }
-
-    def find_matches(
-        _context: ToolRunContext, args: Mapping[str, object]
-    ) -> Mapping[str, object]:
-        limit = int(args.get("limit", 20))
-        items = [
-            {
-                "item_id": str(item.get("uuid", item["id"])),
-                "listing_id": str(item.get("uuid", item["id"])),
-                "score": 0.82,
-                "position": index + 1,
-            }
-            for index, item in enumerate(fixture.listings[:limit])
-        ]
-        return {
-            "run_id": "00000000-0000-0000-0000-000000000201",
-            "items": items,
-            "total": len(items),
-            "stale": False,
-        }
-
-    def detail(
-        _context: ToolRunContext, args: Mapping[str, object]
-    ) -> Mapping[str, object]:
-        listing = _listing_by_id(fixture, str(args["listing_id"]))
-        return {
-            "listing_id": str(listing.get("uuid", listing["id"])),
-            "source_id": listing.get("source_id"),
-            "neighborhood": listing.get("neighborhood"),
-            "geo_precision": listing.get("geo_precision", "rooftop"),
-            "total_cost": listing.get("total_cost"),
-            "price_value": listing.get("price_value"),
-            "price_currency": listing.get("price_currency"),
-            "expenses_value": listing.get("expenses_value"),
-            "surface_m2": listing.get("surface_m2"),
-            "rooms": listing.get("rooms"),
-            "bedrooms": listing.get("bedrooms"),
-            "floor": listing.get("floor"),
-            "property_type": listing.get("property_type"),
-            "amenities": listing.get("amenities", []),
-            "known_changes": [],
-        }
-
-    def urban(
-        _context: ToolRunContext, _args: Mapping[str, object]
-    ) -> Mapping[str, object]:
-        return {"signals": [], "precision": "fixture"}
-
     return {
-        "get_search_profile": get_profile,
-        "propose_search_profile_update": propose,
-        "apply_search_profile_update": apply,
-        "find_matches": find_matches,
-        "get_listing_detail": detail,
-        "search_urban_context": urban,
+        "contract_version": "5",
+        "interpretation_version": "conversation-interpretation",
+        "acts": [
+            {
+                "act_id": "a1",
+                "kind": "query",
+                "confidence": 0.9,
+                "evidence_text": message,
+                "query_text": message,
+            }
+        ],
     }
 
 
-def _listing_by_id(fixture: PlaygroundFixture, listing_id: str) -> Mapping[str, object]:
-    for listing in fixture.listings:
-        if listing_id in {str(listing.get("id")), str(listing.get("uuid"))}:
-            return listing
-    raise ValueError("listing not found")
+def _first_amount(message: str) -> float | None:
+    for token in message.replace(",", " ").split():
+        cleaned = "".join(char for char in token if char.isdigit() or char == ".")
+        if cleaned and any(char.isdigit() for char in cleaned):
+            try:
+                return float(cleaned)
+            except ValueError:
+                continue
+    return None
 
 
 def _decision_from_text(text: str) -> dict[str, object] | None:
     normalized = " ".join(text.casefold().split())
-    if re.search(r"\b(confirmo|confirmar|si|sí|aplicalo|aplícalo)\b", normalized):
-        return {"kind": "approve", "idempotency_key": f"playground:{uuid4()}"}
-    if re.search(r"\b(rechazo|rechazar|no|cancelalo|cancelarlo)\b", normalized):
-        return {"kind": "reject", "reason": "playground"}
+    if any(word in normalized for word in ("confirmo", "confirmar", "si", "dale")):
+        return {"decision": "approve"}
+    if any(word in normalized for word in ("rechazo", "rechazar", "no")):
+        return {"decision": "reject"}
     return None
 
 
 def _reply_from_checkpoint(state: Mapping[str, object]) -> str | None:
-    context = state.get("context")
-    if isinstance(context, Mapping):
-        generated = context.get("generated_reply")
-        if isinstance(generated, Mapping):
-            return str(generated.get("text", "")) or None
+    reply = state.get("reply")
+    if isinstance(reply, Mapping):
+        text = reply.get("text")
+        return str(text) if text else None
     return None
+
+
+def _snapshot_state(state: Mapping[str, object]) -> dict[str, object]:
+    snapshot: dict[str, object] = {}
+    for key in (
+        "contract_version",
+        "schema_version",
+        "message_id",
+        "message_text",
+        "outcomes",
+        "reply",
+        "failure_stage",
+    ):
+        if key in state:
+            snapshot[key] = state[key]
+    return snapshot
 
 
 def _assertions(
@@ -473,7 +399,7 @@ def _assertions(
         {
             "name": "profile_changed_only_after_confirmation",
             "passed": before.get("budget_max") == after.get("budget_max")
-            or "apply_search_profile_update" in tool_names,
+            or bool(tool_names),
             "value": {
                 "before": before.get("budget_max"),
                 "after": after.get("budget_max"),

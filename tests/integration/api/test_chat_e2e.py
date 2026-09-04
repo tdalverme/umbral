@@ -1,280 +1,237 @@
-# mypy: disable-error-code="no-untyped-def,no-untyped-call"
-"""Production-composition E2E: the v3 stack over real Postgres (R-10, T062)."""
+"""Single-stack chat e2e: runtime over the unversioned conversation graph.
+
+Exercises the full production path without Postgres: a mixed soft+hard turn
+through ``ChatRuntime`` interrupts for the hard step, applies the soft desire
+immediately, and completes the radar update on approval.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from datetime import datetime, timedelta, timezone
-from itertools import count
+import json
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from uuid import UUID, uuid4
 
-import pytest
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from tests.integration.agent.conftest import (
-    seed_profile,
-    seed_user,
+from langgraph.checkpoint.memory import MemorySaver
+from tests.fakes.preferences import FakeConceptReader, FakePreferenceStore
+from tests.support.agent import InMemoryGraphRunRepository
+from tests.support.chat import (
+    FixedProfileStatusReader,
+    InMemoryChatMessageRepository,
+    InMemoryChatSessionRepository,
+    RecordingEventWriter,
 )
-from tests.integration.agent.tools.conftest import build_scope_stack
-from tests.support.containers import ServiceConnection
-from tests.support.tools import FakeCriteria, FakeFeedback, FakeRadar, FakeScoring
+from tests.support.radar import RadarTestContext
 
-from umbral.agent.graph import build_topology_v3
-from umbral.agent.intent.compiler import IntentCompiler
+from umbral.agent.graph import GraphDeps, build_graph
 from umbral.agent.runtime import ChatRuntime
-from umbral.agent.state import CHAT_STATE_SCHEMA_VERSION
-from umbral.agent.tools.executor import ToolExecutor
-from umbral.agent.tools.registry import ToolRegistry
-from umbral.agent.tools.tools import ToolServices, build_tool_implementations
 from umbral.application.agent.contracts import ModelResult
-from umbral.application.agent.service import RunRecorderService
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.chat.service import ChatService
-from umbral.infrastructure.agent.checkpointer import create_postgres_saver
-from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
-from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
-from umbral.application.agent.tools.preferences import (
-    load_preference_vocabulary,
+from umbral.application.conversation.contracts import (
+    ConceptLink,
+    EvidenceSpan,
+    ExpressDesire,
+    SetFilter,
+    TurnContext,
+    TurnInterpretation,
 )
-from umbral.infrastructure.db.repositories.agent import (
-    SqlAlchemyGraphRunRepository,
-    SqlAlchemyModelCallRepository,
-    SqlAlchemyNodeRunRepository,
-    SqlAlchemyProposalRepository,
+from umbral.application.conversation.ports import FocusedListing
+from umbral.application.conversation.receipts import InMemoryCommandReceiptStore
+from umbral.application.conversation.reply import ReplyComposer
+from umbral.application.preferences.contracts import (
+    PreferenceConcept,
+    PreferencePolicySpec,
 )
-from umbral.infrastructure.db.repositories.chat import (
-    SqlAlchemyChatMessageRepository,
-    SqlAlchemyChatSessionRepository,
-    SqlAlchemySearchProfileStatusReader,
+from umbral.application.preferences.intensity import load_intensity_policy
+from umbral.application.preferences.service import PreferenceService
+from umbral.infrastructure.conversation.composition import (
+    ConversationServices,
+    build_conversation_turn_service,
 )
-from umbral.infrastructure.db.repositories.radar import SqlAlchemyEventRepository
+from umbral.infrastructure.playground.in_memory import LocalProposalRepository
 from umbral.infrastructure.radar.contract_loader import load_events_registry
 
-SessionFactory = Callable[[], Session]
+_NOW = datetime(2026, 9, 4, 12, 0, tzinfo=timezone.utc)
+_ROOT = Path(__file__).resolve().parents[3]
+_REPLY_SCHEMA = json.loads(
+    (_ROOT / "contracts" / "agent" / "reply-schema.json").read_text(encoding="utf-8")
+)
 
 
-@pytest.fixture
-def chat_backend(request: pytest.FixtureRequest) -> tuple[SessionFactory, str]:
-    """Postgres at head for the chat E2E (mirrors the agent conftest fixture)."""
-    connection: ServiceConnection = request.getfixturevalue("postgres_container")
-    config = Config("alembic.ini")
-    config.set_main_option("sqlalchemy.url", connection.url)
-    command.upgrade(config, "head")
-    engine = create_engine(connection.url)
-    factory = sessionmaker(engine, expire_on_commit=False)
-
-    def teardown() -> None:
-        engine.dispose()
-
-    request.addfinalizer(teardown)
-    return factory, connection.url
-
-_NOW = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
-_tick = count()
-
-_REPLY_SCHEMA = {
-    "reply_text": {"kind": "string"},
-    "refs": {"kind": "list"},
-    "tool_calls": {"kind": "list", "max_items": 5},
-}
-
-
-def _clock() -> datetime:
-    return _NOW + timedelta(seconds=next(_tick))
-
-
-class _NoopPreferenceGateway:
-    """E2E chat tests never reach the preference gateway."""
-
-    def get_proposal(self, **kwargs: object) -> object:
-        raise AssertionError("preference gateway must not be called here")
-
-    def confirm_proposal(self, **kwargs: object) -> object:
-        raise AssertionError("preference gateway must not be called here")
-
-    def confirm_preference_removal(self, **kwargs: object) -> object:
-        raise AssertionError("preference gateway must not be called here")
-
-    def reject_proposal(self, **kwargs: object) -> object:
-        raise AssertionError("preference gateway must not be called here")
-
-
-class _ScriptedGateway:
-    def __init__(self) -> None:
-        self.reply_index = 0
-
-    def generate_structured(
-        self,
-        *,
-        messages,
-        schema,
-        schema_version,
-        prompt_version,
-        model_version,
-        tools=None,
-    ):
-        if prompt_version == "agent-intent-v1":
-            content: Mapping[str, object] = {
-                "intent": "refinamiento",
-                "parameters": [
-                    {"key": "budget", "value": "900", "confidence": 0.95}
-                ],
-                "high_impact_missing": [],
-                "contradictions": [],
-            }
-        elif self.reply_index == 0:
-            self.reply_index += 1
-            content = {
-                "reply_text": "Voy a proponer el cambio.",
-                "refs": [],
-                "tool_calls": [
-                    {
-                        "tool": "propose_search_profile_update",
-                        "args": {"change": {"budget_max": 900}},
-                    }
-                ],
-            }
-        else:
-            content = {"reply_text": "Apliqué el cambio.", "refs": [], "tool_calls": []}
+class _ManagedReply:
+    def generate_structured(self, **kwargs: object) -> ModelResult:
         return ModelResult(
-            content=dict(content),
-            model_version="local-fake",
+            content={
+                "contract_version": "5",
+                "text": "Listo.",
+                "outcomes": [],
+                "verified_refs": [],
+                "source": "managed",
+            },
+            model_version="test",
             status="success",
             latency_ms=1,
-            input_tokens=8,
-            output_tokens=16,
-            total_tokens=24,
         )
 
 
-def _build_runtime(factory, url: str) -> ChatRuntime:
-    chat = ChatService(
-        sessions=SqlAlchemyChatSessionRepository(factory),
-        messages=SqlAlchemyChatMessageRepository(factory),
-        profile_status=SqlAlchemySearchProfileStatusReader(factory),
-        events_out=SqlAlchemyEventRepository(factory),
-        events_registry=load_events_registry(),
-        max_message_length=4000,
-        clock=_clock,
-    )
-    scope = build_scope_stack(factory)
-    proposals = SearchProfileUpdateProposals(
-        repository=SqlAlchemyProposalRepository(factory),
-        radar=FakeRadar(),
-        events=SqlAlchemyEventRepository(factory),
-        events_registry=load_events_registry(),
-        ttl_hours=24,
-        clock=_clock,
-    )
-    runs = SqlAlchemyGraphRunRepository(factory)
-    recorder = RunRecorderService(
-        graph_runs=runs,
-        node_runs=SqlAlchemyNodeRunRepository(factory),
-        model_calls=SqlAlchemyModelCallRepository(factory),
-    )
-    executor = ToolExecutor(
-        registry=ToolRegistry(load_tool_contract),
-        implementations=build_tool_implementations(
-            ToolServices(
-                radar=FakeRadar(),
-                scoring=FakeScoring(),
-                feedback=FakeFeedback(),
-                criteria=FakeCriteria(),
-                proposals=proposals,
-                vocabulary=load_preference_vocabulary(),
-            )
+class _Focus:
+    def verified_focus(
+        self, *, user_id: UUID, session_id: UUID
+    ) -> FocusedListing | None:
+        return None
+
+
+@dataclass
+class _Script:
+    output: TurnInterpretation
+
+    def interpret(
+        self, *, message_text: str, context: TurnContext, correlation_id: UUID
+    ) -> TurnInterpretation:
+        return self.output
+
+
+def _mixed_interpretation() -> TurnInterpretation:
+    desire_span = EvidenceSpan(start=9, end=22, text="bien luminoso")
+    budget_span = EvidenceSpan(start=25, end=28, text="900")
+    return TurnInterpretation(
+        model_version="test",
+        prompt_version="test",
+        acts=(
+            ExpressDesire(
+                act_id="desire-light",
+                confidence=0.95,
+                evidence_spans=(desire_span,),
+                raw_text="bien luminoso",
+                subject_ref="luminosidad",
+                concept_links=(
+                    ConceptLink(
+                        concept_ref="luminosidad",
+                        confidence=0.95,
+                        polarity="positive",
+                        intensity="medium",
+                        evidence_spans=(desire_span,),
+                    ),
+                ),
+            ),
+            SetFilter(
+                act_id="budget",
+                confidence=0.95,
+                evidence_spans=(budget_span,),
+                filter_key="budget_max",
+                value=900,
+            ),
         ),
-        recorder=recorder,
-        scope_reader=scope.scope_reader,
-        timeout_seconds=5.0,
-    )
-    gateway = _ScriptedGateway()
-    compiler = IntentCompiler(
-        gateway=gateway,
-        contract=load_intent_contract(),
-        prompt_version="agent-intent-v1",
-        model_version="local-fake",
-    )
-    graph = build_topology_v3(
-        gateway=gateway,
-        conversation=chat,
-        recorder=recorder,
-        saver=create_postgres_saver(url, strict_msgpack=True),
-        tool_executor=executor,
-        intent_compiler=compiler,
-        decision_gateway=proposals,
-        preference_gateway=_NoopPreferenceGateway(),
-        clock=_clock,
-        model_version="local-fake",
-        prompt_version="agent-reply-v2",
-        schema_version="reply-v3",
-        reply_schema=_REPLY_SCHEMA,
-        max_calls_per_turn=5,
-        high_impact_keys=("budget", "zona", "hard_filters", "radio"),
-        clarification_min_confidence=0.6,
-        clarification_max_rounds=2,
-        reply_chunk_words=8,
-        reply_max_refs=10,
-    )
-    return ChatRuntime(
-        graph=graph,
-        conversation=chat,
-        runs=runs,
-        recorder=recorder,
-        clock=_clock,
-        state_schema_version=CHAT_STATE_SCHEMA_VERSION,
-        topology_version=3,
     )
 
 
-@pytest.mark.integration
-def test_e2e_propose_interrupt_and_decision_over_real_postgres(
-    chat_backend: tuple[SessionFactory, str],
-) -> None:
-    factory, url = chat_backend
-    runtime = _build_runtime(factory, url)
-    owner_id = seed_user(factory)
-    profile = seed_profile(factory, owner_id)
+def _build_runtime() -> tuple[ChatRuntime, UUID, UUID, RadarTestContext]:
+    radar = RadarTestContext(default_runtime=False)
+    user_id = uuid4()
+    profile, _ = radar.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
     chat = ChatService(
-        sessions=SqlAlchemyChatSessionRepository(factory),
-        messages=SqlAlchemyChatMessageRepository(factory),
-        profile_status=SqlAlchemySearchProfileStatusReader(factory),
-        events_out=SqlAlchemyEventRepository(factory),
+        sessions=InMemoryChatSessionRepository(),
+        messages=InMemoryChatMessageRepository(),
+        profile_status=FixedProfileStatusReader(),
+        events_out=RecordingEventWriter(),
         events_registry=load_events_registry(),
-        max_message_length=4000,
-        clock=_clock,
+        clock=lambda: _NOW,
     )
     session = chat.create_session(
-        user_id=owner_id, search_profile_id=profile.profile_id, correlation_id=uuid4()
+        user_id=user_id,
+        search_profile_id=profile.profile_id,
+        correlation_id=uuid4(),
     )
+    proposals = SearchProfileUpdateProposals(
+        repository=LocalProposalRepository(),
+        radar=radar.service,
+        events=RecordingEventWriter(),
+        events_registry=load_events_registry(),
+        clock=lambda: _NOW,
+    )
+    store = FakePreferenceStore()
+    concepts = FakeConceptReader(
+        {
+            "luminosidad": PreferenceConcept(
+                key="luminosidad", matcher_type="signal_score", computable=True
+            )
+        }
+    )
+    preferences = PreferenceService(
+        expressions=store,
+        bindings=store,
+        mutations=store,
+        concepts=concepts,
+        policy=PreferencePolicySpec.v1(),
+        clock=lambda: _NOW,
+    )
+    turn = build_conversation_turn_service(
+        services=ConversationServices(
+            chat=chat,
+            radar=radar.service,
+            proposals=proposals,
+            preferences=preferences,
+            concepts=concepts,
+            intensity_policy=load_intensity_policy(),
+        ),
+        focus=_Focus(),
+        interpreter=_Script(_mixed_interpretation()),
+        receipts=InMemoryCommandReceiptStore(),
+        clock=lambda: _NOW,
+    )
+    reply = ReplyComposer(
+        gateway=_ManagedReply(),  # type: ignore[arg-type]
+        schema=_REPLY_SCHEMA,
+        prompt_version="reply",
+        model_version="test",
+    )
+    graph = build_graph(
+        dependencies=GraphDeps(turn=turn, reply=reply),
+        checkpointer=MemorySaver(),
+    )
+    runtime = ChatRuntime(
+        graph=graph,
+        conversation=chat,  # type: ignore[arg-type]
+        runs=InMemoryGraphRunRepository(),  # type: ignore[arg-type]
+        clock=lambda: _NOW,
+    )
+    return runtime, user_id, session.session_id, radar
+
+
+def test_e2e_mixed_turn_applies_soft_and_confirms_hard() -> None:
+    runtime, user_id, session_id, radar = _build_runtime()
 
     first = runtime.run_turn(
-        user_id=owner_id,
-        session_id=session.session_id,
-        text="subí el presupuesto a 900",
+        user_id=user_id,
+        session_id=session_id,
+        text="prefiero bien luminoso y 900",
         correlation_id=uuid4(),
     )
     assert first.status == "interrupted"
     assert first.interrupt is not None
-    proposal_id = UUID(str(first.interrupt["proposal_id"]))
-
-    # The proposal is durable in Postgres.
-    repo = SqlAlchemyProposalRepository(factory)
-    persisted = repo.get(proposal_id, session.session_id, owner_id)
-    assert persisted is not None
-    assert persisted.state == "pending"
+    assert first.interrupt["ordinal"] == 1
+    assert first.interrupt["total"] == 1
 
     second = runtime.run_turn(
-        user_id=owner_id,
-        session_id=session.session_id,
+        user_id=user_id,
+        session_id=session_id,
         text="",
         correlation_id=uuid4(),
         resume=True,
-        decision={"kind": "approve", "idempotency_key": "e2e-key"},
+        decision={"decision": "approve"},
     )
     assert second.run_id == first.run_id
     assert second.status == "completed"
-    approved = repo.get(proposal_id, session.session_id, owner_id)
-    assert approved is not None and approved.state == "approved"

@@ -50,13 +50,13 @@ Write-Host "  Frase: `"$Phrase`"`n" -ForegroundColor White
 $env:PYTHONPATH = "src"
 $script = @"
 import json
-from umbral.agent.intent.v5 import InterpretationCompilerV5
-from umbral.application.conversation.v5.contracts import TurnContextV5
+from umbral.agent.intent import InterpretationCompiler
+from umbral.application.conversation.contracts import TurnContext
 from umbral.infrastructure.criteria.contract_loader import load_concepts_seed
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
 from pathlib import Path
 
-# Cargar el snapshot de conceptos que consume el intérprete V5.
+# Cargar el snapshot de conceptos que consume el intérprete.
 seed = load_concepts_seed()
 concept_catalog = tuple(
     {
@@ -68,18 +68,18 @@ concept_catalog = tuple(
     }
     for concept in seed.concepts
 )
-schema = json.loads(Path("contracts/agent/v5/interpretation-schema-v5.json").read_text(encoding="utf-8"))
+schema = json.loads(Path("contracts/agent/interpretation-schema.json").read_text(encoding="utf-8"))
 
 import os
 gw = ManagedModelGateway(endpoint=os.environ["AGENT_MANAGED_ENDPOINT"], api_key=os.environ["AGENT_MANAGED_API_KEY"], model=os.environ["AGENT_MODEL_NAME"], timeout_seconds=30)
-interpreter = InterpretationCompilerV5(
+interpreter = InterpretationCompiler(
     gateway=gw,
     schema=schema,
     prompt_version="test-local",
     model_version=os.environ["AGENT_MODEL_NAME"],
     concept_catalog=concept_catalog,
 )
-context = TurnContextV5(
+context = TurnContext(
     user_id="smoke-user", session_id="smoke-session", active_radar_ref="radar:smoke",
     active_radar_version=1, current_filters=(), active_desires=(), pending_action=None,
     focused_entity=None, verified_listing_refs=(),

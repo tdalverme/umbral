@@ -1,66 +1,68 @@
-"""Conversational copilot turn orchestrator.
+"""Ordered V5 turn orchestration with confirmation and idempotency.
 
-``ConversationTurnService`` is the single application seam for a chat turn:
-it loads the verified context, asks the interpretation gateway for ordered
-multi-acts, plans deterministic effects, applies only the safe/reversible ones
-through explicit services and reports the routing decision (refresh and/or
-confirmation) to the agent graph. The model never decides durable state,
-hard filters or ranking (constitution).
-
-The service exposes granular steps (``load_context``, ``interpret``, ``plan``,
-``apply_safe``) so the v4 agent graph can interrupt for confirmation between
-steps; ``process_turn`` composes them for the atomic happy path.
+Processing follows the design's multi-act semantics: resolve the active pending
+action first, reload context after that state-changing segment, re-plan the
+remaining typed acts against the refreshed context, execute safe acts in
+expressed order, and stop the affected segment at a pending or clarification
+decision. Later acts whose prerequisites were not met are marked
+``not_executed``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import UUID
 
 from umbral.application.conversation.contracts import (
-    ConversationError,
-    ConversationNotReady,
-    ConversationTurnContext,
+    ActDecision,
+    ActOutcome,
+    Command,
+    ConversationAct,
     ConversationTurnResult,
-    PendingAction,
-    TurnEffect,
+    ExecutedAct,
+    FailureStage,
+    ResolvePending,
+    TurnContext,
     TurnInterpretation,
+    TurnPlan,
 )
-from umbral.application.conversation.policy import TurnPlan, plan_turn
 from umbral.application.conversation.ports import (
-    EffectApplier,
-    InterpretationGateway,
-    PendingActionReader,
-    PendingActionResolver,
-    RefreshScheduler,
-    TurnContextReader,
+    ContextReader,
+    EffectExecutorLike,
+    Interpreter,
+    PendingResolver,
+    TurnAuditWriter,
+    TurnPolicy,
+)
+from umbral.application.conversation.receipts import (
+    CommandReceiptStore,
+    execute_with_receipt,
 )
 
-Clock = Callable[[], datetime]
 
-
-class ConversationTurnService:
-    """Orchestrates one conversational turn with no generative authority."""
+class ConversationTurn:
+    """Executes one full V5 turn through its explicit ports."""
 
     def __init__(
         self,
         *,
-        contexts: TurnContextReader,
-        interpretation: InterpretationGateway,
-        applier: EffectApplier,
-        pending: PendingActionReader,
-        pending_resolver: PendingActionResolver,
-        refresh: RefreshScheduler,
-        clock: Clock | None = None,
+        contexts: ContextReader,
+        interpreter: Interpreter,
+        policy: TurnPolicy,
+        executor: EffectExecutorLike,
+        pending: PendingResolver,
+        receipts: CommandReceiptStore,
+        audit: TurnAuditWriter | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self.contexts = contexts
-        self.interpretation = interpretation
-        self.applier = applier
+        self.interpreter = interpreter
+        self.policy = policy
+        self.executor = executor
         self.pending = pending
-        self.pending_resolver = pending_resolver
-        self.refresh = refresh
+        self.receipts = receipts
+        self.audit = audit
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     def load_context(
@@ -69,21 +71,19 @@ class ConversationTurnService:
         user_id: UUID,
         session_id: UUID,
         correlation_id: UUID,
-    ) -> ConversationTurnContext:
+    ) -> TurnContext:
         return self.contexts.load(
-            user_id=user_id,
-            session_id=session_id,
-            correlation_id=correlation_id,
+            user_id=user_id, session_id=session_id, correlation_id=correlation_id
         )
 
     def interpret(
         self,
         *,
         message_text: str,
-        context: ConversationTurnContext,
+        context: TurnContext,
         correlation_id: UUID,
     ) -> TurnInterpretation:
-        return self.interpretation.interpret_turn(
+        return self.interpreter.interpret(
             message_text=message_text,
             context=context,
             correlation_id=correlation_id,
@@ -92,164 +92,319 @@ class ConversationTurnService:
     def plan(
         self,
         *,
+        user_message: str,
+        context: TurnContext,
         interpretation: TurnInterpretation,
-        context: ConversationTurnContext,
     ) -> TurnPlan:
-        return plan_turn(interpretation=interpretation, context=context)
+        return self.policy(
+            user_message=user_message,
+            context=context,
+            interpretation=interpretation,
+        )
 
-    def apply_safe(
+    def resolve_pending(
         self,
         *,
-        plan: TurnPlan,
-        context: ConversationTurnContext,
+        act_id: str,
+        context: TurnContext,
+        pending_ref: str,
+        decision: str,
         correlation_id: UUID,
-    ) -> tuple[tuple[TurnEffect, ...], tuple[Mapping[str, object], ...]]:
-        applied: list[TurnEffect] = []
-        active_context = context
-        for effect in plan.effects:
-            try:
-                applied.append(
-                    self.applier.apply(
-                        effect=effect,
-                        context=active_context,
-                        correlation_id=correlation_id,
-                    )
-                )
-            except ConversationError as error:
-                applied.append(
-                    replace(
-                        effect,
-                        status="rejected",
-                        reason_code=str(error.code or "conversation.apply_failed"),
-                    )
-                )
-            except Exception as error:
-                applied.append(
-                    replace(
-                        effect,
-                        status="rejected",
-                        reason_code=f"conversation.apply_failed:{type(error).__name__}",
-                    )
-                )
-            # An act may have created and bound the radar (FR-003); later acts
-            # of the same turn must see the verified profile (FR-004).
-            if active_context.verified_profile_id is None:
-                active_context = self.contexts.load(
-                    user_id=context.user_id,
-                    session_id=context.session_id,
-                    correlation_id=correlation_id,
-                )
-        return tuple(applied), ()
-
-    def schedule_refresh(
-        self,
-        *,
-        context: ConversationTurnContext,
-        correlation_id: UUID,
-    ) -> tuple[Mapping[str, object], ...]:
-        if context.verified_profile_id is None:
-            return ()
-        scheduled = self.refresh.schedule(
-            profile_id=context.verified_profile_id,
+        idempotency_key: str,
+    ) -> ExecutedAct:
+        """Resolve exactly the context-authorized queue head."""
+        return self.pending.resolve(
+            act_id=act_id,
+            context=context,
+            pending_ref=pending_ref,
+            decision=decision,
             correlation_id=correlation_id,
-            trigger="conversational_turn",
-        )
-        if scheduled is None:
-            return ()
-        return (
-            {
-                "object_type": "radar",
-                "object_id": str(context.verified_profile_id),
-                "run_id": str(getattr(scheduled, "run_id", "")),
-            },
+            idempotency_key=idempotency_key,
         )
 
-    def process_turn(
+    def process(
         self,
         *,
         user_id: UUID,
         session_id: UUID,
+        message_id: UUID,
         message_text: str,
         correlation_id: UUID,
     ) -> ConversationTurnResult:
         context = self.load_context(
-            user_id=user_id,
-            session_id=session_id,
-            correlation_id=correlation_id,
+            user_id=user_id, session_id=session_id, correlation_id=correlation_id
         )
-        interpretation = self.interpret(
-            message_text=message_text,
-            context=context,
-            correlation_id=correlation_id,
-        )
-        plan = self.plan(interpretation=interpretation, context=context)
-        effects, _refreshed = self.apply_safe(
-            plan=plan,
-            context=context,
-            correlation_id=correlation_id,
-        )
-        refreshed: tuple[Mapping[str, object], ...] = ()
-        if (
-            plan.routing.refresh_required
-            and not plan.routing.confirmation_required
-        ):
-            refreshed = self.schedule_refresh(
+        try:
+            interpretation = self.interpret(
+                message_text=message_text,
                 context=context,
                 correlation_id=correlation_id,
             )
-        return ConversationTurnResult(
-            effects=effects,
-            routing=plan.routing,
-            refreshed_objects=refreshed,
-            question=plan.question,
-        )
-
-    def resolve(
-        self,
-        *,
-        user_id: UUID,
-        session_id: UUID,
-        decision: Mapping[str, object],
-        correlation_id: UUID,
-    ) -> tuple[TurnEffect, ...]:
-        """Resolve the awaited pending action through its explicit service."""
-        context = self.contexts.load(
+        except Exception as error:
+            stage: FailureStage = (
+                "provider_failure"
+                if _is_provider_error(error)
+                else "interpretation_failure"
+            )
+            return self._failed_result(context, stage)
+        try:
+            plan = self.plan(
+                user_message=message_text,
+                context=context,
+                interpretation=interpretation,
+            )
+        except Exception:
+            return self._failed_result(context, "policy_failure")
+        return self.execute(
             user_id=user_id,
             session_id=session_id,
+            message_id=message_id,
+            message_text=message_text,
             correlation_id=correlation_id,
-        )
-        pending = self.pending.active_for_session(
-            user_id=user_id,
-            session_id=session_id,
-            profile_id=context.verified_profile_id,
-        )
-        if pending is None:
-            raise ConversationNotReady("pending action not found")
-        decision_with_pending = dict(decision)
-        decision_with_pending.setdefault("action_id", pending.action_id)
-        decision_with_pending.setdefault("kind", pending.kind)
-        return self.pending_resolver.resolve(
             context=context,
-            decision=decision_with_pending,
-            correlation_id=correlation_id,
+            interpretation=interpretation,
+            plan=plan,
         )
 
-    def active_pending(
-        self, *, user_id: UUID, session_id: UUID
-    ) -> PendingAction | None:
-        return self.pending.active_for_session(user_id=user_id, session_id=session_id)
-
-    def hydrate_pending(
+    def execute(
         self,
         *,
         user_id: UUID,
         session_id: UUID,
-        pending: PendingAction,
+        message_id: UUID,
+        message_text: str,
         correlation_id: UUID,
-    ) -> ConversationTurnContext:
-        context = self.contexts.load(
-            user_id=user_id,
-            session_id=session_id,
-            correlation_id=correlation_id,
+        context: TurnContext,
+        interpretation: TurnInterpretation,
+        plan: TurnPlan,
+    ) -> ConversationTurnResult:
+        executed: list[ExecutedAct] = []
+        outcomes: list[ActOutcome] = []
+        try:
+            context, acts, decisions, commands_by_act = self._pending_segment(
+                context=context,
+                interpretation=interpretation,
+                acts=list(interpretation.acts),
+                plan=plan,
+                user_id=user_id,
+                session_id=session_id,
+                message_id=message_id,
+                message_text=message_text,
+                correlation_id=correlation_id,
+                executed=executed,
+                outcomes=outcomes,
+            )
+
+            for act in sorted(acts, key=_execution_priority):
+                act_id = act.act_id
+                if any(outcome.act_id == act_id for outcome in outcomes):
+                    continue
+                decision = decisions.get(act_id)
+                if decision is None:
+                    outcomes.append(ActOutcome(act_id, "not_executed"))
+                    continue
+                if decision.status == "rejected":
+                    outcomes.append(
+                        ActOutcome(act_id, "rejected", decision.reason_code)
+                    )
+                    continue
+                if decision.status == "needs_clarification":
+                    outcomes.append(
+                        ActOutcome(
+                            act_id, "needs_clarification", decision.reason_code
+                        )
+                    )
+                    break
+                command = commands_by_act.get(act_id)
+                if command is None:
+                    outcomes.append(
+                        ActOutcome(
+                            act_id,
+                            "pending" if decision.status == "pending" else "applied",
+                            decision.reason_code,
+                        )
+                    )
+                    continue
+                key = self._idempotency_key(session_id, message_id, act_id)
+                result = execute_with_receipt(
+                    store=self.receipts,
+                    executor=self.executor,
+                    command=command,
+                    context=context,
+                    idempotency_key=key,
+                    correlation_id=correlation_id,
+                )
+                executed.append(result)
+                outcomes.append(self._outcome_for(result))
+                if result.status == "needs_clarification":
+                    break
+
+            for act in acts:
+                if not any(outcome.act_id == act.act_id for outcome in outcomes):
+                    outcomes.append(ActOutcome(act.act_id, "not_executed"))
+        except Exception:
+            return self._failed_result(context, "execution_failure")
+
+        if any(result.status == "pending" for result in executed):
+            context = self.contexts.load(
+                user_id=user_id, session_id=session_id, correlation_id=correlation_id
+            )
+        turn_result = ConversationTurnResult(
+            context=context,
+            interpretation=interpretation,
+            plan=plan,
+            executed=tuple(executed),
+            outcomes=_outcomes_in_act_order(interpretation.acts, outcomes),
         )
-        return replace(context, pending_action=pending)
+        return self._record_audit(turn_result, interpretation)
+
+    def _pending_segment(
+        self,
+        *,
+        context: TurnContext,
+        interpretation: TurnInterpretation,
+        acts: list[ConversationAct],
+        plan: TurnPlan,
+        user_id: UUID,
+        session_id: UUID,
+        message_id: UUID,
+        message_text: str,
+        correlation_id: UUID,
+        executed: list[ExecutedAct],
+        outcomes: list[ActOutcome],
+    ) -> tuple[
+        TurnContext,
+        list[ConversationAct],
+        dict[str, ActDecision],
+        dict[str, Command],
+    ]:
+        if not acts or not isinstance(acts[0], ResolvePending):
+            return context, acts, _decision_map(plan), _commands_by_act(plan)
+        act = acts[0]
+        key = self._idempotency_key(session_id, message_id, act.act_id)
+        result = self.pending.resolve(
+            act_id=act.act_id,
+            context=context,
+            pending_ref=act.pending_ref,
+            decision=act.decision,
+            correlation_id=correlation_id,
+            idempotency_key=key,
+        )
+        executed.append(result)
+        outcomes.append(self._outcome_for(result))
+        context = self.contexts.load(
+            user_id=user_id, session_id=session_id, correlation_id=correlation_id
+        )
+        remaining = acts[1:]
+        if not remaining:
+            return context, [], {}, {}
+        replanned = self.policy(
+            user_message=message_text,
+            context=context,
+            interpretation=TurnInterpretation(
+                model_version=interpretation.model_version,
+                prompt_version=interpretation.prompt_version,
+                acts=tuple(remaining),
+            ),
+        )
+        return (
+            context,
+            remaining,
+            _decision_map(replanned),
+            _commands_by_act(replanned),
+        )
+
+    def _outcome_for(self, result: ExecutedAct) -> ActOutcome:
+        if result.status == "applied":
+            return ActOutcome(
+                result.act_id, "applied", result.reason_code, result.object_ref
+            )
+        if result.status == "pending":
+            return ActOutcome(
+                result.act_id, "pending", result.reason_code, result.object_ref
+            )
+        if result.reason_code == "execution.stale_context":
+            return ActOutcome(
+                result.act_id,
+                "needs_clarification",
+                result.reason_code,
+                result.object_ref,
+            )
+        return ActOutcome(
+            result.act_id, "rejected", result.reason_code, result.object_ref
+        )
+
+    def _idempotency_key(
+        self, session_id: UUID, message_id: UUID, act_id: str
+    ) -> str:
+        return f"conversation:{session_id}:{message_id}:{act_id}"
+
+    def _failed_result(
+        self, context: TurnContext, failure_stage: FailureStage
+    ) -> ConversationTurnResult:
+        return ConversationTurnResult(
+            context=context,
+            interpretation=None,
+            plan=None,
+            executed=(),
+            outcomes=(),
+            failure_stage=failure_stage,
+        )
+
+    def _record_audit(
+        self,
+        result: ConversationTurnResult,
+        interpretation: TurnInterpretation,
+    ) -> ConversationTurnResult:
+        if self.audit is None:
+            return result
+        versions: Mapping[str, object] = {
+            "contract_version": "5",
+            "interpretation_version": interpretation.interpretation_version,
+            "model_version": interpretation.model_version,
+            "prompt_version": interpretation.prompt_version,
+        }
+        try:
+            self.audit.record(result, versions)
+        except Exception:
+            return ConversationTurnResult(
+                context=result.context,
+                interpretation=result.interpretation,
+                plan=result.plan,
+                executed=result.executed,
+                outcomes=result.outcomes,
+                failure_stage="contract_or_fixture_failure",
+            )
+        return result
+
+
+def _decision_map(plan: TurnPlan) -> dict[str, ActDecision]:
+    return {decision.act_id: decision for decision in plan.decisions}
+
+
+def _commands_by_act(plan: TurnPlan) -> dict[str, Command]:
+    return {command.act_id: command for command in plan.commands}
+
+
+def _execution_priority(act: ConversationAct) -> int:
+    """Persist soft desires before creating every hard-filter proposal."""
+    if act.kind in {"express_desire", "revise_desire", "withdraw_desire"}:
+        return 0
+    if act.kind in {"set_filter", "clear_filter"}:
+        return 1
+    return 2
+
+
+def _outcomes_in_act_order(
+    acts: tuple[ConversationAct, ...], outcomes: list[ActOutcome]
+) -> tuple[ActOutcome, ...]:
+    by_act = {outcome.act_id: outcome for outcome in outcomes}
+    return tuple(by_act[act.act_id] for act in acts if act.act_id in by_act)
+
+
+def _is_provider_error(error: Exception) -> bool:
+    from umbral.agent.intent import InterpretationContractFailed
+
+    return isinstance(error, InterpretationContractFailed) and (
+        error.reason == "provider_failure" or error.reason.startswith("provider")
+    )

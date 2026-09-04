@@ -1,429 +1,453 @@
-# mypy: disable-error-code="no-untyped-def,no-untyped-call"
-"""HITL lifecycle through the real graph v3 + runtime (FR-011..FR-016, T024)."""
+"""Productive V5 conversation scenarios over the real application seam."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import replace
+import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from uuid import UUID
+from pathlib import Path
+from uuid import UUID, uuid4
 
-from langgraph.checkpoint.memory import MemorySaver
-from tests.support.agent import InMemoryGraphRunRepository, RecordingRunRecorder
-from tests.support.chat import RecordingConversation
-from tests.support.tools import FakeRadar
-
-from umbral.agent.graph import build_topology_v3
-from umbral.agent.intent.compiler import IntentCompiler
-from umbral.agent.runtime import ChatRuntime
-from umbral.agent.state import CHAT_STATE_SCHEMA_VERSION
-from umbral.agent.tools.executor import ToolExecutor
-from umbral.agent.tools.registry import ToolRegistry
-from umbral.agent.tools.tools import ToolServices, build_tool_implementations
-from umbral.application.agent.contracts import ModelResult
-from umbral.application.agent.tools.contracts import Proposal
-from umbral.application.agent.tools.ports import SessionScope
-from umbral.application.agent.tools.preferences import (
-    load_preference_vocabulary,
+from tests.fakes.preferences import FakeConceptReader, FakePreferenceStore
+from tests.support.chat import (
+    FixedProfileStatusReader,
+    InMemoryChatMessageRepository,
+    InMemoryChatSessionRepository,
+    RecordingEventWriter,
 )
+from tests.support.radar import RadarTestContext
+
+from umbral.application.agent.contracts import ModelResult
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
-from umbral.infrastructure.agent.intent.contract_loader import load_intent_contract
-from umbral.infrastructure.agent.tools.contract_loader import load_tool_contract
+from umbral.application.chat.service import ChatService
+from umbral.application.conversation.contracts import (
+    ConceptLink,
+    EvidenceSpan,
+    ExpressDesire,
+    ResolvePending,
+    SetFilter,
+    SetFilterCommand,
+    TurnContext,
+    TurnInterpretation,
+)
+from umbral.application.conversation.ports import FocusedListing
+from umbral.application.conversation.receipts import InMemoryCommandReceiptStore
+from umbral.application.conversation.reply import ReplyComposer
+from umbral.application.conversation.service import ConversationTurn
+from umbral.application.preferences.contracts import (
+    PreferenceConcept,
+    PreferencePolicySpec,
+)
+from umbral.application.preferences.intensity import load_intensity_policy
+from umbral.application.preferences.service import PreferenceService
+from umbral.infrastructure.conversation.composition import (
+    ConversationServices,
+    build_conversation_turn_service,
+)
+from umbral.infrastructure.conversation.context import (
+    ContextAssembler,
+    ProposalsPendingReader,
+)
+from umbral.infrastructure.conversation.executor import EffectExecutor
+from umbral.infrastructure.playground.in_memory import LocalProposalRepository
 from umbral.infrastructure.radar.contract_loader import load_events_registry
 
-USER_ID = UUID(int=1)
-SESSION_ID = UUID(int=2)
-PROFILE_ID = UUID(int=5)
-NOW = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
-
-_REPLY_SCHEMA = {
-    "reply_text": {"kind": "string"},
-    "refs": {"kind": "list"},
-    "tool_calls": {"kind": "list", "max_items": 5},
-}
+_NOW = datetime(2026, 9, 4, 12, 0, tzinfo=timezone.utc)
+_ROOT = Path(__file__).resolve().parents[3]
+_REPLY_SCHEMA = json.loads(
+    (_ROOT / "contracts" / "agent" / "reply-schema.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
-class _Repo:
-    def __init__(self) -> None:
-        self.proposals: dict[UUID, Proposal] = {}
-
-    def insert(self, proposal: Proposal) -> Proposal:
-        self.proposals[proposal.proposal_id] = proposal
-        return proposal
-
-    def enqueue_pending(self, proposal: Proposal) -> Proposal:
-        ordinal = max(
-            (p.queue_ordinal for p in self.proposals.values()
-             if p.search_profile_id == proposal.search_profile_id
-             and p.session_id == proposal.session_id and p.state == "pending"),
-            default=0,
-        ) + 1
-        queued = replace(proposal, queue_ordinal=ordinal, queue_total=ordinal)
-        self.proposals[queued.proposal_id] = queued
-        return queued
-
-    def supersede_and_insert(self, proposal_id, successor):
-        original = self.proposals.get(proposal_id)
-        if original is None or original.state != "pending":
-            return None
-        self.proposals[proposal_id] = replace(
-            original, state="rejected", rejection_reason="edited",
-            superseded_by_proposal_id=successor.proposal_id,
-        )
-        self.proposals[successor.proposal_id] = successor
-        return successor
-
-    def apply_pending(self, proposal_id, key, operation):
-        proposal = self.proposals.get(proposal_id)
-        if proposal is None or proposal.state != "pending":
-            return proposal
-        version, run_id = operation(proposal)
-        updated = replace(
-            proposal, state="approved", applied_idempotency_key=key,
-            applied_profile_version=version, applied_run_id=run_id,
-        )
-        self.proposals[proposal_id] = updated
-        return updated
-
-    def rebase_pending_for_queue(
-        self, search_profile_id, session_id, base_profile_version
-    ):
-        return None
-
-    def get(self, proposal_id, session_id, user_id):
-        return self.proposals.get(proposal_id)
-
-    def latest_pending_for_profile(self, search_profile_id, session_id):
-        return None
-
-    def list_for_profile(self, search_profile_id, state):
-        return tuple(
-            p
-            for p in self.proposals.values()
-            if p.search_profile_id == search_profile_id and p.state == state
-        )
-
-    def mark_approved(self, proposal_id, key, *, profile_version=None, run_id=None):
-        proposal = self.proposals[proposal_id]
-        updated = replace(
-            proposal,
-            state="approved",
-            applied_idempotency_key=key,
-            applied_profile_version=profile_version,
-            applied_run_id=run_id,
-        )
-        self.proposals[proposal_id] = updated
-        return updated
-
-    def mark_rejected(self, proposal_id, reason, rejection_at, rejection_note=None):
-        proposal = self.proposals[proposal_id]
-        updated = replace(
-            proposal,
-            state="rejected",
-            rejection_reason=reason,
-            rejection_note=rejection_note,
-        )
-        self.proposals[proposal_id] = updated
-        return updated
-
-    def reject_pending(self, proposal_id, reason, rejection_at, rejection_note=None):
-        proposal = self.proposals.get(proposal_id)
-        if proposal is None or proposal.state != "pending":
-            return proposal
-        return self.mark_rejected(proposal_id, reason, rejection_at, rejection_note)
-
-    def mark_superseded(self, proposal_id, superseded_by, rejection_at):
-        proposal = self.proposals[proposal_id]
-        updated = replace(
-            proposal,
-            state="rejected",
-            rejection_reason="edited",
-            superseded_by_proposal_id=superseded_by,
-        )
-        self.proposals[proposal_id] = updated
-        return updated
-
-    def expire_pending(self, expired_before):
-        return 0
-
-
-class _ScopeReader:
-    def __init__(self) -> None:
-        self.scope = SessionScope(
-            session_id=SESSION_ID,
-            search_profile_id=PROFILE_ID,
-            status="active",
-        )
-
-    def read_scope(self, user_id: UUID, session_id: UUID) -> SessionScope | None:
-        return self.scope
-
-
-class _NoopPreferenceGateway:
-    """Tests without preference HITL never reach the preference gateway."""
-
-    def get_proposal(self, **kwargs: object) -> object:
-        raise AssertionError("preference gateway must not be called here")
-
-    def confirm_proposal(self, **kwargs: object) -> object:
-        raise AssertionError("preference gateway must not be called here")
-
-    def confirm_preference_removal(self, **kwargs: object) -> object:
-        raise AssertionError("preference gateway must not be called here")
-
-    def reject_proposal(self, **kwargs: object) -> object:
-        raise AssertionError("preference gateway must not be called here")
-
-
-class _ScriptedGateway:
-    def __init__(self, reply_sequence: list[Mapping[str, object]]) -> None:
-        self._sequence = reply_sequence
-        self.calls: list[Mapping[str, object]] = []
-
-    def generate_structured(
-        self,
-        *,
-        messages: tuple[Mapping[str, object], ...],
-        schema: Mapping[str, object],
-        schema_version: str,
-        prompt_version: str,
-        model_version: str,
-        tools: Sequence[Mapping[str, object]] | None = None,
-    ) -> ModelResult:
-        self.calls.append({"prompt_version": prompt_version})
-        if prompt_version == "agent-intent-v1":
-            content: Mapping[str, object] = {
-                "intent": "refinamiento",
-                "parameters": [
-                    {"key": "budget", "value": "900", "confidence": 0.95}
-                ],
-                "high_impact_missing": [],
-                "contradictions": [],
-            }
-        else:
-            content = self._sequence[min(len(self.calls) - 2, len(self._sequence) - 1)]
+class _ManagedReply:
+    def generate_structured(self, **kwargs: object) -> ModelResult:
         return ModelResult(
-            content=dict(content),
-            model_version="local-fake",
+            content={
+                "contract_version": "5",
+                "text": "Listo.",
+                "outcomes": [],
+                "verified_refs": [],
+                "source": "managed",
+            },
+            model_version="test",
             status="success",
             latency_ms=1,
-            input_tokens=8,
-            output_tokens=16,
-            total_tokens=24,
         )
 
 
-class _SessionConversation(RecordingConversation):
-    def assert_accepts_turn(self, *, user_id, session_id):
-        from umbral.application.chat.contracts import ChatSession
-
-        self.accept_calls += 1
-        return ChatSession(
-            session_id=session_id,
-            user_id=user_id,
-            search_profile_id=PROFILE_ID,
-            status="active",
-            created_at=NOW,
-            correlation_id=UUID(int=0),
-        )
+class _Focus:
+    def verified_focus(
+        self, *, user_id: UUID, session_id: UUID
+    ) -> FocusedListing | None:
+        return None
 
 
-def _build() -> tuple[ChatRuntime, _Repo, _ScriptedGateway]:
-    repo = _Repo()
-    radar = FakeRadar()
-    proposals = SearchProfileUpdateProposals(
-        repository=repo,
-        radar=radar,
-        events=_Events(),
+@dataclass
+class _Script:
+    outputs: tuple[TurnInterpretation, ...]
+    index: int = 0
+
+    def interpret(
+        self, *, message_text: str, context: TurnContext, correlation_id: UUID
+    ):
+        output = self.outputs[min(self.index, len(self.outputs) - 1)]
+        self.index += 1
+        return output
+
+
+@dataclass
+class _Stack:
+    radar: RadarTestContext
+    chat: ChatService
+    session_id: UUID
+    profile_id: UUID
+    proposals_repo: LocalProposalRepository
+    proposals: SearchProfileUpdateProposals
+    preferences_store: FakePreferenceStore
+
+
+def _stack() -> tuple[UUID, _Stack]:
+    radar = RadarTestContext(default_runtime=False)
+    user_id = uuid4()
+    profile, _ = radar.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    chat = ChatService(
+        sessions=InMemoryChatSessionRepository(),
+        messages=InMemoryChatMessageRepository(),
+        profile_status=FixedProfileStatusReader(),
+        events_out=RecordingEventWriter(),
         events_registry=load_events_registry(),
-        ttl_hours=24,
-        clock=lambda: NOW,
+        clock=lambda: _NOW,
     )
-    recorder = RecordingRunRecorder()
-    registry = ToolRegistry(load_tool_contract)
-    executor = ToolExecutor(
-        registry=registry,
-        implementations=build_tool_implementations(
-            ToolServices(
-                radar=radar,
-                scoring=FakeScoring(),
-                feedback=FakeFeedback(),
-                criteria=FakeCriteria(),
-                proposals=proposals,
-                vocabulary=load_preference_vocabulary(),
+    session = chat.create_session(
+        user_id=user_id,
+        search_profile_id=profile.profile_id,
+        correlation_id=uuid4(),
+    )
+    events = RecordingEventWriter()
+    proposals_repo = LocalProposalRepository()
+    proposals = SearchProfileUpdateProposals(
+        repository=proposals_repo,
+        radar=radar.service,
+        events=events,
+        events_registry=load_events_registry(),
+        clock=lambda: _NOW,
+    )
+    preferences_store = FakePreferenceStore()
+    return user_id, _Stack(
+        radar,
+        chat,
+        session.session_id,
+        profile.profile_id,
+        proposals_repo,
+        proposals,
+        preferences_store,
+    )
+
+
+def _turn(stack: _Stack, script: _Script) -> ConversationTurn:
+    concepts = FakeConceptReader(
+        {
+            "luminosidad": PreferenceConcept(
+                key="luminosidad", matcher_type="signal_score", computable=True
             )
+        }
+    )
+    preferences = PreferenceService(
+        expressions=stack.preferences_store,
+        bindings=stack.preferences_store,
+        mutations=stack.preferences_store,
+        concepts=concepts,
+        policy=PreferencePolicySpec.v1(),
+        clock=lambda: _NOW,
+    )
+    return build_conversation_turn_service(
+        services=ConversationServices(
+            chat=stack.chat,
+            radar=stack.radar.service,
+            proposals=stack.proposals,
+            preferences=preferences,
+            concepts=concepts,
+            intensity_policy=load_intensity_policy(),
         ),
-        recorder=recorder,
-        scope_reader=_ScopeReader(),
-        timeout_seconds=1.0,
+        focus=_Focus(),
+        interpreter=script,
+        receipts=InMemoryCommandReceiptStore(),
+        clock=lambda: _NOW,
     )
-    gateway = _ScriptedGateway(
-        [
-            {
-                "reply_text": "Voy a proponer el cambio de presupuesto.",
-                "refs": [],
-                "tool_calls": [
-                    {
-                        "tool": "propose_search_profile_update",
-                        "args": {"change": {"budget_max": 900}},
-                    }
-                ],
-            },
-            {
-                "reply_text": "Tu radar ahora busca hasta 900.",
-                "refs": [],
-                "tool_calls": [],
-            },
-        ]
-    )
-    compiler = IntentCompiler(
-        gateway=gateway,
-        contract=load_intent_contract(),
-        prompt_version="agent-intent-v1",
-        model_version="local-fake",
-    )
-    graph = build_topology_v3(
-        gateway=gateway,
-        conversation=_SessionConversation(),
-        recorder=recorder,
-        saver=MemorySaver(),
-        tool_executor=executor,
-        intent_compiler=compiler,
-        decision_gateway=proposals,
-        preference_gateway=_NoopPreferenceGateway(),
-        clock=lambda: NOW,
-        model_version="local-fake",
-        prompt_version="agent-reply-v2",
-        schema_version="reply-v3",
-        reply_schema=_REPLY_SCHEMA,
-        max_calls_per_turn=5,
-        high_impact_keys=("budget", "zona", "hard_filters", "radio"),
-        clarification_min_confidence=0.6,
-        clarification_max_rounds=2,
-        reply_chunk_words=8,
-        reply_max_refs=10,
-    )
-    runtime = ChatRuntime(
-        graph=graph,
-        conversation=_SessionConversation(),
-        runs=InMemoryGraphRunRepository(),
-        recorder=recorder,
-        clock=lambda: NOW,
-        state_schema_version=CHAT_STATE_SCHEMA_VERSION,
-        topology_version=3,
-    )
-    return runtime, repo, gateway
 
 
-def test_propose_interrupts_and_approve_resumes_same_run() -> None:
-    runtime, repo, _gateway = _build()
-    events: list[object] = []
-    first = runtime.run_turn(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        text="subí el presupuesto a 900",
-        correlation_id=UUID(int=40),
-        consumer=events.append,
+def _link() -> ConceptLink:
+    span = EvidenceSpan(start=9, end=22, text="bien luminoso")
+    return ConceptLink(
+        concept_ref="luminosidad",
+        confidence=0.95,
+        polarity="positive",
+        intensity="medium",
+        evidence_spans=(span,),
     )
-    assert first.status == "interrupted"
-    assert first.interrupt is not None
-    first_interrupt = first.interrupt
-    assert first_interrupt["type"] == "proposal_decision"
-    proposal_id = UUID(str(first_interrupt["proposal_id"]))
-    proposal = repo.proposals[proposal_id]
-    assert proposal.state == "pending"
-
-    second = runtime.run_turn(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        text="",
-        correlation_id=UUID(int=41),
-        resume=True,
-        decision={"kind": "approve", "idempotency_key": "decision-1"},
-        consumer=events.append,
-    )
-    assert second.run_id == first.run_id
-    assert second.status == "completed"
-    assert repo.proposals[proposal_id].state == "approved"
 
 
-def test_propose_and_interactive_reject_marks_user() -> None:
-    runtime, repo, _gateway = _build()
-    first = runtime.run_turn(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        text="subí el presupuesto a 900",
-        correlation_id=UUID(int=40),
+def _mixed_interpretation() -> TurnInterpretation:
+    desire_span = EvidenceSpan(start=9, end=22, text="bien luminoso")
+    budget_span = EvidenceSpan(start=25, end=28, text="900")
+    return TurnInterpretation(
+        model_version="test",
+        prompt_version="test",
+        acts=(
+            ExpressDesire(
+                act_id="desire-light",
+                confidence=0.95,
+                evidence_spans=(desire_span,),
+                raw_text="bien luminoso",
+                subject_ref="luminosidad",
+                concept_links=(_link(),),
+            ),
+            SetFilter(
+                act_id="budget",
+                confidence=0.95,
+                evidence_spans=(budget_span,),
+                filter_key="budget_max",
+                value=900,
+            ),
+            SetFilter(
+                act_id="rooms",
+                confidence=0.95,
+                evidence_spans=(budget_span,),
+                filter_key="min_rooms",
+                value=2,
+            ),
+        ),
     )
-    assert first.interrupt is not None
-    proposal_id = UUID(str(first.interrupt["proposal_id"]))
-    second = runtime.run_turn(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        text="",
-        correlation_id=UUID(int=41),
-        resume=True,
-        decision={"kind": "reject", "reason": "no me convence"},
+
+
+def _process(
+    turn: ConversationTurn,
+    *,
+    user_id: UUID,
+    session_id: UUID,
+    message_id: UUID,
+    text: str,
+) -> object:
+    return turn.process(
+        user_id=user_id,
+        session_id=session_id,
+        message_id=message_id,
+        message_text=text,
+        correlation_id=uuid4(),
     )
-    assert second.status == "completed"
-    rejected = repo.proposals[proposal_id]
+
+
+def test_v5_mixed_soft_hard_then_approve_exposes_next_head() -> None:
+    user_id, stack = _stack()
+    approve_text = "aprobar"
+    script = _Script(
+        (
+            _mixed_interpretation(),
+            TurnInterpretation(
+                model_version="test",
+                prompt_version="test",
+                acts=(
+                    ResolvePending(
+                        act_id="approve",
+                        confidence=1,
+                        evidence_spans=(EvidenceSpan(0, 7, approve_text),),
+                        pending_ref="",
+                        decision="approve",
+                    ),
+                ),
+            ),
+        )
+    )
+    turn = _turn(stack, script)
+    first = _process(
+        turn,
+        user_id=user_id,
+        session_id=stack.session_id,
+        message_id=uuid4(),
+        text="prefiero bien luminoso y 900",
+    )
+    assert [outcome.status for outcome in first.outcomes] == [
+        "applied",
+        "pending",
+        "pending",
+    ]
+    assert len(stack.preferences_store.bindings) == 1
+    queue = stack.proposals.pending_for_session(
+        search_profile_id=stack.profile_id, session_id=stack.session_id
+    )
+    assert len(queue) == 2
+    script.outputs = (
+        TurnInterpretation(
+            model_version="test",
+            prompt_version="test",
+            acts=(
+                ResolvePending(
+                    act_id="approve",
+                    confidence=1,
+                    evidence_spans=(EvidenceSpan(0, 7, approve_text),),
+                    pending_ref=f"pending:{queue[0].proposal_id}",
+                    decision="approve",
+                ),
+            ),
+        ),
+    )
+    second = _process(
+        turn,
+        user_id=user_id,
+        session_id=stack.session_id,
+        message_id=uuid4(),
+        text=approve_text,
+    )
+    assert second.outcomes[0].status == "applied"
+    assert second.context.pending_action is not None
+    assert (
+        second.context.pending_action.pending_ref == f"pending:{queue[1].proposal_id}"
+    )
+
+
+def test_v5_turn_reply_keeps_effectful_turn_deterministic() -> None:
+    user_id, stack = _stack()
+    turn = _turn(stack, _Script((_mixed_interpretation(),)))
+
+    result = _process(
+        turn,
+        user_id=user_id,
+        session_id=stack.session_id,
+        message_id=uuid4(),
+        text="prefiero bien luminoso y 900",
+    )
+    reply = ReplyComposer(
+        gateway=_ManagedReply(),
+        schema=_REPLY_SCHEMA,
+        prompt_version="reply",
+        model_version="test",
+    ).compose(result)
+
+    assert reply.source == "deterministic_fallback"
+    assert "luminosidad" in reply.text.casefold()
+    assert "1 de 2" in reply.text
+    assert reply.text.count("?") == 1
+
+
+def test_v5_reject_then_correct_active_head_preserves_lineage() -> None:
+    user_id, stack = _stack()
+    executor = EffectExecutor(
+        radar=stack.radar.service, chat=stack.chat, proposals=stack.proposals
+    )
+    pending_reader = ProposalsPendingReader(proposals=stack.proposals)
+    context_reader = ContextAssembler(
+        chat=stack.chat,
+        radar=stack.radar.service,
+        preferences=None,
+        pending=pending_reader,
+        focus=_Focus(),
+        clock=lambda: _NOW,
+    )
+    context = context_reader.load(
+        user_id=user_id, session_id=stack.session_id, correlation_id=uuid4()
+    )
+    first = executor.execute(
+        command=SetFilterCommand(
+            act_id="budget",
+            filter_key="budget_max",
+            value=900,
+            expected_profile_version=1,
+        ),
+        context=context,
+        idempotency_key="proposal:first",
+    )
+    assert first.status == "pending"
+    second = executor.execute(
+        command=SetFilterCommand(
+            act_id="rooms", filter_key="min_rooms", value=2, expected_profile_version=1
+        ),
+        context=context,
+        idempotency_key="proposal:second",
+    )
+    first_id = UUID(first.object_ref.removeprefix("proposal:"))
+    second_id = UUID(second.object_ref.removeprefix("proposal:"))
+    rejected = stack.proposals.reject(
+        user_id=user_id,
+        session_id=stack.session_id,
+        search_profile_id=stack.profile_id,
+        proposal_id=first_id,
+        note="cambiar",
+        correlation_id=uuid4(),
+    )
     assert rejected.state == "rejected"
     assert rejected.rejection_reason == "user"
-    assert rejected.rejection_note == "no me convence"
-
-
-def test_edit_derives_new_proposal_and_waits_again() -> None:
-    runtime, repo, _gateway = _build()
-    first = runtime.run_turn(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        text="subí el presupuesto a 900",
-        correlation_id=UUID(int=40),
+    current = stack.proposals.pending_for_session(
+        search_profile_id=stack.profile_id, session_id=stack.session_id
     )
-    assert first.interrupt is not None
-    original_id = UUID(str(first.interrupt["proposal_id"]))
-    second = runtime.run_turn(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        text="",
-        correlation_id=UUID(int=41),
-        resume=True,
-        decision={"kind": "edit", "change": {"budget_max": 1100}},
+    assert len(current) == 1 and current[0].proposal_id == second_id
+    correction_context = context_reader.load(
+        user_id=user_id, session_id=stack.session_id, correlation_id=uuid4()
     )
-    # The derived proposal waits for a fresh confirmation (second interrupt).
-    assert second.status == "interrupted"
-    assert second.interrupt is not None
-    second_interrupt = second.interrupt
-    derived_id = UUID(str(second_interrupt["proposal_id"]))
-    assert derived_id != original_id
-    assert repo.proposals[original_id].state == "rejected"
-    assert repo.proposals[original_id].rejection_reason == "edited"
-    assert repo.proposals[original_id].superseded_by_proposal_id == derived_id
-    assert repo.proposals[derived_id].state == "pending"
-    assert repo.proposals[derived_id].diff == {"budget_max": 1100}
-
-    third = runtime.run_turn(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        text="",
-        correlation_id=UUID(int=42),
-        resume=True,
-        decision={"kind": "approve", "idempotency_key": "decision-2"},
+    corrected = executor.execute(
+        command=SetFilterCommand(
+            act_id="rooms-correction",
+            filter_key="min_rooms",
+            value=3,
+            expected_profile_version=1,
+        ),
+        context=correction_context,
+        idempotency_key="proposal:correction",
     )
-    assert third.status == "completed"
-    assert repo.proposals[derived_id].state == "approved"
+    corrected_id = UUID(corrected.object_ref.removeprefix("proposal:"))
+    assert stack.proposals_repo.proposals[first_id].rejection_reason == "user"
+    assert stack.proposals_repo.proposals[second_id].rejection_reason == "edited"
+    assert (
+        stack.proposals_repo.proposals[second_id].superseded_by_proposal_id
+        == corrected_id
+    )
+    assert stack.proposals_repo.proposals[corrected_id].state == "pending"
 
 
-class _Events:
-    def __init__(self) -> None:
-        self.events: list[object] = []
-
-    def insert(self, event: object) -> None:
-        self.events.append(event)
-
-
-from tests.support.tools import (  # noqa: E402
-    FakeCriteria,
-    FakeFeedback,
-    FakeScoring,
-)
+def test_v5_receipt_replay_does_not_duplicate_hard_proposal() -> None:
+    user_id, stack = _stack()
+    text = "presupuesto 900"
+    interpretation = TurnInterpretation(
+        model_version="test",
+        prompt_version="test",
+        acts=(
+            SetFilter(
+                act_id="budget",
+                confidence=1,
+                evidence_spans=(EvidenceSpan(12, 15, "900"),),
+                filter_key="budget_max",
+                value=900,
+            ),
+        ),
+    )
+    turn = _turn(stack, _Script((interpretation, interpretation)))
+    message_id = uuid4()
+    first = _process(
+        turn,
+        user_id=user_id,
+        session_id=stack.session_id,
+        message_id=message_id,
+        text=text,
+    )
+    second = _process(
+        turn,
+        user_id=user_id,
+        session_id=stack.session_id,
+        message_id=message_id,
+        text=text,
+    )
+    assert first.outcomes[0].status == "pending"
+    assert second.outcomes[0].status == "pending"
+    assert len(stack.proposals_repo.proposals) == 1

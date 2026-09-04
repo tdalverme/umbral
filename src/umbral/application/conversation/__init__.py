@@ -1,21 +1,19 @@
-"""Conversational copilot turn orchestrator (feature 016)."""
+"""Single semantic conversation boundary (unversioned)."""
 
 from umbral.application.conversation.contracts import (
     ConversationAct,
-    ConversationError,
-    ConversationTurnContext,
     ConversationTurnResult,
     PendingAction,
-    RoutingDecision,
-    TurnEffect,
+    TurnContext,
+    TurnInterpretation,
+    TurnPlan,
 )
 
 __all__ = [
     "ConversationAct",
-    "ConversationError",
-    "ConversationTurnContext",
     "ConversationTurnResult",
     "PendingAction",
-    "RoutingDecision",
-    "TurnEffect",
+    "TurnContext",
+    "TurnInterpretation",
+    "TurnPlan",
 ]

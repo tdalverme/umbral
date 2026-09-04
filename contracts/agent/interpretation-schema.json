@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "interpretation-schema.json",
+  "title": "ConversationInterpretation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "interpretation_version", "acts"],
+  "properties": {
+    "contract_version": {"const": "5"},
+    "interpretation_version": {"const": "conversation-interpretation"},
+    "acts": {"type": "array", "maxItems": 6, "items": {"$ref": "#/$defs/act"}}
+  },
+  "$defs": {
+    "filter_key": {"enum": ["budget_max", "zones", "min_rooms"]},
+    "concept_link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept_ref", "confidence", "polarity", "intensity"],
+      "properties": {
+        "concept_ref": {"type": "string", "minLength": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "polarity": {"enum": ["positive", "negative"]},
+        "intensity": {"enum": ["low", "medium", "high", "essential"]},
+        "force": {"const": "soft"}
+      }
+    },
+    "act": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_text"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "create_radar"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "evidence_text": {"type": "string", "minLength": 1},
+            "name": {"type": "string", "minLength": 1, "maxLength": 80}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_text", "filter_key", "value"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "set_filter"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "evidence_text": {"type": "string", "minLength": 1},
+            "filter_key": {"$ref": "#/$defs/filter_key"}, "value": {}
+          },
+          "allOf": [
+            {"if": {"properties": {"filter_key": {"const": "budget_max"}}}, "then": {"properties": {"value": {"type": "number"}}}},
+            {"if": {"properties": {"filter_key": {"const": "min_rooms"}}}, "then": {"properties": {"value": {"type": "integer"}}}},
+            {"if": {"properties": {"filter_key": {"const": "zones"}}}, "then": {"properties": {"value": {"type": "array", "maxItems": 15, "items": {"type": "string", "minLength": 1}}}}}
+          ]
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_text", "filter_key"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "clear_filter"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "evidence_text": {"type": "string", "minLength": 1},
+            "filter_key": {"$ref": "#/$defs/filter_key"}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_text", "raw_text", "subject_ref", "concept_links"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "express_desire"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "evidence_text": {"type": "string", "minLength": 1},
+            "raw_text": {"type": "string", "minLength": 1}, "subject_ref": {"type": "string", "minLength": 1, "description": "Clave corta normalizada en español, por ejemplo balcon o moderno."},
+            "concept_links": {"type": "array", "items": {"$ref": "#/$defs/concept_link"}}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_text", "raw_text", "concept_links"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "revise_desire"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "evidence_text": {"type": "string", "minLength": 1},
+            "desire_ref": {"type": "string", "minLength": 1, "description": "Ref autorizada del deseo; omitila si el mensaje es ambiguo."}, "raw_text": {"type": "string", "minLength": 1},
+            "concept_links": {"type": "array", "items": {"$ref": "#/$defs/concept_link"}}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_text"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "withdraw_desire"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "evidence_text": {"type": "string", "minLength": 1},
+            "desire_ref": {"type": "string", "minLength": 1}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_text", "listing_ref", "feedback_type"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "record_feedback"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "evidence_text": {"type": "string", "minLength": 1},
+            "listing_ref": {"type": "string", "minLength": 1}, "feedback_type": {"enum": ["like", "dislike", "save", "dismiss", "contacted"]},
+            "raw_text": {"type": "string", "minLength": 1, "maxLength": 500}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_text", "query_text"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "query"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "evidence_text": {"type": "string", "minLength": 1},
+            "query_text": {"type": "string", "minLength": 1, "maxLength": 500}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["act_id", "kind", "confidence", "evidence_text", "request_text"],
+          "properties": {
+            "act_id": {"type": "string", "minLength": 1}, "kind": {"const": "unsupported_request"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "evidence_text": {"type": "string", "minLength": 1},
+            "request_text": {"type": "string", "minLength": 1, "maxLength": 500}
+          }
+        }
+      ]
+    }
+  }
+}
