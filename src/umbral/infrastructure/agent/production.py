@@ -18,7 +18,10 @@ from typing import cast
 from sqlalchemy.orm import Session
 
 from umbral.application.agent.ports import ModelGateway
-from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
+from umbral.application.agent.tools.proposals import (
+    CriteriaGateway,
+    SearchProfileUpdateProposals,
+)
 from umbral.application.chat.service import ChatService
 from umbral.application.radar.service import RadarService
 from umbral.infrastructure.agent.checkpointer import create_postgres_saver
@@ -63,7 +66,7 @@ def build_production_stack(
     criteria: object,
 ) -> ProductionStack:
     """Compose the single graph stack over the real services."""
-    del scoring, criteria
+    del scoring
     from umbral.application.conversation.ports import (
         FeedbackRecorder,
         FocusedListing,
@@ -102,6 +105,7 @@ def build_production_stack(
         ttl_hours=settings.agent_proposal_ttl_hours,
         clock=clock,
         waiting_runs=runs,
+        criteria=cast(CriteriaGateway | None, criteria),
     )
     if settings.agent_model_provider == "managed" and settings.agent_managed_endpoint:
         gateway: ModelGateway = ManagedModelGateway(

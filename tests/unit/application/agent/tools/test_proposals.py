@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import cast
 from uuid import UUID
 
@@ -193,10 +194,13 @@ class _ProposalRepo:
 
 
 class _Radar:
-    def __init__(self, profile: SearchProfile) -> None:
+    def __init__(
+        self, profile: SearchProfile, timeline: list[str] | None = None
+    ) -> None:
         self.profile = profile
         self.applied: list[dict[str, object]] = []
         self.fail_next_concurrency = False
+        self.timeline = timeline if timeline is not None else []
 
     def validate_change(self, *, owner_id, profile_id, changes):
         return self.profile
@@ -244,6 +248,43 @@ class _Radar:
         )
         return updated, None
 
+    def version_profile(
+        self,
+        *,
+        owner_id,
+        profile_id,
+        expected_version,
+        changes,
+        correlation_id,
+        actor_kind="service",
+        actor_id=None,
+    ):
+        self.timeline.append("version")
+        updated, _ = self.update_profile(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            expected_version=expected_version,
+            changes=changes,
+            correlation_id=correlation_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        return updated, SimpleNamespace(version_id=UUID(int=20))
+
+    def schedule_version_run(self, *, profile, version, trigger):
+        self.timeline.append("schedule")
+        return SimpleNamespace(run_id=UUID(int=21))
+
+
+class _Criteria:
+    def __init__(self, timeline: list[str]) -> None:
+        self.timeline = timeline
+        self.compilations: list[dict[str, object]] = []
+
+    def compile_profile(self, **kwargs):
+        self.timeline.append("compile")
+        self.compilations.append(kwargs)
+
 
 class _Events:
     def __init__(self) -> None:
@@ -254,10 +295,12 @@ class _Events:
 
 
 def _make_service(
-    **kwargs,
+    *,
+    criteria: _Criteria | None = None,
+    timeline: list[str] | None = None,
 ) -> tuple[SearchProfileUpdateProposals, _ProposalRepo, _Radar, _Events]:
     repo = _ProposalRepo()
-    radar = _Radar(_profile())
+    radar = _Radar(_profile(), timeline=timeline)
     events = _Events()
     service = SearchProfileUpdateProposals(
         repository=cast(ProposalRepository, repo),
@@ -266,6 +309,7 @@ def _make_service(
         events_registry=_registry(),
         ttl_hours=24,
         clock=lambda: NOW,
+        criteria=criteria,
     )
     return service, repo, radar, events
 
@@ -721,6 +765,26 @@ def test_apply_versions_profile_and_emits_event() -> None:
     assert any(
         e.event_type == "search_profile.update_applied.v1" for e in events.events
     )
+
+
+def test_apply_compiles_the_new_profile_before_scheduling_the_run() -> None:
+    timeline: list[str] = []
+    criteria = _Criteria(timeline)
+    service, repo, _, _ = _make_service(criteria=criteria, timeline=timeline)
+    proposal = service.propose(
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        search_profile_id=PROFILE_ID,
+        change={"zones": ["nuñez"]},
+        correlation_id=CORRELATION_ID,
+    )
+
+    result = service.apply(**_base_args(proposal.proposal_id))
+
+    assert result.run_id == UUID(int=21)
+    assert timeline == ["version", "compile", "schedule"]
+    assert criteria.compilations[0]["profile_version_id"] == UUID(int=20)
+    assert repo.proposals[proposal.proposal_id].applied_run_id == UUID(int=21)
 
 
 def test_apply_replay_with_same_key_returns_recorded_result() -> None:

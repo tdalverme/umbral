@@ -74,6 +74,7 @@ def test_single_stack_wires_pending_proposals_to_graph_runs(
         "build_conversation_turn_service",
         build_turn_service,
     )
+    criteria = object()
 
     production.build_production_stack(
         settings=_settings(),
@@ -82,10 +83,11 @@ def test_single_stack_wires_pending_proposals_to_graph_runs(
         radar=object(),
         scoring=object(),
         feedback=object(),
-        criteria=object(),
+        criteria=criteria,
     )
 
     assert captured["waiting_runs"] is graph_runs
+    assert captured["criteria"] is criteria
 
 
 def test_release_selector_settings_are_no_longer_accepted() -> None:

@@ -38,6 +38,7 @@ from umbral.application.agent.tools.ports import (
 from umbral.application.events.contracts import ProductEvent
 from umbral.application.events.registry import EventsRegistrySpec, event_version
 from umbral.application.radar.contracts import (
+    ProfileVersion,
     RadarStateError,
     RadarValidationError,
     SearchProfile,
@@ -97,6 +98,37 @@ class RadarGateway(Protocol):
         actor_id: str | None = None,
     ) -> tuple[SearchProfile, object | None]: ...
 
+    def version_profile(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        expected_version: int,
+        changes: Mapping[str, object],
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> tuple[SearchProfile, ProfileVersion]: ...
+
+    def schedule_version_run(
+        self, *, profile: SearchProfile, version: ProfileVersion, trigger: str
+    ) -> object | None: ...
+
+
+class CriteriaGateway(Protocol):
+    def compile_profile(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        profile_version_id: UUID,
+        edits: tuple[Mapping[str, object], ...],
+        confirmations: tuple[str, ...] = (),
+        correlation_id: UUID,
+        actor_kind: str = "service",
+        actor_id: str | None = None,
+    ) -> object: ...
+
 
 class SearchProfileUpdateProposals:
     """Owns the durable proposal lifecycle (FR-008..FR-012)."""
@@ -111,6 +143,7 @@ class SearchProfileUpdateProposals:
         ttl_hours: int = 24,
         clock: Clock | None = None,
         waiting_runs: WaitingRunReader | None = None,
+        criteria: CriteriaGateway | None = None,
     ) -> None:
         self.repository = repository
         self.radar = radar
@@ -119,6 +152,7 @@ class SearchProfileUpdateProposals:
         self.ttl_hours = ttl_hours
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.waiting_runs = waiting_runs
+        self.criteria = criteria
 
     def propose(
         self,
@@ -202,15 +236,38 @@ class SearchProfileUpdateProposals:
         if proposal.applied_idempotency_key is not None:
             raise ProposalIdempotencyMismatch()
         def update_radar(current: Proposal) -> tuple[int, UUID | None]:
-            updated, run = self.radar.update_profile(
-                owner_id=user_id,
-                profile_id=search_profile_id,
-                expected_version=current.base_profile_version,
-                changes=current.diff,
-                correlation_id=correlation_id,
-                actor_kind="user",
-                actor_id=str(user_id),
-            )
+            if self.criteria is None:
+                updated, run = self.radar.update_profile(
+                    owner_id=user_id,
+                    profile_id=search_profile_id,
+                    expected_version=current.base_profile_version,
+                    changes=current.diff,
+                    correlation_id=correlation_id,
+                    actor_kind="user",
+                    actor_id=str(user_id),
+                )
+            else:
+                updated, version = self.radar.version_profile(
+                    owner_id=user_id,
+                    profile_id=search_profile_id,
+                    expected_version=current.base_profile_version,
+                    changes=current.diff,
+                    correlation_id=correlation_id,
+                    actor_kind="user",
+                    actor_id=str(user_id),
+                )
+                self.criteria.compile_profile(
+                    owner_id=user_id,
+                    profile_id=search_profile_id,
+                    profile_version_id=version.version_id,
+                    edits=(),
+                    correlation_id=correlation_id,
+                    actor_kind="user",
+                    actor_id=str(user_id),
+                )
+                run = self.radar.schedule_version_run(
+                    profile=updated, version=version, trigger="edited"
+                )
             return updated.version, getattr(run, "run_id", None)
 
         try:
