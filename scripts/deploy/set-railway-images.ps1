@@ -78,7 +78,10 @@ $serviceArtifacts = [ordered]@{
 # The web reaches the private api over Railway's internal DNS, which requires the
 # container port; the provisioned UMBRAL_PRIVATE_API_URL must carry it.
 $serviceExtraVars = @{
-    api = [ordered]@{ PORT = "8000" }
+    api = [ordered]@{
+        PORT = "8000"
+        UMBRAL_API_BASE_URL = "http://api.railway.internal:8000"
+    }
     web = [ordered]@{ UMBRAL_PRIVATE_API_URL = "http://api.railway.internal:8000" }
 }
 
@@ -329,11 +332,6 @@ foreach ($service in $servicesToPatch) {
             $serviceVariables[$key] = [ordered]@{ value = $ModelVars[$key] }
         }
     }
-    if ($serviceExtraVars.ContainsKey($service)) {
-        foreach ($key in $serviceExtraVars[$service].Keys) {
-            $serviceVariables[$key] = [ordered]@{ value = $serviceExtraVars[$service][$key] }
-        }
-    }
     $patch.services[$serviceIdByName[$service]] = [ordered]@{
         source = [ordered]@{ image = $imageReference }
         variables = $serviceVariables
@@ -361,6 +359,29 @@ $patchJson = $patch | ConvertTo-Json -Depth 6
 $knownDeployments = @{}
 foreach ($service in $servicesToPatch) {
     $knownDeployments[$service] = @(Get-RailwayDeploymentIds -Service $service -Environment $Environment)
+}
+
+# Railway's environment-edit API can silently retain an existing empty service
+# variable when the variable is already present in the service configuration.
+# Set the non-secret private URLs through the variable command first, then let
+# the environment edit commit the image and the remaining release variables.
+# This also gives Railway one deployment event that the wait below can track.
+foreach ($service in $servicesToPatch) {
+    if (-not $serviceExtraVars.ContainsKey($service)) { continue }
+    $variableAssignments = @(
+        $serviceExtraVars[$service].Keys | ForEach-Object {
+            "{0}={1}" -f $_, $serviceExtraVars[$service][$_]
+        }
+    )
+    $variableCommand = @("variable", "set") + $variableAssignments + @(
+        "--service", $service,
+        "--environment", $Environment,
+        "--json"
+    )
+    $null = & npx @railway/cli@5.27.2 @variableCommand
+    if ($LASTEXITCODE -ne 0) {
+        throw "Railway service variable update failed for ${service}."
+    }
 }
 
 # The CLI ignores --service-config flags when stdin is not a terminal (CI),
