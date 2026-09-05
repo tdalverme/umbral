@@ -248,3 +248,26 @@ def test_e2e_mixed_turn_applies_soft_and_confirms_hard() -> None:
         "id": "listing:1",
     }
     assert "confirmado" in str(history[1].content["text"])
+
+
+def test_e2e_frontend_proposal_decision_approves_hard_filter() -> None:
+    runtime, user_id, session_id, _radar, _chat = _build_runtime()
+
+    first = runtime.run_turn(
+        user_id=user_id,
+        session_id=session_id,
+        text="prefiero bien luminoso y 900",
+        correlation_id=uuid4(),
+    )
+    assert first.status == "interrupted"
+
+    resumed = runtime.run_turn(
+        user_id=user_id,
+        session_id=session_id,
+        text="",
+        correlation_id=uuid4(),
+        resume=True,
+        decision={"kind": "approve", "idempotency_key": "decision:test"},
+    )
+
+    assert resumed.status == "completed"

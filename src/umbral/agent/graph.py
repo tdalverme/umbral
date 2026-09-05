@@ -289,7 +289,7 @@ def build_graph(
         raw = cast(Mapping[str, object], state.get("confirmation_payload") or {})
         decision = raw.get("decision")
         if isinstance(decision, Mapping):
-            decision = decision.get("decision")
+            decision = decision.get("decision") or decision.get("kind")
         if pending is None or decision not in {"approve", "reject"}:
             return {"failure_stage": "execution_failure"}
         ids = _ids(config)
