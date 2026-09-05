@@ -126,7 +126,6 @@ export function ChatPanel({
           }
           onDecisionApplied?.();
           setFallbackProposal(null);
-          void chat.resume();
         })
         .catch(() => {});
       return;
