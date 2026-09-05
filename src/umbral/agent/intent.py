@@ -269,7 +269,18 @@ def _compile_act(
     act_id = _required_string(item, "act_id")
     kind = item.get("kind")
     confidence = _confidence(item.get("confidence"))
-    spans = _evidence_spans(item.get("evidence_text"), message_text)
+    try:
+        spans = _evidence_spans(item.get("evidence_text"), message_text)
+    except InterpretationContractFailed as error:
+        # Some providers paraphrase the evidence label while preserving the
+        # literal desire text. Keep the audit span user-grounded when that
+        # fallback is itself present in the message.
+        if kind != "express_desire" or error.reason not in {
+            "evidence text not found in message",
+            "evidence_text required",
+        }:
+            raise
+        spans = _evidence_spans(item.get("raw_text"), message_text)
     if not spans:
         raise InterpretationContractFailed("act missing evidence")
     if kind == "create_radar":
@@ -487,12 +498,41 @@ def _schema_with_catalog_refs(
 def _evidence_spans(value: object, message_text: str) -> tuple[EvidenceSpan, ...]:
     if not isinstance(value, str) or not value:
         raise InterpretationContractFailed("evidence_text required")
-    start = message_text.find(value)
-    if start < 0:
+    start, end = _find_evidence(value, message_text)
+    if start is None or end is None:
         raise InterpretationContractFailed("evidence text not found in message")
-    if message_text.find(value, start + 1) >= 0:
+    return (EvidenceSpan(start=start, end=end, text=message_text[start:end]),)
+
+
+def _find_evidence(value: str, message_text: str) -> tuple[int | None, int | None]:
+    exact_start = message_text.find(value)
+    if exact_start >= 0:
+        if message_text.find(value, exact_start + 1) >= 0:
+            raise InterpretationContractFailed("evidence text is ambiguous")
+        return exact_start, exact_start + len(value)
+
+    normalized_value = _normalize_for_matching(value)
+    normalized_message, offsets = _normalized_offsets(message_text)
+    normalized_start = normalized_message.find(normalized_value)
+    if normalized_start < 0:
+        return None, None
+    if normalized_message.find(normalized_value, normalized_start + 1) >= 0:
         raise InterpretationContractFailed("evidence text is ambiguous")
-    return (EvidenceSpan(start=start, end=start + len(value), text=value),)
+    original_start = offsets[normalized_start]
+    original_end = offsets[normalized_start + len(normalized_value) - 1] + 1
+    return original_start, original_end
+
+
+def _normalized_offsets(value: str) -> tuple[str, list[int]]:
+    normalized: list[str] = []
+    offsets: list[int] = []
+    for index, character in enumerate(value):
+        for normalized_character in unicodedata.normalize("NFKD", character.casefold()):
+            if unicodedata.combining(normalized_character):
+                continue
+            normalized.append(normalized_character)
+            offsets.append(index)
+    return "".join(normalized), offsets
 
 
 def _require_authorized(context: TurnContext, ref: str) -> None:

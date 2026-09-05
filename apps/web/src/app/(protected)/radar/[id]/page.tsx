@@ -16,6 +16,7 @@ import { RadarShell } from "@/components/radar/radar-shell";
 import { radarApi, type Explanation, type FeedbackEventType, type MatchItem, type SearchProfile } from "@/lib/radar/client";
 import { emitExplanationViewed, emitImpression } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
+import { isTerminalRunState } from "@/lib/radar/run-state";
 
 const PAGE_SIZE = 25;
 const POLL_INTERVAL_MS = 3000;
@@ -82,6 +83,8 @@ export default function RadarViewPage(): React.ReactElement {
   const [reloadKey, setReloadKey] = useState(0);
   const [decisionStates, setDecisionStates] = useState<Record<string, FeedbackEventType | null>>({});
   const emittedRef = useRef<Set<string>>(new Set());
+  const matchesRequestRef = useRef(0);
+  const explanationsRequestRef = useRef(0);
 
   useEffect(() => {
     if (isMock) {
@@ -118,9 +121,11 @@ export default function RadarViewPage(): React.ReactElement {
 
   const loadExplanations = useCallback(
     (run: string) => {
+      const requestId = ++explanationsRequestRef.current;
       radarApi
         .explanations(profileId, run, PAGE_SIZE, null)
         .then((page) => {
+          if (requestId !== explanationsRequestRef.current) return;
           const byListing: Record<string, Explanation> = {};
           for (const item of page.items) byListing[item.listing_id] = item;
           setExplanations(byListing);
@@ -139,14 +144,18 @@ export default function RadarViewPage(): React.ReactElement {
 
   const loadMatches = useCallback(
     (run: string | null) => {
+      const requestId = ++matchesRequestRef.current;
+      const isCurrentRequest = (): boolean => requestId === matchesRequestRef.current;
       radarApi
         .matches(profileId, run, PAGE_SIZE, null)
         .then((page) => {
+          if (!isCurrentRequest()) return;
           // Si el run pedido está aún pending/failed y no trae items, fallback al último succeeded para no dejar el mapa vacío
           if (page.run_state !== "succeeded" && page.items.length === 0 && run !== null) {
             radarApi
               .matches(profileId, null, PAGE_SIZE, null)
               .then((fallback) => {
+                if (!isCurrentRequest()) return;
                 if (fallback.items.length > 0) {
                   setItems(fallback.items);
                   setNextAfter(fallback.next_after_position);
@@ -170,6 +179,7 @@ export default function RadarViewPage(): React.ReactElement {
                 setError(null);
               })
               .catch(() => {
+                if (!isCurrentRequest()) return;
                 setItems(page.items);
                 setRunId(page.run_id);
                 setRunState(page.run_state);
@@ -196,6 +206,7 @@ export default function RadarViewPage(): React.ReactElement {
           });
         })
         .catch((reason: unknown) => {
+          if (!isCurrentRequest()) return;
           setError(reason instanceof Error ? reason.message : "radar.error");
         });
     },
@@ -213,10 +224,12 @@ export default function RadarViewPage(): React.ReactElement {
       radarApi.getProfile(profileId).then((value) => {
         setProfile(value);
         const state = value.latest_run?.state ?? null;
+        const latestRunId = value.latest_run?.run_id ?? null;
+        setRunId(latestRunId);
         setRunState(state);
-        if (state === "succeeded") {
+        if (isTerminalRunState(state)) {
           window.clearInterval(interval);
-          loadMatches(value.latest_run?.run_id ?? null);
+          loadMatches(latestRunId);
         }
       });
     }, POLL_INTERVAL_MS);

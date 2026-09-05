@@ -67,6 +67,8 @@ class ChatSessionNotActive(ChatError):
 class ChatExecutionInProgress(ChatError):
     """A non-terminal run exists for the session; resume it before a new turn."""
 
+    code = "chat.execution_in_progress"
+
     def __init__(self, run_id: UUID | None = None) -> None:
         self.run_id = run_id
         super().__init__("chat.execution_in_progress")

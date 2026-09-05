@@ -284,6 +284,64 @@ def test_compiler_derives_unicode_offsets_from_evidence_text() -> None:
     )
 
 
+def test_compiler_accepts_accent_difference_in_model_evidence() -> None:
+    message = "Me gustaría que tenga cafés cercanos"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "a1",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": "Me gustaria que tenga cafes cercanos",
+                    "raw_text": "cafes cercanos",
+                    "subject_ref": "cafes",
+                    "concept_links": [],
+                }
+            ]
+        }
+    )
+
+    result = _compiler(gateway).interpret(
+        message_text=message,
+        context=_context(),
+        correlation_id=CORRELATION_ID,
+    )
+
+    assert result.acts[0].evidence_spans == (
+        EvidenceSpan(start=0, end=len(message), text=message),
+    )
+
+
+def test_compiler_uses_literal_desire_text_when_model_evidence_is_paraphrased() -> None:
+    message = "Me gustaría que tenga cafés cercanos y buen acceso al transporte público"
+    gateway = _FakeGateway(
+        {
+            "acts": [
+                {
+                    "act_id": "a1",
+                    "kind": "express_desire",
+                    "confidence": 0.9,
+                    "evidence_text": "Me gusta que tenga cafés cerca",
+                    "raw_text": "cafés cercanos",
+                    "subject_ref": "cafes",
+                    "concept_links": [],
+                }
+            ]
+        }
+    )
+
+    result = _compiler(gateway).interpret(
+        message_text=message,
+        context=_context(),
+        correlation_id=CORRELATION_ID,
+    )
+
+    assert result.acts[0].evidence_spans == (
+        EvidenceSpan(start=22, end=36, text="cafés cercanos"),
+    )
+
+
 def test_compiler_rejects_ambiguous_evidence_text() -> None:
     message = "quiero balcón y quiero algo moderno"
     gateway = _FakeGateway(

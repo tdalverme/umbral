@@ -41,6 +41,7 @@ from umbral.application.agent.tools.contracts import ProposalError
 from umbral.application.agent.tools.proposals import SearchProfileUpdateProposals
 from umbral.application.chat.contracts import (
     ChatError,
+    ChatExecutionInProgress,
     ChatMessageTooLong,
     ChatSessionNotActive,
     ChatSessionNotFound,
@@ -295,18 +296,23 @@ def _stream_turn(
             if serialized is not None:
                 events.put(serialized)
 
-        _runtime().run_turn(
-            user_id=user_id,
-            session_id=session_id,
-            text=text,
-            correlation_id=correlation_id,
-            resume=resume,
-            decision=decision,
-            consumer=emit,
-            client_message_id=client_message_id,
-            context=context,
-        )
-        events.put(None)
+        try:
+            _runtime().run_turn(
+                user_id=user_id,
+                session_id=session_id,
+                text=text,
+                correlation_id=correlation_id,
+                resume=resume,
+                decision=decision,
+                consumer=emit,
+                client_message_id=client_message_id,
+                context=context,
+            )
+        except ChatExecutionInProgress as error:
+            if error.run_id is not None:
+                emit(RunFailed(run_id=error.run_id, error_code=error.code))
+        finally:
+            events.put(None)
 
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
@@ -449,6 +455,13 @@ def send_message(
             correlation_id=_correlation(request) or uuid4(),
             resume=True,
             decision=decision,
+        )
+    if active is not None:
+        return _problem(
+            request,
+            409,
+            "chat.execution_in_progress",
+            "La conversación ya está procesando otro mensaje.",
         )
     client_message_id = body.get("client_message_id")
     context = body.get("context")
