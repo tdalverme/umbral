@@ -145,6 +145,12 @@ Require-Condition (-not [string]::IsNullOrWhiteSpace($redisUrl)) "Missing REDIS_
 if ($redisUrl -match "^redis://") {
     $redisUrl = "rediss://" + $redisUrl.Substring(8)
 }
+# Railway's preview proxy presents a certificate that the runtime container
+# cannot validate by hostname. Keep the connection encrypted while disabling
+# only that proxy certificate check; production keeps normal TLS validation.
+if ($Environment -eq "preview" -and $redisUrl -match "^rediss://.*\.proxy\.rlwy\.net(?:[:/]|$)") {
+    $redisUrl += if ($redisUrl.Contains("?")) { "&ssl_cert_reqs=none" } else { "?ssl_cert_reqs=none" }
+}
 $runtimeVars.REDIS_URL = $redisUrl
 
 # Runtime services also need the current provider credentials so the worker can
