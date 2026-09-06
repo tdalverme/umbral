@@ -96,7 +96,7 @@ export function OpportunityDetailSheet({
             <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">Por qué encaja</h3>
             {explanation?.reasons?.length ? (
               <ul className="space-y-2.5">
-                {explanation.reasons.slice(0, 2).map((r) => (
+                {explanation.reasons.slice(0, 4).map((r) => (
                   <li key={r.criterion_key} className="flex gap-2.5">
                     <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />
                     <p className="text-sm leading-relaxed text-foreground">
@@ -109,8 +109,8 @@ export function OpportunityDetailSheet({
             ) : (
               <p className="text-sm leading-relaxed text-muted-foreground">Tu radar lo evaluará en el próximo barrido. Te avisa solo si realmente encaja.</p>
             )}
-            {explanation?.reasons?.length && explanation.reasons.length > 2 && (
-              <p className="text-xs text-muted-foreground">+{explanation.reasons.length - 2} coincidencia más · se priorizan las que más pesan para vos.</p>
+            {explanation?.reasons?.length && explanation.reasons.length > 4 && (
+              <p className="text-xs text-muted-foreground">+{explanation.reasons.length - 4} coincidencias más · se priorizan las que más pesan para vos.</p>
             )}
           </section>
 

@@ -20,6 +20,14 @@ from umbral.application.scoring.contracts import (
 from umbral.application.scoring.policy import ScoringPolicyDoc
 
 
+_DISPLAY_LABELS = {
+    "proximidad_cafes": "cafés cercanos",
+    "acceso_transporte": "acceso al transporte",
+    "calma_residencial": "calma residencial",
+    "ruido_ambiental": "ruido ambiental",
+}
+
+
 def evidence_level(confidence: float, policy: ScoringPolicyDoc) -> EvidenceLevel:
     if confidence >= policy.confidence.get("strong_threshold", 0.8):
         return "strong"
@@ -51,8 +59,8 @@ def build_explanation(
         text = _template_text(
             evaluation.reason_code,
             templates,
-            criterion=evaluation.criterion_key,
-            concept=evaluation.criterion_key,
+            concept=_display_label(evaluation.criterion_key),
+            criterion=_display_label(evaluation.criterion_key),
             confidence=f"{evaluation.confidence:.2f}",
         )
         if evaluation.state == "unknown":
@@ -88,6 +96,13 @@ def build_explanation(
                     text=text,
                 )
             )
+    reasons.sort(
+        key=lambda reason: (
+            -reason.contribution,
+            -reason.score,
+            reason.criterion_key,
+        )
+    )
     deduped_risks = _dedupe_risks(tuple(risks))
     return Explanation(
         search_profile_id=search_profile_id,
@@ -120,6 +135,10 @@ def _template_text(
     for name, value in values.items():
         text = text.replace("{" + name + "}", value)
     return text
+
+
+def _display_label(criterion_key: str) -> str:
+    return _DISPLAY_LABELS.get(criterion_key, criterion_key)
 
 
 def _dedupe_risks(risks: tuple[ExplanationRisk, ...]) -> tuple[ExplanationRisk, ...]:

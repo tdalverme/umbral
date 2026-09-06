@@ -15,7 +15,9 @@
     "budget_over_max": { "state": "mismatch", "copy_key": "reason.budget_over_max" },
     "concept_missing": { "state": "mismatch", "copy_key": "reason.concept_missing" },
     "no_observation_data": { "state": "unknown", "copy_key": "reason.no_observation_data" },
-    "location_precision_low": { "state": "unknown", "copy_key": "reason.location_precision_low" }
+    "location_precision_low": { "state": "unknown", "copy_key": "reason.location_precision_low" },
+    "signal_observed": { "state": "match", "copy_key": "reason.signal_observed" },
+    "signal_below_threshold": { "state": "mismatch", "copy_key": "reason.signal_below_threshold" }
   },
   "copy_templates": {
     "reason.budget_within_headroom": "Dentro del presupuesto con margen.",
@@ -28,6 +30,8 @@
     "reason.concept_missing": "No cumple {concept} (evidencia negativa).",
     "reason.no_observation_data": "Sin datos suficientes para evaluar {criterion}.",
     "reason.location_precision_low": "Ubicacion con precision baja; no se pudo evaluar.",
+    "reason.signal_observed": "Hay evidencia de {concept} para este listing.",
+    "reason.signal_below_threshold": "El acceso a {concept} queda por debajo de lo buscado.",
     "notice.legacy_run": "La explicacion no esta disponible para este run.",
     "notice.score_confidence": "Indicador con confianza {confidence}."
   }

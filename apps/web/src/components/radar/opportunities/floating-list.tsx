@@ -99,6 +99,7 @@ export function FloatingList({
               const exp = explanations?.[o.listing_id];
               const topReason = exp?.reasons?.[0];
               const secondReason = exp?.reasons?.[1];
+              const thirdReason = exp?.reasons?.[2];
               const risk = exp?.risks?.[0];
               const missing = exp?.missing_data?.[0];
               const isSelected = selectedId === o.listing_id;
@@ -148,6 +149,12 @@ export function FloatingList({
                           <span className="flex items-start gap-1.5 text-xs text-muted-foreground">
                             <EvidenceDot level={secondReason.evidence_level} />
                             <span className="leading-4">{secondReason.text}</span>
+                          </span>
+                        )}
+                        {thirdReason && (
+                          <span className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                            <EvidenceDot level={thirdReason.evidence_level} />
+                            <span className="leading-4">{thirdReason.text}</span>
                           </span>
                         )}
                         {(risk || missing) && (

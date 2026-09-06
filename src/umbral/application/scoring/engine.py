@@ -13,7 +13,11 @@ from datetime import datetime
 from typing import Protocol, cast
 from uuid import UUID, uuid4
 
-from umbral.application.criteria.contracts import Compilation, ListingObservation
+from umbral.application.criteria.contracts import (
+    Compilation,
+    CompiledCriterion,
+    ListingObservation,
+)
 from umbral.application.radar.contracts import SearchProfile
 from umbral.application.scoring.contracts import (
     CriterionEvaluation,
@@ -128,6 +132,12 @@ def _score_candidate(
     fact_params = {
         compiled.concept_key: compiled for compiled in compilation.criteria
     }
+    normalized_weights = _normalized_criterion_weights(
+        profile=profile,
+        compilation=compilation,
+        policy=policy,
+        fact_params=fact_params,
+    )
     for criterion in policy.criteria:
         if is_fixed_criterion(criterion.key) and not _fixed_criterion_declared(
             criterion.key, profile
@@ -139,16 +149,15 @@ def _score_candidate(
             # weight of a fact override the static policy entry of the same
             # concept; gates stay in the policy (fase 3, US3).
             compiled = fact_params[criterion.concept]
-            weight = (
-                compiled.weight
-                if compiled.weight is not None
-                else criterion.weight
-            )
             compiled_soft_to_hard = compiled.soft_to_hard
             criterion = replace(
                 criterion,
                 params={**criterion.params, **compiled.params},
-                weight=weight,
+                weight=normalized_weights[criterion.key],
+            )
+        else:
+            criterion = replace(
+                criterion, weight=normalized_weights[criterion.key]
             )
         result, input_refs = _evaluate_criterion(
             criterion, profile, listing, observations
@@ -187,7 +196,7 @@ def _score_candidate(
             key=compiled.concept_key,
             concept=compiled.concept_key,
             matcher_type=compiled.matcher_type,
-            weight=compiled.weight,
+            weight=normalized_weights[compiled.concept_key],
             params=dict(compiled.params),
             gate=None,
         )
@@ -258,6 +267,63 @@ def _fixed_criterion_declared(key: str, profile: SearchProfile) -> bool:
     if key == "ubicacion":
         return bool(profile.zones)
     return True
+
+
+def _normalized_criterion_weights(
+    *,
+    profile: SearchProfile,
+    compilation: Compilation,
+    policy: ScoringPolicyDoc,
+    fact_params: Mapping[str, CompiledCriterion],
+) -> dict[str, float]:
+    """Keep all active criteria inside one normalized weight budget.
+
+    The static policy is normalized on its own, but conversational facts may
+    add criteria outside that policy. Their weights must compete with the
+    static criteria instead of being added on top and clipped at 1.0.
+    """
+
+    raw_weights: dict[str, float] = {}
+    policy_concepts = {criterion.concept for criterion in policy.criteria}
+    for criterion in policy.criteria:
+        if is_fixed_criterion(criterion.key) and not _fixed_criterion_declared(
+            criterion.key, profile
+        ):
+            continue
+        compiled = fact_params.get(criterion.concept)
+        compiled_weight = compiled.weight if compiled is not None else None
+        raw_weights[criterion.key] = (
+            compiled_weight
+            if isinstance(compiled_weight, (int, float))
+            and not isinstance(compiled_weight, bool)
+            else criterion.weight
+        )
+    for compiled in compilation.criteria:
+        if compiled.concept_key in policy_concepts or compiled.weight is None:
+            continue
+        raw_weights[compiled.concept_key] = compiled.weight
+
+    policy_by_concept = {
+        criterion.concept: criterion for criterion in policy.criteria
+    }
+    dynamic_weights = any(
+        compiled.weight is not None
+        and (
+            (static := policy_by_concept.get(compiled.concept_key)) is None
+            or compiled.weight != static.weight
+        )
+        for compiled in compilation.criteria
+    )
+    if not dynamic_weights:
+        return raw_weights
+
+    total_weight = sum(raw_weights.values())
+    if total_weight <= 0.0:
+        return {key: 0.0 for key in raw_weights}
+    return {
+        key: round(weight / total_weight, 8)
+        for key, weight in raw_weights.items()
+    }
 
 
 def _semantic_contribution(

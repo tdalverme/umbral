@@ -131,3 +131,46 @@ def test_every_reason_references_internal_evidence_or_declares_unknown() -> None
             risk.criterion_key == criterion_key and risk.state == "unknown"
             for risk in explanation.risks
         )
+
+
+def test_signal_observed_has_user_facing_copy_and_reasons_are_weighted() -> None:
+    evaluations = (
+        _evaluation(
+            {
+                "criterion_key": "ambientes",
+                "state": "match",
+                "score": 1.0,
+                "confidence": 1.0,
+                "contribution": 0.1,
+                "reason_code": "rooms_match",
+                "evidence_refs": [{"kind": "listing_field", "ref": "rooms"}],
+            }
+        ),
+        _evaluation(
+            {
+                "criterion_key": "proximidad_cafes",
+                "state": "match",
+                "score": 0.8,
+                "confidence": 0.9,
+                "contribution": 0.4,
+                "reason_code": "signal_observed",
+                "evidence_refs": [{"kind": "observation", "ref": "obs-cafe"}],
+            }
+        ),
+    )
+    explanation = build_explanation(
+        search_profile_id=_PROFILE_ID,
+        run_id=_RUN_ID,
+        listing_id=_LISTING_ID,
+        score=0.8,
+        confidence=0.9,
+        evaluations=evaluations,
+        policy=POLICY,
+        templates=TEMPLATES,
+        satisfied_filters=(),
+        profile_version_id=uuid4(),
+    )
+
+    assert explanation.reasons[0].criterion_key == "proximidad_cafes"
+    assert "signal_observed" not in explanation.reasons[0].text
+    assert "cafés cercanos" in explanation.reasons[0].text
