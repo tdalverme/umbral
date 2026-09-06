@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 const chatMocks = vi.hoisted(() => ({
   fallback: false,
   streamDecide: vi.fn().mockResolvedValue(true),
-  fallbackDecide: vi.fn(),
   resume: vi.fn(),
   updateProposals: vi.fn(),
 }));
@@ -15,7 +14,6 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/chat/client", () => ({
   chatApi: {
-    decide: chatMocks.fallbackDecide,
     updateProposals: chatMocks.updateProposals,
   },
 }));
@@ -61,7 +59,7 @@ vi.mock("@/components/chat/stream-status", () => ({
 import { ChatPanel } from "@/components/chat/chat-panel";
 
 describe("ChatPanel", () => {
-  it("no reanuda un run después de aprobar una propuesta fallback", async () => {
+  it("procesa la aprobación de una propuesta fallback a través del stream", async () => {
     chatMocks.fallback = true;
     chatMocks.updateProposals.mockResolvedValue({
       items: [
@@ -80,7 +78,6 @@ describe("ChatPanel", () => {
         },
       ],
     });
-    chatMocks.fallbackDecide.mockResolvedValue({ body: null } as Response);
     const onDecisionApplied = vi.fn();
 
     render(<ChatPanel profileId="profile-1" onDecisionApplied={onDecisionApplied} />);
@@ -89,7 +86,10 @@ describe("ChatPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Aprobar" }));
 
     await waitFor(() => expect(onDecisionApplied).toHaveBeenCalledTimes(1));
-    expect(chatMocks.fallbackDecide).toHaveBeenCalledWith("s1", "r1", expect.objectContaining({ kind: "approve" }));
+    expect(chatMocks.streamDecide).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "approve" }),
+      { sessionId: "s1", runId: "r1" },
+    );
     expect(chatMocks.resume).not.toHaveBeenCalled();
   });
 

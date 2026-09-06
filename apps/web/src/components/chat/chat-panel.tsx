@@ -111,26 +111,14 @@ export function ChatPanel({
   }, [chat.pendingDecision, chat.status, profileId]);
 
   const handleDecision = (decision: Record<string, unknown>): void => {
-    // Si hay fallback (SSE interrumpido), decidir contra su run_id/sesión
-    if (!chat.pendingDecision && fallbackProposal?.waiting_run_id) {
-      void chatApi
-        .decide(fallbackProposal.session_id, fallbackProposal.waiting_run_id, decision)
-        .then(async (response) => {
-          if (response.body) {
-            const reader = response.body.getReader();
-            // drenar stream para que el backend cierre el run
-            for (;;) {
-              const { done } = await reader.read();
-              if (done) break;
-            }
+    const fallbackRun =
+      !chat.pendingDecision && fallbackProposal?.waiting_run_id
+        ? {
+            sessionId: fallbackProposal.session_id,
+            runId: fallbackProposal.waiting_run_id,
           }
-          onDecisionApplied?.();
-          setFallbackProposal(null);
-        })
-        .catch(() => {});
-      return;
-    }
-    void chat.decide(decision).then((applied) => {
+        : undefined;
+    void chat.decide(decision, fallbackRun).then((applied) => {
       if (applied) onDecisionApplied?.();
     });
   };

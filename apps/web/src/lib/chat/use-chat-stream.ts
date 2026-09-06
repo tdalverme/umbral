@@ -27,6 +27,8 @@ export function isProposalDecision(value: unknown): value is ProposalDecision {
   );
 }
 
+type DecisionRun = { sessionId: string; runId: string };
+
 /** Owns the single chat panel of a radar (Q3): session resume/create, SSE
  * streaming with dedupe and reconnection (R-11/R-13). */
 export function useChatStream(searchProfileId: string) {
@@ -221,12 +223,14 @@ export function useChatStream(searchProfileId: string) {
   );
 
   const decide = useCallback(
-    async (decision: Record<string, unknown>) => {
-      if (!session || !pendingRunIdRef.current) return false;
-      const runId = pendingRunIdRef.current;
+    async (decision: Record<string, unknown>, target?: DecisionRun) => {
+      const sessionId = target?.sessionId ?? session?.session_id;
+      const runId = target?.runId ?? pendingRunIdRef.current;
+      if (!sessionId || !runId) return false;
       setStatus("running");
       setPendingDecision(null);
-      return streamFrom(chatApi.decide(session.session_id, runId, decision));
+      pendingRunIdRef.current = runId;
+      return streamFrom(chatApi.decide(sessionId, runId, decision));
     },
     [session, streamFrom],
   );
