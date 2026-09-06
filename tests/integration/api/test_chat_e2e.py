@@ -8,12 +8,13 @@ immediately, and completes the radar update on approval.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Command
 from tests.fakes.preferences import FakeConceptReader, FakePreferenceStore
 from tests.support.agent import InMemoryGraphRunRepository
 from tests.support.chat import (
@@ -91,6 +92,19 @@ class _Script:
         self, *, message_text: str, context: TurnContext, correlation_id: UUID
     ) -> TurnInterpretation:
         return self.output
+
+
+class _FailOnResumeCompiled:
+    def __init__(self, delegate: object) -> None:
+        self.delegate = delegate
+
+    def stream(self, input_value: object, config: object, **kwargs: object) -> object:
+        if isinstance(input_value, Command):
+            raise RuntimeError("resume failed")
+        return self.delegate.stream(input_value, config, **kwargs)  # type: ignore[attr-defined]
+
+    def get_state(self, config: object) -> object:
+        return self.delegate.get_state(config)  # type: ignore[attr-defined]
 
 
 def _mixed_interpretation() -> TurnInterpretation:
@@ -271,6 +285,41 @@ def test_e2e_frontend_proposal_decision_approves_hard_filter() -> None:
     )
 
     assert resumed.status == "completed"
+
+
+def test_e2e_failed_proposal_resume_does_not_block_next_message() -> None:
+    runtime, user_id, session_id, _radar, _chat = _build_runtime()
+
+    first = runtime.run_turn(
+        user_id=user_id,
+        session_id=session_id,
+        text="prefiero bien luminoso y 900",
+        correlation_id=uuid4(),
+    )
+    assert first.status == "interrupted"
+
+    runtime.graph = replace(
+        runtime.graph,
+        compiled=_FailOnResumeCompiled(runtime.graph.compiled),
+    )
+    failed = runtime.run_turn(
+        user_id=user_id,
+        session_id=session_id,
+        text="",
+        correlation_id=uuid4(),
+        resume=True,
+        decision={"decision": "approve"},
+    )
+
+    assert failed.status == "failed"
+
+    next_turn = runtime.run_turn(
+        user_id=user_id,
+        session_id=session_id,
+        text="busca también en Palermo",
+        correlation_id=uuid4(),
+    )
+    assert next_turn.run_id != first.run_id
 
 
 def test_e2e_frontend_proposal_decision_approves_zone_filter() -> None:

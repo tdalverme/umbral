@@ -16,7 +16,6 @@ from umbral.agent.events import (
     ReplyFragment,
     RunCompleted,
     RunFailed,
-    RunInterrupted,
     RunStarted,
     RuntimeEvent,
 )
@@ -239,17 +238,17 @@ class ChatRuntime:
             latency_ms = _elapsed_ms(run.started_at, finished)
             self.runs.mark(
                 run_id,
-                status="interrupted",
+                status="failed",
                 finished_at=finished,
                 latency_ms=latency_ms,
-                error_summary={"code": "agent.interrupted"},
+                error_summary={"code": "agent.failed"},
             )
-            emit(RunInterrupted(run_id=run_id))
+            emit(RunFailed(run_id=run_id, error_code="agent.failed"))
             return RunOutcome(
                 run_id=run_id,
-                status="interrupted",
+                status="failed",
                 latency_ms=latency_ms,
-                error_code="agent.interrupted",
+                error_code="agent.failed",
             )
 
 
