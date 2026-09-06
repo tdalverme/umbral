@@ -46,6 +46,7 @@ from umbral.infrastructure.object_store.factory import build_object_store
 from umbral.infrastructure.observability.runtime import initialize_observability
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
 from umbral.infrastructure.radar.composition import build_radar_service
+from umbral.infrastructure.redis import build_redis_connection
 from umbral.infrastructure.runtime.heartbeat import RuntimeHeartbeatWriter
 from umbral.infrastructure.scoring.composition import build_scoring_service
 from umbral.infrastructure.silver.composition import build_normalize_service
@@ -171,7 +172,7 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         notifications.delivery
     ).as_mapping().values():
         registry.register(handler)
-    redis_connection = Redis.from_url(active_settings.redis_url)
+    redis_connection = build_redis_connection(active_settings.redis_url)
     queue = RQJobQueue.from_connection(redis_connection)
     runtime = SqlAlchemyJobRuntime(
         session_provider.session_factory,

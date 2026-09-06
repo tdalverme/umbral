@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Any, Literal, cast
 
-from redis import Redis
-
 from umbral.application.criteria.service import CriteriaService
 from umbral.application.feedback.service import FeedbackService
 from umbral.application.identity.access import IdentityAccess
@@ -53,6 +51,7 @@ from umbral.infrastructure.observability.otel import record_dependency_metric
 from umbral.infrastructure.queue.recording_queue import RecordingJobQueue
 from umbral.infrastructure.queue.rq_queue import RQJobQueue
 from umbral.infrastructure.radar.composition import build_radar_service
+from umbral.infrastructure.redis import build_redis_connection
 from umbral.infrastructure.scoring.composition import build_scoring_service
 
 _MARKER_BODY = b"umbral-preview-readiness-v1"
@@ -99,7 +98,7 @@ class RuntimeCompositionFactories:
     identity_registry: Callable[[Settings], IdentityProviderRegistry] = (
         build_identity_registry
     )
-    redis_connection: Callable[[str], Any] = Redis.from_url
+    redis_connection: Callable[[str], Any] = build_redis_connection
     job_queue: Callable[[Any], JobQueue] = RQJobQueue.from_connection
     job_runtime: Callable[[SessionProvider, JobQueue, str], JobRuntime] = (
         lambda provider, queue, release_id: SqlAlchemyJobRuntime(
