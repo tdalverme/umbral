@@ -513,7 +513,12 @@ class Settings(BaseSettings):
             and redis.scheme == "redis"
             and (redis.hostname or "").endswith(".railway.internal")
         )
-        if redis.scheme != "rediss" and not railway_redis:
+        railway_preview_proxy_redis = (
+            environment == "preview"
+            and redis.scheme == "redis"
+            and (redis.hostname or "").endswith(".proxy.rlwy.net")
+        )
+        if redis.scheme != "rediss" and not railway_redis and not railway_preview_proxy_redis:
             raise SettingsValidationError("CONFIG_TLS_REQUIRED", "REDIS_URL")
         if otel.scheme != "https":
             raise SettingsValidationError(

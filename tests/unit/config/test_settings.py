@@ -121,6 +121,17 @@ def test_preview_rejects_supabase_url_outside_the_configured_project(
     assert raised.value.field_name == "SUPABASE_URL"
 
 
+def test_preview_accepts_railway_public_redis_proxy() -> None:
+    values = _case_environment(
+        next(case for case in ACCEPTED_CASES if case["id"] == "preview-valid")
+    )
+    values["REDIS_URL"] = "redis://viaduct.proxy.rlwy.net:18119/0"
+
+    settings = Settings.from_environment(values)
+
+    assert settings.redis_url == values["REDIS_URL"]
+
+
 def test_matching_settings_have_safe_defaults_and_are_known() -> None:
     values = _case_environment(
         next(case for case in ACCEPTED_CASES if case["id"] == "local-valid")
