@@ -138,19 +138,12 @@ foreach ($key in @("OBJECT_STORE_BUCKET", "OBJECT_STORE_ENDPOINT_URL", "OBJECT_S
 # Railway's provisioned internal Redis hostname is not reachable from the
 # promoted services in this environment. Use the same authenticated endpoint
 # that the promote runner validates so API readiness and the background workers
-# share a working queue.
+# share a working queue. Keep the provider URL unchanged: Railway's public
+# preview proxy is exposed as plain redis:// and the preview runtime explicitly
+# permits that narrowly scoped endpoint.
 $runtimeVars = [ordered]@{}
 $redisUrl = [string][Environment]::GetEnvironmentVariable("REDIS_URL")
 Require-Condition (-not [string]::IsNullOrWhiteSpace($redisUrl)) "Missing REDIS_URL environment value for Railway service variables."
-if ($redisUrl -match "^redis://") {
-    $redisUrl = "rediss://" + $redisUrl.Substring(8)
-}
-# Railway's preview proxy presents a certificate that the runtime container
-# cannot validate by hostname. Keep the connection encrypted while disabling
-# only that proxy certificate check; production keeps normal TLS validation.
-if ($Environment -eq "preview" -and $redisUrl -match "^rediss://.*\.proxy\.rlwy\.net(?:[:/]|$)") {
-    $redisUrl += if ($redisUrl.Contains("?")) { "&ssl_cert_reqs=none" } else { "?ssl_cert_reqs=none" }
-}
 $runtimeVars.REDIS_URL = $redisUrl
 
 # Runtime services also need the current provider credentials so the worker can
