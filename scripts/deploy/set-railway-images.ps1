@@ -142,6 +142,9 @@ foreach ($key in @("OBJECT_STORE_BUCKET", "OBJECT_STORE_ENDPOINT_URL", "OBJECT_S
 $runtimeVars = [ordered]@{}
 $redisUrl = [string][Environment]::GetEnvironmentVariable("REDIS_URL")
 Require-Condition (-not [string]::IsNullOrWhiteSpace($redisUrl)) "Missing REDIS_URL environment value for Railway service variables."
+if ($redisUrl -match "^redis://") {
+    $redisUrl = "rediss://" + $redisUrl.Substring(8)
+}
 $runtimeVars.REDIS_URL = $redisUrl
 
 # Runtime services also need the current provider credentials so the worker can
