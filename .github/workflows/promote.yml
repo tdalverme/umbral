@@ -45,11 +45,19 @@ jobs:
         run: uv sync --locked --all-groups
       - name: Download release artifact by ID
         if: ${{ inputs.manifest_artifact_id != '' }}
-        uses: actions/download-artifact@v4
-        with:
-          artifact-ids: ${{ inputs.manifest_artifact_id }}
-          path: artifacts/release
-          github-token: ${{ github.token }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ inputs.manifest_artifact_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/release
+          curl --fail-with-body -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            -o /tmp/release-artifact.zip
+          unzip -q /tmp/release-artifact.zip -d artifacts/release
       - name: Download release artifact by name
         if: ${{ inputs.manifest_artifact_id == '' }}
         uses: actions/download-artifact@v4
