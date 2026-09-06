@@ -104,6 +104,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from urllib.error import HTTPError
 
 from umbral.api.main import app  # noqa: F401
 
@@ -129,6 +130,11 @@ try:
             with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3) as response:
                 body = response.read().decode()
                 print("health status:", response.status, body)
+                try:
+                    with urllib.request.urlopen("http://127.0.0.1:8000/ready", timeout=3) as ready_response:
+                        print("ready status:", ready_response.status, ready_response.read().decode())
+                except HTTPError as error:
+                    print("ready status:", error.code, error.read().decode())
                 ok = True
                 break
         except Exception as error:
@@ -222,6 +228,33 @@ function Dump-LiveApiServiceConfig {
     } catch {
         Write-Host ("live api service config dump failed: {0}" -f $_.Exception.Message)
     }
+}
+
+function Dump-LatestRuntimeSurfaceStatus {
+    Write-Host ""
+    Write-Host "=== latest runtime surface status ==="
+    $runtimeStatusCode = @'
+import json
+import os
+import psycopg
+
+with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT surface, state, checks, observed_at "
+            "FROM runtime_surface_status "
+            "WHERE environment = 'preview' "
+            "ORDER BY observed_at DESC"
+        )
+        for surface, state, checks, observed_at in cursor.fetchall():
+            print(json.dumps({
+                "surface": surface,
+                "state": state,
+                "checks": checks,
+                "observed_at": observed_at.isoformat(),
+            }, sort_keys=True))
+'@
+    Invoke-Diagnostic "latest runtime surface status" $runtimeStatusCode
 }
 
 function Dump-PreviewPublicDomains {
@@ -337,6 +370,7 @@ try {
     Invoke-Diagnostic "api app module import (uvicorn path)" $apiAppCode
     Invoke-RailwayRunDiagnostic
     Dump-LiveApiServiceConfig
+    Dump-LatestRuntimeSurfaceStatus
     Dump-PrivateApiUrlConfiguration
     Dump-PreviewPublicDomains
 } finally {
