@@ -264,17 +264,13 @@ with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
 function Dump-PreviewPublicDomains {
     Write-Host ""
     Write-Host "=== preview public domains ==="
-    foreach ($attempt in @(
-        @("service", "list", "-e", "preview", "--json")
-    )) {
-        try {
-            Write-Host ("--- railway {0} ---" -f ($attempt -join " "))
-            $raw = & npx @railway/cli@5.27.2 @attempt
-            Write-Host ("exit {0}" -f $LASTEXITCODE)
-            if (-not [string]::IsNullOrWhiteSpace($raw)) { Write-Host $raw }
-        } catch {
-            Write-Host ("failed: {0}" -f $_.Exception.Message)
-        }
+    try {
+        Write-Host "--- railway service list -e preview --json ---"
+        $raw = & npx @railway/cli@5.27.2 service list -e preview --json
+        Write-Host ("exit {0}" -f $LASTEXITCODE)
+        if (-not [string]::IsNullOrWhiteSpace($raw)) { Write-Host $raw }
+    } catch {
+        Write-Host ("failed: {0}" -f $_.Exception.Message)
     }
 }
 
