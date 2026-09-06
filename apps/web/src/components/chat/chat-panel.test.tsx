@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const chatMocks = vi.hoisted(() => ({
   fallback: false,
+  status: "waiting_decision" as "waiting_decision" | "completed",
   streamDecide: vi.fn().mockResolvedValue(true),
   resume: vi.fn(),
   updateProposals: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock("@/lib/chat/use-chat-stream", () => ({
   useChatStream: () => ({
     session: { session_id: "s1" },
     messages: [],
-    status: "waiting_decision",
+    status: chatMocks.status,
     error: null,
     pendingDecision: chatMocks.fallback
       ? null
@@ -101,5 +102,15 @@ describe("ChatPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Decidir" }));
 
     await waitFor(() => expect(onDecisionApplied).toHaveBeenCalledTimes(1));
+  });
+
+  it("notifica al radar cuando termina un turno soft", async () => {
+    chatMocks.status = "completed";
+    const onTurnCompleted = vi.fn();
+
+    render(<ChatPanel profileId="profile-1" onTurnCompleted={onTurnCompleted} />);
+
+    await waitFor(() => expect(onTurnCompleted).toHaveBeenCalledTimes(1));
+    chatMocks.status = "waiting_decision";
   });
 });

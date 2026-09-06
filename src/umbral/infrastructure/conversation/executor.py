@@ -36,10 +36,12 @@ from umbral.application.conversation.contracts import (
 from umbral.application.conversation.ports import FeedbackRecorder
 from umbral.application.preferences.contracts import (
     BindingDraft,
+    PreferenceChange,
     PreferenceValidationError,
 )
 from umbral.application.preferences.intensity import IntensityPolicy
 from umbral.application.preferences.ports import ConceptReader
+from umbral.application.preferences.refresh import RadarPreferenceRefreshService
 from umbral.application.radar.service import RadarService
 from umbral.infrastructure.conversation.preferences import PreferenceServiceLike
 
@@ -54,6 +56,7 @@ class EffectExecutor:
         chat: ChatService,
         proposals: SearchProfileUpdateProposals,
         preferences: PreferenceServiceLike | None = None,
+        preference_refresh: RadarPreferenceRefreshService | None = None,
         feedback: FeedbackRecorder | None = None,
         concepts: ConceptReader | None = None,
         intensity_policy: IntensityPolicy | None = None,
@@ -63,6 +66,7 @@ class EffectExecutor:
         self.chat = chat
         self.proposals = proposals
         self.preferences = preferences
+        self.preference_refresh = preference_refresh
         self.feedback = feedback
         self.concepts = concepts
         self.intensity_policy = intensity_policy
@@ -199,6 +203,7 @@ class EffectExecutor:
                 binding_drafts=(BindingDraft.unresolved("no_structured_evidence"),),
                 correlation_id=UUID(context.correlation_id),
             )
+            self._refresh_preferences((change,), context=context)
             return ExecutedAct(
                 act_id=command.act_id,
                 effect_key="desire.remembered",
@@ -231,6 +236,7 @@ class EffectExecutor:
                 status="rejected",
                 reason_code="preference.already_active",
             )
+        self._refresh_preferences(changes, context=context)
         return ExecutedAct(
             act_id=command.act_id,
             effect_key="desire.remembered",
@@ -273,6 +279,13 @@ class EffectExecutor:
             binding_drafts=drafts,
             correlation_id=UUID(context.correlation_id),
         )
+        self._refresh_preferences(
+            (change,),
+            context=context,
+            previous_binding_kinds=_previous_binding_kinds(
+                context, command.desire_ref
+            ),
+        )
         return ExecutedAct(
             act_id=command.act_id,
             effect_key="desire.revised",
@@ -303,6 +316,7 @@ class EffectExecutor:
             expression_id=_ref_uuid(command.desire_ref, "desire"),
             correlation_id=UUID(context.correlation_id),
         )
+        self._refresh_preferences((change,), context=context)
         return ExecutedAct(
             act_id=command.act_id,
             effect_key="desire.withdrawn",
@@ -384,6 +398,29 @@ class EffectExecutor:
                 )
             )
         return tuple(drafts)
+
+    def _refresh_preferences(
+        self,
+        changes: tuple[PreferenceChange, ...],
+        *,
+        context: TurnContext,
+        previous_binding_kinds: tuple[str, ...] = (),
+    ) -> None:
+        if self.preference_refresh is None:
+            return
+        profile_id = _profile_id(context)
+        expected_version = context.active_radar_version
+        if profile_id is None or expected_version is None:
+            return
+        self.preference_refresh.refresh_after_change(
+            owner_id=UUID(context.user_id),
+            profile_id=profile_id,
+            expected_profile_version=expected_version,
+            changes=changes,
+            correlation_id=UUID(context.correlation_id),
+            actor_id=context.user_id,
+            previous_binding_kinds=previous_binding_kinds,
+        )
 
     def _propose(
         self,
@@ -524,6 +561,15 @@ def _profile_id(context: TurnContext) -> UUID | None:
         return UUID(context.active_radar_ref.removeprefix("radar:"))
     except ValueError:
         return None
+
+
+def _previous_binding_kinds(
+    context: TurnContext, desire_ref: str
+) -> tuple[str, ...]:
+    for desire in context.active_desires:
+        if desire.desire_ref == desire_ref and desire.concept_links:
+            return ("structured",)
+    return ()
 
 
 def _ref_uuid(ref: str, prefix: str) -> UUID:

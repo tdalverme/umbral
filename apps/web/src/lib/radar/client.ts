@@ -2,9 +2,11 @@
 
 export type ProfileStatus = "active" | "paused" | "archived";
 export type RunState = "pending" | "running" | "succeeded" | "failed";
+export type RefreshState = "current" | "refreshing" | "failed";
 
 export interface RunInfo {
   run_id: string;
+  profile_version_id?: string | null;
   state: RunState;
   trigger: string;
   score_policy_version: string;
@@ -28,9 +30,11 @@ export interface SearchProfile {
   status: ProfileStatus;
   unknown_strategy: Record<string, string>;
   version: number;
+  current_version_id?: string | null;
   created_at: string;
   updated_at: string;
   latest_run: RunInfo | null;
+  refresh_state?: RefreshState;
 }
 
 export interface MatchItem {
@@ -53,7 +57,10 @@ export interface MatchItem {
 export interface MatchesPage {
   search_profile_id: string;
   run_id: string;
+  profile_version_id?: string | null;
+  current_version_id?: string | null;
   run_state: RunState;
+  refresh_state?: RefreshState;
   items: MatchItem[];
   next_after_position: number | null;
 }

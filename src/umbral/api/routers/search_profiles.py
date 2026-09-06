@@ -28,6 +28,7 @@ _dependencies: RuntimeDependencies | None = None
 
 ProfileState = Literal["active", "paused", "archived"]
 RunState = Literal["pending", "running", "succeeded", "failed", "superseded"]
+RefreshState = Literal["current", "refreshing", "failed"]
 
 
 class PreferenceServiceLike(Protocol):
@@ -90,6 +91,7 @@ class PreferenceViewResponse(BaseModel):
 class RunResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     run_id: UUID
+    profile_version_id: UUID | None = None
     state: RunState
     trigger: str
     score_policy_version: str
@@ -103,6 +105,7 @@ class RunResponse(BaseModel):
     def from_domain(cls, run: RecommendationRun) -> "RunResponse":
         return cls(
             run_id=run.run_id,
+            profile_version_id=run.profile_version_id,
             state=run.state,
             trigger=run.trigger,
             score_policy_version=run.score_policy_version,
@@ -128,9 +131,11 @@ class SearchProfileResponse(BaseModel):
     status: ProfileState
     unknown_strategy: dict[str, str]
     version: int
+    current_version_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
     latest_run: RunResponse | None = None
+    refresh_state: RefreshState = "current"
 
     @classmethod
     def from_domain(
@@ -149,10 +154,24 @@ class SearchProfileResponse(BaseModel):
             status=profile.status,
             unknown_strategy=dict(profile.unknown_strategy),
             version=profile.version,
+            current_version_id=profile.current_version_id,
             created_at=profile.created_at,
             updated_at=profile.updated_at,
             latest_run=RunResponse.from_domain(run) if run is not None else None,
+            refresh_state=_refresh_state(profile.current_version_id, run),
         )
+
+
+def _refresh_state(
+    current_version_id: UUID | None, run: RecommendationRun | None
+) -> RefreshState:
+    if run is None:
+        return "current"
+    if run.state in ("pending", "running", "superseded"):
+        return "refreshing"
+    if run.state == "failed":
+        return "failed"
+    return "current" if run.profile_version_id == current_version_id else "refreshing"
 
 
 def configure_search_profiles_routes(dependencies: RuntimeDependencies) -> None:

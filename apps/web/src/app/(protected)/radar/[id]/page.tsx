@@ -13,7 +13,7 @@ import { RadarMap, matchPoints } from "@/components/radar/map";
 import { FeedbackActions } from "@/components/radar/feedback-actions";
 import { ProposalBanner } from "@/components/radar/proposal-banner";
 import { RadarShell } from "@/components/radar/radar-shell";
-import { radarApi, type Explanation, type FeedbackEventType, type MatchItem, type SearchProfile } from "@/lib/radar/client";
+import { radarApi, type Explanation, type FeedbackEventType, type MatchItem, type RefreshState, type SearchProfile } from "@/lib/radar/client";
 import { emitExplanationViewed, emitImpression } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
 import { isTerminalRunState } from "@/lib/radar/run-state";
@@ -75,6 +75,7 @@ export default function RadarViewPage(): React.ReactElement {
   const [items, setItems] = useState<MatchItem[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
   const [runState, setRunState] = useState<string | null>(null);
+  const [refreshState, setRefreshState] = useState<RefreshState | null>(null);
   const [nextAfter, setNextAfter] = useState<number | null>(null);
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [explanations, setExplanations] = useState<Record<string, Explanation>>({});
@@ -85,6 +86,7 @@ export default function RadarViewPage(): React.ReactElement {
   const emittedRef = useRef<Set<string>>(new Set());
   const matchesRequestRef = useRef(0);
   const explanationsRequestRef = useRef(0);
+  const refreshRadar = useCallback(() => setReloadKey((current) => current + 1), []);
 
   useEffect(() => {
     if (isMock) {
@@ -93,6 +95,7 @@ export default function RadarViewPage(): React.ReactElement {
         setProfile(found);
         setAllRadars(MOCK_PROFILES);
         setRunState("succeeded");
+        setRefreshState(found.refresh_state ?? "current");
         setRunId(found.latest_run?.run_id ?? "run-preview-1");
         setLegacyRun(false);
         setItems(MOCK_MATCHES);
@@ -106,6 +109,7 @@ export default function RadarViewPage(): React.ReactElement {
       .then((value) => {
         setProfile(value);
         setRunState(value.latest_run?.state ?? null);
+        setRefreshState(value.refresh_state ?? "current");
         setRunId(value.latest_run?.run_id ?? null);
         setLegacyRun(value.latest_run?.score_policy_version === LEGACY_SCORE_POLICY);
         setError(null);
@@ -176,6 +180,7 @@ export default function RadarViewPage(): React.ReactElement {
                 }
                 setRunId(page.run_id);
                 setRunState(page.run_state);
+                setRefreshState(page.refresh_state ?? "current");
                 setError(null);
               })
               .catch(() => {
@@ -183,6 +188,7 @@ export default function RadarViewPage(): React.ReactElement {
                 setItems(page.items);
                 setRunId(page.run_id);
                 setRunState(page.run_state);
+                setRefreshState(page.refresh_state ?? "current");
                 setNextAfter(page.next_after_position);
                 setError(null);
               });
@@ -191,6 +197,7 @@ export default function RadarViewPage(): React.ReactElement {
           setItems(page.items);
           setRunId(page.run_id);
           setRunState(page.run_state);
+          setRefreshState(page.refresh_state ?? "current");
           setNextAfter(page.next_after_position);
           setError(null);
           const states: Record<string, FeedbackEventType | null> = {};
@@ -227,6 +234,7 @@ export default function RadarViewPage(): React.ReactElement {
         const latestRunId = value.latest_run?.run_id ?? null;
         setRunId(latestRunId);
         setRunState(state);
+        setRefreshState(value.refresh_state ?? "current");
         if (isTerminalRunState(state)) {
           window.clearInterval(interval);
           loadMatches(latestRunId);
@@ -244,6 +252,7 @@ export default function RadarViewPage(): React.ReactElement {
       setProfile(updated);
       setRunState(updated.latest_run?.state ?? null);
       setRunId(updated.latest_run?.run_id ?? null);
+      setRefreshState(updated.refresh_state ?? "current");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "radar.error");
     }
@@ -261,6 +270,7 @@ export default function RadarViewPage(): React.ReactElement {
   }
 
   const generating = runState === "pending" || runState === "running";
+  const refreshing = refreshState === "refreshing";
   const isMapView = items.length > 0;
 
   // Ocultar footer global y evitar scroll del body en vista mapa — debe estar antes de cualquier early return (Rules of Hooks)
@@ -338,6 +348,13 @@ export default function RadarViewPage(): React.ReactElement {
             </p>
           </div>
         )}
+        {refreshing && !generating && (
+          <div className="border-t border-border/60 bg-amber-50 px-4 py-1.5">
+            <p className="flex items-center gap-1.5 text-xs text-amber-800">
+              <Spinner className="size-3" /> Actualizando resultados para tu Radar…
+            </p>
+          </div>
+        )}
         {runState === "failed" && !generating && (
           <div className="border-t border-amber-200 bg-amber-50 px-4 py-1.5">
             <p className="text-xs text-amber-800">La última generación falló — mostrando resultados anteriores. Podés reintentar o ajustar el radar.</p>
@@ -353,6 +370,7 @@ export default function RadarViewPage(): React.ReactElement {
           selectedRadarId={profileId}
           matches={items}
           explanations={explanations}
+          onChatTurnCompleted={refreshRadar}
         />
         {error && (
           <div className="pointer-events-none fixed left-[280px] top-[41px] z-20 max-w-xl px-4 sm:left-[296px]">
@@ -429,6 +447,12 @@ export default function RadarViewPage(): React.ReactElement {
         </div>
       )}
 
+      {refreshing && !generating && (
+        <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Spinner /> Actualizando resultados para tu Radar…
+        </div>
+      )}
+
       {legacyRun && !generating && (
         <Alert role="status" className="py-2 text-sm">
           La explicación no está disponible para este run. Se regenerará con razones completas.
@@ -461,7 +485,7 @@ export default function RadarViewPage(): React.ReactElement {
         <section className="mt-6" aria-label="Chat con Umbral">
           <ChatPanel
             profileId={profileId}
-            onDecisionApplied={() => setReloadKey((current) => current + 1)}
+            onTurnCompleted={refreshRadar}
           />
         </section>
       )}

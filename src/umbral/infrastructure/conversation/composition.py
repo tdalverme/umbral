@@ -34,6 +34,7 @@ from umbral.application.conversation.reply import ReplyComposer
 from umbral.application.conversation.service import ConversationTurn
 from umbral.application.preferences.intensity import IntensityPolicy
 from umbral.application.preferences.ports import ConceptReader
+from umbral.application.preferences.refresh import RadarPreferenceRefreshService
 from umbral.application.radar.service import RadarService
 from umbral.infrastructure.conversation.context import (
     ContextAssembler,
@@ -56,6 +57,7 @@ class ConversationServices:
     radar: RadarService
     proposals: SearchProfileUpdateProposals
     preferences: PreferenceServiceLike | None = None
+    preference_refresh: RadarPreferenceRefreshService | None = None
     feedback: FeedbackRecorder | None = None
     concepts: ConceptReader | None = None
     intensity_policy: IntensityPolicy | None = None
@@ -87,6 +89,7 @@ def build_conversation_turn_service(
         chat=services.chat,
         proposals=services.proposals,
         preferences=services.preferences,
+        preference_refresh=services.preference_refresh,
         feedback=services.feedback,
         concepts=services.concepts,
         intensity_policy=services.intensity_policy,

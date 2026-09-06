@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import cast
+from typing import Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, Query, Request
@@ -25,6 +25,7 @@ from umbral.application.radar.service import RadarService
 
 router = APIRouter(prefix="/api/v1", tags=["Matches"])
 _dependencies: RuntimeDependencies | None = None
+RefreshState = Literal["current", "refreshing", "failed"]
 
 
 class MatchResponse(BaseModel):
@@ -74,7 +75,10 @@ class MatchesResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     search_profile_id: UUID
     run_id: UUID
+    profile_version_id: UUID | None = None
+    current_version_id: UUID | None = None
     run_state: str
+    refresh_state: RefreshState = "current"
     items: list[MatchResponse]
     next_after_position: int | None = None
 
@@ -88,6 +92,7 @@ class MatchesResponse(BaseModel):
         points: tuple[MatchPoint, ...] = (),
         summaries: tuple[ListingSummary, ...] = (),
         decision_states: dict[UUID, str] | None = None,
+        current_version_id: UUID | None = None,
     ) -> "MatchesResponse":
         points_by_listing = {point.listing_id: point for point in points}
         summaries_by_listing = {summary.listing_id: summary for summary in summaries}
@@ -95,7 +100,10 @@ class MatchesResponse(BaseModel):
         return cls(
             search_profile_id=profile_id,
             run_id=run.run_id,
+            profile_version_id=run.profile_version_id,
+            current_version_id=current_version_id,
             run_state=run.state,
+            refresh_state=_refresh_state(current_version_id, run),
             items=[
                 MatchResponse.from_domain(
                     item,
@@ -107,6 +115,16 @@ class MatchesResponse(BaseModel):
             ],
             next_after_position=next_after_position,
         )
+
+
+def _refresh_state(
+    current_version_id: UUID | None, run: RecommendationRun
+) -> RefreshState:
+    if run.state in ("pending", "running", "superseded"):
+        return "refreshing"
+    if run.state == "failed":
+        return "failed"
+    return "current" if run.profile_version_id == current_version_id else "refreshing"
 
 
 def configure_matches_routes(dependencies: RuntimeDependencies) -> None:
@@ -207,6 +225,10 @@ async def list_matches(
     except IdentityError as error:
         return _problem(request, error.status, error.code, error.recovery or "")
     try:
+        profile = _radar().get_profile(
+            owner_id=principal.user_id,
+            profile_id=search_profile_id,
+        )
         page = _radar().get_matches(
             owner_id=principal.user_id,
             profile_id=search_profile_id,
@@ -223,6 +245,7 @@ async def list_matches(
             page.points,
             page.summaries,
             dict(page.decision_states),
+            current_version_id=profile.current_version_id,
         )
     except RunNotFound as error:
         return _problem(request, 404, error.code, str(error))

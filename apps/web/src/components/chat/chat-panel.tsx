@@ -16,6 +16,7 @@ import { useChatStream } from "@/lib/chat/use-chat-stream";
 interface ChatPanelProps {
   profileId: string;
   onDecisionApplied?: () => void;
+  onTurnCompleted?: () => void;
 }
 
 /** The single chat panel of the radar page (Q3): resumes the latest session
@@ -24,12 +25,21 @@ interface ChatPanelProps {
 export function ChatPanel({
   profileId,
   onDecisionApplied,
+  onTurnCompleted,
 }: ChatPanelProps): React.ReactElement {
   const chat = useChatStream(profileId);
   const searchParams = useSearchParams();
   const contextRef = useRef<string | null>(null);
   const lastListingRef = useRef<string | null>(null);
+  const previousStatusRef = useRef<string | null>(null);
   const { session, messages, send } = chat;
+
+  useEffect(() => {
+    if (chat.status === "completed" && previousStatusRef.current !== "completed") {
+      onTurnCompleted?.();
+    }
+    previousStatusRef.current = chat.status;
+  }, [chat.status, onTurnCompleted]);
 
   useEffect(() => {
     const raw = searchParams.get("chat_context");

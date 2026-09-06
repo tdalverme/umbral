@@ -23,6 +23,11 @@ from umbral.application.agent.tools.proposals import (
     SearchProfileUpdateProposals,
 )
 from umbral.application.chat.service import ChatService
+from umbral.application.preferences.refresh import (
+    RadarPreferenceRefreshCriteria,
+    RadarPreferenceRefreshRadar,
+    RadarPreferenceRefreshService,
+)
 from umbral.application.radar.service import RadarService
 from umbral.infrastructure.agent.checkpointer import create_postgres_saver
 from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
@@ -152,6 +157,14 @@ def build_production_stack(
         radar=cast(RadarService, radar),
         proposals=proposals,
         preferences=preferences,
+        preference_refresh=(
+            RadarPreferenceRefreshService(
+                radar=cast(RadarPreferenceRefreshRadar, radar),
+                criteria=cast(RadarPreferenceRefreshCriteria, criteria),
+            )
+            if criteria is not None
+            else None
+        ),
         feedback=cast(FeedbackRecorder, feedback),
         concepts=getattr(preferences, "concepts", None),
         intensity_policy=load_intensity_policy(),

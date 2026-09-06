@@ -12,6 +12,9 @@
   ambientes; desconocidos según la política versionada del perfil), calcula el
   scoring baseline determinista y publica `recommendation_items` atómicamente.
   Un run fallido conserva el último run válido como único resultado visible.
+- Los cambios soft registrados desde el chat también versionan el perfil,
+  recompilan sus criterios y disparan un nuevo run. El guardado del mensaje no
+  espera al procesamiento del run.
 - Radar en lista/cards y mapa (MapLibre con tiles OSM públicos): los puntos se
   renderizan solo con precisión `exact`/`block`; el resto aparece solo en la
   lista. El desglose del score aparece únicamente en el detalle del match.
@@ -52,7 +55,18 @@ python -m umbral.workers worker
 - `succeeded`: lista de matches del run congelado (paginación estable por
   `run_id` + `position`).
 - `failed`: se conserva el último run válido; el error queda en `failure_code`.
+- `refresh_state=refreshing`: el perfil ya cambió y el último resultado todavía
+  pertenece a una versión anterior; la UI puede mostrar los resultados
+  anteriores con un indicador de actualización.
+- `refresh_state=failed`: el último resultado del perfil falló; los resultados
+  previos continúan visibles.
 - Sin resultados: estado vacío con siguiente paso sugerido.
+
+Las respuestas de perfil y matches exponen `current_version_id` y
+`profile_version_id` para que cliente y servidor puedan comprobar que los
+resultados corresponden a la versión vigente del Radar. El ranking interactivo
+lee el estado persistido; Airflow/workers no forman parte del critical path del
+guardado del perfil.
 
 ## Verificación manual rápida (local)
 

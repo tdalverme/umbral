@@ -701,6 +701,10 @@ export type MatchResponse = {
  */
 export type MatchesResponse = {
     /**
+     * Current Version Id
+     */
+    current_version_id?: string | null;
+    /**
      * Items
      */
     items: Array<MatchResponse>;
@@ -708,6 +712,14 @@ export type MatchesResponse = {
      * Next After Position
      */
     next_after_position?: number | null;
+    /**
+     * Profile Version Id
+     */
+    profile_version_id?: string | null;
+    /**
+     * Refresh State
+     */
+    refresh_state?: 'current' | 'refreshing' | 'failed';
     /**
      * Run Id
      */
@@ -1265,6 +1277,10 @@ export type SearchProfileResponse = {
      * Created At
      */
     created_at: string;
+    /**
+     * Current Version Id
+     */
+    current_version_id?: string | null;
     latest_run?: UmbralApiRoutersSearchProfilesRunResponse | null;
     /**
      * Min Rooms
@@ -1278,6 +1294,10 @@ export type SearchProfileResponse = {
      * Operation
      */
     operation: string;
+    /**
+     * Refresh State
+     */
+    refresh_state?: 'current' | 'refreshing' | 'failed';
     /**
      * Search Profile Id
      */
@@ -1578,6 +1598,10 @@ export type UmbralApiRoutersSearchProfilesRunResponse = {
      * Published Item Count
      */
     published_item_count: number;
+    /**
+     * Profile Version Id
+     */
+    profile_version_id?: string | null;
     /**
      * Run Id
      */

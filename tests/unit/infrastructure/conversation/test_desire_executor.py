@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
-from tests.fakes.preferences import FakeConceptReader
+from tests.fakes.preferences import FakeConceptReader, FakePreferenceStore
 from tests.support.radar import RadarTestContext
 
 from umbral.application.conversation.contracts import (
@@ -22,9 +22,12 @@ from umbral.application.preferences.contracts import (
     PreferenceChange,
     PreferenceConcept,
     PreferenceExpression,
+    PreferencePolicySpec,
     PreferenceView,
 )
 from umbral.application.preferences.intensity import load_intensity_policy
+from umbral.application.preferences.refresh import RadarPreferenceRefreshService
+from umbral.application.preferences.service import PreferenceService
 from umbral.infrastructure.conversation.executor import EffectExecutor
 
 _NOW = datetime(2026, 8, 26, tzinfo=timezone.utc)
@@ -109,6 +112,15 @@ class _FakePreferences:
 
     def active_view(self, profile_id: UUID) -> tuple[PreferenceView, ...]:
         return ()
+
+
+class _FakePreferenceRefresh:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def refresh_after_change(self, **kwargs: object) -> object:
+        self.calls.append(kwargs)
+        return SimpleNamespace(refresh_state="scheduled", run=None)
 
 
 def _change(subject_key: str, raw_text: str) -> PreferenceChange:
@@ -215,6 +227,159 @@ def test_out_of_catalog_desire_is_persisted_with_zero_concept_links() -> None:
     )
     assert preferences.recorded.subject_key == "moderno"
     assert preferences.recorded.raw_text == "Quiero algo moderno"
+
+
+def test_structured_desire_requests_radar_refresh() -> None:
+    radar_ctx = RadarTestContext(default_runtime=False)
+    user_id = uuid4()
+    profile, _ = radar_ctx.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    preferences = _FakePreferences()
+    refresh = _FakePreferenceRefresh()
+    executor = EffectExecutor(
+        radar=radar_ctx.service,
+        chat=None,  # type: ignore[arg-type]
+        proposals=None,  # type: ignore[arg-type]
+        preferences=preferences,
+        preference_refresh=refresh,  # type: ignore[arg-type]
+        concepts=FakeConceptReader(
+            {
+                "movilidad_cotidiana": PreferenceConcept(
+                    key="movilidad_cotidiana",
+                    matcher_type="numeric_range",
+                    computable=True,
+                )
+            }
+        ),
+        intensity_policy=load_intensity_policy(),
+    )
+    context = _context(
+        profile_id=profile.profile_id, user_id=user_id, session_id=uuid4()
+    )
+
+    result = executor.execute(
+        command=RecordDesireCommand(
+            act_id="a1",
+            raw_text="Quiero estar cerca del transporte",
+            subject_ref="movilidad_cotidiana",
+            concept_links=(
+                ConceptLink(
+                    concept_ref="movilidad_cotidiana",
+                    confidence=0.9,
+                    polarity="positive",
+                    intensity="medium",
+                ),
+            ),
+        ),
+        context=context,
+        idempotency_key="turn:a1",
+    )
+
+    assert result.status == "applied"
+    assert len(refresh.calls) == 1
+    assert refresh.calls[0]["owner_id"] == user_id
+    assert refresh.calls[0]["profile_id"] == profile.profile_id
+    assert refresh.calls[0]["expected_profile_version"] == 1
+    assert len(refresh.calls[0]["changes"]) == 1  # type: ignore[arg-type]
+
+
+class _FakeCriteria:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def compile_profile(self, **kwargs: object) -> object:
+        self.calls.append(kwargs)
+        return SimpleNamespace(compilation_id=uuid4())
+
+
+def test_structured_desire_versions_real_radar_and_schedules_run() -> None:
+    radar_ctx = RadarTestContext()
+    user_id = uuid4()
+    profile, _ = radar_ctx.service.create_profile(
+        owner_id=user_id,
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    preference_store = FakePreferenceStore()
+    preferences = PreferenceService(
+        expressions=preference_store,
+        bindings=preference_store,
+        mutations=preference_store,
+        concepts=FakeConceptReader(
+            {
+                "movilidad_cotidiana": PreferenceConcept(
+                    key="movilidad_cotidiana",
+                    matcher_type="numeric_range",
+                    computable=True,
+                )
+            }
+        ),
+        policy=PreferencePolicySpec.v1(),
+    )
+    criteria = _FakeCriteria()
+    executor = EffectExecutor(
+        radar=radar_ctx.service,
+        chat=None,  # type: ignore[arg-type]
+        proposals=None,  # type: ignore[arg-type]
+        preferences=preferences,
+        preference_refresh=RadarPreferenceRefreshService(
+            radar=radar_ctx.service,
+            criteria=criteria,  # type: ignore[arg-type]
+        ),
+        concepts=preferences.concepts,
+        intensity_policy=load_intensity_policy(),
+    )
+    context = _context(
+        profile_id=profile.profile_id, user_id=user_id, session_id=uuid4()
+    )
+
+    result = executor.execute(
+        command=RecordDesireCommand(
+            act_id="a1",
+            raw_text="Quiero estar cerca del transporte",
+            subject_ref="movilidad_cotidiana",
+            concept_links=(
+                ConceptLink(
+                    concept_ref="movilidad_cotidiana",
+                    confidence=0.9,
+                    polarity="positive",
+                    intensity="medium",
+                ),
+            ),
+        ),
+        context=context,
+        idempotency_key="turn:a1",
+    )
+
+    assert result.status == "applied"
+    updated = radar_ctx.service.get_profile(
+        owner_id=user_id, profile_id=profile.profile_id
+    )
+    assert updated.version == 2
+    assert updated.current_version_id is not None
+    assert len(criteria.calls) == 1
+    assert criteria.calls[0]["profile_version_id"] == updated.current_version_id
+    run = radar_ctx.service.latest_run_of(updated)
+    assert run is not None
+    assert run.profile_version_id == updated.current_version_id
+    assert run.trigger == "edited"
 
 
 def test_revise_desire_uses_authorized_expression_ref() -> None:

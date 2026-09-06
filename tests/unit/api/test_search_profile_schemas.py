@@ -1,6 +1,9 @@
 """HTTP schemas preserve legacy payloads while allowing partial radars."""
 
-from tests.support.radar import build_profile
+from dataclasses import replace
+from uuid import uuid4
+
+from tests.support.radar import RadarTestContext, build_profile
 
 from umbral.api.routers import search_profiles
 from umbral.api.routers.search_profiles import (
@@ -33,3 +36,31 @@ def test_update_distinguishes_an_explicit_null_from_an_omitted_constraint() -> N
 
     assert search_profiles._profile_changes(clear_budget) == {"budget_max": None}
     assert search_profiles._profile_changes(no_changes) == {}
+
+
+def test_profile_response_exposes_result_version_and_refresh_state() -> None:
+    context = RadarTestContext()
+    profile, run = context.service.create_profile(
+        owner_id=uuid4(),
+        name="Radar",
+        zones=(),
+        budget_max=None,
+        budget_min=None,
+        min_rooms=None,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+
+    assert run is not None
+    response = SearchProfileResponse.from_domain(profile, run)
+
+    assert response.current_version_id == profile.current_version_id
+    assert response.latest_run is not None
+    assert response.latest_run.profile_version_id == run.profile_version_id
+    assert response.refresh_state == "refreshing"
+
+    stale_profile = replace(profile, current_version_id=uuid4(), version=2)
+    stale_response = SearchProfileResponse.from_domain(stale_profile, run)
+    assert stale_response.refresh_state == "refreshing"

@@ -21,6 +21,7 @@ export function RadarShell({
   opportunitiesFilter,
   header,
   hideSidebar,
+  onChatTurnCompleted,
 }: Readonly<{
   radars: SearchProfile[];
   selectedRadarId: string | null;
@@ -29,6 +30,7 @@ export function RadarShell({
   opportunitiesFilter?: "all" | "saved" | "dismissed";
   header?: React.ReactNode;
   hideSidebar?: boolean;
+  onChatTurnCompleted?: () => void;
 }>) {
   const { selectedId, setSelectedId, filter, setFilter } = useRadarSelection();
   const [collapsed, setCollapsed] = useState(false);
@@ -187,7 +189,10 @@ export function RadarShell({
                 <button className="text-xs text-muted-foreground" onClick={() => setMobileView("map")} aria-label="Volver al mapa">Mapa</button>
               </div>
               <div className="flex-1 overflow-hidden">
-                <RadarChatPanel profileId={selectedRadarId} />
+                <RadarChatPanel
+                  profileId={selectedRadarId}
+                  onTurnCompleted={onChatTurnCompleted}
+                />
               </div>
             </div>
           )}
@@ -270,7 +275,14 @@ export function RadarShell({
           </button>
         </div>
         <div className="flex-1 overflow-hidden">
-          {selectedRadarId ? <RadarChatPanel profileId={selectedRadarId} /> : <p className="p-4 text-sm text-muted-foreground">Seleccioná un radar.</p>}
+          {selectedRadarId ? (
+            <RadarChatPanel
+              profileId={selectedRadarId}
+              onTurnCompleted={onChatTurnCompleted}
+            />
+          ) : (
+            <p className="p-4 text-sm text-muted-foreground">Seleccioná un radar.</p>
+          )}
         </div>
       </aside>
       {chatCollapsed && (

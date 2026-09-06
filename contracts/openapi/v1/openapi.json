@@ -1309,6 +1309,18 @@
       "MatchesResponse": {
         "additionalProperties": false,
         "properties": {
+          "current_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Id"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/MatchResponse"
@@ -1326,6 +1338,28 @@
               }
             ],
             "title": "Next After Position"
+          },
+          "profile_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Version Id"
+          },
+          "refresh_state": {
+            "default": "current",
+            "enum": [
+              "current",
+              "refreshing",
+              "failed"
+            ],
+            "title": "Refresh State",
+            "type": "string"
           },
           "run_id": {
             "format": "uuid",
@@ -2188,6 +2222,18 @@
             "title": "Created At",
             "type": "string"
           },
+          "current_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Id"
+          },
           "latest_run": {
             "anyOf": [
               {
@@ -2215,6 +2261,16 @@
           },
           "operation": {
             "title": "Operation",
+            "type": "string"
+          },
+          "refresh_state": {
+            "default": "current",
+            "enum": [
+              "current",
+              "refreshing",
+              "failed"
+            ],
+            "title": "Refresh State",
             "type": "string"
           },
           "search_profile_id": {
@@ -2747,6 +2803,18 @@
           "published_item_count": {
             "title": "Published Item Count",
             "type": "integer"
+          },
+          "profile_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Version Id"
           },
           "run_id": {
             "format": "uuid",

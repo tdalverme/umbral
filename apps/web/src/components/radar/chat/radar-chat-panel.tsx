@@ -93,7 +93,10 @@ function MockChatPanel() {
   );
 }
 
-export function RadarChatPanel({ profileId }: Readonly<{ profileId: string }>) {
+export function RadarChatPanel({
+  profileId,
+  onTurnCompleted,
+}: Readonly<{ profileId: string; onTurnCompleted?: () => void }>) {
   const isMock = process.env.NEXT_PUBLIC_USE_MOCKS === "1";
   if (isMock) {
     return (
@@ -111,7 +114,7 @@ export function RadarChatPanel({ profileId }: Readonly<{ profileId: string }>) {
   return (
     <div className="flex h-full flex-col bg-card">
       <div className="flex-1 overflow-hidden">
-        <ChatPanel profileId={profileId} onDecisionApplied={() => {}} />
+        <ChatPanel profileId={profileId} onTurnCompleted={onTurnCompleted} />
       </div>
       <p className="shrink-0 border-t border-border/50 bg-muted/20 px-4 py-2 text-xs leading-relaxed text-muted-foreground">
         El mapa se mueve sin cambiar filtros.
