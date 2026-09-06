@@ -220,8 +220,21 @@ def test_promotion_downloads_the_named_release_run_artifact() -> None:
     assert workflow["permissions"]["actions"] == "read"
     assert inputs["release_run_id"]["required"] == "true"
     assert download["with"] == {
-        "name": "${{ inputs.manifest }}",
+        "name": "${{ inputs.manifest || format('release-manifest-{0}', github.event.workflow_run.head_sha) }}",
         "path": "artifacts/release",
         "github-token": "${{ github.token }}",
-        "run-id": "${{ inputs.release_run_id }}",
+        "run-id": "${{ inputs.release_run_id || github.event.workflow_run.id }}",
     }
+
+
+def test_promotion_runs_after_a_successful_release_workflow() -> None:
+    workflow = yaml.load(
+        PROMOTE_WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader
+    )
+
+    assert workflow["on"]["workflow_run"] == {
+        "workflows": ["release"],
+        "types": ["completed"],
+    }
+    promote_job = workflow["jobs"]["promote"]
+    assert "github.event.workflow_run.conclusion == 'success'" in promote_job["if"]

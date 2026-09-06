@@ -73,9 +73,8 @@ correo. El manifiesto de release se entrega a las imágenes como JSON inline
 
 ## Paso 3: release y promote
 
-1. Llevar el incremento a la rama por defecto (`main`), porque el `promote`
-   (workflow_dispatch) se lee desde `main` y su checkout descarga los scripts de
-   ahí:
+1. Llevar el incremento a la rama por defecto (`main`), porque `promote` se
+   ejecuta desde `main` y su checkout descarga los scripts de ahí:
    `git checkout main; git merge --ff-only <rama>` y `git push origin main`.
 2. Taggear el commit más reciente de `main` con el fix del manifest inline y el
    workflow `release` desbloqueado (sin `if` de secrets a nivel step):
@@ -90,10 +89,14 @@ correo. El manifiesto de release se entrega a las imágenes como JSON inline
    https://github.com/users/tdalverme/packages/container/package/umbral%2Fruntime/settings
    (ídem `umbral%2Fweb`). El gate "Ensure GHCR packages are public" del release
    falla con el URL exacto si alguno quedó `private`.
-5. Disparar `promote` (workflow_dispatch) con:
+5. Cuando `release` termina exitosamente, `promote` se dispara automáticamente
+   mediante `workflow_run`, usando el mismo run ID y el artifact
+   `release-manifest-<sha>`, sobre el environment `preview`. Si hace falta
+   repetirlo manualmente, usar `workflow_dispatch` con:
    - `manifest`: nombre del artifact (`release-manifest-<sha>`);
    - `release_run_id`: run ID de la corrida release;
    - `environment`: `preview`.
+   Un `release` fallido no dispara la promoción automática.
  6. Orden del promote: verify-access → validate-railway-config → backup →
     migrate (Alembic) → check-dependencies → set-railway-images (fija imagen y
     las `UMBRAL_RELEASE_*` por servicio) → wait-railway-services →

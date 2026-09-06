@@ -20,18 +20,22 @@ on:
         required: true
         type: choice
         options: [preview]
+  workflow_run:
+    workflows: ["release"]
+    types: [completed]
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: promote-${{ inputs.environment }}
+  group: promote-${{ inputs.environment || 'preview' }}
   cancel-in-progress: false
 
 jobs:
   promote:
-    environment: ${{ inputs.environment }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    environment: ${{ inputs.environment || 'preview' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,10 +66,10 @@ jobs:
         if: ${{ inputs.manifest_artifact_id == '' }}
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.manifest }}
+          name: ${{ inputs.manifest || format('release-manifest-{0}', github.event.workflow_run.head_sha) }}
           path: artifacts/release
           github-token: ${{ github.token }}
-          run-id: ${{ inputs.release_run_id }}
+          run-id: ${{ inputs.release_run_id || github.event.workflow_run.id }}
       - name: Install pinned Railway CLI
         run: npx @railway/cli@5.27.2 --version
       - name: Install PostgreSQL client for preview backups
@@ -142,9 +146,9 @@ jobs:
           ./scripts/deploy/backup-preview.ps1 -ManifestPath $manifest.FullName -EvidencePath $backupEvidence
           ./scripts/deploy/migrate-preview.ps1 -ManifestPath $manifest.FullName -BackupEvidencePath $backupEvidence -PythonExecutable $pythonExecutable
           ./scripts/deploy/check-preview-dependencies.ps1 -ManifestPath $manifest.FullName -EvidencePath "artifacts/release/preview-dependency-evidence.json" -PythonExecutable $pythonExecutable
-          $switch = ./scripts/deploy/set-railway-images.ps1 -ManifestPath $manifest.FullName -ManifestSha256 $checksum -Environment "${{ inputs.environment }}" | ConvertFrom-Json
+          $switch = ./scripts/deploy/set-railway-images.ps1 -ManifestPath $manifest.FullName -ManifestSha256 $checksum -Environment "${{ inputs.environment || 'preview' }}" | ConvertFrom-Json
           $null = ./scripts/deploy/diagnose-preview-runtime.ps1 -PythonExecutable $pythonExecutable -ManifestPath $manifest.FullName
-          $null = ./scripts/deploy/wait-railway-services.ps1 -Environment "${{ inputs.environment }}" -DeploymentIdsJson ($switch.deployment_ids | ConvertTo-Json -Compress)
+          $null = ./scripts/deploy/wait-railway-services.ps1 -Environment "${{ inputs.environment || 'preview' }}" -DeploymentIdsJson ($switch.deployment_ids | ConvertTo-Json -Compress)
           $preload = & $pythonExecutable -m umbral.ops.identity preload-invitation --email-env UMBRAL_SMOKE_INVITEE --database-url-env UMBRAL_SMOKE_OPERATOR_DATABASE_URL | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $preload.result -ne "accepted" -or [string]::IsNullOrWhiteSpace([string]$preload.invitation_id)) { throw "Preview invitation preload failed." }
           $env:UMBRAL_SMOKE_INVITATION_ID = [string]$preload.invitation_id
