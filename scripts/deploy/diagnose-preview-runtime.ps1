@@ -265,8 +265,6 @@ function Dump-PreviewPublicDomains {
     Write-Host ""
     Write-Host "=== preview public domains ==="
     foreach ($attempt in @(
-        @("domain list", "-e", "preview", "--json"),
-        @("domain list", "-e", "preview"),
         @("service", "list", "-e", "preview", "--json")
     )) {
         try {
