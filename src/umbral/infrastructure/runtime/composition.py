@@ -17,6 +17,7 @@ from umbral.application.identity.ports import IdentityStore
 from umbral.application.ingestion.service import ImportRunService
 from umbral.application.jobs.ports import JobQueue, JobRuntime
 from umbral.application.jobs.service import InMemoryJobRuntime
+from umbral.application.objects.contracts import ObjectNotFound
 from umbral.application.objects.ports import ObjectStore
 from umbral.application.radar.service import RadarService
 from umbral.application.runtime.readiness import (
@@ -458,14 +459,18 @@ def _object_storage_readiness(
     critical: bool, object_store: S3ObjectStore
 ) -> ReadinessCheck:
     try:
-        reference = object_store.put_if_absent(
-            storage_key=_MARKER_KEY,
-            body=BytesIO(_MARKER_BODY),
-            sha256=_MARKER_DIGEST,
-            size_bytes=len(_MARKER_BODY),
-            content_type="application/octet-stream",
-        )
-        info = object_store.stat(reference)
+        reference = object_store.ref_for_key(_MARKER_KEY)
+        try:
+            info = object_store.stat(reference)
+        except ObjectNotFound:
+            reference = object_store.put_if_absent(
+                storage_key=_MARKER_KEY,
+                body=BytesIO(_MARKER_BODY),
+                sha256=_MARKER_DIGEST,
+                size_bytes=len(_MARKER_BODY),
+                content_type="application/octet-stream",
+            )
+            info = object_store.stat(reference)
         available = info.sha256 == _MARKER_DIGEST and info.size_bytes == len(
             _MARKER_BODY
         )

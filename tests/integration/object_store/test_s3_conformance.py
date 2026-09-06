@@ -14,6 +14,7 @@ import pytest
 
 from umbral.application.objects.contracts import ObjectNotFound, ProviderObjectRef
 from umbral.infrastructure.object_store.s3 import S3ObjectStore
+from umbral.infrastructure.runtime.composition import _object_storage_readiness
 
 
 class _FakeBody:
@@ -102,6 +103,23 @@ def test_s3_rejects_non_durable_provider_references(value: object) -> None:
 
     with pytest.raises(ObjectNotFound):
         store.stat(reference)
+
+
+class _ConflictOnExistingS3(_FakeS3):
+    def put_object(self, **kwargs: Any) -> dict[str, str]:
+        key = (kwargs["Bucket"], kwargs["Key"])
+        if kwargs.get("IfNoneMatch") == "*" and key in self.objects:
+            error = RuntimeError("ConditionalRequestConflict")
+            setattr(error, "response", {"Error": {"Code": "409"}})
+            raise error
+        return super().put_object(**kwargs)
+
+
+def test_runtime_readiness_reuses_existing_marker_before_conditional_put() -> None:
+    store = S3ObjectStore(client=_ConflictOnExistingS3(), bucket="private")
+
+    assert _object_storage_readiness(True, store).state == "ready"
+    assert _object_storage_readiness(True, store).state == "ready"
 
 
 def _unsafe_ref(value: object) -> ProviderObjectRef:
