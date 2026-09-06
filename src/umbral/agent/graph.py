@@ -505,10 +505,11 @@ def _act_from_dict(data: Mapping[str, object]) -> ConversationAct:
     if kind == "create_radar":
         return CreateRadar(**common, name=_optional_str(data.get("name")))
     if kind == "set_filter":
+        filter_key = str(data["filter_key"])
         return SetFilter(
             **common,
-            filter_key=str(data["filter_key"]),
-            value=data["value"],
+            filter_key=filter_key,
+            value=_restore_filter_value(filter_key, data["value"]),
         )
     if kind == "clear_filter":
         return ClearFilter(**common, filter_key=str(data["filter_key"]))
@@ -602,10 +603,11 @@ def _command_from_dict(data: Mapping[str, object]) -> Command:
             act_id=str(data["act_id"]), name=_optional_str(data.get("name"))
         )
     if name == "SetFilterCommand":
+        filter_key = str(data["filter_key"])
         return SetFilterCommand(
             act_id=str(data["act_id"]),
-            filter_key=str(data["filter_key"]),
-            value=data["value"],
+            filter_key=filter_key,
+            value=_restore_filter_value(filter_key, data["value"]),
             expected_profile_version=_optional_int(data.get("expected_profile_version")),
         )
     if name == "ClearFilterCommand":
@@ -640,6 +642,13 @@ def _command_from_dict(data: Mapping[str, object]) -> Command:
             raw_text=_optional_str(data.get("raw_text")),
         )
     raise ValueError(f"unknown command: {name}")
+
+
+def _restore_filter_value(filter_key: str, value: object) -> object:
+    """Restore tuple-backed filter values after checkpoint serialization."""
+    if filter_key == "zones" and isinstance(value, list):
+        return tuple(value)
+    return value
 
 
 def _executed_to_dict(item: ExecutedAct) -> dict[str, object]:

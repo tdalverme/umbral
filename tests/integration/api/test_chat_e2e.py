@@ -271,3 +271,40 @@ def test_e2e_frontend_proposal_decision_approves_hard_filter() -> None:
     )
 
     assert resumed.status == "completed"
+
+
+def test_e2e_frontend_proposal_decision_approves_zone_filter() -> None:
+    runtime, user_id, session_id, _radar, _chat = _build_runtime()
+    text = "Buscame deptos en nuñez palermo y flores"
+    runtime.graph.deps.turn.interpreter.output = TurnInterpretation(
+        model_version="test",
+        prompt_version="test",
+        acts=(
+            SetFilter(
+                act_id="zones",
+                confidence=1,
+                evidence_spans=(EvidenceSpan(0, len(text), text),),
+                filter_key="zones",
+                value=("nuñez", "palermo", "flores"),
+            ),
+        ),
+    )
+
+    first = runtime.run_turn(
+        user_id=user_id,
+        session_id=session_id,
+        text=text,
+        correlation_id=uuid4(),
+    )
+    assert first.status == "interrupted"
+
+    resumed = runtime.run_turn(
+        user_id=user_id,
+        session_id=session_id,
+        text="",
+        correlation_id=uuid4(),
+        resume=True,
+        decision={"kind": "approve", "idempotency_key": "decision:zones"},
+    )
+
+    assert resumed.status == "completed"
