@@ -11,6 +11,10 @@ on:
         description: "GitHub Actions run ID that produced the release artifact"
         required: true
         type: string
+      manifest_artifact_id:
+        description: "Optional immutable artifact ID (preferred when downloading from a rerun)"
+        required: false
+        type: string
       environment:
         description: "Target environment"
         required: true
@@ -39,7 +43,16 @@ jobs:
           version: "0.8.17"
       - name: Sync locked Python environment
         run: uv sync --locked --all-groups
-      - uses: actions/download-artifact@v4
+      - name: Download release artifact by ID
+        if: ${{ inputs.manifest_artifact_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.manifest_artifact_id }}
+          path: artifacts/release
+          github-token: ${{ github.token }}
+      - name: Download release artifact by name
+        if: ${{ inputs.manifest_artifact_id == '' }}
+        uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.manifest }}
           path: artifacts/release
