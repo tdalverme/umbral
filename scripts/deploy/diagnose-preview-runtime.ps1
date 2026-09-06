@@ -148,11 +148,13 @@ finally:
 function Invoke-Diagnostic([string]$Label, [string]$Code) {
     Write-Host ""
     Write-Host "=== $Label ==="
-    & $PythonExecutable -c $Code
-    if ($LASTEXITCODE -eq 0) {
+    $diagnosticOutput = & $PythonExecutable -c $Code 2>&1
+    $diagnosticExit = $LASTEXITCODE
+    if ($diagnosticOutput) { Write-Host ($diagnosticOutput | Out-String) }
+    if ($diagnosticExit -eq 0) {
         Write-Host "$Label OK"
     } else {
-        Write-Host "$Label FAILED (exit $LASTEXITCODE)"
+        Write-Host "$Label FAILED (exit $diagnosticExit)"
     }
 }
 
@@ -162,8 +164,10 @@ function Invoke-RailwayRunDiagnostic {
     try {
         $scriptPath = Join-Path ([System.IO.Path]::GetTempPath()) "umbral-api-run-diagnostic.py"
         [System.IO.File]::WriteAllText($scriptPath, $apiRunCode, [Text.UTF8Encoding]::new($false))
-        & npx @railway/cli@5.27.2 run -e preview --service api -- $PythonExecutable $scriptPath
-        Write-Host "railway run api boot exit $LASTEXITCODE"
+        $diagnosticOutput = & npx @railway/cli@5.27.2 run -e preview --service api -- $PythonExecutable $scriptPath 2>&1
+        $diagnosticExit = $LASTEXITCODE
+        if ($diagnosticOutput) { Write-Host ($diagnosticOutput | Out-String) }
+        Write-Host "railway run api boot exit $diagnosticExit"
     } catch {
         Write-Host ("railway run api boot failed: {0}" -f $_.Exception.Message)
     }
