@@ -135,6 +135,15 @@ foreach ($key in @("OBJECT_STORE_BUCKET", "OBJECT_STORE_ENDPOINT_URL", "OBJECT_S
     $objectStoreVars[$key] = [string]$value
 }
 
+# Railway's provisioned internal Redis hostname is not reachable from the
+# promoted services in this environment. Use the same authenticated endpoint
+# that the promote runner validates so API readiness and the background workers
+# share a working queue.
+$runtimeVars = [ordered]@{}
+$redisUrl = [string][Environment]::GetEnvironmentVariable("REDIS_URL")
+Require-Condition (-not [string]::IsNullOrWhiteSpace($redisUrl)) "Missing REDIS_URL environment value for Railway service variables."
+$runtimeVars.REDIS_URL = $redisUrl
+
 # Runtime services also need the current provider credentials so the worker can
 # issue magic links; static provisioning can leave a rotated key behind, which
 # makes the sender return 401 during the smoke. The magic-link capture URL must
@@ -208,6 +217,7 @@ function Test-ServiceAtTarget {
         [AllowNull()] $SvcConfig,
         [Parameter(Mandatory = $true)] $ObservabilityVars,
         [Parameter(Mandatory = $true)] $ObjectStoreVars,
+        [Parameter(Mandatory = $true)] $RuntimeVars,
         [Parameter(Mandatory = $true)] $ProviderVars,
         [Parameter(Mandatory = $true)] $ServiceDeployOverrides,
         [Parameter(Mandatory = $true)] $ServiceExtraVars,
@@ -230,6 +240,11 @@ function Test-ServiceAtTarget {
     }
     foreach ($key in $ObjectStoreVars.Keys) {
         if ([string]$SvcConfig.variables.$key.value -ne [string]$ObjectStoreVars[$key]) { return $false }
+    }
+    if ($Service -in @("api", "worker", "scheduler")) {
+        foreach ($key in $RuntimeVars.Keys) {
+            if ([string]$SvcConfig.variables.$key.value -ne [string]$RuntimeVars[$key]) { return $false }
+        }
     }
     if ($Service -ne "web") {
         foreach ($key in $ProviderVars.Keys) {
@@ -268,7 +283,7 @@ foreach ($service in $serviceArtifacts.Keys) {
     if ($null -ne $currentConfig) {
         $svcConfig = $currentConfig.services.($serviceIdByName[$service])
     }
-    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars -TargetEnvironment $Environment)
+    $serviceNeedsPatch[$service] = -not (Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $svcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -RuntimeVars $runtimeVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars -TargetEnvironment $Environment)
 }
 
 $servicesToPatch = @($serviceArtifacts.Keys | Where-Object { $serviceNeedsPatch[$_] })
@@ -302,6 +317,11 @@ foreach ($service in $servicesToPatch) {
     }
     foreach ($key in $ObjectStoreVars.Keys) {
         $serviceVariables[$key] = [ordered]@{ value = $ObjectStoreVars[$key] }
+    }
+    if ($service -in @("api", "worker", "scheduler")) {
+        foreach ($key in $RuntimeVars.Keys) {
+            $serviceVariables[$key] = [ordered]@{ value = $RuntimeVars[$key] }
+        }
     }
     if ($service -ne "web") {
         foreach ($key in $ProviderVars.Keys) {
@@ -447,7 +467,7 @@ foreach ($service in $serviceArtifacts.Keys) {
                 $recheckSvcConfig = $recheckConfig.services.($serviceIdByName[$service])
             }
             if ($null -ne $recheckSvcConfig) {
-                $isNowAtTarget = Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $recheckSvcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars -TargetEnvironment $Environment
+                $isNowAtTarget = Test-ServiceAtTarget -Service $service -Manifest $manifest -ServiceArtifacts $serviceArtifacts -SvcConfig $recheckSvcConfig -ObservabilityVars $observabilityVars -ObjectStoreVars $objectStoreVars -RuntimeVars $runtimeVars -ProviderVars $providerVars -ServiceDeployOverrides $serviceDeployOverrides -ServiceExtraVars $serviceExtraVars -AgentVars $agentVars -NotificationVars $notificationVars -ModelVars $modelVars -TargetEnvironment $Environment
                 if ($isNowAtTarget) { break }
                 Write-Host "Recheck $recheckAttempts for ${service}: not yet at target (release_id=$($recheckSvcConfig.variables.UMBRAL_RELEASE_ID.value) vs $($manifest.release_id))"
             }
