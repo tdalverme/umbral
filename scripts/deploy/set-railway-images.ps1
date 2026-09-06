@@ -452,12 +452,18 @@ foreach ($service in $serviceArtifacts.Keys) {
                 Write-Host "Recheck $recheckAttempts for ${service}: not yet at target (release_id=$($recheckSvcConfig.variables.UMBRAL_RELEASE_ID.value) vs $($manifest.release_id))"
             }
         }
-        if ($isNowAtTarget) {
+        $targetImageReference = "{0}@{1}" -f $manifest.artifacts.($serviceArtifacts[$service]).image, $manifest.artifacts.($serviceArtifacts[$service]).digest
+        $imageAlreadyAtTarget = (
+            $null -ne $recheckSvcConfig -and
+            $null -ne $recheckSvcConfig.source -and
+            [string]$recheckSvcConfig.source.image -eq $targetImageReference
+        )
+        if ($isNowAtTarget -or $imageAlreadyAtTarget) {
             $currentId = [string]$statusByName[$service].deploymentId
             # Releer deployment list por si el ID cambió sin que lo detectáramos como "nuevo"
             $latestIds = @(Get-RailwayDeploymentIds -Service $service -Environment $Environment)
             if ($latestIds.Count -gt 0) { $currentId = [string]$latestIds[0] }
-            Write-Host "No new deployment for ${service} but config already at target (image unchanged). Reusing deployment: $currentId"
+            Write-Host "No new deployment for ${service} but the target image is already applied. Reusing deployment: $currentId"
             $deploymentId = $currentId
         } else {
             Write-Host "Recheck final for ${service}: still not at target. Current UMBRAL_RELEASE_ID=$($recheckSvcConfig.variables.UMBRAL_RELEASE_ID.value) vs manifest $($manifest.release_id), image=$($recheckSvcConfig.source.image) vs $($manifest.artifacts.($serviceArtifacts[$service]).image)@$($manifest.artifacts.($serviceArtifacts[$service]).digest)"
