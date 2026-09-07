@@ -40,12 +40,17 @@ def runtime_factory(
     engine = create_engine(postgres_container.url)
     factory = sessionmaker(engine, expire_on_commit=False)
 
-    def create(*, queue: RecordingJobQueue | None = None) -> SqlAlchemyJobRuntime:
+    def create(
+        *,
+        queue: RecordingJobQueue | None = None,
+        immediate_relay: bool = False,
+    ) -> SqlAlchemyJobRuntime:
         return SqlAlchemyJobRuntime(
             factory,
             queue=queue or RecordingJobQueue(),
             now=lambda: NOW,
             release_id="test-release",
+            immediate_relay=immediate_relay,
         )
 
     try:
@@ -69,15 +74,53 @@ def test_submit_is_atomic_and_idempotent_across_runtime_instances(
     queue = RecordingJobQueue()
 
     def submit_once(_: int) -> JobSnapshot:
-        return runtime_factory(queue=queue).submit(_command())
+        return runtime_factory(queue=queue, immediate_relay=True).submit(_command())
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         snapshots = list(executor.map(submit_once, range(2)))
 
     assert len({snapshot.execution_id for snapshot in snapshots}) == 1
-    assert queue.messages == []
-    assert runtime_factory(queue=queue).relay_due().published == 1
     assert len(queue.messages) == 1
+    assert runtime_factory(queue=queue, immediate_relay=True).relay_due().published == 0
+
+
+def test_submit_keeps_the_committed_execution_when_immediate_relay_fails(
+    runtime_factory: RuntimeFactory,
+) -> None:
+    class FailingQueue(RecordingJobQueue):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def publish(self, **kwargs: object) -> str:
+            self.calls += 1
+            raise RuntimeError("redis unavailable")
+
+    queue = FailingQueue()
+    runtime = runtime_factory(queue=queue, immediate_relay=True)
+
+    execution = runtime.submit(_command())
+
+    assert queue.calls == 1
+    assert execution.state is JobState.PENDING
+    assert runtime.pending_outbox_count() == 1
+
+
+def test_submit_relays_its_own_outbox_when_an_older_message_is_pending(
+    runtime_factory: RuntimeFactory,
+) -> None:
+    queue = RecordingJobQueue()
+    older = runtime_factory(queue=queue).submit(_command(key="older"))
+
+    newer = runtime_factory(queue=queue, immediate_relay=True).submit(
+        _command(key="newer")
+    )
+
+    assert [message.payload["execution_id"] for message in queue.messages] == [
+        str(newer.execution_id)
+    ]
+    assert runtime_factory(queue=queue).relay_due().published == 1
+    assert runtime_factory(queue=queue).get(older.execution_id).state is JobState.QUEUED
 
 
 def test_claim_outcome_retry_and_expired_lease_are_durable(

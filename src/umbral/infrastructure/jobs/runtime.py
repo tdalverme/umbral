@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from typing import TypeGuard, cast
@@ -26,6 +27,8 @@ from umbral.application.jobs.ports import JobClaim, JobQueue, RelayResult
 from umbral.infrastructure.db.models.jobs import JobExecution, JobOutboxMessage
 from umbral.infrastructure.db.repositories.jobs import SqlAlchemyJobRepository
 
+logger = logging.getLogger(__name__)
+
 
 class SqlAlchemyJobRuntime:
     """A session-per-operation runtime safe to share across worker processes."""
@@ -40,6 +43,7 @@ class SqlAlchemyJobRuntime:
         lease_seconds: int = 60,
         outbox_lease_seconds: int = 30,
         handlers: Mapping[str, object] | None = None,
+        immediate_relay: bool = True,
     ) -> None:
         self._session_factory = session_factory
         self.queue = queue
@@ -49,6 +53,7 @@ class SqlAlchemyJobRuntime:
         self.lease_seconds = lease_seconds
         self.outbox_lease_seconds = outbox_lease_seconds
         self.handlers = handlers
+        self.immediate_relay = immediate_relay
 
     @property
     def now(self) -> datetime:
@@ -75,7 +80,10 @@ class SqlAlchemyJobRuntime:
                 if winner is None:
                     raise
                 return _snapshot(winner)
-            return _snapshot(execution)
+            snapshot = _snapshot(execution)
+        if self.immediate_relay:
+            self._relay_immediately(execution_id=snapshot.execution_id)
+        return snapshot
 
     def submit_simple(
         self,
@@ -213,7 +221,11 @@ class SqlAlchemyJobRuntime:
         return self.record_outcome(claim, result)
 
     def relay_due(
-        self, *, limit: int = 100, queue: JobQueue | None = None
+        self,
+        *,
+        limit: int = 100,
+        queue: JobQueue | None = None,
+        execution_id: UUID | None = None,
     ) -> RelayResult:
         limit = _limit(limit)
         target_queue = queue or self.queue
@@ -226,6 +238,7 @@ class SqlAlchemyJobRuntime:
                 now=self.now,
                 lease_seconds=self.outbox_lease_seconds,
                 limit=limit,
+                execution_id=execution_id,
             )
             messages = [
                 (row.id, row.execution_id, row.attempt_number) for row in rows
@@ -360,6 +373,28 @@ class SqlAlchemyJobRuntime:
                 repository.mark_outbox_failed(row, now=self.now)
             session.commit()
             return True
+
+    def _relay_immediately(self, *, execution_id: UUID) -> None:
+        """Best-effort publish after the durable submit transaction commits.
+
+        The outbox remains the source of truth: a relay failure must not undo a
+        successful job submission, and the scheduler will retry the row later.
+        """
+
+        try:
+            result = self.relay_due(limit=1, execution_id=execution_id)
+        except Exception:
+            logger.exception(
+                "jobs.immediate_relay_failed execution_id=%s", execution_id
+            )
+            return
+        if result.failed:
+            logger.warning(
+                "jobs.immediate_relay_deferred execution_id=%s published=%d failed=%d",
+                execution_id,
+                result.published,
+                result.failed,
+            )
 
     def _normalized_command(self, command: SubmitJob) -> SubmitJob:
         if self.handlers is None:

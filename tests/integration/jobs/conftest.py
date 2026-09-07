@@ -38,7 +38,9 @@ def job_runtime_factory(
     now = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
     def create(queue: RecordingJobQueue) -> SqlAlchemyJobRuntime:
-        return SqlAlchemyJobRuntime(factory, queue=queue, now=lambda: now)
+        return SqlAlchemyJobRuntime(
+            factory, queue=queue, now=lambda: now, immediate_relay=False
+        )
 
     request.addfinalizer(engine.dispose)
     return create

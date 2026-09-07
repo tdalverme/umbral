@@ -227,16 +227,20 @@ class SqlAlchemyJobRepository:
         now: datetime | None = None,
         lease_seconds: int = 30,
         limit: int = 100,
+        execution_id: UUID | None = None,
     ) -> list[JobOutboxMessage]:
         timestamp = _utc(now or datetime.now(timezone.utc))
+        criteria = [
+            JobOutboxMessage.state == "pending",
+            JobOutboxMessage.available_at <= timestamp,
+            JobOutboxMessage.publish_attempts < 100,
+        ]
+        if execution_id is not None:
+            criteria.append(JobOutboxMessage.execution_id == execution_id)
         rows = list(
             self.session.scalars(
                 select(JobOutboxMessage)
-                .where(
-                    JobOutboxMessage.state == "pending",
-                    JobOutboxMessage.available_at <= timestamp,
-                    JobOutboxMessage.publish_attempts < 100,
-                )
+                .where(*criteria)
                 .order_by(JobOutboxMessage.available_at)
                 .limit(limit)
                 .with_for_update(skip_locked=True)

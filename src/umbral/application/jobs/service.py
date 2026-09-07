@@ -309,7 +309,11 @@ class InMemoryJobRuntime:
             return self._snapshot(execution)
 
     def relay_due(
-        self, *, queue: JobQueue | None = None, limit: int = 100
+        self,
+        *,
+        queue: JobQueue | None = None,
+        limit: int = 100,
+        execution_id: UUID | None = None,
     ) -> RelayResult:
         if not 1 <= limit <= 1000:
             raise ValueError("limit must be between 1 and 1000")
@@ -324,6 +328,10 @@ class InMemoryJobRuntime:
                     outbox.state == "pending"
                     and outbox.available_at <= self._now
                     and outbox.publish_attempts < 100
+                    and (
+                        execution_id is None
+                        or outbox.execution_id == execution_id
+                    )
                 )
             ][:limit]
             for outbox in due:

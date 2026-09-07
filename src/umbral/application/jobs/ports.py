@@ -63,7 +63,11 @@ class JobRuntime(Protocol):
     ) -> JobSnapshot: ...
 
     def relay_due(
-        self, *, queue: JobQueue | None = None, limit: int = 100
+        self,
+        *,
+        queue: JobQueue | None = None,
+        limit: int = 100,
+        execution_id: UUID | None = None,
     ) -> RelayResult: ...
 
     def reclaim_expired_outbox(self, *, limit: int = 100) -> int: ...
