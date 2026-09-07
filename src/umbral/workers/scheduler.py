@@ -40,6 +40,7 @@ def scheduler_once(
     limit: int = DEFAULT_DUE_WORK_LIMIT,
     agent_purge: Callable[[datetime], int] | None = None,
     proposal_expire: Callable[[datetime], int] | None = None,
+    preference_refresh_reconcile: Callable[[datetime], int] | None = None,
     notifications_plan: Callable[[datetime], int] | None = None,
     notifications_digest: Callable[[datetime], int] | None = None,
 ) -> dict[str, int]:
@@ -49,6 +50,11 @@ def scheduler_once(
         raise ValueError("limit must be between 1 and 1000")
     reclaimed_outbox = runtime.reclaim_expired_outbox(limit=limit)
     reaped_jobs = runtime.reap_expired(limit=limit)
+    reconciled_refreshes = 0
+    if preference_refresh_reconcile is not None:
+        reconciled_refreshes = preference_refresh_reconcile(
+            datetime.now(timezone.utc)
+        )
     scheduled = 0
     while scheduled < limit:
         claimed = runtime.schedule_tick()
@@ -67,6 +73,8 @@ def scheduler_once(
         "failed": relay.failed,
         "purged_requests": purged_requests,
     }
+    if preference_refresh_reconcile is not None:
+        summary["reconciled_preference_refreshes"] = reconciled_refreshes
     if agent_purge is not None:
         summary["purged_agent_checkpoints"] = agent_purge(datetime.now(timezone.utc))
     if proposal_expire is not None:

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import cast
 from uuid import uuid4
 
+from sqlalchemy.orm import Session
 from tests.fakes.criteria import (
     FakeConceptRepository,
     FakeFactRepository,
@@ -18,6 +20,10 @@ from umbral.application.criteria.contracts import (
     PreferenceFact,
     RecomputeScope,
 )
+from umbral.infrastructure.db.models.criteria import (
+    PreferenceFact as PreferenceFactModel,
+)
+from umbral.infrastructure.db.repositories.criteria import SqlAlchemyFactRepository
 
 NOW = datetime(2026, 8, 1, tzinfo=timezone.utc)
 PROFILE_ID = uuid4()
@@ -94,13 +100,55 @@ def test_fact_repository_supersedes_the_active_fact() -> None:
         fact_source="harness",
         state="active",
         superseded_by=None,
-        created_at=NOW,
+        created_at=NOW.replace(microsecond=1),
         correlation_id=uuid4(),
     )
     repo.record_change(second, superseded_by=second.fact_id)
     active = repo.active_for_profile(PROFILE_ID)
     assert [fact.fact_id for fact in active] == [second.fact_id]
     assert active[0].superseded_by is None
+
+
+def test_sql_fact_repository_reconstructs_replaced_fact_at_snapshot() -> None:
+    snapshot_at = datetime(2026, 8, 2, tzinfo=timezone.utc)
+    old_id = uuid4()
+    profile_id = uuid4()
+    old = PreferenceFactModel(
+        id=old_id,
+        created_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 8, 3, tzinfo=timezone.utc),
+        actor_kind="service",
+        actor_id=None,
+        source="criteria.fact",
+        correlation_id=uuid4(),
+        profile_id=profile_id,
+        concept_key="balcon",
+        value="true",
+        weight=0.8,
+        polarity="positive",
+        confidence=0.9,
+        fact_source="harness",
+        state="superseded",
+        superseded_by=uuid4(),
+        soft_to_hard=False,
+    )
+
+    class _Session:
+        def __enter__(self) -> _Session:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            del args
+
+        def scalars(self, statement: object) -> tuple[PreferenceFactModel, ...]:
+            del statement
+            return (old,)
+
+    repository = SqlAlchemyFactRepository(lambda: cast(Session, _Session()))
+
+    reconstructed = repository.active_for_profile_as_of(profile_id, snapshot_at)
+
+    assert [fact.fact_id for fact in reconstructed] == [old_id]
 
 
 def test_observation_repository_scopes_and_supersede() -> None:

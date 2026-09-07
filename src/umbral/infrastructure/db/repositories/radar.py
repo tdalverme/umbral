@@ -139,6 +139,21 @@ class SqlAlchemySearchProfileRepository:
             models = session.scalars(statement)
             return tuple(_to_domain_profile(model) for model in models)
 
+    def list_active(self, limit: int) -> tuple[SearchProfile, ...]:
+        if not 1 <= limit <= 1000:
+            raise ValueError("limit must be between 1 and 1000")
+        with self.session_factory() as session:
+            models = session.scalars(
+                select(SearchProfileModel)
+                .where(SearchProfileModel.status == "active")
+                .order_by(
+                    SearchProfileModel.updated_at.asc(),
+                    SearchProfileModel.id.asc(),
+                )
+                .limit(limit)
+            )
+            return tuple(_to_domain_profile(model) for model in models)
+
     def save(self, profile: SearchProfile) -> None:
         with self.session_factory() as session:
             model = session.get(SearchProfileModel, profile.profile_id)
@@ -347,9 +362,16 @@ class SqlAlchemyRunRepository:
         items: tuple[RecommendationItem, ...],
         event: ProductEvent,
         evaluations: tuple[CriterionEvaluation, ...] = (),
-    ) -> None:
+    ) -> RecommendationRun:
         now = datetime.now(timezone.utc)
         with self.session_factory() as session:
+            profile = session.scalar(
+                select(SearchProfileModel)
+                .where(SearchProfileModel.id == run.profile_id)
+                .with_for_update()
+            )
+            if profile is None:
+                raise KeyError(run.profile_id)
             model = session.get(RecommendationRunModel, run.run_id)
             if model is None:
                 raise KeyError(run.run_id)
@@ -357,6 +379,14 @@ class SqlAlchemyRunRepository:
                 raise ConcurrencyConflict(
                     expected_version=run.version, actual_version=model.version
                 )
+            if profile.current_version_id != run.profile_version_id:
+                model.state = "superseded"
+                model.failure_code = "radar.results_superseded"
+                model.finished_at = now
+                model.updated_at = now
+                model.correlation_id = run.correlation_id
+                session.commit()
+                return _to_domain_run(model)
             model.state = "succeeded"
             model.candidate_count = run.candidate_count
             model.published_item_count = len(items)
@@ -422,6 +452,7 @@ class SqlAlchemyRunRepository:
                 )
             )
             session.commit()
+            return _to_domain_run(model)
 
     def fail(self, run: RecommendationRun, failure_code: str) -> None:
         now = datetime.now(timezone.utc)

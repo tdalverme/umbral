@@ -14,6 +14,7 @@ from redis import Redis
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.ingestion.contracts import ImportRunSnapshot
 from umbral.application.ingestion.service import ImportRunService
+from umbral.application.preferences.refresh import RadarPreferenceRefreshService
 from umbral.application.runtime.version import (
     ReleaseManifest,
     load_release_manifest,
@@ -79,6 +80,7 @@ class ProcessDependencies:
     heartbeat_writer: RuntimeHeartbeatWriter | None = None
     agent_checkpoint_purge: Callable[[datetime], int] | None = None
     proposal_expire: Callable[[datetime], int] | None = None
+    preference_refresh_reconcile: Callable[[datetime], int] | None = None
     notifications_plan: Callable[[datetime], int] | None = None
     notifications_digest: Callable[[datetime], int] | None = None
 
@@ -180,6 +182,11 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         release_id=active_settings.release_id,
         handlers=registry.as_mapping(),
     )
+    radar.job_runtime = runtime
+    preference_refresh = RadarPreferenceRefreshService(
+        radar=radar,
+        criteria=criteria,
+    )
     normalize_publish.bind(runtime)
     identity_access.job_runtime = runtime
     heartbeat_writer = None
@@ -203,6 +210,9 @@ def build_process_dependencies(settings: Settings | None = None) -> ProcessDepen
         heartbeat_writer=heartbeat_writer,
         agent_checkpoint_purge=_build_agent_purge(active_settings),
         proposal_expire=_build_proposal_expire(active_settings),
+        preference_refresh_reconcile=(
+            lambda _now: preference_refresh.reconcile_pending(limit=100)
+        ),
         notifications_plan=build_plan_duty(notifications.planner),
         notifications_digest=build_digest_duty(notifications.planner),
     )

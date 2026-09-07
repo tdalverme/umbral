@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -40,6 +41,12 @@ class FactRepository(Protocol):
     ) -> None: ...
 
     def active_for_profile(self, profile_id: UUID) -> tuple[PreferenceFact, ...]: ...
+
+    def active_for_profile_as_of(
+        self, profile_id: UUID, as_of: datetime
+    ) -> tuple[PreferenceFact, ...]: ...
+
+    def changed_since(self, profile_id: UUID, as_of: datetime) -> bool: ...
 
     def supersede_active(
         self,
@@ -139,6 +146,10 @@ class ProfileSnapshotReader(Protocol):
     def get_payload(self, profile_version_id: UUID) -> Mapping[str, object] | None: ...
 
     def get_version(self, profile_version_id: UUID) -> tuple[UUID, int] | None: ...
+
+    def get_version_snapshot(
+        self, profile_version_id: UUID
+    ) -> tuple[UUID, int, datetime] | None: ...
 
     def owner_of(self, profile_id: UUID) -> UUID | None: ...
 

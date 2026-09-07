@@ -17,6 +17,7 @@ from tests.integration.radar.conftest import (
     seed_user,
 )
 
+from umbral.application.events.contracts import ProductEvent
 from umbral.application.jobs.contracts import JobSnapshot, SubmitJob
 from umbral.application.jobs.service import InMemoryJobRuntime
 from umbral.application.radar.contracts import RadarValidationError
@@ -117,6 +118,62 @@ def test_run_pipeline_publishes_atomically(radar_backend: Any) -> None:
     events = _events_of(factory)
     assert "radar.created.v1" in events
     assert "recommendation.run_published.v1" in events
+
+
+def test_publish_supersedes_run_when_profile_version_advanced(
+    radar_backend: Any,
+) -> None:
+    factory = radar_backend
+    seed_silver_listings(factory, count=1)
+    user_id = seed_user(factory)
+    service = build_radar_service(factory)
+    profile, first_run = service.create_profile(
+        owner_id=user_id,
+        name="Radar CAS",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=1,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert first_run is not None
+    first_run = service.runs.get(first_run.run_id)
+    assert first_run is not None
+
+    updated, _ = service.update_profile(
+        owner_id=user_id,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={"budget_max": 1200.0},
+        correlation_id=uuid4(),
+    )
+    assert updated.current_version_id != first_run.profile_version_id
+
+    event = ProductEvent(
+        event_id=uuid4(),
+        event_type="recommendation.run_published.v1",
+        event_version=1,
+        actor_id=None,
+        occurred_at=updated.updated_at,
+        correlation_id=first_run.correlation_id,
+        payload={},
+    )
+    published = service.runs.publish(first_run, (), event)
+
+    assert published.state == "superseded"
+    assert published.failure_code == "radar.results_superseded"
+    assert _events_of(factory).count("recommendation.run_published.v1") == 0
+    with Session(factory()) as session:
+        persisted = session.scalar(
+            select(RecommendationRunModel).where(
+                RecommendationRunModel.id == first_run.run_id
+            )
+        )
+        assert persisted is not None
+        assert persisted.state == "superseded"
 
 
 def test_identical_profiles_produce_identical_orders(radar_backend: Any) -> None:

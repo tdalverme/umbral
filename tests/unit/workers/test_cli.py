@@ -248,6 +248,35 @@ def test_scheduler_once_runs_durable_steps_in_order_and_returns_summary() -> Non
     ]
 
 
+def test_scheduler_once_reconciles_preference_refreshes_before_new_jobs() -> None:
+    runtime = _SchedulerRuntime()
+    store = _RetentionStore(runtime.events)
+
+    def reconcile(_now: object) -> int:
+        runtime.events.append("reconcile")
+        return 2
+
+    result = scheduler_once(
+        cast(JobRuntime, runtime),
+        queue=cast(JobQueue, object()),
+        identity_store=cast(IdentityStore, store),
+        limit=7,
+        preference_refresh_reconcile=reconcile,
+    )
+
+    assert result["reconciled_preference_refreshes"] == 2
+    assert runtime.events == [
+        "reclaim:7",
+        "reap:7",
+        "reconcile",
+        "schedule",
+        "schedule",
+        "schedule",
+        "relay:7",
+        "retention",
+    ]
+
+
 def test_scheduler_once_emits_a_bounded_summary(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

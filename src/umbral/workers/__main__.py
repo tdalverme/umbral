@@ -61,6 +61,9 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                 proposal_expire=getattr(
                     active_dependencies, "proposal_expire", None
                 ),
+                preference_refresh_reconcile=getattr(
+                    active_dependencies, "preference_refresh_reconcile", None
+                ),
                 notifications_plan=getattr(
                     active_dependencies, "notifications_plan", None
                 ),
@@ -83,6 +86,9 @@ def main(argv: list[str] | None = None, *, dependencies: Any | None = None) -> i
                     ),
                     proposal_expire=getattr(
                         active_dependencies, "proposal_expire", None
+                    ),
+                    preference_refresh_reconcile=getattr(
+                        active_dependencies, "preference_refresh_reconcile", None
                     ),
                     notifications_plan=getattr(
                         active_dependencies, "notifications_plan", None

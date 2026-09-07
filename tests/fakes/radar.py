@@ -69,6 +69,16 @@ class FakeSearchProfileRepository:
         ]
         return tuple(sorted(values, key=lambda item: item.created_at, reverse=True))
 
+    def list_active(self, limit: int) -> tuple[SearchProfile, ...]:
+        if not 1 <= limit <= 1000:
+            raise ValueError("limit must be between 1 and 1000")
+        values = [
+            profile for profile in self.rows.values() if profile.status == "active"
+        ]
+        return tuple(
+            sorted(values, key=lambda item: (item.updated_at, item.profile_id))[:limit]
+        )
+
     def save(self, profile: SearchProfile) -> None:
         current = self.rows.get(profile.profile_id)
         if current is None:
@@ -154,6 +164,7 @@ class FakeRunRepository:
     evaluations_by_run: dict[UUID, list[CriterionEvaluation]] = field(
         default_factory=dict
     )
+    profiles: FakeSearchProfileRepository | None = None
     fail_next_bind: bool = False
     fail_next_reserve: bool = False
     fail_next_get_reserved: bool = False
@@ -274,7 +285,7 @@ class FakeRunRepository:
         items: tuple[RecommendationItem, ...],
         event: ProductEvent,
         evaluations: tuple[CriterionEvaluation, ...] = (),
-    ) -> None:
+    ) -> RecommendationRun:
         current = self.rows.get(run.run_id)
         if current is None:
             raise KeyError(run.run_id)
@@ -282,6 +293,22 @@ class FakeRunRepository:
             raise ConcurrencyConflict(
                 expected_version=run.version, actual_version=current.version
             )
+        profile = (
+            self.profiles.get(run.profile_id) if self.profiles is not None else None
+        )
+        if (
+            profile is not None
+            and profile.current_version_id != run.profile_version_id
+        ):
+            superseded = replace(
+                current,
+                state="superseded",
+                failure_code="radar.results_superseded",
+                finished_at=event.occurred_at,
+                version=current.version + 1,
+            )
+            self.rows[run.run_id] = superseded
+            return superseded
         self.rows[run.run_id] = RecommendationRun(
             run_id=run.run_id,
             profile_id=run.profile_id,
@@ -303,6 +330,7 @@ class FakeRunRepository:
         self.events.append(event)
         if evaluations:
             self.evaluations_by_run.setdefault(run.run_id, []).extend(evaluations)
+        return self.rows[run.run_id]
 
     def fail(self, run: RecommendationRun, failure_code: str) -> None:
         current = self.rows.get(run.run_id)

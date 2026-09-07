@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from typing import cast
 from uuid import UUID
 
@@ -53,6 +54,8 @@ class FakeConceptRepository:
 @dataclass
 class FakeFactRepository:
     rows: list[PreferenceFact] = field(default_factory=list)
+    as_of_calls: list[datetime] = field(default_factory=list)
+    as_of_result: tuple[PreferenceFact, ...] | None = None
 
     def record_change(self, fact: PreferenceFact, superseded_by: UUID | None) -> None:
         if superseded_by is not None:
@@ -63,7 +66,9 @@ class FakeFactRepository:
                     and existing.state == "active"
                 ):
                     self.rows[index] = replace(
-                        existing, state="superseded", superseded_by=superseded_by
+                        existing,
+                        state="superseded",
+                        superseded_by=superseded_by,
                     )
         self.rows.append(fact)
 
@@ -72,6 +77,21 @@ class FakeFactRepository:
             fact
             for fact in self.rows
             if fact.profile_id == profile_id and fact.state == "active"
+        )
+
+    def active_for_profile_as_of(
+        self, profile_id: UUID, as_of: datetime
+    ) -> tuple[PreferenceFact, ...]:
+        self.as_of_calls.append(as_of)
+        if self.as_of_result is not None:
+            return self.as_of_result
+        return self.active_for_profile(profile_id)
+
+    def changed_since(self, profile_id: UUID, as_of: datetime) -> bool:
+        return any(
+            fact.profile_id == profile_id
+            and fact.created_at > as_of
+            for fact in self.rows
         )
 
     def supersede_active(
@@ -282,6 +302,7 @@ class FakeListingReader:
 class FakeProfileSnapshotReader:
     payloads: dict[UUID, Mapping[str, object]] = field(default_factory=dict)
     versions: dict[UUID, tuple[UUID, int]] = field(default_factory=dict)
+    snapshots: dict[UUID, tuple[UUID, int, datetime]] = field(default_factory=dict)
     owners: dict[UUID, UUID] = field(default_factory=dict)
 
     def get_payload(self, profile_version_id: UUID) -> Mapping[str, object] | None:
@@ -289,6 +310,17 @@ class FakeProfileSnapshotReader:
 
     def get_version(self, profile_version_id: UUID) -> tuple[UUID, int] | None:
         return self.versions.get(profile_version_id)
+
+    def get_version_snapshot(
+        self, profile_version_id: UUID
+    ) -> tuple[UUID, int, datetime] | None:
+        snapshot = self.snapshots.get(profile_version_id)
+        if snapshot is not None:
+            return snapshot
+        version = self.versions.get(profile_version_id)
+        if version is None:
+            return None
+        return (*version, datetime.max.replace(tzinfo=timezone.utc))
 
     def owner_of(self, profile_id: UUID) -> UUID | None:
         return self.owners.get(profile_id)

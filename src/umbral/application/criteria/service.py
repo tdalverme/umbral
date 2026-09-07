@@ -388,12 +388,13 @@ class CriteriaService:
     ) -> Compilation:
         if self.profiles.owner_of(profile_id) != owner_id:
             raise CriteriaNotFound(f"search profile not accessible: {profile_id}")
-        version_ref = self.profiles.get_version(profile_version_id)
-        if version_ref is None or version_ref[0] != profile_id:
+        version_snapshot = self.profiles.get_version_snapshot(profile_version_id)
+        if version_snapshot is None or version_snapshot[0] != profile_id:
             raise CriteriaNotFound(f"profile version not found: {profile_version_id}")
-        profile_version_number = version_ref[1]
-
-        facts = self.facts.active_for_profile(profile_id)
+        profile_version_number = version_snapshot[1]
+        facts = self.facts.active_for_profile_as_of(
+            profile_id, version_snapshot[2]
+        )
         concepts = self._concept_map()
         draft = compile_criteria(
             concepts=concepts,
@@ -434,6 +435,11 @@ class CriteriaService:
 
     def latest_compilation(self, profile_version_id: UUID) -> Compilation | None:
         return self.compilations.latest_for_profile_version(profile_version_id)
+
+    def preference_facts_changed_since(
+        self, profile_id: UUID, as_of: datetime
+    ) -> bool:
+        return self.facts.changed_since(profile_id, as_of)
 
     # ------------------------------------------------------------------
     # Extraction and recompute (US3, US4, US5)

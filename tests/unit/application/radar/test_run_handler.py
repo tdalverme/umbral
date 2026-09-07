@@ -538,6 +538,58 @@ def test_stale_pending_run_is_superseded_when_newer_results_exist() -> None:
     assert persisted.failure_code == "radar.results_superseded"
 
 
+def test_in_flight_run_is_superseded_when_profile_advances_before_publish() -> None:
+    ctx = _ctx_with_candidates(build_listing(total_cost=700.0))
+    owner = uuid4()
+    profile, first_run = ctx.service.create_profile(
+        owner_id=owner,
+        name="Radar",
+        zones=("palermo",),
+        budget_max=1000.0,
+        budget_min=None,
+        min_rooms=0,
+        surface_min=None,
+        surface_max=None,
+        unknown_strategy=None,
+        correlation_id=uuid4(),
+    )
+    assert first_run is not None
+
+    # Simulate the profile update committing while the first worker is still
+    # calculating. The newer run remains pending, so the start-of-run stale
+    # check cannot detect this race; publish must do the final check.
+    edited, _ = ctx.service.update_profile(
+        owner_id=owner,
+        profile_id=profile.profile_id,
+        expected_version=profile.version,
+        changes={"budget_max": 1200.0},
+        correlation_id=uuid4(),
+    )
+    assert edited.current_version_id != profile.current_version_id
+    ctx.runs.profiles = ctx.profiles
+
+    handler = RecommendationRunHandler(ctx.service)
+    summary = handler.run(
+        JobContext(
+            execution_id=first_run.job_execution_id or uuid4(),
+            attempt_number=1,
+            correlation_id=uuid4(),
+            release_id="test",
+            logical_target=str(first_run.run_id),
+        )
+    )
+
+    assert summary["state"] == "superseded"
+    persisted = _run_for(ctx, first_run)
+    assert persisted is not None
+    assert persisted.state == "superseded"
+    assert persisted.failure_code == "radar.results_superseded"
+    assert not any(
+        event.event_type == "recommendation.run_published.v1"
+        for event in ctx.runs.events
+    )
+
+
 def test_zero_match_run_persists_diagnostics_and_relaxations() -> None:
     ctx = _ctx_with_candidates(
         build_listing(total_cost=900.0, neighborhood="palermo", rooms=1),

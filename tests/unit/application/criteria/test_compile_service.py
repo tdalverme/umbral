@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 import pytest
@@ -80,6 +81,42 @@ def test_compile_profile_recompilation_versions_increment() -> None:
     )
     assert first.compilation_version == 1
     assert second.compilation_version == 2
+
+
+def test_compile_profile_reads_facts_as_of_the_profile_snapshot() -> None:
+    context = CriteriaTestContext()
+    context.seed_concepts()
+    owner_id, profile_id, version_id = _profile(context)
+    context.profiles.snapshots[version_id] = (
+        profile_id,
+        1,
+        datetime(2026, 8, 1, tzinfo=timezone.utc),
+    )
+    context.service.record_preference_fact(
+        owner_id=owner_id,
+        profile_id=profile_id,
+        concept_key="balcon",
+        value="true",
+        weight=0.8,
+        polarity="positive",
+        confidence=0.9,
+        fact_source="harness",
+        correlation_id=uuid4(),
+    )
+
+    context.facts.as_of_result = ()
+    compilation = context.service.compile_profile(
+        owner_id=owner_id,
+        profile_id=profile_id,
+        profile_version_id=version_id,
+        edits=(),
+        correlation_id=uuid4(),
+    )
+
+    assert context.facts.as_of_calls == [
+        datetime(2026, 8, 1, tzinfo=timezone.utc)
+    ]
+    assert compilation.criteria == ()
 
 
 def test_compile_profile_soft_to_hard_requires_confirmation() -> None:

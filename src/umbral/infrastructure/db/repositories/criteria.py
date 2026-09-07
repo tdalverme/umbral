@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import CursorResult, func, select, update
+from sqlalchemy import CursorResult, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from umbral.application.criteria.contracts import (
@@ -165,6 +165,7 @@ class SqlAlchemyFactRepository:
         self.session_factory = session_factory
 
     def record_change(self, fact: PreferenceFact, superseded_by: UUID | None) -> None:
+        """Append a fact while preserving when the previous fact ended."""
         with self.session_factory() as session:
             if superseded_by is not None:
                 session.execute(
@@ -174,7 +175,11 @@ class SqlAlchemyFactRepository:
                         PreferenceFactModel.concept_key == fact.concept_key,
                         PreferenceFactModel.state == "active",
                     )
-                    .values(state="superseded", superseded_by=superseded_by)
+                    .values(
+                        state="superseded",
+                        superseded_by=superseded_by,
+                        updated_at=fact.created_at,
+                    )
                 )
             session.add(
                 PreferenceFactModel(
@@ -207,6 +212,52 @@ class SqlAlchemyFactRepository:
                 )
             )
             return tuple(_to_domain_fact(model) for model in models)
+
+    def active_for_profile_as_of(
+        self, profile_id: UUID, as_of: datetime
+    ) -> tuple[PreferenceFact, ...]:
+        """Reconstruct facts visible when an immutable profile version was made."""
+
+        with self.session_factory() as session:
+            models = session.scalars(
+                select(PreferenceFactModel)
+                .where(
+                    PreferenceFactModel.profile_id == profile_id,
+                    PreferenceFactModel.created_at <= as_of,
+                )
+                .order_by(
+                    PreferenceFactModel.concept_key,
+                    PreferenceFactModel.created_at.desc(),
+                    PreferenceFactModel.id.desc(),
+                )
+            )
+            selected: dict[str, PreferenceFactModel] = {}
+            for model in models:
+                if model.concept_key in selected:
+                    continue
+                if model.state == "active" or model.updated_at > as_of:
+                    selected[model.concept_key] = model
+            return tuple(
+                _to_domain_fact(model)
+                for model in sorted(
+                    selected.values(), key=lambda item: (item.created_at, item.id)
+                )
+            )
+
+    def changed_since(self, profile_id: UUID, as_of: datetime) -> bool:
+        with self.session_factory() as session:
+            fact_id = session.scalar(
+                select(PreferenceFactModel.id)
+                .where(
+                    PreferenceFactModel.profile_id == profile_id,
+                    or_(
+                        PreferenceFactModel.created_at > as_of,
+                        PreferenceFactModel.updated_at > as_of,
+                    ),
+                )
+                .limit(1)
+            )
+            return fact_id is not None
 
     def supersede_active(
         self,
@@ -675,6 +726,19 @@ class SqlAlchemyProfileSnapshotReader:
             model = session.get(SearchProfileVersion, profile_version_id)
             return (
                 (model.profile_id, model.profile_version) if model is not None else None
+            )
+
+    def get_version_snapshot(
+        self, profile_version_id: UUID
+    ) -> tuple[UUID, int, datetime] | None:
+        from umbral.infrastructure.db.models.radar import SearchProfileVersion
+
+        with self.session_factory() as session:
+            model = session.get(SearchProfileVersion, profile_version_id)
+            return (
+                (model.profile_id, model.profile_version, model.created_at)
+                if model is not None
+                else None
             )
 
     def owner_of(self, profile_id: UUID) -> UUID | None:

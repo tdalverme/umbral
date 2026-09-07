@@ -214,9 +214,27 @@ class RadarService:
     ) -> tuple[SearchProfile, ...]:
         return self.profiles.list_by_owner(owner_id, status)
 
+    def list_active_profiles(self, limit: int) -> tuple[SearchProfile, ...]:
+        return self.profiles.list_active(limit)
+
     def get_profile(self, owner_id: UUID, profile_id: UUID) -> SearchProfile:
         profile = self._owned(owner_id, profile_id)
         return profile
+
+    def get_profile_version(
+        self, *, owner_id: UUID, profile_id: UUID, profile_version_id: UUID
+    ) -> ProfileVersion | None:
+        self._owned(owner_id, profile_id)
+        version = self.versions.get(profile_version_id)
+        if version is None or version.profile_id != profile_id:
+            return None
+        return version
+
+    def get_run_for_version(
+        self, *, owner_id: UUID, profile_id: UUID, profile_version_id: UUID
+    ) -> RecommendationRun | None:
+        self._owned(owner_id, profile_id)
+        return self.runs.get_for_version(profile_id, profile_version_id)
 
     def validate_change(
         self,
@@ -792,7 +810,7 @@ class RadarService:
                 published_item_count=len(items),
                 finished_at=now,
             )
-            self.runs.publish(published, items, event, evaluations)
+            published = self.runs.publish(published, items, event, evaluations)
         except ConcurrencyConflict:
             raise RadarTransientError(
                 "radar.run_race", "run publication lost the optimistic lock"

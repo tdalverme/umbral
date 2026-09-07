@@ -301,6 +301,10 @@ class _FakeCriteria:
         self.calls.append(kwargs)
         return SimpleNamespace(compilation_id=uuid4())
 
+    def latest_compilation(self, profile_version_id: UUID) -> object | None:
+        del profile_version_id
+        return None
+
 
 def test_structured_desire_versions_real_radar_and_schedules_run() -> None:
     radar_ctx = RadarTestContext()
