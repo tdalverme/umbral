@@ -1,4 +1,4 @@
-# Re-review — hardening task 1: grounded narrative integrity
+# Final re-review — hardening task 1: grounded narrative integrity
 
 ## Spec: PASS
 
@@ -6,13 +6,14 @@
 
 ## Strengths
 
-- Geographic packets now carry explicit placement, and managed validation checks match/trade-off/unknown markers against the packet descriptor (`src/umbral/application/scoring/narrative.py:326-340`, `src/umbral/infrastructure/scoring/narrative.py:234-340`). Direct probes rejected both negative-as-match and positive-as-tradeoff cases.
-- The unknown-claim case requested in the previous review is closed: the closed-world token check rejects `"Encaja por la buena conectividad y tiene vista al río."` (`src/umbral/infrastructure/scoring/narrative.py:343-371`; probe result `untracked_view_accepted=False`).
-- Identity-less and mismatched observation snapshots are now omitted because `listing_id` is required and compared exactly (`src/umbral/application/scoring/service.py:614-623`). The identity-less probe returned `0` rehydrated observations.
-- Human labels cover the supported concept set, with no `"esta prioridad"` result in the label probe (`src/umbral/application/scoring/narrative.py:27-64`, `611-614`).
-- The endpoint still resolves an omitted run once and reuses that UUID for explanation and narrative (`src/umbral/api/routers/explanations.py:249-266`).
-- Train/subte identity remains preserved (`src/umbral/application/scoring/narrative.py:469-479`, `496-515`), unsupported geographic signals remain omitted (`src/umbral/application/scoring/narrative.py:66-75`), and fallback provenance remains limited to rendered facts (`src/umbral/application/scoring/narrative.py:157-195`).
-- The engine diff only adds listing identity to the frozen narrative snapshot (`src/umbral/application/scoring/engine.py:273-283`); no scoring formula, ranking, hard-filter, activation, notification, model, or migration changes were introduced.
+- Packet-scoped closed-world validation now derives authorized copy tokens only from packets whose criterion and evidence refs are both present in the submitted `used_criteria`/`used_evidence_refs` (`src/umbral/infrastructure/scoring/narrative.py:343-396`). A direct probe returned `authorized_unlisted=False` for the formerly accepted extra `superficie` descriptor, while the happy managed response returned `happy_managed=True`.
+- Unknown additional copy is rejected (`src/umbral/infrastructure/scoring/narrative.py:244-250`, `343-396`); the `vista al río` probe returned `unknown_extra=False`.
+- Placement and polarity are enforced for packet descriptors and geographic facts (`src/umbral/infrastructure/scoring/narrative.py:252-283`, `299-340`). Direct probes returned `negative_as_match=False` and `positive_as_tradeoff=False`.
+- Identity-less and mismatched observation snapshots are omitted through required, exact `listing_id` validation (`src/umbral/application/scoring/service.py:614-623`); the identity-less probe returned `identityless_count=0`. Listing snapshots use the same exact identity check (`src/umbral/application/scoring/service.py:325-330`, `599-602`).
+- The supported narrative concept set has human labels with no `"esta prioridad"` placeholders (`src/umbral/application/scoring/narrative.py:27-64`, `611-614`; probe returned `placeholder_labels=[]`).
+- The selected explanation endpoint resolves an omitted run once and reuses it for both views (`src/umbral/api/routers/explanations.py:249-266`).
+- Geographic identity remains bounded: train/subte terms are rendered distinctly (`src/umbral/application/scoring/narrative.py:469-479`, `496-515`), unsupported signals are omitted (`src/umbral/application/scoring/narrative.py:66-75`), and fallback provenance is limited to rendered facts (`src/umbral/application/scoring/narrative.py:157-195`).
+- The scoring engine change only adds `listing_id` to the frozen narrative listing snapshot (`src/umbral/application/scoring/engine.py:273-283`). No scoring formula, ranking, hard-filter, activation, notification, model, migration, or database-model change was found.
 
 ## Issues
 
@@ -22,19 +23,7 @@ None identified.
 
 ### Critical
 
-1. **Resolved in the correction round: closed-world validation was not provenance-complete for authorized but unlisted packets.** `src/umbral/infrastructure/scoring/narrative.py` now scopes lexical authorization to packets whose evidence refs intersect the submitted refs and whose criteria are included in `used_criteria`; price values are similarly gated by the submitted price ref. The exact regression text `"Encaja por la buena conectividad y la superficie."` with only `acceso_transporte` and `urban:transit-1` now falls back.
-
-### Correction-round verification
-
-- RED: the exact authorized-unlisted descriptor regression failed (`1 failed`) before the fix.
-- GREEN: the regression passed (`1 passed`) after the minimal packet-scoped authorization change.
-- Placement favorable/desfavorable, exact fallback provenance, and managed happy path are covered by the writer tests.
-- Focused narrative/contracts suite: **52 passed, 11 warnings**.
-- Relevant backend scoring/infrastructure/contracts suite: **131 passed, 11 warnings**.
-- Ruff: **passed**.
-- Strict mypy over the six changed source/fixture files: **passed**. The broader repository baseline remains documented with 8 unrelated targeted errors and 195 full-baseline errors.
-- Web suite: **31 files / 80 tests passed**; TypeScript typecheck **passed**.
-- `git diff --check`: **passed**.
+None identified.
 
 ### Major
 
@@ -46,17 +35,30 @@ None identified.
 
 ## Tests/commands executed and result
 
-- `PYTHONPATH=src .venv\\Scripts\\python.exe -m pytest tests/unit/application/scoring/test_narrative.py tests/unit/application/scoring/test_narrative_service.py tests/unit/infrastructure/scoring/test_narrative_writer.py tests/contract/test_explanation_endpoints.py tests/contract/test_explanation_narrative.py -q` — **52 passed, 11 warnings**.
-- `PYTHONPATH=src .venv\\Scripts\\python.exe -m pytest tests/unit/application/scoring tests/unit/infrastructure/scoring tests/contract/test_explanations.py tests/contract/test_explanation_narrative.py tests/contract/test_explanation_endpoints.py -q` — **131 passed, 11 warnings**.
+- `PYTHONPATH=src .venv\\Scripts\\python.exe -m pytest tests/unit/application/scoring/test_narrative.py tests/unit/application/scoring/test_narrative_service.py tests/unit/infrastructure/scoring/test_narrative_writer.py tests/contract/test_explanation_endpoints.py -q` — **48 passed, 11 warnings**.
+- `PYTHONPATH=src .venv\\Scripts\\python.exe -m pytest tests/unit/application/scoring tests/unit/infrastructure/scoring tests/contract/test_explanation_endpoints.py -q` — **123 passed, 11 warnings**.
+- Targeted regression selection covering packet provenance, managed happy path, placement, run resolution, fallback provenance, identity snapshots, train/subte, and unsupported signals — **9 passed, 39 deselected, 2 warnings**.
+- Direct probes — authorized-unlisted descriptor **False**; happy managed **True**; unknown extra claim **False**; negative-as-match **False**; positive-as-tradeoff **False**; identity-less rehydration **0**; placeholder labels **none**.
 - Ruff on all changed source and fixture files — **passed**.
-- Targeted mypy invocation — **8 errors**, all existing unrelated baseline errors in `src/umbral/application/preferences/service.py`, `src/umbral/agent/graph.py`, and `src/umbral/api/dependencies.py`; no errors were reported in changed narrative source or fixtures.
-- `git diff e1f21b1..35d9519 --check` — **passed**.
-- Direct probes: negative-as-match **False**; positive-as-tradeoff **False**; unknown extra claim **False**; identity-less observation rehydration **0**; placeholder labels **none**; authorized-unlisted wrong-placement claim **False** after correction.
+- `git diff e1f21b1..f5adc16 --check` — **passed**.
+- Targeted mypy invocation — **8 errors**, all existing unrelated baseline errors in `src/umbral/application/preferences/service.py`, `src/umbral/agent/graph.py`, and `src/umbral/api/dependencies.py`; no errors were reported in the changed narrative source or fixtures.
 
 ## Limitations
 
-The focused and relevant backend suites are green and the residual provenance bypass is covered by the correction regression. No full repository suite claim is made; mypy remains red only on unrelated baseline files. The implementation and report changes were committed without publishing or merging.
+The full repository test suite was not claimed; verification is limited to the focused/relevant backend suites and targeted probes. Mypy remains red only on unrelated baseline files, and the test runs retain the existing FastAPI/HTTPX deprecation warnings.
 
-## Correction commit
+No issues remain in the scoped final review.
 
-`205b90c` — `fix: scope narrative copy to submitted packets`
+## Whole-branch correction follow-up
+
+The subsequent whole-branch review findings are also closed by `e9004c2`:
+typed deterministic managed claims, measurement-aware geographic direction,
+negative non-geographic fallback facts, v2 contributor coverage, local test
+typing, neutral UI caveats, same-identity narrative preservation, and the
+introduced radar-service lint line.
+
+Fresh results for that round were `179 passed, 11 warnings` in the relevant
+backend suite, `185 passed` in adjacent backend groups, `83 passed` web tests,
+passing web typecheck, and no errors in targeted strict mypy over the changed
+source/tests. Ruff retains only seven pre-existing E501s in the radar service;
+`git diff --check` passes. No full repository pytest/mypy claim is made.
