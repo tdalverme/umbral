@@ -29,9 +29,15 @@ _DEFAULT_LABELS = {
     "ambientes": "cantidad de ambientes",
     "superficie": "superficie",
     "ubicacion": "ubicación",
+    "piso": "piso",
+    "tipo_cocina": "tipo de cocina",
     "balcon": "balcón",
     "luminosidad": "buena luz natural",
     "estado_general": "buen estado general",
+    "barrio_seguro": "entorno del barrio",
+    "moderno": "estilo moderno",
+    "dormitorios": "dormitorios",
+    "banos": "baños",
     "mascotas": "acepta mascotas",
     "amoblado": "nivel de amoblamiento",
     "ascensor": "ascensor",
@@ -323,6 +329,7 @@ def build_narrative_context(
             "label": fact.label,
             "fact": fact.value,
             "state": "mismatch",
+            "placement": "tradeoff",
             "evidence_refs": (fact.source_ref,),
         }
         for fact in unfavorable
@@ -547,6 +554,7 @@ def _evaluation_packet(
         "criterion_key": reason.criterion_key,
         "label": _label(reason.criterion_key, active_criteria),
         "state": reason.state,
+        "placement": "match" if reason.state == "match" else "tradeoff",
         "confidence": reason.confidence,
         "evidence_refs": _evidence_refs(reason.evidence_refs),
     }
@@ -560,6 +568,7 @@ def _risk_packet(
         "criterion_key": risk.criterion_key,
         "label": _label(risk.criterion_key, active_criteria),
         "state": risk.state,
+        "placement": "unknown",
         "evidence_refs": (),
     }
 

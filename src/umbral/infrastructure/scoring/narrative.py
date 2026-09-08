@@ -34,6 +34,63 @@ _UNSAFE_GEOGRAPHY_RE = re.compile(
 )
 _RAW_KEY_RE = re.compile(r"\b[a-z][a-z0-9]*_[a-z0-9_]*\b", re.IGNORECASE)
 _PRICE_COPY_RE = re.compile(r"(?:USD|ARS|\$)\s?[\d.]+", re.IGNORECASE)
+_COPY_TOKEN_RE = re.compile(r"[a-záéíóúüñ0-9]+", re.IGNORECASE)
+_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
+_TRADEOFF_MARKERS = (
+    "punto para revisar",
+    "conviene revisar",
+    "es una concesión",
+    "concesión",
+)
+_MATCH_MARKERS = ("encaja por", "encaja con")
+_UNKNOWN_MARKERS = ("no puedo confirmar", "todavía no puedo confirmar")
+_VOICE_WORDS = frozenset(
+    {
+        "a",
+        "además",
+        "algo",
+        "al",
+        "aunque",
+        "bajó",
+        "cerca",
+        "con",
+        "confirmar",
+        "conviene",
+        "de",
+        "el",
+        "en",
+        "encaja",
+        "es",
+        "está",
+        "hay",
+        "la",
+        "las",
+        "lo",
+        "los",
+        "más",
+        "menos",
+        "no",
+        "para",
+        "parte",
+        "pasó",
+        "precio",
+        "poco",
+        "por",
+        "punto",
+        "puedo",
+        "que",
+        "revisar",
+        "se",
+        "sin",
+        "son",
+        "subió",
+        "también",
+        "tiene",
+        "un",
+        "una",
+        "y",
+    }
+)
 
 
 class ManagedExplanationNarrativeWriter:
@@ -174,54 +231,55 @@ def _claims_match_context(
     context: ExplanationNarrativeContext,
 ) -> bool:
     lowered = text.casefold()
-    packets = (*context.reasons, *context.tradeoffs, *context.unknowns)
+    packet_groups = (
+        ("match", context.reasons),
+        ("tradeoff", context.tradeoffs),
+        ("unknown", context.unknowns),
+    )
+    submitted_refs = {
+        value for value in evidence_refs if isinstance(value, str)
+    }
     if _PRICE_COPY_RE.search(text) and not context.price_changes:
+        return False
+    if not _copy_is_closed_world(text, context):
         return False
     for criterion in criteria:
         if not isinstance(criterion, str):
             return False
-        packet = next(
-            (item for item in packets if item.get("criterion_key") == criterion),
-            None,
-        )
-        if packet is None:
-            refs = set(context.criterion_evidence_refs.get(criterion, ()))
-            packet = next(
-                (item for item in packets if refs.intersection(_packet_refs(item))),
-                None,
-            )
         criterion_refs = set(context.criterion_evidence_refs.get(criterion, ()))
-        submitted_refs = {
-            value for value in evidence_refs if isinstance(value, str)
-        }
-        if packet is None and not any(
-            fact.criterion_key == criterion
-            and fact.value.casefold() in lowered
-            and fact.source_ref in submitted_refs
-            for fact in context.geography
-        ):
-            return False
         if not criterion_refs or not criterion_refs.intersection(submitted_refs):
             return False
-        if packet is not None:
-            packet_refs = set(_packet_refs(packet))
-            if not packet_refs.intersection(submitted_refs):
-                return False
-            label = packet.get("label")
-            if not isinstance(label, str) or label.casefold() not in lowered:
-                return False
-            fact = packet.get("fact")
-            if isinstance(fact, str) and fact.casefold() not in lowered:
-                return False
-        elif not any(
+        packet_grounded = any(
+            _packet_claim_is_grounded(
+                packet,
+                placement,
+                criterion,
+                criterion_refs,
+                submitted_refs,
+                text,
+            )
+            for placement, packets in packet_groups
+            for packet in packets
+        )
+        geography_grounded = any(
             fact.criterion_key == criterion
-            and fact.value.casefold() in lowered
+            and fact.source_ref in criterion_refs
             and fact.source_ref in submitted_refs
+            and _descriptor_has_placement(
+                text,
+                fact.value,
+                "match" if fact.favorable else "tradeoff",
+            )
             for fact in context.geography
-        ):
+        )
+        if not packet_grounded and not geography_grounded:
             return False
     for fact in context.geography:
-        if fact.criterion_key in criteria and fact.value.casefold() not in lowered:
+        if fact.criterion_key in criteria and not _descriptor_has_placement(
+            text,
+            fact.value,
+            "match" if fact.favorable else "tradeoff",
+        ):
             return False
     if re.search(r"(?:baj[oó]|pas[oó]|subi[oó]|aument[oó])", lowered):
         if not context.price_changes:
@@ -235,24 +293,82 @@ def _claims_match_context(
             _price_mentioned(change, text) for change in context.price_changes
         ):
             return False
-    if re.search(r"\b(?:balcón|pileta|piscina|terraza|patio|cochera)\b", lowered):
-        authorized_labels = {
-            str(item.get("label", "")).casefold()
-            for item in packets
-        }
-        if not any(
-            term in authorized_labels
-            for term in (
-                "balcón",
-                "pileta",
-                "piscina",
-                "terraza",
-                "patio",
-                "cochera",
-            )
-        ):
-            return False
     return True
+
+
+def _packet_claim_is_grounded(
+    packet: Mapping[str, object],
+    default_placement: str,
+    criterion: str,
+    criterion_refs: set[str],
+    submitted_refs: set[str],
+    text: str,
+) -> bool:
+    packet_key = packet.get("criterion_key")
+    packet_refs = set(_packet_refs(packet))
+    if packet_key is not None and packet_key != criterion:
+        return False
+    if not packet_refs.intersection(criterion_refs, submitted_refs):
+        return False
+    descriptor = packet.get("fact")
+    if not isinstance(descriptor, str):
+        descriptor = packet.get("label")
+    if not isinstance(descriptor, str):
+        return False
+    placement = packet.get("placement")
+    if not isinstance(placement, str):
+        placement = default_placement
+    return _descriptor_has_placement(text, descriptor, placement)
+
+
+def _descriptor_has_placement(
+    text: str, descriptor: str, placement: str
+) -> bool:
+    descriptor_lower = descriptor.casefold()
+    for sentence in _SENTENCE_RE.split(text.casefold()):
+        if descriptor_lower not in sentence:
+            continue
+        has_match = any(marker in sentence for marker in _MATCH_MARKERS)
+        has_tradeoff = any(marker in sentence for marker in _TRADEOFF_MARKERS)
+        has_unknown = any(marker in sentence for marker in _UNKNOWN_MARKERS)
+        if placement == "match" and has_match and not has_tradeoff:
+            return True
+        if placement == "tradeoff" and has_tradeoff and not has_match:
+            return True
+        if placement == "unknown" and has_unknown:
+            return True
+    return False
+
+
+def _copy_is_closed_world(
+    text: str, context: ExplanationNarrativeContext
+) -> bool:
+    allowed = _authorized_copy_tokens(context)
+    return all(token in allowed for token in _COPY_TOKEN_RE.findall(text.casefold()))
+
+
+def _authorized_copy_tokens(
+    context: ExplanationNarrativeContext,
+) -> set[str]:
+    values: list[str] = []
+    packets = (*context.reasons, *context.tradeoffs, *context.unknowns)
+    for packet in packets:
+        for key in ("label", "fact"):
+            value = packet.get(key)
+            if isinstance(value, str):
+                values.append(value)
+    for fact in context.geography:
+        values.extend((fact.label, fact.value))
+    for change in context.price_changes:
+        currency = change.get("currency")
+        before = change.get("before")
+        after = change.get("after")
+        if isinstance(currency, str):
+            values.append(currency)
+        for value in (before, after):
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                values.append(f"{value:,.0f}".replace(",", "."))
+    return set(_COPY_TOKEN_RE.findall(" ".join(values).casefold())) | _VOICE_WORDS
 
 
 def _price_mentioned(change: Mapping[str, object], text: str) -> bool:

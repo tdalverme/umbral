@@ -196,3 +196,42 @@ def test_narrative_ignores_frozen_listing_for_another_listing() -> None:
     )
 
     assert writer.contexts[-1].listing == {}
+
+
+def test_narrative_ignores_identityless_frozen_observation() -> None:
+    context, writer, owner_id, profile_id, run_id, listing_id = _context()
+    item = context.items.items_by_run[run_id][0]
+    context.items.items_by_run[run_id][0] = replace(
+        item,
+        contributions={
+            **item.contributions,
+            "_narrative_observations": {
+                "luminosidad": {
+                    "observation_id": str(uuid4()),
+                    "concept_key": "luminosidad",
+                    "matcher_type": "signal_score",
+                    "value": 0.8,
+                    "score": 0.8,
+                    "confidence": 0.8,
+                    "evidence": {
+                        "signal_ref": "transit_access",
+                        "contributors": [
+                            {
+                                "term": "subway_station.nearest_m",
+                                "observed_value": 300,
+                                "unit": "m",
+                            }
+                        ],
+                    },
+                    "source": "urban",
+                    "state": "active",
+                }
+            },
+        },
+    )
+
+    context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+
+    assert writer.contexts[-1].geography == ()

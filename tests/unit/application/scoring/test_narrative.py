@@ -474,7 +474,10 @@ def test_avoid_noise_and_desired_noise_have_opposite_placement() -> None:
 
 def test_supported_narrative_criteria_have_human_labels() -> None:
     supported = (
-        "balcon", "luminosidad", "estado_general", "proximidad_cafes",
+        "presupuesto", "ambientes", "superficie", "ubicacion", "balcon",
+        "piso", "tipo_cocina", "luminosidad", "estado_general", "barrio_seguro",
+        "moderno", "dormitorios", "banos", "mascotas", "amoblado", "ascensor",
+        "cochera", "piscina", "precio_m2", "variacion_precio", "proximidad_cafes",
         "acceso_transporte", "proximidad_parque", "proximidad_compras",
         "vida_nocturna", "zona_comercial", "caminabilidad", "calma_residencial",
         "ruido_transito", "ruido_tren", "ruido_ambiental", "acceso_escuela",

@@ -11,7 +11,10 @@ from typing import Any, Literal
 import pytest
 
 from umbral.application.agent.contracts import ModelResult
-from umbral.application.scoring.contracts import ExplanationNarrativeContext
+from umbral.application.scoring.contracts import (
+    ExplanationNarrativeContext,
+    GeographicFact,
+)
 from umbral.application.scoring.narrative import deterministic_narrative
 from umbral.infrastructure.scoring.narrative import ManagedExplanationNarrativeWriter
 
@@ -284,6 +287,78 @@ def test_writer_rejects_empty_evidence_refs(
         "text": "Encaja por la buena conectividad.",
         "used_criteria": ["acceso_transporte"],
         "used_evidence_refs": [],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+@pytest.mark.parametrize(
+    ("fact", "text"),
+    [
+        (
+            GeographicFact(
+                label="actividad nocturna",
+                value="algo de actividad nocturna cerca",
+                source_ref="urban:nightlife-1",
+                confidence=0.8,
+                criterion_key="vida_nocturna",
+                favorable=False,
+                signal_ref="nightlife_intensity",
+            ),
+            "Encaja por algo de actividad nocturna cerca.",
+        ),
+        (
+            GeographicFact(
+                label="buena conectividad",
+                value="subte relativamente cerca",
+                source_ref="urban:transit-1",
+                confidence=0.8,
+                criterion_key="acceso_transporte",
+                favorable=True,
+                signal_ref="transit_access",
+            ),
+            "La subte relativamente cerca es un punto para revisar.",
+        ),
+    ],
+)
+def test_writer_rejects_geography_with_wrong_placement(
+    scripted_gateway: ScriptedGateway,
+    context: ExplanationNarrativeContext,
+    fact: GeographicFact,
+    text: str,
+) -> None:
+    assert fact.criterion_key is not None
+    criterion_key = fact.criterion_key
+    scripted_gateway.output = {
+        "text": text,
+        "used_criteria": [criterion_key],
+        "used_evidence_refs": [fact.source_ref],
+    }
+    context = replace(
+        context,
+        allowed_criteria=tuple(
+            dict.fromkeys((*context.allowed_criteria, criterion_key))
+        ),
+        allowed_evidence_refs=tuple(
+            dict.fromkeys((*context.allowed_evidence_refs, fact.source_ref))
+        ),
+        criterion_evidence_refs={
+            **context.criterion_evidence_refs,
+            criterion_key: (fact.source_ref,),
+        },
+        geography=(fact,),
+    )
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_rejects_untracked_claim_after_grounded_claim(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    scripted_gateway.output = {
+        "text": "Encaja por la buena conectividad y tiene vista al río.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
     }
 
     assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"

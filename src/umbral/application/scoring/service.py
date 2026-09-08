@@ -613,7 +613,10 @@ def _rehydrate_narrative_observations(
             continue
         try:
             observation_id = UUID(str(value["observation_id"]))
-            stored_listing_id = UUID(str(value.get("listing_id", listing_id)))
+            raw_listing_id = value["listing_id"]
+            if not isinstance(raw_listing_id, str):
+                continue
+            stored_listing_id = UUID(raw_listing_id)
         except (KeyError, ValueError):
             continue
         if stored_listing_id != listing_id:
