@@ -51,7 +51,7 @@ def test_allowed_value_produces_match_evaluation() -> None:
     candidate = scored[0]
     assert candidate.score > 0.0
     evaluations = candidate.evaluations
-    assert len(evaluations) == 6  # surface is absent from this profile
+    assert len(evaluations) == 4  # surface and unasked soft criteria are absent
     balcon = next(item for item in evaluations if item.criterion_key == "balcon")
     assert balcon.state == "match"
     assert balcon.score == 1.0

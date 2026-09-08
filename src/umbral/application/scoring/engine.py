@@ -19,6 +19,7 @@ from umbral.application.criteria.contracts import (
     ListingObservation,
 )
 from umbral.application.radar.contracts import SearchProfile
+from umbral.application.scoring.active_criteria import active_criterion_keys
 from umbral.application.scoring.contracts import (
     CriterionEvaluation,
     SemanticSignal,
@@ -85,6 +86,7 @@ def score_candidates(
     """Score every candidate against the policy; returns frozen candidates."""
 
     signals = semantic_signals or {}
+    active_keys = active_criterion_keys(profile, compilation, policy)
     scored: list[ScoredCandidate] = []
     for listing in candidates:
         candidate = _score_candidate(
@@ -97,6 +99,7 @@ def score_candidates(
             correlation_id=correlation_id,
             now=now,
             semantic_signals=signals.get(listing.listing_id, ()),
+            active_keys=active_keys,
         )
         if candidate is not None:
             scored.append(candidate)
@@ -124,6 +127,7 @@ def _score_candidate(
     correlation_id: UUID,
     now: datetime,
     semantic_signals: tuple[SemanticSignal, ...] = (),
+    active_keys: frozenset[str] = frozenset(),
 ) -> ScoredCandidate | None:
     version_key = f"policy:{policy.score_policy_version}"
     evaluations: list[CriterionEvaluation] = []
@@ -137,11 +141,10 @@ def _score_candidate(
         compilation=compilation,
         policy=policy,
         fact_params=fact_params,
+        active_keys=active_keys,
     )
     for criterion in policy.criteria:
-        if is_fixed_criterion(criterion.key) and not _fixed_criterion_declared(
-            criterion.key, profile
-        ):
+        if criterion.key not in active_keys:
             continue
         compiled_soft_to_hard = False
         if criterion.concept in fact_params:
@@ -187,7 +190,11 @@ def _score_candidate(
         return None
     policy_keys = {criterion.concept for criterion in policy.criteria}
     for compiled in compilation.criteria:
-        if compiled.concept_key in policy_keys or compiled.weight is None:
+        if (
+            compiled.concept_key in policy_keys
+            or compiled.weight is None
+            or compiled.concept_key not in active_keys
+        ):
             continue
         # Facts of concepts outside the static policy contribute with their
         # own weight (fase 3, US3); a confirmed hard criterion excludes the
@@ -257,24 +264,13 @@ def _score_candidate(
     )
 
 
-def _fixed_criterion_declared(key: str, profile: SearchProfile) -> bool:
-    if key == "presupuesto":
-        return profile.budget_max is not None
-    if key == "ambientes":
-        return profile.min_rooms is not None
-    if key == "superficie":
-        return profile.surface_min is not None or profile.surface_max is not None
-    if key == "ubicacion":
-        return bool(profile.zones)
-    return True
-
-
 def _normalized_criterion_weights(
     *,
     profile: SearchProfile,
     compilation: Compilation,
     policy: ScoringPolicyDoc,
     fact_params: Mapping[str, CompiledCriterion],
+    active_keys: frozenset[str],
 ) -> dict[str, float]:
     """Keep all active criteria inside one normalized weight budget.
 
@@ -286,9 +282,7 @@ def _normalized_criterion_weights(
     raw_weights: dict[str, float] = {}
     policy_concepts = {criterion.concept for criterion in policy.criteria}
     for criterion in policy.criteria:
-        if is_fixed_criterion(criterion.key) and not _fixed_criterion_declared(
-            criterion.key, profile
-        ):
+        if criterion.key not in active_keys:
             continue
         compiled = fact_params.get(criterion.concept)
         compiled_weight = compiled.weight if compiled is not None else None
@@ -299,23 +293,13 @@ def _normalized_criterion_weights(
             else criterion.weight
         )
     for compiled in compilation.criteria:
-        if compiled.concept_key in policy_concepts or compiled.weight is None:
+        if (
+            compiled.concept_key in policy_concepts
+            or compiled.weight is None
+            or compiled.concept_key not in active_keys
+        ):
             continue
         raw_weights[compiled.concept_key] = compiled.weight
-
-    policy_by_concept = {
-        criterion.concept: criterion for criterion in policy.criteria
-    }
-    dynamic_weights = any(
-        compiled.weight is not None
-        and (
-            (static := policy_by_concept.get(compiled.concept_key)) is None
-            or compiled.weight != static.weight
-        )
-        for compiled in compilation.criteria
-    )
-    if not dynamic_weights:
-        return raw_weights
 
     total_weight = sum(raw_weights.values())
     if total_weight <= 0.0:

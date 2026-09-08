@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -13,7 +14,10 @@ from tests.support.scoring import (
     build_observation,
 )
 
-from umbral.application.scoring.engine import ScoredCandidate
+from umbral.application.scoring.engine import ScoredCandidate, score_candidates
+from umbral.application.scoring.policy import parse_policy_document
+from umbral.infrastructure.criteria.contract_loader import load_matcher_types
+from umbral.infrastructure.scoring.contract_loader import load_scoring_policy_seed
 
 
 def _scored_twice() -> tuple[tuple[ScoredCandidate, ...], tuple[ScoredCandidate, ...]]:
@@ -104,3 +108,47 @@ def test_evaluations_carry_versioned_input_refs_and_reason() -> None:
     assert balcon.input_refs[0]["ref"] == str(observation.observation_id)
     assert balcon.input_refs[0]["version"] == str(observation.extraction_version_id)
     assert balcon.contribution > 0.0
+
+
+def test_scoring_does_not_change_when_unasked_default_signal_changes() -> None:
+    profile = build_profile()
+    listing = build_listing()
+    compilation = build_compilation(
+        profile_id=profile.profile_id,
+        profile_version_id=uuid4(),
+        criteria=(),
+    )
+    policy = parse_policy_document(load_scoring_policy_seed(), load_matcher_types())
+    common = dict(
+        profile=profile,
+        compilation=compilation,
+        candidates=(listing,),
+        policy=policy,
+        run_id=uuid4(),
+        correlation_id=uuid4(),
+        now=datetime.now(timezone.utc),
+    )
+    without_defaults = score_candidates(observations={}, **common)
+    with_defaults = score_candidates(
+        observations={
+            listing.listing_id: {
+                "balcon": build_observation(
+                    listing_id=listing.listing_id, concept_key="balcon", value="si"
+                ),
+                "estado_general": build_observation(
+                    listing_id=listing.listing_id,
+                    concept_key="estado_general",
+                    value="bueno",
+                ),
+            }
+        },
+        **common,
+    )
+
+    assert [item.score for item in without_defaults] == [
+        item.score for item in with_defaults
+    ]
+    assert all(
+        item.criterion_key not in {"balcon", "estado_general"}
+        for item in without_defaults[0].evaluations
+    )

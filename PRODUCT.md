@@ -80,6 +80,8 @@ Umbral es un **radar personal de vivienda**: convierte intenciones cambiantes en
 
 **Principios de escritura y patrones de agente (vinculantes):** empezar por lo que importa, frases breves/conversacionales, explicar por qué cada propiedad fue seleccionada, mostrar incertidumbre sin jerga, recomendar acción conservando decisión, nunca declarar “perfecta/ideal/imperdible”, sin abuso de emojis/exclamaciones/referencias a IA, sin certeza no respaldada. Patrones de referencia: nueva selección, oportunidad destacada, incertidumbre, sin resultados, feedback (ver `docs/superpowers/specs/2026-08-26-umbral-brand-system-design.md:159-187`).
 
+**Reglas para explicar coincidencias:** empezar por qué se seleccionó el aviso; agrupar las coincidencias activas más fuertes; señalar un trade-off material cuando haya evidencia; mostrar faltantes solo si importan para ese radar; traducir señales geográficas a impacto para la persona; nunca exponer nombres de señales ni valores normalizados; usar lenguaje seguro ante proxies.
+
 **Arquitectura verbal:** Tu radar, Oportunidades, Por qué encaja (coincidencias/concesiones/evidencia/faltantes), Guardados, Comparar, Ajustar el radar. Verbos preferidos: crear, ajustar, seguir, aparecer, acercar, entender, comparar, decidir. Evitar jerga tecnológica artificial (`Smart Match`, `AI Search`, `Umbral Assistant`); la voz del asistente es la voz de Umbral.
 
 **Dirección visual “Luz serena” (compromiso aprobado conceptualmente, no arte final):** 

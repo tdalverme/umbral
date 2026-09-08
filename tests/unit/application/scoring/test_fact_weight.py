@@ -14,6 +14,7 @@ from tests.support.scoring import (
     build_criterion,
     build_observation,
 )
+
 from umbral.application.scoring.engine import score_candidates
 from umbral.application.scoring.policy import PolicyCriterion, parse_policy_document
 from umbral.infrastructure.criteria.contract_loader import load_matcher_types
@@ -91,6 +92,7 @@ def test_fact_weight_is_normalized_with_the_policy_weight_budget() -> None:
         profile_id=profile.profile_id,
         profile_version_id=uuid4(),
         criteria=(
+            build_criterion("balcon", matcher_type="semantic_feature"),
             build_criterion(
                 "proximidad_cafes",
                 matcher_type="signal_score",

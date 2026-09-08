@@ -239,8 +239,6 @@ def test_run_publishes_evaluations_atomically_with_the_run() -> None:
         "ambientes",
         "ubicacion",
         "balcon",
-        "luminosidad",
-        "estado_general",
     }
     assert len(runs.events) == 1
 
