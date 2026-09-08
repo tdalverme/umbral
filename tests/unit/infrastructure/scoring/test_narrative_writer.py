@@ -131,7 +131,12 @@ def test_writer_rejects_technical_or_certain_geographic_copy(
         "used_evidence_refs": ["urban:transit-1"],
     }
 
-    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative == deterministic_narrative(
+        context,
+        prompt_version="explanation-narrative-v1",
+    )
 
 
 def test_writer_rejects_raw_authorized_criterion_key(
@@ -255,6 +260,12 @@ def test_writer_uses_managed_text_only_with_authorized_grounding(
 
     assert narrative.source == "managed"
     assert narrative.text.startswith("Encaja")
+    assert narrative.used_criteria == ("acceso_transporte", "superficie")
+    assert narrative.used_evidence_refs == (
+        "urban:transit-1",
+        "listing_field:surface_m2",
+    )
+    assert narrative.model_version == "test-model"
 
 
 def test_writer_rejects_invented_price_change_with_unrelated_valid_reference(
@@ -265,7 +276,12 @@ def test_writer_rejects_invented_price_change_with_unrelated_valid_reference(
         "used_criteria": ["acceso_transporte"],
         "used_evidence_refs": ["urban:transit-1"],
     }
-    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative == deterministic_narrative(
+        context,
+        prompt_version="explanation-narrative-v1",
+    )
 
 
 def test_writer_rejects_invented_amenity_with_valid_transport_reference(
@@ -277,7 +293,12 @@ def test_writer_rejects_invented_amenity_with_valid_transport_reference(
         "used_evidence_refs": ["urban:transit-1"],
     }
 
-    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative == deterministic_narrative(
+        context,
+        prompt_version="explanation-narrative-v1",
+    )
 
 
 def test_writer_rejects_empty_evidence_refs(
@@ -349,7 +370,12 @@ def test_writer_rejects_geography_with_wrong_placement(
         geography=(fact,),
     )
 
-    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative == deterministic_narrative(
+        context,
+        prompt_version="explanation-narrative-v1",
+    )
 
 
 def test_writer_rejects_untracked_claim_after_grounded_claim(
@@ -357,6 +383,19 @@ def test_writer_rejects_untracked_claim_after_grounded_claim(
 ) -> None:
     scripted_gateway.output = {
         "text": "Encaja por la buena conectividad y tiene vista al río.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_rejects_authorized_unlisted_packet_descriptor(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """A valid catalog descriptor still needs this response's packet provenance."""
+    scripted_gateway.output = {
+        "text": "Encaja por la buena conectividad y la superficie.",
         "used_criteria": ["acceso_transporte"],
         "used_evidence_refs": ["urban:transit-1"],
     }

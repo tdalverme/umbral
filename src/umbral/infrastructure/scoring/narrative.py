@@ -241,7 +241,7 @@ def _claims_match_context(
     }
     if _PRICE_COPY_RE.search(text) and not context.price_changes:
         return False
-    if not _copy_is_closed_world(text, context):
+    if not _copy_is_closed_world(text, criteria, submitted_refs, context):
         return False
     for criterion in criteria:
         if not isinstance(criterion, str):
@@ -341,33 +341,58 @@ def _descriptor_has_placement(
 
 
 def _copy_is_closed_world(
-    text: str, context: ExplanationNarrativeContext
+    text: str,
+    criteria: list[object],
+    submitted_refs: set[str],
+    context: ExplanationNarrativeContext,
 ) -> bool:
-    allowed = _authorized_copy_tokens(context)
+    allowed = _authorized_copy_tokens(criteria, submitted_refs, context)
     return all(token in allowed for token in _COPY_TOKEN_RE.findall(text.casefold()))
 
 
 def _authorized_copy_tokens(
+    criteria: list[object],
+    submitted_refs: set[str],
     context: ExplanationNarrativeContext,
 ) -> set[str]:
     values: list[str] = []
+    selected_criteria = {value for value in criteria if isinstance(value, str)}
+    criterion_refs = {
+        ref
+        for criterion in selected_criteria
+        for ref in context.criterion_evidence_refs.get(criterion, ())
+    }
     packets = (*context.reasons, *context.tradeoffs, *context.unknowns)
     for packet in packets:
+        packet_refs = set(_packet_refs(packet))
+        packet_key = packet.get("criterion_key")
+        if (
+            not packet_refs.intersection(submitted_refs, criterion_refs)
+            or (isinstance(packet_key, str) and packet_key not in selected_criteria)
+        ):
+            continue
         for key in ("label", "fact"):
             value = packet.get(key)
             if isinstance(value, str):
                 values.append(value)
     for fact in context.geography:
+        if (
+            fact.criterion_key not in selected_criteria
+            or fact.source_ref not in submitted_refs
+            or fact.source_ref not in criterion_refs
+        ):
+            continue
         values.extend((fact.label, fact.value))
-    for change in context.price_changes:
-        currency = change.get("currency")
-        before = change.get("before")
-        after = change.get("after")
-        if isinstance(currency, str):
-            values.append(currency)
-        for value in (before, after):
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                values.append(f"{value:,.0f}".replace(",", "."))
+    if "listing_field:price" in submitted_refs:
+        for change in context.price_changes:
+            currency = change.get("currency")
+            before = change.get("before")
+            after = change.get("after")
+            if isinstance(currency, str):
+                values.append(currency)
+            for value in (before, after):
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    values.append(f"{value:,.0f}".replace(",", "."))
     return set(_COPY_TOKEN_RE.findall(" ".join(values).casefold())) | _VOICE_WORDS
 
 
