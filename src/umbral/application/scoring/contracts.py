@@ -150,6 +150,7 @@ class ExplanationNarrativeContext:
     criterion_evidence_refs: Mapping[str, tuple[str, ...]] = field(
         default_factory=dict
     )
+    run_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

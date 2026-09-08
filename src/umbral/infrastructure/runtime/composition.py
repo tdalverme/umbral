@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Literal, cast
 
 from umbral.application.criteria.service import CriteriaService
@@ -28,7 +30,9 @@ from umbral.application.runtime.readiness import (
     login_dependency_probes,
 )
 from umbral.application.runtime.version import ReleaseManifest
+from umbral.application.scoring.ports import ExplanationNarrativeWriter
 from umbral.application.scoring.service import ScoringService
+from umbral.infrastructure.agent.model_gateway.managed import ManagedModelGateway
 from umbral.infrastructure.config.settings import Settings
 from umbral.infrastructure.criteria.composition import build_criteria_service
 from umbral.infrastructure.db.readiness import PersistenceProbe
@@ -54,6 +58,7 @@ from umbral.infrastructure.queue.rq_queue import RQJobQueue
 from umbral.infrastructure.radar.composition import build_radar_service
 from umbral.infrastructure.redis import build_redis_connection
 from umbral.infrastructure.scoring.composition import build_scoring_service
+from umbral.infrastructure.scoring.narrative import ManagedExplanationNarrativeWriter
 
 _MARKER_BODY = b"umbral-preview-readiness-v1"
 _MARKER_DIGEST = hashlib.sha256(_MARKER_BODY).hexdigest()
@@ -313,6 +318,35 @@ def _build_and_bind_scoring(
         legacy_score_policy_version=settings.scoring_legacy_score_policy_version,
         comparison_max_listings=settings.scoring_comparison_max_listings,
         comparator_enabled=settings.scoring_comparator_enabled,
+        narrative_writer=_narrative_writer(settings),
+    )
+
+
+def _narrative_writer(settings: Settings) -> ExplanationNarrativeWriter | None:
+    if (
+        settings.agent_model_provider != "managed"
+        or not settings.agent_managed_endpoint
+    ):
+        return None
+    schema_path = (
+        Path(__file__).resolve().parents[4]
+        / "contracts"
+        / "scoring"
+        / "v1"
+        / "explanation-narrative-schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    return ManagedExplanationNarrativeWriter(
+        gateway=ManagedModelGateway(
+            endpoint=settings.agent_managed_endpoint,
+            api_key=settings.agent_managed_api_key or "",
+            model=settings.agent_model_name,
+            timeout_seconds=settings.agent_reply_timeout_seconds,
+            max_retries=0,
+        ),
+        schema=schema,
+        prompt_version="explanation-narrative-v1",
+        model_version=settings.agent_model_name,
     )
 
 

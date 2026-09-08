@@ -10,7 +10,7 @@ over frozen run data; nothing is invented beyond the persisted breakdown.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -46,10 +46,16 @@ from umbral.application.scoring.engine import (
     score_candidates,
 )
 from umbral.application.scoring.explanations import build_explanation
+from umbral.application.scoring.narrative import (
+    ExplanationNarrative,
+    build_narrative_context,
+    deterministic_narrative,
+)
 from umbral.application.scoring.policy import ScoringPolicyDoc, parse_policy_document
 from umbral.application.scoring.ports import (
     CompilationReader,
     EvaluationRepository,
+    ExplanationNarrativeWriter,
     ItemReader,
     ListingReader,
     ObservationReader,
@@ -89,6 +95,7 @@ class ScoringService:
         comparison_max_listings: int = 6,
         comparator_enabled: bool = False,
         semantic_signals: SemanticSignalReader | None = None,
+        narrative_writer: ExplanationNarrativeWriter | None = None,
         clock: Clock | None = None,
     ) -> None:
         self.policies = policies
@@ -109,6 +116,7 @@ class ScoringService:
         self.comparison_max_listings = comparison_max_listings
         self.comparator_enabled = comparator_enabled
         self.semantic_signals = semantic_signals
+        self.narrative_writer = narrative_writer
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     # ------------------------------------------------------------------
@@ -280,6 +288,50 @@ class ScoringService:
             )
             for item in items
         )
+
+    def get_narrative(
+        self,
+        *,
+        owner_id: UUID,
+        profile_id: UUID,
+        run_id: UUID,
+        listing_id: UUID,
+    ) -> ExplanationNarrative:
+        """Render presentation copy from the same frozen inputs as an explanation."""
+
+        run = self._owned_succeeded_run(owner_id, profile_id, run_id)
+        if run.score_policy_version == self.legacy_score_policy_version:
+            raise ExplanationUnavailable("this run has no breakdown data")
+        if listing_id not in self.items.listing_ids_for_run(run.run_id):
+            raise ScoringNotFound(f"listing not in run: {listing_id}")
+        listing = self.listings.get(listing_id)
+        if listing is None:
+            raise ScoringNotFound(f"listing not found: {listing_id}")
+        explanation = self.get_explanation(
+            owner_id=owner_id,
+            profile_id=profile_id,
+            run_id=run_id,
+            listing_id=listing_id,
+        )
+        policy = self._policy_document_for_reference(run.score_policy_version)
+        profile = self._profile_for_run(run)
+        active_keys = self._active_criterion_keys(profile, run, policy)
+        observations = self.observations.active_for_listings((listing_id,)).get(
+            listing_id, {}
+        )
+        context = build_narrative_context(
+            explanation=explanation,
+            listing=asdict(listing),
+            active_criteria={
+                key: {"label": _narrative_label(key)} for key in sorted(active_keys)
+            },
+            observations=observations,
+            price_changes=listing.price_changes,
+        )
+        context = replace(context, run_id=run.run_id)
+        if self.narrative_writer is not None:
+            return self.narrative_writer.write(context)
+        return deterministic_narrative(context)
 
     # ------------------------------------------------------------------
     # Comparison (US8)
@@ -484,3 +536,19 @@ def _satisfied_filters(profile: SearchProfile) -> tuple[str, ...]:
     if profile.surface_min is not None or profile.surface_max is not None:
         filters.append("surface")
     return tuple(filters)
+
+
+def _narrative_label(key: str) -> str:
+    return {
+        "presupuesto": "el presupuesto",
+        "ambientes": "los ambientes",
+        "superficie": "la superficie",
+        "ubicacion": "la ubicación",
+        "balcon": "el balcón",
+        "luminosidad": "la luz natural",
+        "estado_general": "el estado general",
+        "proximidad_cafes": "cafés cercanos",
+        "acceso_transporte": "buena conectividad",
+        "calma_residencial": "entorno más residencial",
+        "ruido_ambiental": "menor exposición",
+    }.get(key, "esta prioridad")

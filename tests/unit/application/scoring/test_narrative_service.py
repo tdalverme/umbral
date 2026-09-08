@@ -1,0 +1,120 @@
+"""Service coverage for selected-opportunity narratives."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
+
+from tests.support.radar import build_listing, build_profile, profile_version_payload
+from tests.support.scoring import (
+    ScoringTestContext,
+    build_compilation,
+    build_criterion,
+    build_item,
+    build_run,
+)
+
+from umbral.application.radar.contracts import ProfileVersion
+from umbral.application.scoring.contracts import (
+    CriterionEvaluation,
+    ExplanationNarrativeContext,
+)
+from umbral.application.scoring.narrative import ExplanationNarrative
+
+
+class RecordingNarrativeWriter:
+    def __init__(self) -> None:
+        self.contexts: list[ExplanationNarrativeContext] = []
+
+    def write(self, context: ExplanationNarrativeContext) -> ExplanationNarrative:
+        self.contexts.append(context)
+        return ExplanationNarrative(
+            text="Encaja por la luz natural.",
+            used_criteria=("luminosidad",),
+            used_evidence_refs=("listing_field:total_cost",),
+            source="deterministic_fallback",
+            prompt_version="test",
+            model_version="test",
+        )
+
+
+def _context() -> tuple[
+    ScoringTestContext, RecordingNarrativeWriter, UUID, UUID, UUID, UUID
+]:
+    context = ScoringTestContext()
+    writer = RecordingNarrativeWriter()
+    context.service.narrative_writer = writer
+    owner_id, profile_id, run_id, listing_id, profile_version_id = (
+        uuid4() for _ in range(5)
+    )
+    score_policy_version = context.service.pin_policy_version()
+    profile = build_profile(owner_id=owner_id, profile_id=profile_id)
+    context.profiles.rows[profile_id] = profile
+    context.versions.rows[profile_version_id] = ProfileVersion(
+        version_id=profile_version_id,
+        profile_id=profile_id,
+        profile_version=1,
+        payload=profile_version_payload(profile),
+        created_at=profile.created_at,
+        correlation_id=profile.correlation_id,
+    )
+    context.runs.rows[run_id] = build_run(
+        profile_id=profile_id,
+        profile_version_id=profile_version_id,
+        run_id=run_id,
+        score_policy_version=score_policy_version,
+    )
+    context.items.items_by_run[run_id] = [build_item(run_id, listing_id)]
+    context.listings.rows[listing_id] = build_listing(listing_id=listing_id)
+    context.compilations.compilations[profile_version_id] = build_compilation(
+        profile_id=profile_id,
+        profile_version_id=profile_version_id,
+        criteria=(build_criterion("luminosidad"),),
+    )
+    context.evaluations.rows.extend(
+        (
+            _evaluation(run_id, listing_id, score_policy_version, "luminosidad"),
+            _evaluation(run_id, listing_id, score_policy_version, "balcon"),
+        )
+    )
+    return context, writer, owner_id, profile_id, run_id, listing_id
+
+
+def _evaluation(
+    run_id: UUID, listing_id: UUID, score_policy_version: str, criterion_key: str
+) -> CriterionEvaluation:
+    return CriterionEvaluation(
+        evaluation_id=uuid4(), run_id=run_id, listing_id=listing_id,
+        criterion_key=criterion_key, criterion_version=f"policy:{score_policy_version}",
+        matcher_type="categorical", params={}, input_refs=(), score=1.0,
+        confidence=1.0, state="match", contribution=0.1,
+        reason_code="concept_observed",
+        evidence_refs=({"kind": "listing_field", "ref": "total_cost"},),
+        created_at=datetime.now(timezone.utc), correlation_id=uuid4(),
+    )
+
+
+def test_narrative_uses_frozen_run_profile_and_listing_context() -> None:
+    context, writer, owner_id, profile_id, run_id, listing_id = _context()
+
+    result = context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+
+    assert result.text
+    assert writer.contexts[-1].run_id == run_id
+    assert "balcon" not in {
+        item["key"] for item in writer.contexts[-1].active_priorities
+    }
+    assert writer.contexts[-1].listing["price"] == 700.0
+
+
+def test_list_explanations_does_not_call_narrative_writer() -> None:
+    context, writer, owner_id, profile_id, run_id, _ = _context()
+
+    context.service.list_explanations(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id,
+        after_position=None, limit=25,
+    )
+
+    assert writer.contexts == []

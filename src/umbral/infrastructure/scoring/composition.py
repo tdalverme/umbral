@@ -6,6 +6,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
+from umbral.application.scoring.ports import ExplanationNarrativeWriter
 from umbral.application.scoring.service import ScoringService
 from umbral.infrastructure.criteria.contract_loader import load_matcher_types
 from umbral.infrastructure.db.repositories.radar import (
@@ -36,6 +37,7 @@ def build_scoring_service(
     legacy_score_policy_version: str = "scoring-baseline-v1",
     comparison_max_listings: int = 6,
     comparator_enabled: bool = False,
+    narrative_writer: ExplanationNarrativeWriter | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> ScoringService:
     return ScoringService(
@@ -60,6 +62,7 @@ def build_scoring_service(
         legacy_score_policy_version=legacy_score_policy_version,
         comparison_max_listings=comparison_max_listings,
         comparator_enabled=comparator_enabled,
+        narrative_writer=narrative_writer,
         clock=clock or (lambda: datetime.now(timezone.utc)),
     )
 

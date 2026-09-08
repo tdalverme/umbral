@@ -238,6 +238,31 @@ def test_explanation_by_listing_returns_breakdown() -> None:
     assert "budget_max" in body["satisfied_filters"]
 
 
+def test_explanation_by_listing_includes_narrative_only_when_requested() -> None:
+    context, owner_id, profile_id, run_id, listing_id = _scoring_context()
+    context.listings.rows[listing_id] = build_listing(listing_id=listing_id)
+    radar = _radar(
+        profile=context.profiles.rows[profile_id],
+        run=context.runs.rows[run_id],
+        items=tuple(context.items.items_by_run.get(run_id, ())),
+    )
+    client = _app(_principal_for(owner_id), context, radar)
+
+    ordinary = client.get(
+        f"/api/v1/search-profiles/{profile_id}/explanations/{listing_id}",
+        cookies={COOKIE: "token"},
+    )
+    selected = client.get(
+        f"/api/v1/search-profiles/{profile_id}/explanations/{listing_id}?include_narrative=true",
+        cookies={COOKIE: "token"},
+    )
+
+    assert ordinary.status_code == 200
+    assert ordinary.json()["narrative"] is None
+    assert selected.status_code == 200
+    assert selected.json()["narrative"]["text"]
+
+
 def test_explanation_list_paginates() -> None:
     context, owner_id, profile_id, run_id, _ = _scoring_context()
     radar = _radar(

@@ -20,6 +20,7 @@ from umbral.application.scoring.contracts import (
     ScoringNotFound,
     ScoringStateError,
 )
+from umbral.application.scoring.narrative import ExplanationNarrative
 from umbral.application.scoring.service import ScoringService
 
 router = APIRouter(prefix="/api/v1", tags=["Explanations"])
@@ -61,9 +62,12 @@ class ExplanationResponse(BaseModel):
     satisfied_filters: list[str]
     profile_snapshot: dict[str, object]
     feature_snapshot: dict[str, object]
+    narrative: "NarrativeResponse | None" = None
 
     @classmethod
-    def from_domain(cls, explanation: Explanation) -> "ExplanationResponse":
+    def from_domain(
+        cls, explanation: Explanation, narrative: ExplanationNarrative | None = None
+    ) -> "ExplanationResponse":
         return cls(
             search_profile_id=explanation.search_profile_id,
             run_id=explanation.run_id,
@@ -98,6 +102,28 @@ class ExplanationResponse(BaseModel):
             satisfied_filters=list(explanation.satisfied_filters),
             profile_snapshot=dict(explanation.profile_snapshot),
             feature_snapshot=dict(explanation.feature_snapshot),
+            narrative=(NarrativeResponse.from_domain(narrative) if narrative else None),
+        )
+
+
+class NarrativeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str
+    used_criteria: list[str]
+    used_evidence_refs: list[str]
+    source: str
+    prompt_version: str
+    model_version: str
+
+    @classmethod
+    def from_domain(cls, narrative: ExplanationNarrative) -> "NarrativeResponse":
+        return cls(
+            text=narrative.text,
+            used_criteria=list(narrative.used_criteria),
+            used_evidence_refs=list(narrative.used_evidence_refs),
+            source=narrative.source,
+            prompt_version=narrative.prompt_version,
+            model_version=narrative.model_version,
         )
 
 
@@ -210,6 +236,7 @@ async def get_explanation(
     search_profile_id: UUID,
     listing_id: UUID,
     run_id: UUID | None = None,
+    include_narrative: bool = Query(default=False),
     x_correlation_id: UUID | None = Header(default=None),
 ) -> ExplanationResponse | JSONResponse:
     del x_correlation_id
@@ -224,7 +251,16 @@ async def get_explanation(
             run_id=run_id or _latest_run(request, principal.user_id, search_profile_id),
             listing_id=listing_id,
         )
-        return ExplanationResponse.from_domain(explanation)
+        narrative = None
+        if include_narrative:
+            narrative = _scoring().get_narrative(
+                owner_id=principal.user_id,
+                profile_id=search_profile_id,
+                run_id=run_id
+                or _latest_run(request, principal.user_id, search_profile_id),
+                listing_id=listing_id,
+            )
+        return ExplanationResponse.from_domain(explanation, narrative)
     except ScoringError as error:
         status, code, detail = _problem_for(error)
         return _problem(request, status, code, detail)
