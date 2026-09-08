@@ -180,6 +180,25 @@ def test_high_noise_risk_uses_directionally_correct_proxy_safe_language() -> Non
     ]
 
 
+def test_low_noise_risk_uses_bounded_favorable_proxy_language() -> None:
+    facts = geographic_facts(
+        {
+            "ruido_ambiental": _urban_observation(
+                "ruido_ambiental",
+                signal_ref="noise_risk",
+                contributors=[],
+                value=0.18,
+            ),
+        }
+    )
+
+    assert [(fact.label, fact.value) for fact in facts] == [
+        ("menor exposición", "menor exposición a actividad urbana"),
+    ]
+    assert all("mayor exposición" not in fact.value for fact in facts)
+    assert all("0.18" not in fact.value for fact in facts)
+
+
 def test_narrative_context_keeps_safe_listing_fields_and_material_geography() -> None:
     explanation = _explanation()
     observation = _urban_observation(
