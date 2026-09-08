@@ -319,13 +319,26 @@ def build_narrative_context(
     )
     geography = tuple(fact for fact in classified_geography if fact.favorable)
     unfavorable = tuple(fact for fact in classified_geography if not fact.favorable)
+    geographic_keys = {key for key, _ in geography_pairs}
+    ungrounded_geographic_keys = {
+        key
+        for key, observation in observations.items()
+        if (
+            key in material_keys
+            and observation.source == "urban"
+            and observation.state == "active"
+            and key not in geographic_keys
+        )
+    }
     unfavorable_keys = {
         fact.criterion_key for fact in unfavorable if fact.criterion_key is not None
     }
     reasons = tuple(
         reason
         for reason in reasons
-        if reason.get("criterion_key") not in unfavorable_keys
+        if reason.get("criterion_key") not in (
+            unfavorable_keys | ungrounded_geographic_keys
+        )
     )
     tradeoffs = tradeoffs + tuple(
         {
@@ -421,7 +434,7 @@ def _geographic_fact(
         signal_ref=signal_ref,
         observed_value=observed_value,
         unit=unit,
-        signal_positive=_signal_value_positive(signal_ref, observed_value, unit),
+        signal_positive=_signal_value_positive(signal_ref, observation.score),
     )
 
 
@@ -512,25 +525,20 @@ def _term_matches_signal(term: str, signal_ref: str) -> bool:
     return expected is not None and term.startswith(expected)
 
 
-def _signal_value_positive(
-    signal_ref: str, value: float | int, unit: str
-) -> bool | None:
-    if unit == "places":
-        return value > 0
-    if unit != "m":
+def _signal_value_positive(signal_ref: str, value: object) -> bool | None:
+    if signal_ref not in {
+        "road_noise",
+        "transit_access",
+        "green_access",
+        "daily_convenience",
+        "cafe_lifestyle",
+        "commercial_intensity",
+        "nightlife_intensity",
+    }:
         return None
-    thresholds = {
-        "transit_access": 600,
-        "green_access": 600,
-        "cafe_lifestyle": 650,
-        "daily_convenience": 600,
-        "commercial_intensity": 1200,
-        "nightlife_intensity": 450,
-    }
-    if signal_ref == "road_noise":
-        return value >= 120
-    threshold = thresholds.get(signal_ref)
-    return value <= threshold if threshold is not None else None
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return value >= 0.5
 
 
 def _composite_signal_positive(signal_ref: str, value: object) -> bool | None:
@@ -654,14 +662,31 @@ def _evaluation_fact(
 ) -> str | None:
     priority = active_criteria.get(reason.criterion_key)
     polarity = priority.get("polarity") if isinstance(priority, Mapping) else None
-    if polarity != "negative" or reason.state != "match":
+    if reason.state != "match":
         return None
+    observation = observations.get(reason.criterion_key)
+    value = observation.value if observation is not None else None
     if reason.criterion_key == "luminosidad":
-        observation = observations.get(reason.criterion_key)
-        value = observation.value if observation is not None else None
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            if value <= 0.5:
-                return "poca luz natural"
+        if isinstance(value, str):
+            return {
+                "baja": "poca luz natural",
+                "media": "luz natural intermedia",
+                "alta": "buena luz natural",
+            }.get(value)
+        if (
+            polarity == "negative"
+            and isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value <= 0.5
+        ):
+            return "poca luz natural"
+    if reason.criterion_key == "estado_general" and isinstance(value, str):
+        return {
+            "malo": "estado general deteriorado",
+            "regular": "estado general regular",
+            "bueno": "buen estado general",
+            "muy_bueno": "buen estado general",
+        }.get(value)
     return None
 
 

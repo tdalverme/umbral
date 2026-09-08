@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { FeedbackActions } from "@/components/radar/feedback-actions";
 import { radarApi, type Explanation, type ListingDetail } from "@/lib/radar/client";
-import { caveatCopy, criterionLabel } from "@/lib/radar/criterion-labels";
+import { caveatCopy, unknownCopy } from "@/lib/radar/criterion-labels";
 import { emitDetailViewed, emitExplanationViewed, emitSourceOpened } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
 
@@ -36,7 +36,7 @@ function Breakdown({ explanation }: { explanation: Explanation }): React.ReactEl
           </ul>
         </div>
       )}
-      {explanation.missing_data.map((key) => <p key={key} className="text-muted-foreground">No puedo confirmar {criterionLabel(key)}: el aviso no lo informa.</p>)}
+      {explanation.missing_data.map((key) => <p key={key} className="text-muted-foreground">{unknownCopy(key)}</p>)}
     </CardContent>
   );
 }

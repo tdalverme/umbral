@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { snapshotBadge } from "@/lib/urban/signal-meta";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
-import { caveatCopy, criterionLabel } from "@/lib/radar/criterion-labels";
+import { caveatCopy, unknownCopy } from "@/lib/radar/criterion-labels";
 import type { Explanation, ExplanationNarrative } from "@/lib/radar/client";
 import type { RadarPoi, PoiCategory } from "@/lib/radar/urban";
 import { POI_CATEGORY_META } from "@/lib/radar/urban";
@@ -149,7 +149,7 @@ export function OpportunityDetailSheet({
                     <p key={risk.criterion_key} className="text-sm leading-relaxed text-muted-foreground">· {caveatCopy(risk.criterion_key, risk.state)}</p>
                   ))}
                   {relevantMissing.slice(0, 2).map((key) => (
-                    <p key={key} className="text-sm leading-relaxed text-muted-foreground">· No puedo confirmar {criterionLabel(key)} todavía.</p>
+                    <p key={key} className="text-sm leading-relaxed text-muted-foreground">· {unknownCopy(key)}</p>
                   ))}
                 </div>
               )}

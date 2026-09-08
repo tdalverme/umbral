@@ -43,13 +43,17 @@ export function criterionLabel(key: string): string {
   return CRITERION_LABELS[key] ?? "este criterio";
 }
 
+export function unknownCopy(key: string): string {
+  return `No puedo confirmar ${criterionLabel(key)} todavía.`;
+}
+
 export function caveatCopy(key: string, state: "match" | "mismatch" | "unknown"): string {
   const label = criterionLabel(key);
   if (key === "vida_nocturna" && state === "mismatch") {
     return "La actividad nocturna es un punto para revisar antes de decidir.";
   }
   if (state === "unknown") {
-    return `No puedo confirmar ${label} todavía.`;
+    return unknownCopy(key);
   }
   return `${label[0]?.toLocaleUpperCase("es-AR")}${label.slice(1)} es un punto para revisar antes de decidir.`;
 }

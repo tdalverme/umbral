@@ -195,6 +195,7 @@ def test_far_transit_is_not_a_favorable_geographic_match() -> None:
                 "unit": "m",
             }
         ],
+        value=0.0,
     )
 
     context = build_narrative_context(
