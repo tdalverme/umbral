@@ -8,12 +8,12 @@ from tests.support.radar import build_profile
 from tests.support.scoring import build_compilation, build_criterion
 
 from umbral.application.scoring.active_criteria import active_criterion_keys
-from umbral.application.scoring.policy import parse_policy_document
+from umbral.application.scoring.policy import ScoringPolicyDoc, parse_policy_document
 from umbral.infrastructure.criteria.contract_loader import load_matcher_types
 from umbral.infrastructure.scoring.contract_loader import load_scoring_policy_seed
 
 
-def _policy():
+def _policy() -> ScoringPolicyDoc:
     return parse_policy_document(load_scoring_policy_seed(), load_matcher_types())
 
 

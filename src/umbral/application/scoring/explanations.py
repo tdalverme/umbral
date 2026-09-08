@@ -31,6 +31,31 @@ _DISPLAY_LABELS = {
     "acceso_transporte": "acceso al transporte",
     "calma_residencial": "calma residencial",
     "ruido_ambiental": "ruido ambiental",
+    "piso": "el piso",
+    "tipo_cocina": "el tipo de cocina",
+    "barrio_seguro": "el entorno del barrio",
+    "moderno": "el estilo moderno",
+    "dormitorios": "los dormitorios",
+    "banos": "los baños",
+    "mascotas": "la aceptación de mascotas",
+    "amoblado": "el amoblamiento",
+    "ascensor": "el ascensor",
+    "cochera": "la cochera",
+    "piscina": "la piscina",
+    "precio_m2": "el precio por metro cuadrado",
+    "variacion_precio": "la variación del precio",
+    "proximidad_parque": "los espacios verdes cercanos",
+    "proximidad_compras": "los servicios cotidianos cercanos",
+    "vida_nocturna": "la actividad nocturna",
+    "zona_comercial": "la actividad comercial",
+    "caminabilidad": "la facilidad para moverte a pie",
+    "ruido_transito": "la exposición al tránsito",
+    "ruido_tren": "la exposición al tren",
+    "acceso_escuela": "las escuelas cercanas",
+    "acceso_deporte": "los espacios para hacer deporte",
+    "acceso_cultura": "los espacios culturales",
+    "acceso_bici": "la facilidad para moverte en bici",
+    "acceso_salud": "los servicios de salud cercanos",
 }
 
 
@@ -157,11 +182,13 @@ def _fallback_reason_text(reason_code: str) -> str:
         "rooms_match": "Tiene la cantidad de ambientes que buscás.",
         "surface_within_bounds": "La superficie entra en el rango que buscás.",
         "location_near_preferred": "Está en una zona que marcaste.",
-        "concept_observed": "Aparece alineado con este criterio.",
-        "concept_missing": "No termina de encajar con este criterio.",
-        "no_observation_data": "Todavía no puedo confirmar este dato.",
-        "signal_observed": "La zona muestra señales compatibles.",
-        "signal_below_threshold": "La zona queda por debajo de lo que buscás.",
+        "concept_observed": "Aparece alineado con {concept}.",
+        "concept_missing": "No termina de encajar con {concept}.",
+        "no_observation_data": "Todavía no puedo confirmar {concept}.",
+        "signal_observed": "La zona muestra señales compatibles con {concept}.",
+        "signal_below_threshold": (
+            "La zona queda por debajo de lo que buscás en {concept}."
+        ),
     }.get(reason_code, "Hay un aspecto de esta búsqueda para revisar.")
 
 

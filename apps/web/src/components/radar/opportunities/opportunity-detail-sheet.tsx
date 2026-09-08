@@ -149,7 +149,7 @@ export function OpportunityDetailSheet({
                     <p key={risk.criterion_key} className="text-sm leading-relaxed text-muted-foreground">· {caveatCopy(risk.criterion_key, risk.state)}</p>
                   ))}
                   {relevantMissing.slice(0, 2).map((key) => (
-                    <p key={key} className="text-sm leading-relaxed text-muted-foreground">· No puedo confirmar {criterionLabel(key)}: el aviso no lo informa.</p>
+                    <p key={key} className="text-sm leading-relaxed text-muted-foreground">· No puedo confirmar {criterionLabel(key)} todavía.</p>
                   ))}
                 </div>
               )}

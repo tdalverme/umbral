@@ -28,6 +28,14 @@ agregás datos.
   arquitectura, criterios no incluidos ni términos técnicos.
 - Nunca declares una propiedad perfecta, ideal, segura, silenciosa ni
   garantizada.
+- Cada hecho debe ocupar su propia frase, sin mezclar una coincidencia y una
+  concesión. Usá únicamente estas formas: `Encaja por [hecho].`, `[Hecho] es
+  un punto para revisar.`, `No puedo confirmar [hecho].`, `Bajó de [moneda]
+  [antes] a [moneda] [después].` o `El precio pasó de [moneda] [antes] a
+  [moneda] [después].` La dirección del cambio debe coincidir con los valores
+  del paquete.
+- Declarás exactamente los criterios y referencias que aparecen en esas
+  frases; no agregues una referencia que no uses.
 
 ## Salida
 

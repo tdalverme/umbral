@@ -403,6 +403,77 @@ def test_writer_rejects_authorized_unlisted_packet_descriptor(
     assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
 
 
+@pytest.mark.parametrize(
+    ("text", "used_criteria", "used_evidence_refs"),
+    [
+        (
+            "No encaja por la buena conectividad.",
+            ["acceso_transporte"],
+            ["urban:transit-1"],
+        ),
+        (
+            "Encaja por la buena conectividad. No tiene buena conectividad.",
+            ["acceso_transporte"],
+            ["urban:transit-1"],
+        ),
+        (
+            "Encaja por la buena conectividad y la superficie. "
+            "La superficie es un punto para revisar.",
+            ["acceso_transporte", "superficie"],
+            ["urban:transit-1", "listing_field:surface_m2"],
+        ),
+    ],
+)
+def test_writer_rejects_semantic_contradictions(
+    scripted_gateway: ScriptedGateway,
+    context: ExplanationNarrativeContext,
+    text: str,
+    used_criteria: list[str],
+    used_evidence_refs: list[str],
+) -> None:
+    scripted_gateway.output = {
+        "text": text,
+        "used_criteria": used_criteria,
+        "used_evidence_refs": used_evidence_refs,
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_rejects_inverted_price_transition(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    context = replace(
+        context,
+        price_changes=({"before": 900, "after": 800, "currency": "USD"},),
+        allowed_evidence_refs=(*context.allowed_evidence_refs, "listing_field:price"),
+    )
+    scripted_gateway.output = {
+        "text": "Encaja por la buena conectividad. Subió de USD 800 a USD 900.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1", "listing_field:price"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_rejects_declared_reference_without_rendered_claim(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    context = replace(
+        context,
+        price_changes=({"before": 900, "after": 800, "currency": "USD"},),
+        allowed_evidence_refs=(*context.allowed_evidence_refs, "listing_field:price"),
+    )
+    scripted_gateway.output = {
+        "text": "Encaja por la buena conectividad.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1", "listing_field:price"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
 def test_fallback_explains_reason_and_tradeoff_without_jargon(
     context: ExplanationNarrativeContext,
 ) -> None:

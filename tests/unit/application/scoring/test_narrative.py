@@ -151,6 +151,165 @@ def test_geographic_facts_translate_observed_distances_without_signal_scores() -
     assert all("0.4" not in fact.value for fact in facts)
 
 
+def test_geographic_facts_do_not_turn_zero_counts_into_presence() -> None:
+    facts = geographic_facts(
+        {
+            "proximidad_cafes": _urban_observation(
+                "proximidad_cafes",
+                signal_ref="cafe_lifestyle",
+                contributors=[
+                    {
+                        "term": "cafe.count_300m",
+                        "observed_value": 0,
+                        "unit": "places",
+                    },
+                ],
+                value=0.0,
+            )
+        }
+    )
+
+    assert facts == ()
+
+
+def test_far_transit_is_not_a_favorable_geographic_match() -> None:
+    reason = ExplanationReason(
+        criterion_key="acceso_transporte",
+        state="match",
+        score=1.0,
+        confidence=0.9,
+        contribution=0.2,
+        evidence_level="strong",
+        reason_code="signal_observed",
+        evidence_refs=({"kind": "observation", "ref": "transit"},),
+        text="transporte",
+    )
+    explanation = replace(_explanation(), reasons=(reason,))
+    observation = _urban_observation(
+        "acceso_transporte",
+        signal_ref="transit_access",
+        contributors=[
+            {
+                "term": "subway_station.nearest_m",
+                "observed_value": 2000,
+                "unit": "m",
+            }
+        ],
+    )
+
+    context = build_narrative_context(
+        explanation=explanation,
+        listing={},
+        active_criteria={
+            "acceso_transporte": {
+                "label": "buena conectividad",
+                "polarity": "positive",
+            }
+        },
+        observations={"acceso_transporte": observation},
+    )
+
+    assert context.geography == ()
+    assert [item["fact"] for item in context.tradeoffs] == [
+        "con subte a una distancia mayor"
+    ]
+    assert not deterministic_narrative(context).text.startswith(
+        "Encaja por con subte"
+    )
+
+
+def test_v2_geographic_contributors_keep_their_contract_identity() -> None:
+    observations = {
+        "proximidad_parque": _urban_observation(
+            "proximidad_parque",
+            signal_ref="green_access",
+            contributors=[
+                {
+                    "term": "green_space.nearest_m",
+                    "observed_value": 150,
+                    "unit": "m",
+                }
+            ],
+        ),
+        "proximidad_compras": _urban_observation(
+            "proximidad_compras",
+            signal_ref="daily_convenience",
+            contributors=[
+                {
+                    "term": "supermarket.count_600m",
+                    "observed_value": 4,
+                    "unit": "places",
+                }
+            ],
+        ),
+        "zona_comercial": _urban_observation(
+            "zona_comercial",
+            signal_ref="commercial_intensity",
+            contributors=[
+                {
+                    "term": "restaurant.count_300m",
+                    "observed_value": 4,
+                    "unit": "places",
+                }
+            ],
+        ),
+    }
+
+    facts = geographic_facts(observations)
+
+    assert [fact.signal_ref for fact in facts] == [
+        "green_access",
+        "daily_convenience",
+        "commercial_intensity",
+    ]
+
+
+def test_negative_luminosidad_fallback_keeps_the_observed_direction() -> None:
+    reason = ExplanationReason(
+        criterion_key="luminosidad",
+        state="match",
+        score=0.9,
+        confidence=0.9,
+        contribution=0.2,
+        evidence_level="strong",
+        reason_code="concept_observed",
+        evidence_refs=({"kind": "observation", "ref": "light"},),
+        text="buena luz natural",
+    )
+    context = build_narrative_context(
+        explanation=replace(_explanation(), reasons=(reason,)),
+        listing={},
+        active_criteria={
+            "luminosidad": {
+                "label": "buena luz natural",
+                "polarity": "negative",
+            }
+        },
+        observations={
+            "luminosidad": ListingObservation(
+                observation_id=uuid4(),
+                listing_id=uuid4(),
+                concept_key="luminosidad",
+                matcher_type="semantic_feature",
+                value=0.1,
+                score=0.1,
+                confidence=0.9,
+                evidence={},
+                source="model",
+                extraction_version_id=None,
+                state="active",
+                failure_code=None,
+                recomputation_run_id=None,
+                created_at=datetime.now(timezone.utc),
+                correlation_id=uuid4(),
+            )
+        },
+    )
+
+    assert "poca luz natural" in deterministic_narrative(context).text
+    assert "buena luz natural" not in deterministic_narrative(context).text
+
+
 def test_geographic_facts_use_proxy_safe_language_for_composite_signals() -> None:
     facts = geographic_facts(
         {

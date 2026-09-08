@@ -86,7 +86,22 @@ describe("OpportunityDetailSheet", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /antes de decidir/i }));
 
-    expect(screen.getByText(/La zona parece más activa de noche que lo que venís priorizando\./)).toBeVisible();
+    expect(screen.getByText(/La actividad nocturna es un punto para revisar antes de decidir\./)).toBeVisible();
     expect(screen.queryByText(/nightlife_intensity/i)).not.toBeInTheDocument();
+  });
+
+  it("mantiene neutral la causa de un dato desconocido", () => {
+    render(
+      <OpportunityDetailSheet
+        opportunity={opportunity}
+        explanation={{ ...explanation, risks: [], missing_data: ["vida_nocturna"] }}
+        onClose={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /antes de decidir/i }));
+
+    expect(screen.getByText(/No puedo confirmar actividad nocturna todavía\./)).toBeVisible();
+    expect(screen.queryByText(/el aviso no lo informa/i)).not.toBeInTheDocument();
   });
 });

@@ -100,8 +100,12 @@ def deterministic_narrative(
         item for item in context.reasons if _string(item.get("label"))
     ][:3]
     reasons = [
-        label for item in selected_reasons
-        if (label := _string(item.get("label"))) is not None
+        descriptor
+        for item in selected_reasons
+        if (
+            descriptor := _string(item.get("fact"))
+            or _string(item.get("label"))
+        )
     ]
     selected_geography = [fact for fact in context.geography if fact.favorable][
         : max(0, 3 - len(reasons))
@@ -274,12 +278,12 @@ def build_narrative_context(
     material = select_material_evaluations(explanation, active_criteria)
     material_keys = {item.criterion_key for item in material}
     reasons = tuple(
-        _evaluation_packet(reason, active_criteria)
+        _evaluation_packet(reason, active_criteria, observations)
         for reason in material
         if isinstance(reason, ExplanationReason) and reason.state == "match"
     )
     tradeoffs = tuple(
-        _evaluation_packet(reason, active_criteria)
+        _evaluation_packet(reason, active_criteria, observations)
         for reason in material
         if isinstance(reason, ExplanationReason) and reason.state == "mismatch"
     )
@@ -395,6 +399,11 @@ def _geographic_fact(
             confidence=observation.confidence,
             criterion_key=observation.concept_key,
             signal_ref=signal_ref,
+            observed_value=observation.value
+            if isinstance(observation.value, (int, float))
+            and not isinstance(observation.value, bool)
+            else None,
+            signal_positive=_composite_signal_positive(signal_ref, observation.value),
         )
     contributor = _first_factual_contributor(observation, signal_ref)
     if contributor is None:
@@ -410,6 +419,9 @@ def _geographic_fact(
         confidence=observation.confidence,
         criterion_key=observation.concept_key,
         signal_ref=signal_ref,
+        observed_value=observed_value,
+        unit=unit,
+        signal_positive=_signal_value_positive(signal_ref, observed_value, unit),
     )
 
 
@@ -425,6 +437,8 @@ def _geography_favorable(
 
 
 def _geographic_signal_positive(fact: GeographicFact) -> bool | None:
+    if fact.signal_positive is not None:
+        return fact.signal_positive
     if fact.signal_ref in {
         "transit_access",
         "green_access",
@@ -462,21 +476,71 @@ def _first_factual_contributor(
             and isinstance(term, str)
             and _term_matches_signal(term, signal_ref)
         ):
-            return value, unit, term
+            if unit == "places" and value <= 0:
+                continue
+            phrase = _phrase(signal_ref, value, unit, term)
+            if phrase is not None:
+                return value, unit, term
     return None
 
 
 def _term_matches_signal(term: str, signal_ref: str) -> bool:
     expected = {
-        "transit_access": ("subway_station.", "train_station.", "rail_station."),
+        "transit_access": (
+            "bus_stop.",
+            "subway_station.",
+            "train_station.",
+            "rail_station.",
+        ),
         "road_noise": ("major_road.",),
-        "green_access": ("park.",),
-        "daily_convenience": ("service.",),
+        "green_access": ("green_space.",),
+        "daily_convenience": (
+            "supermarket.",
+            "pharmacy.",
+            "convenience.",
+            "health.",
+        ),
         "cafe_lifestyle": ("cafe.",),
-        "commercial_intensity": ("commercial.",),
+        "commercial_intensity": (
+            "restaurant.",
+            "cafe.",
+            "supermarket.",
+            "shopping_mall.",
+        ),
         "nightlife_intensity": ("nightlife.",),
     }.get(signal_ref)
     return expected is not None and term.startswith(expected)
+
+
+def _signal_value_positive(
+    signal_ref: str, value: float | int, unit: str
+) -> bool | None:
+    if unit == "places":
+        return value > 0
+    if unit != "m":
+        return None
+    thresholds = {
+        "transit_access": 600,
+        "green_access": 600,
+        "cafe_lifestyle": 650,
+        "daily_convenience": 600,
+        "commercial_intensity": 1200,
+        "nightlife_intensity": 450,
+    }
+    if signal_ref == "road_noise":
+        return value >= 120
+    threshold = thresholds.get(signal_ref)
+    return value <= threshold if threshold is not None else None
+
+
+def _composite_signal_positive(signal_ref: str, value: object) -> bool | None:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    if signal_ref == "residential_calm":
+        return value >= 0.5
+    if signal_ref == "noise_risk":
+        return value >= 0.5
+    return None
 
 
 def _composite_fact(signal_ref: str, value: object) -> tuple[str, str] | None:
@@ -519,6 +583,24 @@ def _phrase(
             if value <= 600
             else "espacio verde a una distancia mayor"
         )
+    if signal_ref == "cafe_lifestyle" and unit == "m":
+        return (
+            "cafés relativamente cerca"
+            if value <= 650
+            else "cafés a una distancia mayor"
+        )
+    if signal_ref == "daily_convenience" and unit == "m":
+        return (
+            "servicios cotidianos relativamente cerca"
+            if value <= 600
+            else "servicios cotidianos a una distancia mayor"
+        )
+    if signal_ref == "commercial_intensity" and unit == "m":
+        return (
+            "actividad comercial relativamente cerca"
+            if value <= 1200
+            else "actividad comercial a una distancia mayor"
+        )
     if signal_ref == "daily_convenience" and unit == "places":
         return (
             "varios servicios cotidianos cerca"
@@ -549,8 +631,9 @@ def _phrase(
 def _evaluation_packet(
     reason: ExplanationReason,
     active_criteria: Mapping[str, object],
+    observations: Mapping[str, ListingObservation],
 ) -> Mapping[str, object]:
-    return {
+    packet: dict[str, object] = {
         "criterion_key": reason.criterion_key,
         "label": _label(reason.criterion_key, active_criteria),
         "state": reason.state,
@@ -558,6 +641,28 @@ def _evaluation_packet(
         "confidence": reason.confidence,
         "evidence_refs": _evidence_refs(reason.evidence_refs),
     }
+    fact = _evaluation_fact(reason, active_criteria, observations)
+    if fact is not None:
+        packet["fact"] = fact
+    return packet
+
+
+def _evaluation_fact(
+    reason: ExplanationReason,
+    active_criteria: Mapping[str, object],
+    observations: Mapping[str, ListingObservation],
+) -> str | None:
+    priority = active_criteria.get(reason.criterion_key)
+    polarity = priority.get("polarity") if isinstance(priority, Mapping) else None
+    if polarity != "negative" or reason.state != "match":
+        return None
+    if reason.criterion_key == "luminosidad":
+        observation = observations.get(reason.criterion_key)
+        value = observation.value if observation is not None else None
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if value <= 0.5:
+                return "poca luz natural"
+    return None
 
 
 def _risk_packet(

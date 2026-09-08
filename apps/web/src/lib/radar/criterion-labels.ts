@@ -46,10 +46,10 @@ export function criterionLabel(key: string): string {
 export function caveatCopy(key: string, state: "match" | "mismatch" | "unknown"): string {
   const label = criterionLabel(key);
   if (key === "vida_nocturna" && state === "mismatch") {
-    return "La zona parece más activa de noche que lo que venís priorizando.";
+    return "La actividad nocturna es un punto para revisar antes de decidir.";
   }
   if (state === "unknown") {
-    return `No puedo confirmar ${label}: el aviso no lo informa.`;
+    return `No puedo confirmar ${label} todavía.`;
   }
   return `${label[0]?.toLocaleUpperCase("es-AR")}${label.slice(1)} es un punto para revisar antes de decidir.`;
 }

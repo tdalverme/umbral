@@ -135,6 +135,9 @@ class GeographicFact:
     criterion_key: str | None = None
     favorable: bool = True
     signal_ref: str | None = None
+    observed_value: float | int | None = None
+    unit: str | None = None
+    signal_positive: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)

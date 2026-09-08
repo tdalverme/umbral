@@ -99,3 +99,32 @@ def test_unknown_is_kept_only_when_the_active_criterion_matters() -> None:
 
     assert explanation.missing_data == ("luminosidad",)
     assert explanation.risks[0].criterion_key == "luminosidad"
+
+
+def test_fallback_reason_text_uses_human_labels_for_supported_concepts() -> None:
+    supported = (
+        "piso",
+        "tipo_cocina",
+        "vida_nocturna",
+        "proximidad_parque",
+        "mascotas",
+        "acceso_salud",
+    )
+
+    for key in supported:
+        explanation = build_explanation(
+            search_profile_id=PROFILE_ID,
+            run_id=RUN_ID,
+            listing_id=LISTING_ID,
+            score=0.8,
+            confidence=0.9,
+            evaluations=(_evaluation(key),),
+            policy=POLICY,
+            templates={},
+            satisfied_filters=(),
+            profile_version_id=PROFILE_VERSION_ID,
+            active_criterion_keys=frozenset({key}),
+        )
+
+        assert explanation.reasons[0].text != "Aparece alineado con este criterio."
+        assert "este criterio" not in explanation.reasons[0].text

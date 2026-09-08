@@ -751,7 +751,9 @@ class RadarService:
                             "_narrative_listing": dict(candidate.narrative_listing),
                             "_narrative_observations": {
                                 key: dict(value)
-                                for key, value in candidate.narrative_observations.items()
+                                for key, value in (
+                                    candidate.narrative_observations.items()
+                                )
                             },
                         },
                     )

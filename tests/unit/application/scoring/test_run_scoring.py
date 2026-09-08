@@ -119,7 +119,7 @@ def test_scoring_does_not_change_when_unasked_default_signal_changes() -> None:
         criteria=(),
     )
     policy = parse_policy_document(load_scoring_policy_seed(), load_matcher_types())
-    common = dict(
+    common: dict[str, Any] = dict(
         profile=profile,
         compilation=compilation,
         candidates=(listing,),

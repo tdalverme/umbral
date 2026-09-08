@@ -12,6 +12,7 @@ import type { Explanation, ExplanationNarrative, MatchItem, SearchProfile } from
 import { radarApi } from "@/lib/radar/client";
 import type { RadarPoi } from "@/lib/radar/urban";
 import { cn } from "@/lib/utils";
+import { shouldResetNarrative } from "@/lib/radar/narrative-selection";
 
 export function RadarShell({
   radars,
@@ -59,8 +60,10 @@ export function RadarShell({
     : null;
 
   const selectOpportunity = (id: string | null) => {
-    setNarrativeResult(null);
-    setNarrativeLoading(id !== null);
+    if (shouldResetNarrative(narrativeResult, id, selectedExplanation?.run_id)) {
+      setNarrativeResult(null);
+      setNarrativeLoading(id !== null);
+    }
     setSelectedId(id);
   };
 

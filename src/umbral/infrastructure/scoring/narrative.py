@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import jsonschema  # type: ignore[import-untyped]
 
@@ -33,64 +34,19 @@ _UNSAFE_GEOGRAPHY_RE = re.compile(
     re.IGNORECASE,
 )
 _RAW_KEY_RE = re.compile(r"\b[a-z][a-z0-9]*_[a-z0-9_]*\b", re.IGNORECASE)
-_PRICE_COPY_RE = re.compile(r"(?:USD|ARS|\$)\s?[\d.]+", re.IGNORECASE)
-_COPY_TOKEN_RE = re.compile(r"[a-záéíóúüñ0-9]+", re.IGNORECASE)
-_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
-_TRADEOFF_MARKERS = (
-    "punto para revisar",
-    "conviene revisar",
-    "es una concesión",
-    "concesión",
-)
-_MATCH_MARKERS = ("encaja por", "encaja con")
-_UNKNOWN_MARKERS = ("no puedo confirmar", "todavía no puedo confirmar")
-_VOICE_WORDS = frozenset(
-    {
-        "a",
-        "además",
-        "algo",
-        "al",
-        "aunque",
-        "bajó",
-        "cerca",
-        "con",
-        "confirmar",
-        "conviene",
-        "de",
-        "el",
-        "en",
-        "encaja",
-        "es",
-        "está",
-        "hay",
-        "la",
-        "las",
-        "lo",
-        "los",
-        "más",
-        "menos",
-        "no",
-        "para",
-        "parte",
-        "pasó",
-        "precio",
-        "poco",
-        "por",
-        "punto",
-        "puedo",
-        "que",
-        "revisar",
-        "se",
-        "sin",
-        "son",
-        "subió",
-        "también",
-        "tiene",
-        "un",
-        "una",
-        "y",
-    }
-)
+
+ClaimPlacement = Literal["match", "tradeoff", "unknown", "price"]
+
+
+@dataclass(frozen=True, slots=True)
+class _RenderedClaim:
+    """One deterministic, packet-backed sentence accepted from managed output."""
+
+    criterion_key: str | None
+    evidence_refs: tuple[str, ...]
+    placement: ClaimPlacement
+    descriptor: str
+    rendered: str
 
 
 class ManagedExplanationNarrativeWriter:
@@ -230,185 +186,187 @@ def _claims_match_context(
     evidence_refs: list[object],
     context: ExplanationNarrativeContext,
 ) -> bool:
-    lowered = text.casefold()
-    packet_groups = (
+    claims = _rendered_claims(criteria, evidence_refs, context)
+    if claims is None:
+        return False
+    return text.strip() == " ".join(claim.rendered for claim in claims)
+
+
+def _rendered_claims(
+    criteria: list[object],
+    evidence_refs: list[object],
+    context: ExplanationNarrativeContext,
+) -> tuple[_RenderedClaim, ...] | None:
+    selected_criteria = tuple(value for value in criteria if isinstance(value, str))
+    submitted_refs = tuple(value for value in evidence_refs if isinstance(value, str))
+    if len(selected_criteria) != len(set(selected_criteria)):
+        return None
+    if len(submitted_refs) != len(set(submitted_refs)):
+        return None
+    criterion_refs = {
+        criterion: set(context.criterion_evidence_refs.get(criterion, ()))
+        for criterion in selected_criteria
+    }
+    if any(
+        not refs or not refs.intersection(submitted_refs)
+        for refs in criterion_refs.values()
+    ):
+        return None
+
+    claims: list[_RenderedClaim] = []
+    seen: set[tuple[str | None, tuple[str, ...], ClaimPlacement, str]] = set()
+
+    def add_claim(
+        criterion_key: str | None,
+        refs: tuple[str, ...],
+        placement: ClaimPlacement,
+        descriptor: str,
+    ) -> None:
+        if not refs or not descriptor:
+            return
+        identity = (criterion_key, refs, placement, descriptor)
+        if identity in seen:
+            return
+        seen.add(identity)
+        claims.append(
+            _RenderedClaim(
+                criterion_key=criterion_key,
+                evidence_refs=refs,
+                placement=placement,
+                descriptor=descriptor,
+                rendered=_render_claim(placement, descriptor),
+            )
+        )
+
+    for default_placement, packets in (
         ("match", context.reasons),
         ("tradeoff", context.tradeoffs),
         ("unknown", context.unknowns),
-    )
-    submitted_refs = {
-        value for value in evidence_refs if isinstance(value, str)
-    }
-    if _PRICE_COPY_RE.search(text) and not context.price_changes:
-        return False
-    if not _copy_is_closed_world(text, criteria, submitted_refs, context):
-        return False
-    for criterion in criteria:
-        if not isinstance(criterion, str):
-            return False
-        criterion_refs = set(context.criterion_evidence_refs.get(criterion, ()))
-        if not criterion_refs or not criterion_refs.intersection(submitted_refs):
-            return False
-        packet_grounded = any(
-            _packet_claim_is_grounded(
-                packet,
-                placement,
-                criterion,
-                criterion_refs,
-                submitted_refs,
-                text,
+    ):
+        for packet in packets:
+            packet_refs = tuple(
+                ref for ref in _packet_refs(packet) if ref in submitted_refs
             )
-            for placement, packets in packet_groups
-            for packet in packets
-        )
-        geography_grounded = any(
-            fact.criterion_key == criterion
-            and fact.source_ref in criterion_refs
-            and fact.source_ref in submitted_refs
-            and _descriptor_has_placement(
-                text,
-                fact.value,
-                "match" if fact.favorable else "tradeoff",
+            packet_placement = packet.get("placement", default_placement)
+            if packet_placement not in {"match", "tradeoff", "unknown"}:
+                return None
+            packet_claim_placement = cast(ClaimPlacement, packet_placement)
+            packet_key = packet.get("criterion_key")
+            if isinstance(packet_key, str):
+                candidate_keys: tuple[str, ...] = (
+                    (packet_key,) if packet_key in selected_criteria else ()
+                )
+            else:
+                candidate_keys = tuple(
+                    criterion
+                    for criterion in selected_criteria
+                    if set(packet_refs).intersection(criterion_refs[criterion])
+                )
+            descriptor = packet.get("fact")
+            if not isinstance(descriptor, str):
+                descriptor = packet.get("label")
+            if not isinstance(descriptor, str):
+                continue
+            for criterion in candidate_keys:
+                refs = tuple(
+                    ref for ref in packet_refs if ref in criterion_refs[criterion]
+                )
+                add_claim(criterion, refs, packet_claim_placement, descriptor)
+
+    for fact in context.geography:
+        if fact.source_ref not in submitted_refs:
+            continue
+        candidate_keys = (
+            (fact.criterion_key,)
+            if fact.criterion_key in selected_criteria
+            else tuple(
+                criterion
+                for criterion in selected_criteria
+                if fact.source_ref in criterion_refs[criterion]
             )
-            for fact in context.geography
         )
-        if not packet_grounded and not geography_grounded:
-            return False
-    for fact in context.geography:
-        if fact.criterion_key in criteria and not _descriptor_has_placement(
-            text,
-            fact.value,
-            "match" if fact.favorable else "tradeoff",
-        ):
-            return False
-    if re.search(r"(?:baj[oó]|pas[oó]|subi[oó]|aument[oó])", lowered):
-        if not context.price_changes:
-            return False
-        if (
-            not isinstance(evidence_refs, list)
-            or "listing_field:price" not in evidence_refs
-        ):
-            return False
-        if not all(
-            _price_mentioned(change, text) for change in context.price_changes
-        ):
-            return False
-    return True
+        fact_placement: ClaimPlacement = (
+            "match" if fact.favorable else "tradeoff"
+        )
+        for criterion in candidate_keys:
+            if criterion is None:
+                continue
+            if fact.source_ref in criterion_refs[criterion]:
+                add_claim(
+                    criterion,
+                    (fact.source_ref,),
+                    fact_placement,
+                    fact.value,
+                )
 
-
-def _packet_claim_is_grounded(
-    packet: Mapping[str, object],
-    default_placement: str,
-    criterion: str,
-    criterion_refs: set[str],
-    submitted_refs: set[str],
-    text: str,
-) -> bool:
-    packet_key = packet.get("criterion_key")
-    packet_refs = set(_packet_refs(packet))
-    if packet_key is not None and packet_key != criterion:
-        return False
-    if not packet_refs.intersection(criterion_refs, submitted_refs):
-        return False
-    descriptor = packet.get("fact")
-    if not isinstance(descriptor, str):
-        descriptor = packet.get("label")
-    if not isinstance(descriptor, str):
-        return False
-    placement = packet.get("placement")
-    if not isinstance(placement, str):
-        placement = default_placement
-    return _descriptor_has_placement(text, descriptor, placement)
-
-
-def _descriptor_has_placement(
-    text: str, descriptor: str, placement: str
-) -> bool:
-    descriptor_lower = descriptor.casefold()
-    for sentence in _SENTENCE_RE.split(text.casefold()):
-        if descriptor_lower not in sentence:
-            continue
-        has_match = any(marker in sentence for marker in _MATCH_MARKERS)
-        has_tradeoff = any(marker in sentence for marker in _TRADEOFF_MARKERS)
-        has_unknown = any(marker in sentence for marker in _UNKNOWN_MARKERS)
-        if placement == "match" and has_match and not has_tradeoff:
-            return True
-        if placement == "tradeoff" and has_tradeoff and not has_match:
-            return True
-        if placement == "unknown" and has_unknown:
-            return True
-    return False
-
-
-def _copy_is_closed_world(
-    text: str,
-    criteria: list[object],
-    submitted_refs: set[str],
-    context: ExplanationNarrativeContext,
-) -> bool:
-    allowed = _authorized_copy_tokens(criteria, submitted_refs, context)
-    return all(token in allowed for token in _COPY_TOKEN_RE.findall(text.casefold()))
-
-
-def _authorized_copy_tokens(
-    criteria: list[object],
-    submitted_refs: set[str],
-    context: ExplanationNarrativeContext,
-) -> set[str]:
-    values: list[str] = []
-    selected_criteria = {value for value in criteria if isinstance(value, str)}
-    criterion_refs = {
-        ref
-        for criterion in selected_criteria
-        for ref in context.criterion_evidence_refs.get(criterion, ())
-    }
-    packets = (*context.reasons, *context.tradeoffs, *context.unknowns)
-    for packet in packets:
-        packet_refs = set(_packet_refs(packet))
-        packet_key = packet.get("criterion_key")
-        if (
-            not packet_refs.intersection(submitted_refs, criterion_refs)
-            or (isinstance(packet_key, str) and packet_key not in selected_criteria)
-        ):
-            continue
-        for key in ("label", "fact"):
-            value = packet.get(key)
-            if isinstance(value, str):
-                values.append(value)
-    for fact in context.geography:
-        if (
-            fact.criterion_key not in selected_criteria
-            or fact.source_ref not in submitted_refs
-            or fact.source_ref not in criterion_refs
-        ):
-            continue
-        values.extend((fact.label, fact.value))
     if "listing_field:price" in submitted_refs:
         for change in context.price_changes:
-            currency = change.get("currency")
-            before = change.get("before")
-            after = change.get("after")
-            if isinstance(currency, str):
-                values.append(currency)
-            for value in (before, after):
-                if isinstance(value, (int, float)) and not isinstance(value, bool):
-                    values.append(f"{value:,.0f}".replace(",", "."))
-    return set(_COPY_TOKEN_RE.findall(" ".join(values).casefold())) | _VOICE_WORDS
+            rendered = _render_price_change(change)
+            if rendered is not None:
+                claims.append(
+                    _RenderedClaim(
+                        criterion_key=None,
+                        evidence_refs=("listing_field:price",),
+                        placement="price",
+                        descriptor=rendered,
+                        rendered=rendered,
+                    )
+                )
+                break
+
+    claimed_criteria = {
+        claim.criterion_key for claim in claims if claim.criterion_key is not None
+    }
+    claimed_refs = {
+        ref for claim in claims for ref in claim.evidence_refs
+    }
+    if claimed_criteria != set(selected_criteria):
+        return None
+    if claimed_refs != set(submitted_refs):
+        return None
+    return tuple(claims)
 
 
-def _price_mentioned(change: Mapping[str, object], text: str) -> bool:
+def _render_claim(
+    placement: ClaimPlacement,
+    descriptor: str,
+) -> str:
+    if placement == "match":
+        return f"Encaja por {_with_article(descriptor)}."
+    if placement == "tradeoff":
+        return f"{_capitalize(_with_article(descriptor))} es un punto para revisar."
+    if placement == "unknown":
+        return f"No puedo confirmar {descriptor}."
+    return descriptor
+
+
+def _render_price_change(change: Mapping[str, object]) -> str | None:
     before = change.get("before")
     after = change.get("after")
     currency = change.get("currency")
     if not isinstance(before, (int, float)) or isinstance(before, bool):
-        return False
+        return None
     if not isinstance(after, (int, float)) or isinstance(after, bool):
-        return False
-    if not isinstance(currency, str):
-        return False
-    def token(value: int | float) -> str:
-        return f"{value:,.0f}".replace(",", ".")
-    return all(f"{currency} {token(value)}" in text for value in (before, after))
+        return None
+    if not isinstance(currency, str) or before == after:
+        return None
+    before_text = f"{before:,.0f}".replace(",", ".")
+    after_text = f"{after:,.0f}".replace(",", ".")
+    if after < before:
+        return f"Bajó de {currency} {before_text} a {currency} {after_text}."
+    return f"El precio pasó de {currency} {before_text} a {currency} {after_text}."
+
+
+def _with_article(descriptor: str) -> str:
+    article = {
+        "buena conectividad": "la",
+        "superficie": "la",
+    }.get(descriptor.casefold())
+    return f"{article} {descriptor}" if article else descriptor
+
+
+def _capitalize(value: str) -> str:
+    return value[:1].upper() + value[1:]
 
 
 def _packet_refs(packet: Mapping[str, object]) -> tuple[str, ...]:
