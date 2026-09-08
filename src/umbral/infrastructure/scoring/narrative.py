@@ -1,0 +1,226 @@
+"""Managed, bounded adapter for selected-opportunity narrative copy."""
+
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import Mapping
+from pathlib import Path
+
+import jsonschema  # type: ignore[import-untyped]
+
+from umbral.application.agent.ports import ModelGateway
+from umbral.application.conversation.voice_check import lint_voice
+from umbral.application.scoring.contracts import ExplanationNarrativeContext
+from umbral.application.scoring.narrative import (
+    ExplanationNarrative,
+    deterministic_narrative,
+)
+
+_VOICE_HARD_VIOLATIONS = (
+    "VOZ-06",
+    "VOZ-07:emoji",
+    "VOZ-07:tech_jargon",
+    "VOZ-08:certainty_without_evidence",
+    "VOZ-07:multiple_exclamations",
+    "VOZ-07:too_many_exclamations",
+)
+_TECHNICAL_COPY_RE = re.compile(
+    r"\b(?:criterio|criterios|evidencia|evidencias|matcher|ranking|"
+    r"normalizad[oa]s?|arquitectura|modelo|ia)\b",
+    re.IGNORECASE,
+)
+_UNSAFE_GEOGRAPHY_RE = re.compile(
+    r"\b(?:perfect[oa]?|ideal|safe|segur[oa]|silent|silencios[oa]|"
+    r"sin tr[aá]fico|garantizad[oa])\b",
+    re.IGNORECASE,
+)
+
+
+class ManagedExplanationNarrativeWriter:
+    """Accept only schema-valid, context-authorized presentation copy."""
+
+    def __init__(
+        self,
+        *,
+        gateway: ModelGateway,
+        schema: Mapping[str, object],
+        prompt_version: str,
+        model_version: str,
+        schema_version: str = "explanation-narrative-v1",
+        system_prompt: str | None = None,
+    ) -> None:
+        self.gateway = gateway
+        self.schema = schema
+        self.prompt_version = prompt_version
+        self.model_version = model_version
+        self.schema_version = schema_version
+        self.system_prompt = system_prompt or _load_narrative_prompt()
+
+    def write(self, context: ExplanationNarrativeContext) -> ExplanationNarrative:
+        fallback = deterministic_narrative(
+            context,
+            prompt_version=self.prompt_version,
+        )
+        try:
+            result = self.gateway.generate_structured(
+                messages=_messages(self.system_prompt, context),
+                schema=self.schema,
+                schema_version=self.schema_version,
+                prompt_version=self.prompt_version,
+                model_version=self.model_version,
+            )
+        except Exception:
+            return fallback
+        if result.status != "success" or result.content is None:
+            return fallback
+        content = result.content
+        if not _valid_content(content, self.schema, context):
+            return fallback
+        return ExplanationNarrative(
+            text=content["text"],
+            used_criteria=tuple(content["used_criteria"]),
+            used_evidence_refs=tuple(content["used_evidence_refs"]),
+            source="managed",
+            prompt_version=self.prompt_version,
+            model_version=self.model_version,
+        )
+
+
+def _messages(
+    system_prompt: str,
+    context: ExplanationNarrativeContext,
+) -> tuple[Mapping[str, object], ...]:
+    return (
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "listing": context.listing,
+                    "active_priorities": context.active_priorities,
+                    "reasons": context.reasons,
+                    "tradeoffs": context.tradeoffs,
+                    "unknowns": context.unknowns,
+                    "geography": [
+                        {
+                            "label": fact.label,
+                            "fact": fact.value,
+                            "evidence_refs": [fact.source_ref],
+                        }
+                        for fact in context.geography
+                    ],
+                    "price_changes": context.price_changes,
+                    "allowed_criteria": context.allowed_criteria,
+                    "allowed_evidence_refs": context.allowed_evidence_refs,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        },
+    )
+
+
+def _valid_content(
+    content: Mapping[str, object],
+    schema: Mapping[str, object],
+    context: ExplanationNarrativeContext,
+) -> bool:
+    try:
+        jsonschema.validate(content, schema)
+    except jsonschema.ValidationError:
+        return False
+    text = content.get("text")
+    criteria = content.get("used_criteria")
+    evidence_refs = content.get("used_evidence_refs")
+    if not isinstance(text, str):
+        return False
+    if not isinstance(criteria, list) or not all(
+        isinstance(value, str) and value in context.allowed_criteria
+        for value in criteria
+    ):
+        return False
+    if not isinstance(evidence_refs, list) or not all(
+        isinstance(value, str) and value in context.allowed_evidence_refs
+        for value in evidence_refs
+    ):
+        return False
+    if _TECHNICAL_COPY_RE.search(text) or _UNSAFE_GEOGRAPHY_RE.search(text):
+        return False
+    if any(_raw_key_in_text(key, text, context) for key in context.allowed_criteria):
+        return False
+    violations = lint_voice(text)
+    return not any(
+        violation.startswith(prefix)
+        for violation in violations
+        for prefix in _VOICE_HARD_VIOLATIONS
+    )
+
+
+def _raw_key_in_text(
+    key: str,
+    text: str,
+    context: ExplanationNarrativeContext,
+) -> bool:
+    if key in _human_priority_labels(context):
+        return False
+    return bool(key and re.search(rf"(?<!\w){re.escape(key)}(?!\w)", text, re.I))
+
+
+def _human_priority_labels(context: ExplanationNarrativeContext) -> set[str]:
+    priorities = {
+        label
+        for priority in context.active_priorities
+        if isinstance(label := priority.get("label"), str)
+    }
+    packets = context.reasons + context.tradeoffs + context.unknowns
+    return priorities | {
+        label for packet in packets if isinstance(label := packet.get("label"), str)
+    }
+
+
+def _load_narrative_prompt() -> str:
+    module_root = Path(__file__).resolve().parents[2]
+    prompt = _read_text(module_root / "agent" / "prompts" / "explanation-narrative.md")
+    product = _product_voice_context(_read_text(module_root.parents[1] / "PRODUCT.md"))
+    if prompt and product:
+        return (
+            f"{prompt}\n\n## Contexto de producto — PRODUCT.md\n\n{product}\n\n"
+            "Este contexto es interno: aplicá su voz, sin exponer etiquetas internas."
+        )
+    return prompt
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _product_voice_context(product: str) -> str:
+    sections = {
+        "## Product Purpose": ("**Por qué existe:",),
+        "## Brand Commitments": (
+            "**Personalidad y voz:",
+            "**Principios de escritura y patrones de agente",
+            "**Reglas para explicar coincidencias:",
+            "**Arquitectura verbal:",
+        ),
+        "## Product Principles": None,
+        "## Accessibility & Inclusion": ("- **Inclusión y lenguaje:",),
+    }
+    selected: list[str] = []
+    active: str | None = None
+    for line in product.splitlines():
+        if line.startswith("## "):
+            active = line if line in sections else None
+            if active:
+                selected.append(line)
+            continue
+        prefixes = sections.get(active) if active else None
+        if active == "## Product Principles" or (
+            prefixes and any(line.startswith(prefix) for prefix in prefixes)
+        ):
+            selected.append(line)
+    return "\n".join(selected).strip()

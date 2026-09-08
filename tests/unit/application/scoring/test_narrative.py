@@ -249,3 +249,17 @@ def test_narrative_context_keeps_safe_listing_fields_and_material_geography() ->
     assert context.price_changes == (
         {"field": "price", "before": 225000, "after": 207000, "currency": "USD"},
     )
+
+
+def test_narrative_context_excludes_incomplete_price_changes() -> None:
+    context = build_narrative_context(
+        explanation=_explanation(),
+        listing={},
+        active_criteria={},
+        observations={},
+        price_changes=(
+            {"field": "price", "before": 225000, "after": 207000},
+        ),
+    )
+
+    assert context.price_changes == ()

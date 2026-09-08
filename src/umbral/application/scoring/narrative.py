@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Literal
 
 from umbral.application.criteria.contracts import ListingObservation
 from umbral.application.scoring.contracts import (
@@ -43,6 +45,76 @@ _GEOGRAPHIC_SIGNAL_ORDER = (
     "residential_calm",
     "noise_risk",
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ExplanationNarrative:
+    """Auditable presentation copy for one already-ranked opportunity."""
+
+    text: str
+    used_criteria: tuple[str, ...]
+    used_evidence_refs: tuple[str, ...]
+    source: Literal["managed", "deterministic_fallback"]
+    prompt_version: str
+    model_version: str
+
+
+def deterministic_narrative(
+    context: ExplanationNarrativeContext,
+    *,
+    prompt_version: str = "explanation-narrative-v1",
+    model_version: str = "deterministic",
+) -> ExplanationNarrative:
+    """Describe bounded reasons without model availability or inference."""
+
+    reasons = [
+        _string(item.get("label"))
+        for item in context.reasons[:3]
+        if _string(item.get("label"))
+    ]
+    geography = [fact.value for fact in context.geography[: 3 - len(reasons)]]
+    matches = reasons + geography
+    if matches:
+        text = f"Encaja por {_join_spanish(matches)}."
+    else:
+        text = "Encaja con parte de lo que buscás."
+
+    tradeoff = next(
+        (
+            _string(item.get("label"))
+            for item in context.tradeoffs
+            if _string(item.get("label"))
+        ),
+        None,
+    )
+    if tradeoff:
+        text += f" La {tradeoff} es un punto para revisar."
+    elif context.unknowns:
+        unknown = _string(context.unknowns[0].get("label"))
+        if unknown:
+            text += f" No puedo confirmar {unknown}."
+
+    price_change = next(
+        (
+            change
+            for change in context.price_changes
+            if _is_complete_price_change(change)
+        ),
+        None,
+    )
+    if price_change is not None:
+        text += (
+            f" Bajó de {_price_text(price_change['before'], price_change['currency'])}"
+            f" a {_price_text(price_change['after'], price_change['currency'])}."
+        )
+    return ExplanationNarrative(
+        text=text,
+        used_criteria=(),
+        used_evidence_refs=(),
+        source="deterministic_fallback",
+        prompt_version=prompt_version,
+        model_version=model_version,
+    )
 
 
 def select_material_evaluations(
@@ -145,7 +217,11 @@ def build_narrative_context(
         tradeoffs=tradeoffs,
         unknowns=unknowns,
         geography=geography,
-        price_changes=tuple(_price_change(change) for change in price_changes),
+        price_changes=tuple(
+            projected
+            for change in price_changes
+            if (projected := _price_change(change)) is not None
+        ),
         allowed_criteria=tuple(active_criteria),
         allowed_evidence_refs=allowed_evidence_refs,
     )
@@ -302,9 +378,42 @@ def _label(key: str, active_criteria: Mapping[str, object]) -> str:
     return _DEFAULT_LABELS.get(key, "esta prioridad")
 
 
-def _price_change(change: Mapping[str, object]) -> Mapping[str, object]:
+def _price_change(change: Mapping[str, object]) -> Mapping[str, object] | None:
+    if not _is_complete_price_change(change):
+        return None
     return {
-        key: change[key]
-        for key in ("field", "before", "after", "currency")
-        if key in change
+        "field": "price",
+        "before": change["before"],
+        "after": change["after"],
+        "currency": change["currency"],
     }
+
+
+def _is_complete_price_change(change: Mapping[str, object]) -> bool:
+    return (
+        change.get("field") == "price"
+        and isinstance(change.get("before"), (int, float))
+        and not isinstance(change.get("before"), bool)
+        and isinstance(change.get("after"), (int, float))
+        and not isinstance(change.get("after"), bool)
+        and isinstance(change.get("currency"), str)
+        and bool(change["currency"])
+    )
+
+
+def _string(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _join_spanish(values: Sequence[str]) -> str:
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        return f"{values[0]} y {values[1]}"
+    return f"{', '.join(values[:-1])} y {values[-1]}"
+
+
+def _price_text(value: object, currency: object) -> str:
+    assert isinstance(value, (int, float)) and not isinstance(value, bool)
+    assert isinstance(currency, str)
+    return f"{currency} {value:,.0f}".replace(",", ".")

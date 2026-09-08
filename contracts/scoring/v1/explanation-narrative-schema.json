@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["text", "used_criteria", "used_evidence_refs"],
+  "properties": {
+    "text": {"type": "string", "minLength": 1, "maxLength": 900},
+    "used_criteria": {
+      "type": "array",
+      "items": {"type": "string"},
+      "maxItems": 6
+    },
+    "used_evidence_refs": {
+      "type": "array",
+      "items": {"type": "string"},
+      "maxItems": 12
+    }
+  }
+}

@@ -16,9 +16,11 @@ from umbral.application.radar.contracts import (
 )
 from umbral.application.scoring.contracts import (
     CriterionEvaluation,
+    ExplanationNarrativeContext,
     PolicyVersion,
     SemanticSignal,
 )
+from umbral.application.scoring.narrative import ExplanationNarrative
 from umbral.application.silver.contracts import NormalizedListing
 
 
@@ -118,3 +120,9 @@ class ListingReader(Protocol):
     def list_by_ids(
         self, listing_ids: tuple[UUID, ...]
     ) -> tuple[NormalizedListing, ...]: ...
+
+
+class ExplanationNarrativeWriter(Protocol):
+    """Writes a presentation-only narrative from a frozen context packet."""
+
+    def write(self, context: ExplanationNarrativeContext) -> ExplanationNarrative: ...
