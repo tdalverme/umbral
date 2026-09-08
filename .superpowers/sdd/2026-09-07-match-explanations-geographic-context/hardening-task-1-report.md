@@ -151,6 +151,29 @@ The report update is committed separately after this implementation commit.
 - `git diff --check`: passed.
 - No scoring formula, ranking, hard-filter, activation, notification, database model, migration, or LLM decision behavior changed.
 
+## Final re-review correction round
+
+### TDD evidence
+
+- RED reproduced both remaining issues through the real v2 UrbanSignalCalculator → observation/scoring → explanation → narrative context path: the mixed bus/train/subte contributor case inherited the aggregate transit direction, and the near-road positive case retained the contradictory generic “menor exposición” descriptor.
+- GREEN focused narrative/end-to-end/writer suite: `49 passed`.
+
+### Correction
+
+- Geographic direction is now derived from the selected contributor's concrete observed value/unit, including the lower-distance-is-higher-risk semantics of `road_noise`; aggregate scores no longer lend direction to a different contributor.
+- Generic evaluation reasons are omitted when the same criterion has a concrete geographic fact, preserving valid non-geographic reasons for other criteria while preventing contradictory duplicate descriptors.
+- Added final-text and managed-boundary regressions for mixed transit and near-road positive output. Safe tradeoff wording remains canonically accepted; favorable rewrites are rejected.
+
+### Verification
+
+- Relevant backend scoring/infrastructure/urban/contracts: `185 passed, 11 warnings`.
+- Adjacent backend radar/matching/notifications/criteria/voice groups: `185 passed`.
+- Web suite: `33 test files, 84 tests passed`; typecheck passed.
+- Ruff and targeted mypy on this correction's Python files: passed.
+- `git diff --check`: passed.
+- Implementation commit: `5da5e5f` — `fix: preserve contributor narrative direction`.
+- No scoring/ranking/filter/activation/notification, model, migration or LLM decision changes.
+
 ## Final whole-branch review correction round
 
 ### TDD evidence

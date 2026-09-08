@@ -1,30 +1,41 @@
-# Whole-branch final review
+# Whole-branch final re-review
 
 - **Spec: PASS**
 - **Quality: PASS**
-- Branch: `feat/match-explanations-geographic-context`
-- HEAD reviewed: `c3da7c23ccfdacc830d5ddb7e1231d215d37bb91`
-- Base / merge-base with main: `72ebf51af46d30b0fd17a8e268472b9597cbcd0c`
-- Worktree: `D:\Tomi\dev\umbral\.worktrees\match-explanations-geographic-context`
-- Date: 2026-09-08.
-- Independent review, no subagents and no implementation changes. Previous reports were not used as evidence of correctness.
+- **HEAD before report commit:** `5da5e5f`
+- **Correction commit:** `5da5e5f`
+- **Base:** `72ebf51af46d30b0fd17a8e268472b9597cbcd0c`
+- **Branch:** `feat/match-explanations-geographic-context`
+- **Worktree:** `D:\Tomi\dev\umbral\.worktrees\match-explanations-geographic-context`
+- **Date:** 2026-09-08.
 
-## Sources and scope
+Independent re-review, without subagents, code edits or brief edits. This report replaces the previous final report. Two Major content-integrity issues were identified in that re-review; no Blocker, Critical or Minor issue was identified.
 
-Read root AGENTS.md and PRODUCT.md, current worktree PRODUCT.md, the hardening brief, the supplied whole-branch diff package, current source and tests. The brief and diff do **not** exist at the requested root paths: the corresponding files were located and read under this worktree's `.superpowers/sdd/2026-09-07-match-explanations-geographic-context/`. Also read the original task 1–3 briefs to distinguish intended activation/weight normalization from regressions.
+## Scope and sources
 
-All source references below are relative to this exact worktree, with one-based HEAD line numbers.
+Read the current AGENTS.md, PRODUCT.md, hardening brief, previous final review, updated implementation report and `review-72ebf51..f2136e7.diff`. Inspected the current code and tests, with detailed comparison of `c3da7c2..HEAD` against the previous whole-branch review. Reports were context, not proof of passing behavior.
+
+File references below are relative to the exact worktree above, with one-based HEAD line numbers.
 
 ## Strengths
 
-- Managed validation now compares the entire output to packet-derived canonical sentences (`src/umbral/infrastructure/scoring/narrative.py:192`). Negation, appended contradiction, mixed placement and reversed price examples fall back. The existing valid two-claim example remains managed.
-- Declared criteria and refs must equal the rendered claim sets (`src/umbral/infrastructure/scoring/narrative.py:320`). No global vocabulary authorization path remains. Existing tests exercise empty refs, unrelated refs, extra refs, invented amenities and facts not in the submitted packet.
-- Listing identity is checked before using its snapshot; observation rehydration requires and checks listing identity (`src/umbral/application/scoring/service.py:331`, `:599`, `:605`). Tests cover mismatched listings/observations and identity-less observations.
-- The endpoint resolves the latest run once and passes the resolved ID to both views (`src/umbral/api/routers/explanations.py:248`). The contract probe verifies exactly one resolution.
-- Active-criterion filtering is shared by scoring and explanations. The original task explicitly calls for active-weight renormalization; this branch is not score-identical to the base by design. Targeted deterministic ranking, hard-filter, activation and notification tests pass.
-- The narrative writer remains presentation-only, invoked on the selected explanation path, not the list/scoring/notification path. No DB model or migration changes appear in the whole-branch diff.
-- Web tests cover human-facing copy, the selected-explanation BFF flag, neutral unknown copy in the sheet and same-listing/same-run reset behavior.
-- No introduced Ruff, targeted mypy or ESLint diagnostics were found after comparison against the base. Existing failures are detailed below.
+- Zero-count and unsupported active urban observations now remove the corresponding favorable generic reason, rather than merely disappearing from geography (`src/umbral/application/scoring/narrative.py:322`–`:341`). Independent probes explicitly submitted the old false sentences to the writer and confirmed rejection.
+- Luminosidad and estado_general now use the actual extraction enums. Independent low/negative and high/positive probes preserve direction and remain managed (`src/umbral/application/scoring/narrative.py:669`–`:689`).
+- The four homogeneous road-distance/polarity combinations now classify geography correctly: negative/far and positive/near are matches; negative/near and positive/far are tradeoffs. The remaining generic wording issue is reported separately below.
+- Full listing detail and the opportunity sheet now share neutral unknownCopy (`apps/web/src/lib/radar/criterion-labels.ts:46`, `apps/web/src/app/(protected)/listings/[id]/page.tsx:39`, `apps/web/src/components/radar/opportunities/opportunity-detail-sheet.tsx:152`).
+- Writer canonical sentence equality and exact rendered criterion/ref set checks remain unchanged and pass the executed adversarial tests (`src/umbral/infrastructure/scoring/narrative.py:192`, `:320`–`:326`). Negation, appended contradiction, mixed placement, reversed price, invented facts, empty/unrelated refs and unused declared refs are rejected; authorized happy paths remain managed.
+- Frozen snapshot identity checks and single latest-run resolution remain intact; their tests were rerun (`src/umbral/application/scoring/service.py:331`, `:599`, `:605`; `src/umbral/api/routers/explanations.py:248`).
+- The selected narrative remains presentation-only. No model decision path was added to scoring, ranking, hard filtering, activation or notifications. There are no DB-model/migration changes in the whole branch.
+- **356 backend tests and 84 web tests passed**, and TypeScript typecheck passed. Strict targeted typing and lint show no new diagnostics after fresh baseline comparison.
+
+## Status of the four previous findings
+
+| Previous finding | Current result |
+| --- | --- |
+| Zero/unsupported geographic facts leave favorable reasons and pass managed | **Closed for the reproduced cases.** Zero daily services, distant/zero nightlife and unsupported school_access produce no favorable reason/geography. Explicitly submitting each old favorable sentence returns deterministic_fallback. |
+| Road-noise near/far polarity reversed | **Placement fixed; semantic closure incomplete.** All four geography placements pass, but positive/near still authorizes “menor exposición” through its generic reason. See Major 2. |
+| Luminosidad/estado_general contractual enums invert direction | **Closed for the requested enums.** baja/negative -> “poca luz natural”; malo/negative -> “estado general deteriorado”; alta/positive and bueno/positive keep their favorable observations. All four independent probes remain managed. |
+| Full listing detail invents “el aviso no lo informa” | **Closed.** It calls the same tested neutral helper as the sheet. No unsupported cause is appended at the call site. |
 
 ## Issues
 
@@ -32,225 +43,224 @@ All source references below are relative to this exact worktree, with one-based 
 
 None found.
 
-### Major 1 — Zero/unsupported geographic facts leave a favorable generic reason alive
+### Major 1 — A favorable aggregate score promotes an unfavorable contributor into “Encaja por”
 
-**Location:** `src/umbral/application/scoring/narrative.py:303`–`:328`; `:479`–`:484`; nightlife distance has no rendering branch in `_phrase` (`:561`–`:628`).
+**Location:** `src/umbral/application/scoring/narrative.py:437`, `:528`–`:541`; contributor selection at `:473`.
 
-The context initially includes every material evaluation whose state is `match`. It removes the reason only if geographic conversion produced an explicitly unfavorable fact. Zero-count contributors are skipped; unsupported distance phrases return no fact. In both cases the original favorable label survives.
+The correction now determines each rendered geographic fact's direction using the **whole observation's score**. The rendered phrase still comes from the first supported individual contributor. Other contributors can raise the aggregate score above 0.5 even when the selected contributor is unfavorable. Thus a distant station borrows the favorable direction of unrelated transport measurements.
 
-This matters because a present soft urban signal with score zero is still `state="match"` in the existing evaluator (`src/umbral/application/scoring/evaluators.py:221`). A match state alone does not establish nearby presence.
+**Executed reproduction using the real v2 calculator, urban observation builder, scoring, explanation, packet and writer:**
 
-**Executed reproduction:** use the real v2 UrbanSignalCalculator, score_candidates, build_explanation, build_narrative_context and deterministic_narrative (script below).
+```python
+poi_distances = {
+    "bus_stop": {"count_300m": [50, 60, 70]},
+    "subway_station": {"nearest_m": [2000]},
+    "train_station": {"nearest_m": [250]},
+}
+# active acceso_transporte, polarity positive
+```
 
-- Positive `proximidad_compras`: all supermarket/pharmacy/convenience/health count_600m buckets contain only a distance of 2000 m. Calculator contributors explicitly report four counts of zero; evaluation is `("match", 0.0)`; geography is empty.
-- Actual output: **“Encaja por servicios cotidianos cerca.”**
-- Positive `vida_nocturna`: count_300m has no in-radius places and nearest_m is 2000 m. Contributors report zero and 2000 m; evaluation is `("match", 0.0)`; geography is empty.
-- Actual output: **“Encaja por actividad nocturna.”**
-- Submitting those exact texts and their provenance to ManagedExplanationNarrativeWriter returns **source="managed"**.
+The v2 contract computes transit_access = **0.6**: 0.45 from buses, zero from the far subway, 0.15 from the nearby train. The formatter skips the bus count (no transit/places phrase), selects the subway distance, and classifies it favorable because 0.6 >= 0.5.
 
-**Impact:** unsupported proximity/presence claims escape both fallback and managed output. The canonical validator cannot repair a false descriptor already authorized by the packet. This violates requested check 3 and the hardening brief's concrete-fact/proxy-safe requirements.
+Observed output:
 
-**Required correction:** distinguish “no usable fact” from a favorable fact when building geographic reasons. Omit or neutrally qualify unsupported measurements and preserve zero/distance semantics before authorizing a match sentence. Add end-to-end packet tests; the current zero test only asserts that geographic_facts returns an empty tuple.
+- Geography: `("con subte a una distancia mayor", favorable=True)`.
+- Fallback: **“Encaja por buena conectividad y con subte a una distancia mayor.”**
+- Explicit writer output **“Encaja por con subte a una distancia mayor.”**, with just the corresponding urban ref, is accepted as **source="managed"**.
 
-### Major 2 — Avoiding road noise reverses the distance placement
+**Impact:** a real unfavorable distance is advertised as a reason to fit a positive transport preference. This violates the requested distance/placement guard and the brief's concrete-fact requirement. It is not a malformed observation: every contributor and the aggregate score came from the current v2 calculator.
 
-**Location:** `src/umbral/application/scoring/narrative.py:530`–`:531`, combined with `:436`.
+**Required correction:** retain contributor-specific factual direction when assigning placement, or choose/render a contributor that actually supports the favorable aggregate claim. The road-noise polarity correction must not make all geographic facts inherit a composite score's direction.
 
-For road_noise, signal_positive currently means distance >=120 m, i.e. *less* exposure. The common polarity handler then inverts that for a negative/avoid preference. The actual road_noise contract assigns higher values to nearer roads (`contracts/urban/v2/urban-contract-v2.json:141`), so this double interpretation reverses what the user asked for.
+**Coverage gap:** the existing far-transit test now sets its observation value to 0.0; it does not test mixed favorable and unfavorable contributors. Add the mixed bus/subway/train case through final text and managed acceptance.
 
-**Executed reproduction**, real v2 calculator through scoring and narrative, `ruido_transito`, polarity negative:
+### Major 2 — Near-road positive preference still authorizes the opposite generic descriptor
 
-- Both major_road and highway at 500 m: observed score 0, preference evaluation score 1.0. The favorable “alejada de los principales corredores” fact is removed from matches and emitted as a mismatch/tradeoff.
-- Actual output: **“Encaja con parte de lo que buscás. Alejada de los principales corredores es un punto para revisar.”**
-- Both roads at 40 m: observed score 1.0, preference evaluation score 0.0. The near-road fact is classified favorable.
-- Actual output: **“Encaja por menor exposición y con una avenida principal relativamente cerca.”**
+**Location:** `src/umbral/application/scoring/narrative.py:56`, `:336`–`:341`, `:644`–`:654`.
 
-**Impact:** the person avoiding traffic exposure sees the undesired condition as a reason to match, and the desired condition as a tradeoff. This violates requested check 3 and the direction-preservation requirement.
-
-**Required correction:** define road signal polarity consistently with the contract before applying the preference's polarity. Test both near/far values and positive/negative preferences through context construction, not only the standalone phrase formatter.
-
-### Major 3 — Non-geographic negative polarity is only patched for a non-contract luminosidad value
-
-**Location:** `src/umbral/application/scoring/narrative.py:650`–`:665`, especially `:659`–`:664`; positive defaults at `:35`–`:36`.
-
-The only direction-aware non-geographic descriptor handles luminosidad when observation.value is numeric. The actual extraction contracts encode luminosidad as `"baja" | "media" | "alta"`, and estado_general as `"malo" | "regular" | "bueno" | "muy_bueno"` (`contracts/criteria/v3/extraction-v3.json:29`, `:39`; also present in v1).
+The geographical fact has the correct positive/near placement after the fix, but its original generic reason survives alongside it. That reason uses the fixed label **“menor exposición”**, independent of the observed road-noise direction, and has no direction-aware fact descriptor. The writer can select this reason alone and present the opposite claim.
 
 **Executed reproduction:**
 
-- luminosidad, polarity negative, value `"baja"`, observation score 0.1: real scorer returns match/0.9, but the packet has label “buena luz natural” and no fact.
-- Actual output: **“Encaja por buena luz natural.”**, accepted as **managed**.
-- estado_general, polarity negative, value `"malo"`, score 0.1: real scorer returns match/0.9.
-- Actual output: **“Encaja por buen estado general.”**, accepted as **managed**.
-- Control: numeric luminosidad value 0.1 produces “Encaja por poca luz natural.” and remains managed. This explains why the current regression test passes while the contract-shaped value fails.
+- v2 major_road.nearest_m = 40 m; highway.nearest_m = 40 m.
+- The real calculator returns road_noise **1.0**.
+- Active ruido_transito with **positive** polarity.
+- Geography correctly contains the favorable descriptor “con una avenida principal relativamente cerca”.
+- Fallback nevertheless says **“Encaja por menor exposición y con una avenida principal relativamente cerca.”**
+- Submitting **“Encaja por menor exposición.”**, criterio ruido_transito and the valid observation ref, is accepted as **source="managed"**.
 
-**Impact:** the explanation states the opposite of the observed property. Negative estado_general is explicitly supported by the preference vocabulary (`contracts/criteria/v1/preferences-vocabulary-v1.json:30`). This violates requested check 4; the gap is not limited to a hypothetical unknown concept.
+**Impact:** correcting placement alone has not preserved the observed direction of the final narrative. High road exposure can still be stated as lower exposure, in both deterministic and managed presentation. Positive and negative polarity were explicitly part of the requested verification.
 
-**Required correction:** build descriptors from the supported observation value/direction contract across relevant non-geographic concepts. Use real enum fixtures and cover both fallback and managed acceptance.
+**Required correction:** suppress or replace direction-bearing generic labels when a geographic fact is available; ensure every authorized descriptor agrees with that observation's direction. Test the final fallback and canonical managed selection, not only context.geography/tradeoffs membership.
 
-### Minor 1 — Full listing detail still invents the cause of unknown data
+### Minor
 
-**Location:** `apps/web/src/app/(protected)/listings/[id]/page.tsx:39`.
+None found in this re-review. The previous full-detail unknown wording issue is corrected.
 
-The sheet now uses neutral wording, but the full listing detail renders every missing_data entry as “No puedo confirmar …: el aviso no lo informa.”
+## Other requested checks
 
-**Reproduction by direct source inspection:** return an explanation with `missing_data: ["vida_nocturna"]` because the urban snapshot is unavailable, then open the listing detail in that radar/run context. Line 39 renders **“No puedo confirmar actividad nocturna: el aviso no lo informa.”** The API's missing_data key does not establish that the listing omitted information; a missing urban snapshot is a different cause.
-
-**Impact:** the two detail surfaces disagree, and one attributes uncertainty to unsupported source content. Violates requested check 6 and PRODUCT.md's honest uncertainty rule.
-
-**Required correction:** reuse the sheet's neutral unknown wording unless an explicit cause is available. Add coverage for the full listing page. This reproduction is static; no browser assertion was executed for this page.
-
-## Requested checks
-
-| Check | Result and evidence |
+| Area | Result |
 | --- | --- |
-| 1. Negations/contradictions/placement/inverted price; managed happy path | PASS for writer boundary: existing focused tests executed successfully, including valid managed output. |
-| 2. Every ref represented; packet-only claims | PASS for structural authorization in the writer. Packet semantic truth FAILS for Major 1 and 3; exact-copy validation does not establish source truth. |
-| 3. Zero/distances/polarity/train/subte/v2 | FAIL: Major 1 and 2. Train/subte identity, unrelated/unsupported contributors and green_space/supermarket/restaurant v2 examples pass their current tests. |
-| 4. Negative non-geographic direction | FAIL: Major 3 with contract-shaped observations. |
-| 5. Snapshot identity / single run | PASS in inspected implementation and executed unit/contract tests. Identity-less listing snapshots also fail the explicit equality guard; no dedicated identity-less-listing test was added. |
-| 6. Human labels / neutral unknown / same identity | PARTIAL: sheet tests and reset helper pass; Minor 1 remains. Same-identity behavior was tested by the existing helper suite and inspected in RadarShell, not with a new full-shell browser test. |
-| 7. Scoring/ranking/filters/activation/notifications/DB/LLM | No additional regression found in focused suites and diff inspection. Active weighting intentionally changes per original brief. No DB models/migrations; writer does not make product decisions. Broader suite was not completed. |
-| 8. Typing / lint | No new diagnostics found. Full lint/changed-file mypy are not globally green due to verified baseline failures. |
+| Writer negations/contradictions/placement/inverted price | Executed tests pass. No reopened structural bypass found. |
+| Packet-only claims; every declared ref represented | Structural checks pass. The two Major findings are semantically incorrect facts already authorized by the packet, not vocabulary/ref-membership bypasses. |
+| Zero/unsupported facts | Original cases plus unsupported school probe pass. |
+| Geographic distances / polarity | FAIL overall: mixed contributors and generic road wording above. Homogeneous four-way road placements now pass. |
+| v2 categories; train/subte identity | Existing tests rerun and pass for green_space, supermarket, restaurant and train identity; the mixed transport probe exposes the separate placement defect. |
+| Non-geographic enums | Requested luminosidad/estado_general cases pass independent assertions, including source="managed". |
+| Snapshots and one run | Existing unit/contract tests rerun and pass; guards and endpoint flow unchanged in the correction. |
+| Human labels / unknown UI / same identity | Existing label, sheet, BFF, neutral helper and same-identity helper tests pass. Full-page helper call and RadarShell flow inspected; no new browser integration test was created. |
+| Scoring / ranking / filters / activation / notifications | Targeted suites pass. These modules are unchanged by 6891c15; active-weight renormalization remains the earlier explicitly planned whole-branch behavior. |
+| Models / migrations / model decisions | No DB model/migration changes; LLM remains presentation-only. |
+| Type/lint regressions | None introduced in tested scope; verified baseline failures remain below. |
 
 ## Tests / commands and results
 
-Run from this worktree unless stated otherwise. Python executable: `D:\Tomi\dev\umbral\.venv\Scripts\python.exe`. Python commands set `$env:PYTHONPATH='src'`; pytest used `-p no:cacheprovider`.
+All Python commands ran from the worktree with `$env:PYTHONPATH='src'`, using `D:\Tomi\dev\umbral\.venv\Scripts\python.exe`.
 
-1. `python -m pytest -p no:cacheprovider tests/unit/application/scoring tests/unit/infrastructure/scoring tests/unit/application/urban tests/contract/test_explanation_endpoints.py tests/contract/test_explanation_narrative.py tests/contract/test_explanations.py -q`
-   - **165 passed**, 11 deprecation warnings, 21.45 s.
-   - Warnings: Starlette/httpx testclient and per-request cookies.
+### Backend
 
-2. `python -m pytest -p no:cacheprovider tests/unit/application/radar tests/unit/application/notifications tests/unit/application/criteria tests/contract/test_evaluators.py tests/contract/test_scoring_policy.py tests/contract/test_matching_regression.py tests/contract/test_matching_golden.py tests/contract/test_matching_fidelity.py tests/contract/test_notifications_policy.py tests/contract/test_notifications_planner_golden.py tests/contract/test_notification_events.py -q`
-   - **186 passed**, 1.89 s.
+```text
+python -B -m pytest -p no:cacheprovider
+  tests/unit/application/scoring
+  tests/unit/infrastructure/scoring
+  tests/unit/application/urban
+  tests/unit/application/radar
+  tests/unit/application/notifications
+  tests/unit/application/criteria
+  tests/contract/test_explanation_endpoints.py
+  tests/contract/test_explanation_narrative.py
+  tests/contract/test_explanations.py
+  tests/contract/test_evaluators.py
+  tests/contract/test_scoring_policy.py
+  tests/contract/test_matching_regression.py
+  tests/contract/test_matching_golden.py
+  tests/contract/test_matching_fidelity.py
+  tests/contract/test_notifications_policy.py
+  tests/contract/test_notifications_planner_golden.py
+  tests/contract/test_notification_events.py
+  -q
+```
 
-3. In `apps/web`: `npm test`
-   - **32 test files / 83 tests passed**, 42.89 s.
-   - Initial attempt `npm test -- --reporter=dot` was rejected by the installed npm as an unknown CLI flag; reran without it.
+Run as one command: **356 passed, 11 warnings, 7.24 s**. Warnings are the Starlette/httpx testclient and per-request cookie deprecations.
 
-4. In `apps/web`: `npm run typecheck`
-   - **PASS**, exit 0, no TypeScript diagnostics.
+### Web
 
-5. Ruff on all 27 changed Python files:
-   - `$changedPython = @(git diff --name-only 72ebf51 HEAD -- '*.py'); python -m ruff check --no-cache @changedPython`
-   - **7 E501 errors**, all in `src/umbral/application/radar/service.py`: 466, 467, 623, 630, 693, 696, 724.
-   - Re-ran Ruff against `git show 72ebf51:src/umbral/application/radar/service.py` via stdin with the real stdin filename: **the same 7 E501 errors at the same lines**.
-   - All remaining changed Python files: **All checks passed**.
+From `apps/web`:
 
-6. Strict targeted mypy on all 27 changed Python files:
-   - `python -m mypy --cache-dir=nul @changedPython`
-   - **1 assignment error** in `tests/unit/application/scoring/test_run_publish.py:291`, assigning conflicting_publish to FakeRunRepository.publish; its method-assign ignore does not cover assignment.
-   - Verified the base file with mypy's build API using the base source text in memory and the same project options: **same assignment error at base line 293**. This branch only removes two unrelated expected criterion names from that test file.
-   - Remaining 26 changed Python files: **Success: no issues found in 26 source files**.
-   - A preliminary `mypy -c` baseline attempt was rejected because the project also configures files; the in-memory build above is the successful baseline diagnostic comparison.
+- `npm test`: **33 files / 84 tests passed**, 11.47 s.
+- `npm run typecheck`: **PASS, exit 0**, no diagnostics. Also rerun independently of the lint command to verify the exit status.
+- `npm run lint`: **7 errors, 14 warnings**, exit 1. Not a whole-project lint PASS.
 
-7. In `apps/web`: `npm run lint`
-   - **7 errors, 14 warnings**, exit 1. Not a global PASS.
-   - Errors in login/page.tsx, chat/chat-panel.tsx, chat/message-list.tsx, radar/chat/radar-chat-panel.tsx, opportunity-detail-sheet.tsx and radar-shell.tsx (two).
-   - Used ESLint.lintText on HEAD and base source obtained with git show, under current configuration, for all 13 changed TS/TSX files. Same rules/diagnostics remain in changed files; **zero unmatched/new diagnostics**. Radar page has one fewer unused warning.
-   - The error-bearing files outside the changed set are unchanged in the branch.
+Fresh ESLint.lintText comparison of base and HEAD, under the current config, across **14 changed TS/TSX files**: zero unmatched/new diagnostics. Existing changed-file diagnostics remain in opportunity-detail-sheet, radar-shell, floating-list and radar page; radar page has one fewer warning. Other error-bearing files are unchanged from base.
 
-8. `git diff --check 72ebf51 HEAD`
-   - **PASS**.
-   - No paths changed under DB models/migrations.
+### Python lint and typing
 
-9. Expanded exploratory run:
-   - `python -m pytest -p no:cacheprovider tests/unit/application/radar tests/unit/application/notifications tests/unit/application/criteria tests/unit/application/scoring tests/unit/infrastructure/scoring tests/unit/application/urban tests/contract -q`
-   - **Interrupted, not PASS**. Partial output showed a failure and multiple setup errors; no final summary/tracebacks were produced before interruption. Those errors are not assigned to this branch or to Docker without evidence.
-   - Its generated-client contract test regenerated 17 tracked web-client files. It checks git status, and these files showed modified status even though normalized git diff had no content changes. Restored those files from exact HEAD using checkout filters; final tracked status returned clean. The published OpenAPI/client/config inputs are unchanged by this branch, but this interrupted run is not used as a conformance PASS.
+Changed files selected by `git diff --name-only 72ebf51 HEAD -- '*.py'`:
 
-10. Independent probes below:
-    - Executed against HEAD, real calculator/scorer/context/writer and repository fake gateway.
-    - Reproduced all three Major findings. No implementation/test files were added for the probes.
+- `python -m ruff check --no-cache @changedPython`: 7 E501s in `src/umbral/application/radar/service.py` at 466, 467, 623, 630, 693, 696, 724.
+- Re-ran Ruff with the base radar/service.py source via stdin and real stdin filename: **exact same 7 E501s at the same lines**.
+- Clean changed-file slice excluding that baseline file and the baseline mypy fixture: **All checks passed**.
+- `python -m mypy --cache-dir=nul @changedPython`: one error across 28 files, `tests/unit/application/scoring/test_run_publish.py:291`, incompatible assignment to publish.
+- Fresh mypy build with the **base source text in memory**, same project options: **the same assignment error at base line 293**. The differing lines are two removed unrelated expected criteria.
+- Excluding that baseline fixture: **Success: no issues found in 27 source files**.
+- No code/ignore edits were made to obtain these results.
 
-## Reproduction script for Major findings
+### Independent probes
 
-Execute from the worktree with PYTHONPATH=src using the Python executable above. The script uses the existing fake gateway and fixture builders; it does not contact a provider or modify source files. Observations use explicit test scores; geographic values/contributors come from the real v2 calculator.
+- Executed the full reproduction script below against HEAD; both false sentences return source="managed".
+- Executed a four-case 40 m/500 m × positive/negative road matrix through real calculator and narrative: placements match the contract; positive/near text still fails as described.
+- Executed three zero/unsupported cases, explicitly submitting their old false favorable statements with observation refs: **3/3 rejected**, empty favorable reasons/geography.
+- Executed four real-enum cases: luminosidad baja/negative, alta/positive, estado_general malo/negative, bueno/positive: **4/4 preserve expected copy and remain managed**.
+
+### Repository checks
+
+- `git diff --check 72ebf51 HEAD`: **PASS**.
+- No changed paths under DB models, alembic or migrations.
+- HEAD stayed `f2136e7`. Before report replacement the worktree was clean.
+- No generated-client or all-contract regeneration tests were run this time; they modify generated code and were unnecessary for this bounded re-review.
+
+## Executed reproduction for remaining issues
+
+Run from the worktree with PYTHONPATH=src and the Python executable above. Uses existing test builders/fake gateway and real production calculator/scorer/packet/writer; no provider call or file modification.
 
 ```python
-from dataclasses import replace
-from datetime import datetime, timezone
-from pathlib import Path
 from uuid import uuid4
-from tests.support.radar import build_listing, build_profile
-from tests.support.scoring import build_compilation, build_criterion, build_observation, MATCHER_TYPES, SEED, TEMPLATES
+from tests.unit.application.scoring.test_narrative_end_to_end import (
+    _urban_observation, _narrative_for_observation, CONTRACT_PATH,
+)
 from tests.unit.infrastructure.scoring.test_narrative_writer import ScriptedGateway, _writer
-from umbral.application.scoring.engine import score_candidates
-from umbral.application.scoring.policy import parse_policy_document
-from umbral.application.scoring.explanations import build_explanation
-from umbral.application.scoring.narrative import build_narrative_context, deterministic_narrative, narrative_label
 from umbral.application.urban.calculator import UrbanSignalCalculator
 from umbral.application.urban.contract import load_urban_contract
 
-policy = parse_policy_document(SEED, MATCHER_TYPES)
-calc = UrbanSignalCalculator(load_urban_contract(Path("contracts/urban/v2/urban-contract-v2.json")))
+calc = UrbanSignalCalculator(load_urban_contract(CONTRACT_PATH))
 
-def probe(key, polarity, *, score=None, value=None, signal=None, poi=None, linear=None):
-    profile, listing, run_id, version_id = build_profile(), build_listing(), uuid4(), uuid4()
-    matcher = "signal_score" if signal else "semantic_feature"
-    evidence = {}
-    if signal:
-        measured = calc.calculate(poi_distances=poi, linear_distances=linear).for_signal(signal)
-        score = value = measured.value
-        evidence = {"signal_ref": signal, "contributors": list(measured.contributors)}
-    observation = replace(build_observation(listing_id=listing.listing_id, concept_key=key, value=value, score=score),
-        matcher_type=matcher, source="urban" if signal else "model", evidence=evidence)
-    observations = {key: observation}
-    compilation = build_compilation(profile_id=profile.profile_id, profile_version_id=version_id,
-        criteria=(build_criterion(key, matcher_type=matcher, params={"polarity":polarity}, weight=1),))
-    candidate = score_candidates(profile=profile, compilation=compilation, candidates=(listing,),
-        observations={listing.listing_id:observations}, policy=policy, run_id=run_id,
-        correlation_id=uuid4(), now=datetime.now(timezone.utc))[0]
-    evaluation = next(e for e in candidate.evaluations if e.criterion_key == key)
-    explanation = build_explanation(search_profile_id=profile.profile_id, run_id=run_id, listing_id=listing.listing_id,
-        score=candidate.score, confidence=candidate.confidence, evaluations=(evaluation,), policy=policy,
-        templates=TEMPLATES, satisfied_filters=(), profile_version_id=version_id)
-    context = build_narrative_context(explanation=explanation, listing=candidate.narrative_listing,
-        active_criteria={key:{"label":narrative_label(key),"polarity":polarity}}, observations=observations)
-    result = deterministic_narrative(context)
-    gateway = ScriptedGateway()
-    gateway.output = {"text":result.text,"used_criteria":list(result.used_criteria),"used_evidence_refs":list(result.used_evidence_refs)}
-    managed = _writer(gateway).write(context)
-    print(key, polarity, "observed=", value, "evaluation=", (evaluation.state,evaluation.score))
-    print("contributors=",evidence.get("contributors"),"geography=", [(g.value,g.favorable) for g in context.geography])
-    print("reasons=",context.reasons, "tradeoffs=",context.tradeoffs)
-    print("OUTPUT:",result.text,"MANAGED:",managed.source)
-    return context
+# Major 1: low-quality subway access borrows the aggregate score of bus/train.
+result = calc.calculate(poi_distances={
+    "bus_stop": {"count_300m": [50, 60, 70]},
+    "subway_station": {"nearest_m": [2000]},
+    "train_station": {"nearest_m": [250]},
+})
+obs = _urban_observation(listing_id=uuid4(), concept_key="acceso_transporte",
+                         signal_ref="transit_access", result=result)
+context, fallback, _ = _narrative_for_observation(
+    concept_key="acceso_transporte", polarity="positive", observation=obs)
+print("transit score:", obs.score)
+print("facts:", [(f.value, f.favorable) for f in context.geography])
+print("fallback:", fallback.text)
+gateway = ScriptedGateway()
+gateway.output = {
+    "text": "Encaja por con subte a una distancia mayor.",
+    "used_criteria": ["acceso_transporte"],
+    "used_evidence_refs": [context.geography[0].source_ref],
+}
+print("managed:", _writer(gateway).write(context))
 
-probe("estado_general","negative",score=0.1,value="malo")
-probe("luminosidad","negative",score=0.1,value="baja")
-probe("luminosidad","negative",score=0.1,value=0.1)
-probe("vida_nocturna","positive",signal="nightlife_intensity",poi={"nightlife":{"count_300m":[2000.0],"nearest_m":[2000.0]}})
-probe("proximidad_compras","positive",signal="daily_convenience",poi={k:{"count_600m":[2000.0]} for k in ["supermarket","pharmacy","convenience","health"]})
-probe("ruido_transito","negative",signal="road_noise",linear={"major_road":{"nearest_m":[500.0]},"highway":{"nearest_m":[500.0]}})
-probe("ruido_transito","negative",signal="road_noise",linear={"major_road":{"nearest_m":[40.0]},"highway":{"nearest_m":[40.0]}})
+# Major 2: correct geographic placement retains an opposite generic descriptor.
+result = calc.calculate(linear_distances={
+    "major_road": {"nearest_m": [40.0]},
+    "highway": {"nearest_m": [40.0]},
+})
+obs = _urban_observation(listing_id=uuid4(), concept_key="ruido_transito",
+                         signal_ref="road_noise", result=result)
+context, fallback, _ = _narrative_for_observation(
+    concept_key="ruido_transito", polarity="positive", observation=obs)
+print("road score:", obs.score)
+print("fallback:", fallback.text)
+reason = context.reasons[0]
+gateway.output = {
+    "text": "Encaja por " + reason["label"] + ".",
+    "used_criteria": ["ruido_transito"],
+    "used_evidence_refs": list(reason["evidence_refs"]),
+}
+print("managed:", _writer(gateway).write(context))
 ```
 
 ## Limitations
 
-- No live managed-provider call, production database, deployed browser E2E or full build was run. Managed tests use a scripted provider boundary.
-- Passing focused suites do not establish that the entire repository passes. The broader exploratory contract run was interrupted and has unclassified failures/setup errors.
-- The geographic probes use the real urban calculator and scoring functions with controlled in-memory observations; they do not validate live PostGIS distance extraction or production normalization.
-- Review introduces only this report as an intentional artifact. Test-generated client changes were restored; no commits, branch changes, implementation edits or subagents.
-- Existing review reports were not treated as proof. These findings are based on current source and newly executed checks.
+- No live managed-provider evaluation, browser E2E, production PostGIS, full build or full repository suite. Passing focused tests does not imply those checks pass.
+- Geographic probes use controlled valid distance buckets; they verify calculation through narrative output, not live distance ingestion or barrio normalization.
+- Same-identity and neutral copy were verified with the existing web tests plus source call-site inspection, not a newly added full-shell/full-page browser test.
+- Reports were read for context only. All test counts, baseline diagnostics and observed failures above were checked in this re-review.
+- Only this report was intentionally replaced. No implementation/brief edits, commits or subagents.
 
-**Conclusion before correction round:** 3 Major and 1 Minor issues remained. No Blocker/Critical issue was found.
+**Final verdict before this correction round:** Spec FAIL and Quality FAIL. Two Major issues remained, both reproduced in managed output despite valid references. The previous zero/unsupported, contractual-enum and unknown-copy failures were fixed.
 
 ## Final correction round resolution
 
-The four findings above were implemented in the same worktree with no subagents, publication, or merge:
+The two remaining findings were reproduced with RED tests and corrected in the same worktree, without subagents, publication or merge:
 
-- Major 1: the narrative context now removes an active urban match when the real v2 signal has no concrete/proxy-safe geographic fact. The end-to-end tests run UrbanSignalCalculator → score_candidates → build_explanation → build_narrative_context → deterministic_narrative and the managed writer for zero daily services and unsupported nightlife; neither emits a favorable presence claim.
-- Major 2: geographic placement now uses the normalized contract signal score as the signal direction and applies user polarity once. Real v2 road-noise tests cover 500m/40m and both positive/negative preferences; avoiding noise makes the far-road fact a match and the near-road fact a tradeoff.
-- Major 3: the packet projection now handles contract enum values for luminosidad and estado_general, preserving observed low/bad/high/good direction. End-to-end tests cover negative and positive values and the writer boundary.
-- Minor 1: the full listing detail reuses the neutral `unknownCopy` helper used by the sheet; a helper regression guards against the unsupported “el aviso no lo informa” cause.
+- Major 1: geographic placement now uses the selected contributor's own observed value and unit. In the v2 mixed bus/train/subte case, the selected subte at 2000m is classified as a tradeoff even though the aggregate `transit_access` score is `0.6`; the final fallback and managed boundary cannot promote that contributor to a favorable match.
+- Major 2: when a concrete geographic fact exists for a criterion, its generic evaluation reason is removed from the narrative packet. The near-road positive case now ends with only the observed avenue fact; “menor exposición” cannot be submitted as a separately accepted managed claim.
 
 ### Final correction verification
 
-- Relevant backend scoring/infrastructure/urban/contracts: `184 passed, 11 warnings`.
+- TDD RED: the new mixed-contributor and near-road final-text assertions failed before implementation (`2 failed`).
+- TDD GREEN: focused narrative/end-to-end/writer suite `49 passed`.
+- Relevant backend scoring/infrastructure/urban/contracts suite: `185 passed, 11 warnings`.
 - Adjacent backend radar/matching/notifications/criteria/voice groups: `185 passed`.
-- Web: `33 test files, 84 tests passed`; typecheck passed.
-- Ruff on the Python files changed in this round: passed. Targeted mypy on those files: passed.
-- `git diff --check`: passed. The previously documented branch baseline remains: 7 unchanged Ruff `E501` diagnostics in `src/umbral/application/radar/service.py`.
-- No scoring formula, ranking, hard-filter, activation, notification, database model, migration, or LLM decision behavior changed.
+- Web suite: `33 test files, 84 tests passed`; typecheck passed (`tsc --noEmit`, exit 0).
+- Ruff on the Python files changed in this round: passed. Targeted mypy: passed with no issues.
+- `git diff --check`: passed. The known branch baseline remains 7 unchanged Ruff `E501` diagnostics in `src/umbral/application/radar/service.py` when checking all historical changed Python paths.
+- No scoring formula, ranking, hard-filter, activation, notification, database model, migration or LLM decision behavior changed.
 
-**Final conclusion:** the 3 Major and 1 Minor findings are resolved. The branch is ready for the requested handoff, subject to the existing documented baseline diagnostics and the review limitations above.
+**Final conclusion:** the two Major findings from this re-review are resolved. The branch is ready for handoff, subject to the documented baseline diagnostics and review limitations.
