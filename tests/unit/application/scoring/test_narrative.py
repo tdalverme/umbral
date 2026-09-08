@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from umbral.application.scoring.contracts import (
     ExplanationNarrativeContext,
     ExplanationReason,
     ExplanationRisk,
+    GeographicFact,
 )
 from umbral.application.scoring.narrative import (
     build_narrative_context,
@@ -309,10 +311,25 @@ def test_material_evaluations_keep_matches_and_tradeoffs_independent() -> None:
     explanation = _explanation()
     selected = select_material_evaluations(
         explanation,
-        {key: object() for key in ("acceso_transporte", "proximidad_cafes", "balcon", "luminosidad", "superficie", "orientacion")},
+        {
+            key: object()
+            for key in (
+                "acceso_transporte",
+                "proximidad_cafes",
+                "balcon",
+                "luminosidad",
+                "superficie",
+                "orientacion",
+            )
+        },
     )
     assert [item.criterion_key for item in selected] == [
-        "acceso_transporte", "proximidad_cafes", "balcon", "luminosidad", "superficie", "orientacion"
+        "acceso_transporte",
+        "proximidad_cafes",
+        "balcon",
+        "luminosidad",
+        "superficie",
+        "orientacion",
     ]
 
 
@@ -320,9 +337,189 @@ def test_geographic_contributor_requires_matching_term() -> None:
     facts = geographic_facts({
         "acceso_transporte": _urban_observation(
             "acceso_transporte", signal_ref="transit_access", contributors=[
-                {"term": "train_station.nearest_m", "observed_value": 200, "unit": "m"},
-                {"term": "subway_station.nearest_m", "observed_value": 800, "unit": "m"},
+                {
+                    "term": "train_station.nearest_m",
+                    "observed_value": 200,
+                    "unit": "m",
+                },
+                {
+                    "term": "subway_station.nearest_m",
+                    "observed_value": 800,
+                    "unit": "m",
+                },
             ]
         )
     })
     assert facts[0].value == "tren relativamente cerca"
+
+
+def test_unsupported_geographic_signal_is_omitted() -> None:
+    facts = geographic_facts({
+        "acceso_escuela": _urban_observation(
+            "acceso_escuela",
+            signal_ref="school_access",
+            contributors=[
+                {"term": "school.nearest_m", "observed_value": 250, "unit": "m"},
+            ],
+        )
+    })
+
+    assert facts == ()
+
+
+def test_avoid_nightlife_is_a_tradeoff_while_desired_nightlife_is_a_match() -> None:
+    reason = ExplanationReason(
+        criterion_key="vida_nocturna",
+        state="match",
+        score=1.0,
+        confidence=0.9,
+        contribution=0.2,
+        evidence_level="strong",
+        reason_code="signal_observed",
+        evidence_refs=({"kind": "observation", "ref": "nightlife"},),
+        text="actividad nocturna",
+    )
+    explanation = replace(_explanation(), reasons=(_explanation().reasons + (reason,)))
+    observation = _urban_observation(
+        "vida_nocturna",
+        signal_ref="nightlife_intensity",
+        contributors=[
+            {"term": "nightlife.nearest_m", "observed_value": 1, "unit": "places"},
+        ],
+    )
+
+    desired = build_narrative_context(
+        explanation=explanation,
+        listing={},
+        active_criteria={
+            "vida_nocturna": {
+                "label": "actividad nocturna",
+                "polarity": "positive",
+            }
+        },
+        observations={"vida_nocturna": observation},
+    )
+    avoided = build_narrative_context(
+        explanation=explanation,
+        listing={},
+        active_criteria={
+            "vida_nocturna": {
+                "label": "actividad nocturna",
+                "polarity": "negative",
+            }
+        },
+        observations={"vida_nocturna": observation},
+    )
+
+    assert [fact.value for fact in desired.geography] == [
+        "algo de actividad nocturna cerca"
+    ]
+    assert [item["label"] for item in avoided.tradeoffs] == ["actividad nocturna"]
+    avoided_text = deterministic_narrative(avoided).text
+    assert not avoided_text.startswith("Encaja por actividad nocturna.")
+    assert "Algo de actividad nocturna cerca es un punto para revisar." in avoided_text
+
+
+def test_avoid_noise_and_desired_noise_have_opposite_placement() -> None:
+    reason = ExplanationReason(
+        criterion_key="ruido_ambiental",
+        state="match",
+        score=1.0,
+        confidence=0.9,
+        contribution=0.2,
+        evidence_level="strong",
+        reason_code="signal_observed",
+        evidence_refs=({"kind": "observation", "ref": "noise"},),
+        text="exposición",
+    )
+    explanation = replace(_explanation(), reasons=(_explanation().reasons + (reason,)))
+    observation = _urban_observation(
+        "ruido_ambiental",
+        signal_ref="noise_risk",
+        contributors=[],
+        value=0.82,
+    )
+
+    desired = build_narrative_context(
+        explanation=explanation,
+        listing={},
+        active_criteria={
+            "ruido_ambiental": {
+                "label": "mayor actividad",
+                "polarity": "positive",
+            }
+        },
+        observations={"ruido_ambiental": observation},
+    )
+    avoided = build_narrative_context(
+        explanation=explanation,
+        listing={},
+        active_criteria={
+            "ruido_ambiental": {
+                "label": "menor exposición",
+                "polarity": "negative",
+            }
+        },
+        observations={"ruido_ambiental": observation},
+    )
+
+    assert [fact.value for fact in desired.geography] == [
+        "mayor exposición a actividad urbana"
+    ]
+    assert [item["label"] for item in avoided.tradeoffs] == ["mayor actividad"]
+    assert not deterministic_narrative(avoided).text.startswith(
+        "Encaja por mayor actividad."
+    )
+
+
+def test_supported_narrative_criteria_have_human_labels() -> None:
+    supported = (
+        "balcon", "luminosidad", "estado_general", "proximidad_cafes",
+        "acceso_transporte", "proximidad_parque", "proximidad_compras",
+        "vida_nocturna", "zona_comercial", "caminabilidad", "calma_residencial",
+        "ruido_transito", "ruido_tren", "ruido_ambiental", "acceso_escuela",
+        "acceso_deporte", "acceso_cultura", "acceso_bici", "acceso_salud",
+    )
+    context = build_narrative_context(
+        explanation=_explanation(),
+        listing={},
+        active_criteria={key: {} for key in supported},
+        observations={},
+    )
+
+    labels = [item["label"] for item in context.active_priorities]
+    assert all(isinstance(label, str) and label != "esta prioridad" for label in labels)
+    assert all("_" not in label for label in labels if isinstance(label, str))
+
+
+def test_fallback_provenance_contains_only_rendered_geography() -> None:
+    context = ExplanationNarrativeContext(
+        listing={},
+        active_priorities=(),
+        reasons=(),
+        tradeoffs=(),
+        unknowns=(),
+        geography=tuple(
+            GeographicFact(
+                label="conectividad",
+                value=f"señal {index}",
+                source_ref=f"urban:{index}",
+                confidence=0.9,
+                criterion_key=f"criterio_{index}",
+            )
+            for index in range(4)
+        ),
+        price_changes=(),
+        allowed_criteria=(),
+        allowed_evidence_refs=(),
+    )
+
+    result = deterministic_narrative(context)
+
+    assert result.used_criteria == ("criterio_0", "criterio_1", "criterio_2")
+    assert result.used_evidence_refs == (
+        "urban:0",
+        "urban:1",
+        "urban:2",
+    )
+    assert "señal 3" not in result.text

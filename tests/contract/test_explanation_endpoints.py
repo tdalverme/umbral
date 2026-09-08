@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from typing import cast
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from tests.fakes.radar import (
@@ -26,6 +27,7 @@ from tests.support.scoring import (
     build_run,
 )
 from umbral.api.dependencies import RuntimeDependencies
+from umbral.api.routers import explanations as explanations_module
 from umbral.api.routers.comparisons import router as comparisons_router
 from umbral.api.routers.explanations import router as explanations_router
 from umbral.application.identity.authorization import AccessControl
@@ -261,6 +263,40 @@ def test_explanation_by_listing_includes_narrative_only_when_requested() -> None
     assert ordinary.json()["narrative"] is None
     assert selected.status_code == 200
     assert selected.json()["narrative"]["text"]
+
+
+def test_selected_explanation_resolves_latest_run_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, owner_id, profile_id, run_id, listing_id = _scoring_context()
+    radar = _radar(
+        profile=context.profiles.rows[profile_id],
+        run=context.runs.rows[run_id],
+        items=tuple(context.items.items_by_run.get(run_id, ())),
+    )
+    client = _app(_principal_for(owner_id), context, radar)
+    original = explanations_module._latest_run
+    calls = 0
+
+    def counted_latest_run(
+        request: Request, owner: UUID, profile: UUID
+    ) -> UUID:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise AssertionError("latest run must be resolved once")
+        return original(request, owner, profile)
+
+    monkeypatch.setattr(explanations_module, "_latest_run", counted_latest_run)
+
+    response = client.get(
+        f"/api/v1/search-profiles/{profile_id}/explanations/{listing_id}?include_narrative=true",
+        cookies={COOKIE: "token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["run_id"] == str(run_id)
+    assert calls == 1
 
 
 def test_explanation_list_paginates() -> None:

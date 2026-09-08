@@ -246,22 +246,22 @@ async def get_explanation(
     except IdentityError as error:
         return _problem(request, error.status, error.code, error.recovery or "")
     try:
+        resolved_run = run_id or _latest_run(
+            request, principal.user_id, search_profile_id
+        )
         explanation = _scoring().get_explanation(
             owner_id=principal.user_id,
             profile_id=search_profile_id,
-            run_id=run_id or _latest_run(request, principal.user_id, search_profile_id),
+            run_id=resolved_run,
             listing_id=listing_id,
         )
         narrative = None
         if include_narrative:
-            resolved_narrative_run = run_id or _latest_run(
-                request, principal.user_id, search_profile_id
-            )
             narrative = await run_in_threadpool(
                 lambda: _scoring().get_narrative(
                     owner_id=principal.user_id,
                     profile_id=search_profile_id,
-                    run_id=resolved_narrative_run,
+                    run_id=resolved_run,
                     listing_id=listing_id,
                 )
             )

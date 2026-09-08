@@ -33,6 +33,7 @@ _UNSAFE_GEOGRAPHY_RE = re.compile(
     re.IGNORECASE,
 )
 _RAW_KEY_RE = re.compile(r"\b[a-z][a-z0-9]*_[a-z0-9_]*\b", re.IGNORECASE)
+_PRICE_COPY_RE = re.compile(r"(?:USD|ARS|\$)\s?[\d.]+", re.IGNORECASE)
 
 
 class ManagedExplanationNarrativeWriter:
@@ -147,7 +148,7 @@ def _valid_content(
         for criterion in criteria
         for ref in context.criterion_evidence_refs[criterion]
     }
-    if not isinstance(evidence_refs, list) or not all(
+    if not isinstance(evidence_refs, list) or not evidence_refs or not all(
         isinstance(value, str)
         and value in context.allowed_evidence_refs
         and (
@@ -169,27 +170,55 @@ def _valid_content(
 def _claims_match_context(
     text: str,
     criteria: list[object],
-    evidence_refs: object,
+    evidence_refs: list[object],
     context: ExplanationNarrativeContext,
 ) -> bool:
     lowered = text.casefold()
     packets = (*context.reasons, *context.tradeoffs, *context.unknowns)
+    if _PRICE_COPY_RE.search(text) and not context.price_changes:
+        return False
     for criterion in criteria:
         if not isinstance(criterion, str):
             return False
-        packet = next((item for item in packets if item.get("criterion_key") == criterion), None)
+        packet = next(
+            (item for item in packets if item.get("criterion_key") == criterion),
+            None,
+        )
         if packet is None:
             refs = set(context.criterion_evidence_refs.get(criterion, ()))
             packet = next(
                 (item for item in packets if refs.intersection(_packet_refs(item))),
                 None,
             )
-        if packet is None:
+        criterion_refs = set(context.criterion_evidence_refs.get(criterion, ()))
+        submitted_refs = {
+            value for value in evidence_refs if isinstance(value, str)
+        }
+        if packet is None and not any(
+            fact.criterion_key == criterion
+            and fact.value.casefold() in lowered
+            and fact.source_ref in submitted_refs
+            for fact in context.geography
+        ):
             return False
-        if not context.criterion_evidence_refs.get(criterion):
+        if not criterion_refs or not criterion_refs.intersection(submitted_refs):
             return False
-        label = packet.get("label")
-        if not isinstance(label, str) or label.casefold() not in lowered:
+        if packet is not None:
+            packet_refs = set(_packet_refs(packet))
+            if not packet_refs.intersection(submitted_refs):
+                return False
+            label = packet.get("label")
+            if not isinstance(label, str) or label.casefold() not in lowered:
+                return False
+            fact = packet.get("fact")
+            if isinstance(fact, str) and fact.casefold() not in lowered:
+                return False
+        elif not any(
+            fact.criterion_key == criterion
+            and fact.value.casefold() in lowered
+            and fact.source_ref in submitted_refs
+            for fact in context.geography
+        ):
             return False
     for fact in context.geography:
         if fact.criterion_key in criteria and fact.value.casefold() not in lowered:
@@ -197,7 +226,10 @@ def _claims_match_context(
     if re.search(r"(?:baj[oó]|pas[oó]|subi[oó]|aument[oó])", lowered):
         if not context.price_changes:
             return False
-        if not isinstance(evidence_refs, list) or "listing_field:price" not in evidence_refs:
+        if (
+            not isinstance(evidence_refs, list)
+            or "listing_field:price" not in evidence_refs
+        ):
             return False
         if not all(
             _price_mentioned(change, text) for change in context.price_changes
@@ -208,7 +240,17 @@ def _claims_match_context(
             str(item.get("label", "")).casefold()
             for item in packets
         }
-        if not any(term in authorized_labels for term in ("balcón", "pileta", "piscina", "terraza", "patio", "cochera")):
+        if not any(
+            term in authorized_labels
+            for term in (
+                "balcón",
+                "pileta",
+                "piscina",
+                "terraza",
+                "patio",
+                "cochera",
+            )
+        ):
             return False
     return True
 

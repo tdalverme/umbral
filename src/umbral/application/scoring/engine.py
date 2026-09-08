@@ -51,7 +51,9 @@ class ScoredCandidate:
     contributions: Mapping[str, object]
     evaluations: tuple[CriterionEvaluation, ...]
     narrative_listing: Mapping[str, object] = field(default_factory=dict)
-    narrative_observations: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
+    narrative_observations: Mapping[str, Mapping[str, object]] = field(
+        default_factory=dict
+    )
 
 
 class PolicyRunEngine(Protocol):
@@ -270,6 +272,7 @@ def _score_candidate(
 
 def _narrative_listing_snapshot(listing: NormalizedListing) -> Mapping[str, object]:
     return {
+        "listing_id": str(listing.listing_id),
         "price_value": listing.price_value,
         "price_currency": listing.price_currency,
         "surface_m2": listing.surface_m2,

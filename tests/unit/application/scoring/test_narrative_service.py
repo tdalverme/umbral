@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from dataclasses import replace
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from tests.support.radar import build_listing, build_profile, profile_version_payload
@@ -70,6 +70,7 @@ def _context() -> tuple[
             build_item(run_id, listing_id),
             contributions={
                 "_narrative_listing": {
+                    "listing_id": str(listing_id),
                     "price_value": 700.0,
                     "price_currency": "ARS",
                     "price_changes": (),
@@ -131,3 +132,67 @@ def test_list_explanations_does_not_call_narrative_writer() -> None:
     )
 
     assert writer.contexts == []
+
+
+def test_narrative_ignores_frozen_observation_for_another_listing() -> None:
+    context, writer, owner_id, profile_id, run_id, listing_id = _context()
+    other_listing_id = uuid4()
+    item = context.items.items_by_run[run_id][0]
+    context.items.items_by_run[run_id][0] = replace(
+        item,
+        contributions={
+            **item.contributions,
+            "_narrative_observations": {
+                "luminosidad": {
+                    "observation_id": str(uuid4()),
+                    "listing_id": str(other_listing_id),
+                    "concept_key": "luminosidad",
+                    "matcher_type": "signal_score",
+                    "value": 0.8,
+                    "score": 0.8,
+                    "confidence": 0.8,
+                    "evidence": {
+                        "signal_ref": "transit_access",
+                        "contributors": [
+                            {
+                                "term": "subway_station.nearest_m",
+                                "observed_value": 300,
+                                "unit": "m",
+                            }
+                        ],
+                    },
+                    "source": "urban",
+                    "state": "active",
+                }
+            },
+        },
+    )
+
+    context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+
+    assert writer.contexts[-1].geography == ()
+
+
+def test_narrative_ignores_frozen_listing_for_another_listing() -> None:
+    context, writer, owner_id, profile_id, run_id, listing_id = _context()
+    item = context.items.items_by_run[run_id][0]
+    context.items.items_by_run[run_id][0] = replace(
+        item,
+        contributions={
+            **item.contributions,
+            "_narrative_listing": {
+                "listing_id": str(uuid4()),
+                "price_value": 999.0,
+                "price_currency": "USD",
+                "price_changes": (),
+            },
+        },
+    )
+
+    context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+
+    assert writer.contexts[-1].listing == {}

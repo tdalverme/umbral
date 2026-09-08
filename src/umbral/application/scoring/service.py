@@ -51,6 +51,7 @@ from umbral.application.scoring.narrative import (
     ExplanationNarrative,
     build_narrative_context,
     deterministic_narrative,
+    narrative_label,
 )
 from umbral.application.scoring.policy import ScoringPolicyDoc, parse_policy_document
 from umbral.application.scoring.ports import (
@@ -325,6 +326,7 @@ class ScoringService:
         listing_payload = (
             cast(Mapping[str, object], frozen_listing)
             if isinstance(frozen_listing, Mapping)
+            and _snapshot_matches_listing(frozen_listing, listing_id)
             else {}
         )
         frozen_observations = item.contributions.get("_narrative_observations")
@@ -558,19 +560,7 @@ def _satisfied_filters(profile: SearchProfile) -> tuple[str, ...]:
 
 
 def _narrative_label(key: str) -> str:
-    return {
-        "presupuesto": "el presupuesto",
-        "ambientes": "los ambientes",
-        "superficie": "la superficie",
-        "ubicacion": "la ubicación",
-        "balcon": "el balcón",
-        "luminosidad": "la luz natural",
-        "estado_general": "el estado general",
-        "proximidad_cafes": "cafés cercanos",
-        "acceso_transporte": "buena conectividad",
-        "calma_residencial": "entorno más residencial",
-        "ruido_ambiental": "menor exposición",
-    }.get(key, "esta prioridad")
+    return narrative_label(key)
 
 
 def _narrative_criteria(
@@ -606,6 +596,12 @@ def _run_snapshot(
     return snapshot if isinstance(snapshot, Mapping) else None
 
 
+def _snapshot_matches_listing(
+    snapshot: Mapping[str, object], listing_id: UUID
+) -> bool:
+    return snapshot.get("listing_id") == str(listing_id)
+
+
 def _rehydrate_narrative_observations(
     raw: object, run: RecommendationRun, listing_id: UUID
 ) -> Mapping[str, ListingObservation]:
@@ -619,6 +615,8 @@ def _rehydrate_narrative_observations(
             observation_id = UUID(str(value["observation_id"]))
             stored_listing_id = UUID(str(value.get("listing_id", listing_id)))
         except (KeyError, ValueError):
+            continue
+        if stored_listing_id != listing_id:
             continue
         observations[key] = ListingObservation(
             observation_id=observation_id,

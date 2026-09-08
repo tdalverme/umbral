@@ -265,6 +265,30 @@ def test_writer_rejects_invented_price_change_with_unrelated_valid_reference(
     assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
 
 
+def test_writer_rejects_invented_amenity_with_valid_transport_reference(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    scripted_gateway.output = {
+        "text": "Encaja por la buena conectividad y tiene balcón.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_rejects_empty_evidence_refs(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    scripted_gateway.output = {
+        "text": "Encaja por la buena conectividad.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": [],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
 def test_fallback_explains_reason_and_tradeoff_without_jargon(
     context: ExplanationNarrativeContext,
 ) -> None:
