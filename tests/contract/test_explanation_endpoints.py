@@ -21,6 +21,7 @@ from tests.fakes.radar import (
 from tests.support.radar import build_listing, build_profile, profile_version_payload
 from tests.support.scoring import (
     ScoringTestContext,
+    build_compilation,
     build_item,
     build_run,
 )
@@ -113,6 +114,11 @@ def _scoring_context(
         payload=profile_version_payload(profile),
         created_at=profile.created_at,
         correlation_id=profile.correlation_id,
+    )
+    context.compilations.compilations[profile_version_id] = build_compilation(
+        profile_id=profile_id,
+        profile_version_id=profile_version_id,
+        criteria=(),
     )
     from umbral.application.scoring.contracts import CriterionEvaluation
 

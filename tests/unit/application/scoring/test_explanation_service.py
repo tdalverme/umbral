@@ -85,6 +85,11 @@ def _context_with_run() -> tuple[ScoringTestContext, UUID, UUID, UUID, UUID]:
         created_at=profile.created_at,
         correlation_id=profile.correlation_id,
     )
+    context.compilations.compilations[profile_version_id] = build_compilation(
+        profile_id=profile_id,
+        profile_version_id=profile_version_id,
+        criteria=(),
+    )
     return context, owner_id, profile_id, run_id, listing_id
 
 
@@ -228,6 +233,32 @@ def test_explanation_views_hide_criteria_not_declared_by_frozen_compilation() ->
         "luminosidad",
         "presupuesto",
     }
+
+
+def test_explanation_views_hide_evaluations_without_a_frozen_compilation() -> None:
+    context, owner_id, profile_id, run_id, listing_id = _context_with_run()
+    del context.compilations.compilations[context.runs.rows[run_id].profile_version_id]
+
+    explanation = context.service.get_explanation(
+        owner_id=owner_id,
+        profile_id=profile_id,
+        run_id=run_id,
+        listing_id=listing_id,
+    )
+    page = context.service.list_explanations(
+        owner_id=owner_id,
+        profile_id=profile_id,
+        run_id=run_id,
+        after_position=None,
+        limit=10,
+    )
+
+    assert explanation.reasons == ()
+    assert explanation.risks == ()
+    assert explanation.missing_data == ()
+    assert page[0].reasons == ()
+    assert page[0].risks == ()
+    assert page[0].missing_data == ()
 
 
 def test_legacy_run_raises_explanation_unavailable() -> None:

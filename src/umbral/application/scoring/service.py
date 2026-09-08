@@ -429,10 +429,10 @@ class ScoringService:
         profile: SearchProfile,
         run: RecommendationRun,
         policy: ScoringPolicyDoc,
-    ) -> frozenset[str] | None:
+    ) -> frozenset[str]:
         compilation = self.compilation_for(run.profile_version_id)
         if compilation is None:
-            return None
+            return frozenset()
         return active_criterion_keys(profile, compilation, policy)
 
     def _latest_policy_version(self) -> PolicyVersion:
