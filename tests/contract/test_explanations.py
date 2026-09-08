@@ -173,4 +173,5 @@ def test_signal_observed_has_user_facing_copy_and_reasons_are_weighted() -> None
 
     assert explanation.reasons[0].criterion_key == "proximidad_cafes"
     assert "signal_observed" not in explanation.reasons[0].text
+    assert "proximidad_cafes" not in explanation.reasons[0].text
     assert "cafés cercanos" in explanation.reasons[0].text

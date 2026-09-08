@@ -20,19 +20,19 @@
     "signal_below_threshold": { "state": "mismatch", "copy_key": "reason.signal_below_threshold" }
   },
   "copy_templates": {
-    "reason.budget_within_headroom": "Dentro del presupuesto con margen.",
-    "reason.rooms_match": "Coincide con los ambientes buscados.",
-    "reason.rooms_above_min": "Supera el minimo de ambientes.",
-    "reason.surface_within_bounds": "Superficie dentro del rango buscado.",
-    "reason.location_near_preferred": "Ubicacion cercana a la preferida.",
-    "reason.concept_observed": "Se observo {concept} en el listing.",
-    "reason.budget_over_max": "El costo total supera el presupuesto.",
-    "reason.concept_missing": "No cumple {concept} (evidencia negativa).",
-    "reason.no_observation_data": "Sin datos suficientes para evaluar {criterion}.",
-    "reason.location_precision_low": "Ubicacion con precision baja; no se pudo evaluar.",
-    "reason.signal_observed": "Hay evidencia de {concept} para este listing.",
-    "reason.signal_below_threshold": "El acceso a {concept} queda por debajo de lo buscado.",
-    "notice.legacy_run": "La explicacion no esta disponible para este run.",
+    "reason.budget_within_headroom": "Está dentro del presupuesto con margen.",
+    "reason.rooms_match": "Tiene la cantidad de ambientes que buscás.",
+    "reason.rooms_above_min": "Tiene más ambientes de los que buscás.",
+    "reason.surface_within_bounds": "La superficie entra en el rango que buscás.",
+    "reason.location_near_preferred": "Está en una zona que marcaste.",
+    "reason.concept_observed": "Aparece alineado con {concept}.",
+    "reason.budget_over_max": "El costo total supera el presupuesto que marcaste.",
+    "reason.concept_missing": "No termina de encajar por {concept}.",
+    "reason.no_observation_data": "Todavía no puedo confirmar {criterion}.",
+    "reason.location_precision_low": "Todavía no puedo confirmar la ubicación exacta.",
+    "reason.signal_observed": "La zona muestra buenas señales de {concept}.",
+    "reason.signal_below_threshold": "La zona queda por debajo de lo que buscás en {concept}.",
+    "notice.legacy_run": "La explicación no está disponible para este resultado.",
     "notice.score_confidence": "Indicador con confianza {confidence}."
   }
 }

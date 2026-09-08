@@ -35,7 +35,7 @@
             "criterion_key": "presupuesto",
             "state": "match",
             "evidence_level": "strong",
-            "text": "Dentro del presupuesto con margen."
+            "text": "Está dentro del presupuesto con margen."
           }
         ],
         "risks": [{"criterion_key": "luminosidad", "state": "unknown"}],
@@ -68,7 +68,7 @@
             "criterion_key": "estado_general",
             "state": "match",
             "evidence_level": "low",
-            "text": "Se observo estado_general en el listing."
+            "text": "Aparece alineado con el estado general."
           }
         ],
         "risks": [{"criterion_key": "estado_general", "state": "match"}],

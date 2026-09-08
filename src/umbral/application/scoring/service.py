@@ -25,6 +25,7 @@ from umbral.application.radar.profile_policy import (
     frozen_search_profile_policy,
     rehydrate_profile_version,
 )
+from umbral.application.scoring.active_criteria import active_criterion_keys
 from umbral.application.scoring.comparison import EvaluationsByListing, build_comparison
 from umbral.application.scoring.contracts import (
     Comparison,
@@ -226,6 +227,7 @@ class ScoringService:
             raise ScoringNotFound(f"listing not in run: {listing_id}")
         policy = self._policy_document_for_reference(run.score_policy_version)
         profile = self._profile_for_run(run)
+        active_keys = self._active_criterion_keys(profile, run, policy)
         return build_explanation(
             search_profile_id=profile_id,
             run_id=run.run_id,
@@ -237,6 +239,7 @@ class ScoringService:
             templates=self.templates,
             satisfied_filters=_satisfied_filters(profile),
             profile_version_id=run.profile_version_id,
+            active_criterion_keys=active_keys,
         )
 
     def list_explanations(
@@ -258,6 +261,7 @@ class ScoringService:
         )
         policy = self._policy_document_for_reference(run.score_policy_version)
         profile = self._profile_for_run(run)
+        active_keys = self._active_criterion_keys(profile, run, policy)
         return tuple(
             build_explanation(
                 search_profile_id=profile_id,
@@ -272,6 +276,7 @@ class ScoringService:
                 templates=self.templates,
                 satisfied_filters=_satisfied_filters(profile),
                 profile_version_id=run.profile_version_id,
+                active_criterion_keys=active_keys,
             )
             for item in items
         )
@@ -418,6 +423,17 @@ class ScoringService:
             )
         except RadarPermanentError as error:
             raise ScoringStateError(error.detail) from error
+
+    def _active_criterion_keys(
+        self,
+        profile: SearchProfile,
+        run: RecommendationRun,
+        policy: ScoringPolicyDoc,
+    ) -> frozenset[str] | None:
+        compilation = self.compilation_for(run.profile_version_id)
+        if compilation is None:
+            return None
+        return active_criterion_keys(profile, compilation, policy)
 
     def _latest_policy_version(self) -> PolicyVersion:
         version = self.policies.latest_version(self.policy_seed_version)

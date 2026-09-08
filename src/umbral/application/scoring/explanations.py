@@ -19,8 +19,14 @@ from umbral.application.scoring.contracts import (
 )
 from umbral.application.scoring.policy import ScoringPolicyDoc
 
-
 _DISPLAY_LABELS = {
+    "presupuesto": "el presupuesto",
+    "ambientes": "los ambientes",
+    "superficie": "la superficie",
+    "ubicacion": "la ubicación",
+    "balcon": "el balcón",
+    "luminosidad": "la luz natural",
+    "estado_general": "el estado general",
     "proximidad_cafes": "cafés cercanos",
     "acceso_transporte": "acceso al transporte",
     "calma_residencial": "calma residencial",
@@ -48,8 +54,16 @@ def build_explanation(
     templates: Mapping[str, str],
     satisfied_filters: tuple[str, ...],
     profile_version_id: UUID,
+    active_criterion_keys: frozenset[str] | None = None,
 ) -> Explanation:
     """Build the explanation document from frozen evaluations."""
+
+    if active_criterion_keys is not None:
+        evaluations = tuple(
+            evaluation
+            for evaluation in evaluations
+            if evaluation.criterion_key in active_criterion_keys
+        )
 
     reasons: list[ExplanationReason] = []
     risks: list[ExplanationRisk] = []
@@ -138,7 +152,7 @@ def _template_text(
 
 
 def _display_label(criterion_key: str) -> str:
-    return _DISPLAY_LABELS.get(criterion_key, criterion_key)
+    return _DISPLAY_LABELS.get(criterion_key, "este criterio")
 
 
 def _dedupe_risks(risks: tuple[ExplanationRisk, ...]) -> tuple[ExplanationRisk, ...]:

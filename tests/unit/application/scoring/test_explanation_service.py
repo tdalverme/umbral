@@ -10,6 +10,8 @@ import pytest
 from tests.support.radar import profile_version_payload
 from tests.support.scoring import (
     ScoringTestContext,
+    build_compilation,
+    build_criterion,
     build_item,
     build_run,
 )
@@ -174,6 +176,58 @@ def test_two_calls_produce_identical_explanation() -> None:
         owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
     )
     assert first == second
+
+
+def test_explanation_views_hide_criteria_not_declared_by_frozen_compilation() -> None:
+    context, owner_id, profile_id, run_id, listing_id = _context_with_run()
+    run = context.runs.rows[run_id]
+    context.compilations.compilations[run.profile_version_id] = build_compilation(
+        profile_id=profile_id,
+        profile_version_id=run.profile_version_id,
+        criteria=(build_criterion("luminosidad"),),
+    )
+    context.evaluations.rows.extend(
+        (
+            replace(
+                _evaluation(run_id, listing_id, run.score_policy_version),
+                criterion_key="balcon",
+                reason_code="concept_observed",
+            ),
+            replace(
+                _evaluation(run_id, listing_id, run.score_policy_version),
+                criterion_key="estado_general",
+                reason_code="concept_observed",
+            ),
+            replace(
+                _evaluation(run_id, listing_id, run.score_policy_version),
+                criterion_key="luminosidad",
+                reason_code="concept_observed",
+            ),
+        )
+    )
+
+    explanation = context.service.get_explanation(
+        owner_id=owner_id,
+        profile_id=profile_id,
+        run_id=run_id,
+        listing_id=listing_id,
+    )
+    page = context.service.list_explanations(
+        owner_id=owner_id,
+        profile_id=profile_id,
+        run_id=run_id,
+        after_position=None,
+        limit=10,
+    )
+
+    assert {reason.criterion_key for reason in explanation.reasons} == {
+        "luminosidad",
+        "presupuesto",
+    }
+    assert {reason.criterion_key for reason in page[0].reasons} == {
+        "luminosidad",
+        "presupuesto",
+    }
 
 
 def test_legacy_run_raises_explanation_unavailable() -> None:
