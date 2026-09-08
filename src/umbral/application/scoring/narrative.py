@@ -337,7 +337,7 @@ def build_narrative_context(
         reason
         for reason in reasons
         if reason.get("criterion_key") not in (
-            unfavorable_keys | ungrounded_geographic_keys
+            unfavorable_keys | ungrounded_geographic_keys | geographic_keys
         )
     )
     tradeoffs = tradeoffs + tuple(
@@ -434,7 +434,7 @@ def _geographic_fact(
         signal_ref=signal_ref,
         observed_value=observed_value,
         unit=unit,
-        signal_positive=_signal_value_positive(signal_ref, observation.score),
+        signal_positive=_signal_value_positive(signal_ref, observed_value, unit),
     )
 
 
@@ -525,7 +525,9 @@ def _term_matches_signal(term: str, signal_ref: str) -> bool:
     return expected is not None and term.startswith(expected)
 
 
-def _signal_value_positive(signal_ref: str, value: object) -> bool | None:
+def _signal_value_positive(
+    signal_ref: str, value: float | int, unit: str
+) -> bool | None:
     if signal_ref not in {
         "road_noise",
         "transit_access",
@@ -538,7 +540,25 @@ def _signal_value_positive(signal_ref: str, value: object) -> bool | None:
         return None
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
-    return value >= 0.5
+    if unit == "places":
+        return value > 0
+    if unit != "m":
+        return None
+    if signal_ref == "road_noise":
+        return value < 120
+    if signal_ref == "transit_access":
+        return value <= 600
+    if signal_ref == "green_access":
+        return value <= 600
+    if signal_ref == "cafe_lifestyle":
+        return value <= 650
+    if signal_ref == "daily_convenience":
+        return value <= 600
+    if signal_ref == "commercial_intensity":
+        return value <= 1200
+    if signal_ref == "nightlife_intensity":
+        return value <= 450
+    return value > 0
 
 
 def _composite_signal_positive(signal_ref: str, value: object) -> bool | None:

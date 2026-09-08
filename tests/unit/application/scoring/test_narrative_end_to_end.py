@@ -247,7 +247,11 @@ def test_v2_road_noise_applies_user_polarity_once() -> None:
             result=far,
         ),
     )
-    near_positive, _, _ = _narrative_for_observation(
+    (
+        near_positive,
+        near_positive_fallback,
+        near_positive_managed,
+    ) = _narrative_for_observation(
         concept_key="ruido_transito",
         polarity="positive",
         observation=_urban_observation(
@@ -274,6 +278,66 @@ def test_v2_road_noise_applies_user_polarity_once() -> None:
     assert [fact.value for fact in near_positive.geography] == [
         "con una avenida principal relativamente cerca"
     ]
+    assert near_positive_fallback.text == (
+        "Encaja por con una avenida principal relativamente cerca."
+    )
+    assert "menor exposición" not in near_positive_fallback.text
+    assert near_positive_managed.source == "managed"
+    assert near_positive_managed.text == near_positive_fallback.text
+
+
+def test_v2_mixed_transit_contributor_keeps_selected_subte_direction() -> None:
+    calculator = UrbanSignalCalculator(load_urban_contract(CONTRACT_PATH))
+    result = calculator.calculate(
+        poi_distances={
+            "bus_stop": {"count_300m": [50.0, 60.0, 70.0]},
+            "subway_station": {"nearest_m": [2000.0]},
+            "train_station": {"nearest_m": [250.0]},
+        }
+    )
+    observation = _urban_observation(
+        listing_id=uuid4(),
+        concept_key="acceso_transporte",
+        signal_ref="transit_access",
+        result=result,
+    )
+
+    context, fallback, managed = _narrative_for_observation(
+        concept_key="acceso_transporte",
+        polarity="positive",
+        observation=observation,
+    )
+
+    transit = result.for_signal("transit_access")
+    assert transit is not None and transit.value == 0.6
+    assert [fact.value for fact in context.geography] == []
+    assert [item["fact"] for item in context.tradeoffs] == [
+        "con subte a una distancia mayor"
+    ]
+    assert fallback.text == (
+        "Encaja con parte de lo que buscás. "
+        "Con subte a una distancia mayor es un punto para revisar."
+    )
+    assert managed.source == "deterministic_fallback"
+    safe_gateway = ScriptedGateway()
+    safe_gateway.output = {
+        "text": "Con subte a una distancia mayor es un punto para revisar.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": [context.tradeoffs[0]["evidence_refs"][0]],
+    }
+    safe_managed = _writer(safe_gateway).write(context)
+    assert safe_managed.source == "managed"
+    assert safe_managed.text == safe_gateway.output["text"]
+
+    gateway = ScriptedGateway()
+    gateway.output = {
+        "text": "Encaja por con subte a una distancia mayor.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": [context.tradeoffs[0]["evidence_refs"][0]],
+    }
+    rejected = _writer(gateway).write(context)
+    assert rejected.source == "deterministic_fallback"
+    assert rejected.text == fallback.text
 
 
 def test_contract_enum_values_keep_negative_non_geographic_direction() -> None:
