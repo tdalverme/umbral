@@ -117,3 +117,22 @@ def test_reproducible_across_runs() -> None:
     for name, value in first.signals.items():
         assert second.signals[name].value == value.value
         assert second.signals[name].confidence == value.confidence
+
+
+def test_urban_contributor_keeps_observed_distance_and_count() -> None:
+    result = _calculator().calculate(
+        linear_distances={"major_road": {"nearest_m": [220.0]}},
+        poi_distances={
+            "cafe": {"count_300m": [80.0, 120.0], "nearest_m": [120.0]},
+        },
+    )
+
+    road = result.for_signal("road_noise")
+    cafes = result.for_signal("cafe_lifestyle")
+
+    assert road is not None
+    assert cafes is not None
+    assert road.contributors[0]["observed_value"] == 220.0
+    assert road.contributors[0]["unit"] == "m"
+    assert cafes.contributors[0]["observed_value"] == 2
+    assert cafes.contributors[0]["unit"] == "places"

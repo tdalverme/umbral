@@ -91,10 +91,13 @@ class UrbanSignalCalculator:
             inputs_present += 1
             score = self._score_term(term, buckets)
             total += term.weight * score
+            observed_value, unit = self._observed_term(term, buckets)
             contributors.append(
                 {
                     "term": _term_label(term),
                     "score": round(score, 6),
+                    "observed_value": observed_value,
+                    "unit": unit,
                 }
             )
         missing = inputs_present == 0
@@ -189,6 +192,20 @@ class UrbanSignalCalculator:
         if best >= far:
             return 0.0
         return _clamp01(1 - ((best - near) / (far - near)))
+
+    def _observed_term(
+        self,
+        term: SignalTerm,
+        buckets: Mapping[str, Mapping[str, list[float]]],
+    ) -> tuple[float | int, str]:
+        if term.primitive_ref is None:
+            return 0, "places"
+        category, metric = _split_ref(term.primitive_ref)
+        distances = buckets.get(category, {}).get(metric) or []
+        if term.op == "count":
+            radius = _radius_for_metric(metric)
+            return sum(distance <= radius for distance in distances), "places"
+        return min(distances), "m"
 
 def _term_label(term: SignalTerm) -> str:
     return term.primitive_ref or term.signal_ref or ""

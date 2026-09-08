@@ -125,6 +125,31 @@ class Explanation:
 
 
 @dataclass(frozen=True, slots=True)
+class GeographicFact:
+    """A bounded urban fact authorized for narrative presentation."""
+
+    label: str
+    value: str
+    source_ref: str
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class ExplanationNarrativeContext:
+    """The bounded, deterministic input to an opportunity narrative."""
+
+    listing: Mapping[str, object]
+    active_priorities: tuple[Mapping[str, object], ...]
+    reasons: tuple[Mapping[str, object], ...]
+    tradeoffs: tuple[Mapping[str, object], ...]
+    unknowns: tuple[Mapping[str, object], ...]
+    geography: tuple[GeographicFact, ...]
+    price_changes: tuple[Mapping[str, object], ...]
+    allowed_criteria: tuple[str, ...]
+    allowed_evidence_refs: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ComparisonDimension:
     """One homogeneous row of a structured comparison."""
 

@@ -1,0 +1,214 @@
+"""Grounded, presentation-only inputs for opportunity narratives."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from umbral.application.criteria.contracts import ListingObservation
+from umbral.application.scoring.contracts import (
+    Explanation,
+    ExplanationReason,
+    ExplanationRisk,
+)
+from umbral.application.scoring.narrative import (
+    build_narrative_context,
+    geographic_facts,
+    select_material_evaluations,
+)
+
+
+def _explanation() -> Explanation:
+    reasons = tuple(
+        ExplanationReason(
+            criterion_key=key,
+            state="match",
+            score=1.0,
+            confidence=0.9,
+            contribution=contribution,
+            evidence_level="strong",
+            reason_code="concept_observed",
+            evidence_refs=({"kind": "observation", "ref": key},),
+            text=key,
+        )
+        for key, contribution in (
+            ("acceso_transporte", 0.40),
+            ("proximidad_cafes", 0.30),
+            ("balcon", 0.20),
+            ("luminosidad", 0.10),
+            ("estado_general", 0.05),
+        )
+    )
+    return Explanation(
+        search_profile_id=uuid4(),
+        run_id=uuid4(),
+        listing_id=uuid4(),
+        score_version="v1",
+        score=0.8,
+        confidence=0.9,
+        reasons=reasons,
+        risks=(
+            ExplanationRisk("superficie", "mismatch", "too_small", "superficie"),
+            ExplanationRisk("orientacion", "unknown", "unknown", "orientación"),
+            ExplanationRisk("balcon", "unknown", "unknown", "balcón"),
+        ),
+        missing_data=("orientacion", "balcon"),
+        satisfied_filters=(),
+        profile_snapshot={},
+        feature_snapshot={},
+    )
+
+
+def _urban_observation(
+    concept_key: str,
+    *,
+    signal_ref: str,
+    contributors: list[dict[str, object]],
+) -> ListingObservation:
+    now = datetime.now(timezone.utc)
+    return ListingObservation(
+        observation_id=uuid4(),
+        listing_id=uuid4(),
+        concept_key=concept_key,
+        matcher_type="signal_score",
+        value=0.82,
+        score=0.82,
+        confidence=0.8,
+        evidence={"signal_ref": signal_ref, "contributors": contributors},
+        source="urban",
+        extraction_version_id=None,
+        state="active",
+        failure_code=None,
+        recomputation_run_id=None,
+        created_at=now,
+        correlation_id=uuid4(),
+    )
+
+
+def test_select_material_evaluations_limits_active_matches_and_caveats() -> None:
+    selected = select_material_evaluations(
+        _explanation(),
+        {
+            "acceso_transporte": object(),
+            "proximidad_cafes": object(),
+            "balcon": object(),
+            "luminosidad": object(),
+            "superficie": object(),
+            "orientacion": object(),
+        },
+    )
+
+    assert [item.criterion_key for item in selected] == [
+        "acceso_transporte",
+        "proximidad_cafes",
+        "balcon",
+        "luminosidad",
+        "superficie",
+        "orientacion",
+    ]
+
+
+def test_geographic_facts_translate_observed_distances_without_signal_scores() -> None:
+    facts = geographic_facts(
+        {
+            "ruido_transito": _urban_observation(
+                "ruido_transito",
+                signal_ref="road_noise",
+                contributors=[
+                    {
+                        "term": "major_road.nearest_m",
+                        "score": 0.4,
+                        "observed_value": 220.0,
+                        "unit": "m",
+                    },
+                ],
+            ),
+            "acceso_transporte": _urban_observation(
+                "acceso_transporte",
+                signal_ref="transit_access",
+                contributors=[
+                    {
+                        "term": "subway_station.nearest_m",
+                        "score": 0.8,
+                        "observed_value": 340.0,
+                        "unit": "m",
+                    },
+                ],
+            ),
+        }
+    )
+
+    assert [(fact.label, fact.value) for fact in facts] == [
+        ("menor exposición", "sin estar directamente sobre una avenida grande"),
+        ("buena conectividad", "subte relativamente cerca"),
+    ]
+    assert all("road_noise" not in fact.value for fact in facts)
+    assert all("0.4" not in fact.value for fact in facts)
+
+
+def test_geographic_facts_use_proxy_safe_language_for_composite_signals() -> None:
+    facts = geographic_facts(
+        {
+            "calma_residencial": _urban_observation(
+                "calma_residencial",
+                signal_ref="residential_calm",
+                contributors=[],
+            ),
+        }
+    )
+
+    assert [(fact.label, fact.value) for fact in facts] == [
+        ("entorno más residencial", "entorno más residencial"),
+    ]
+
+
+def test_narrative_context_keeps_safe_listing_fields_and_material_geography() -> None:
+    explanation = _explanation()
+    observation = _urban_observation(
+        "acceso_transporte",
+        signal_ref="transit_access",
+        contributors=[
+            {
+                "term": "subway_station.nearest_m",
+                "score": 0.8,
+                "observed_value": 340.0,
+                "unit": "m",
+            },
+        ],
+    )
+
+    context = build_narrative_context(
+        explanation=explanation,
+        listing={
+            "price_value": 207000,
+            "surface_m2": 54,
+            "rooms": 2,
+            "expenses_value": 185000,
+            "neighborhood": "Palermo",
+            "description_text": "Departamento con una descripción no autorizada.",
+        },
+        active_criteria={
+            "acceso_transporte": {"label": "transporte cerca", "polarity": "positive"},
+            "proximidad_cafes": {"label": "cafés cerca", "polarity": "positive"},
+            "balcon": {"label": "balcón", "polarity": "positive"},
+            "luminosidad": {"label": "buena luz natural", "polarity": "positive"},
+            "superficie": {"label": "superficie", "polarity": "positive"},
+            "orientacion": {"label": "orientación", "polarity": "positive"},
+        },
+        observations={"acceso_transporte": observation},
+        price_changes=(
+            {"field": "price", "before": 225000, "after": 207000, "currency": "USD"},
+        ),
+    )
+
+    assert context.listing == {
+        "price": 207000,
+        "surface_m2": 54,
+        "rooms": 2,
+        "expenses": 185000,
+        "neighborhood": "Palermo",
+    }
+    assert [fact.value for fact in context.geography] == ["subte relativamente cerca"]
+    assert context.price_changes == (
+        {"field": "price", "before": 225000, "after": 207000, "currency": "USD"},
+    )
