@@ -64,6 +64,7 @@ def _urban_observation(
     *,
     signal_ref: str,
     contributors: list[dict[str, object]],
+    value: float = 0.82,
 ) -> ListingObservation:
     now = datetime.now(timezone.utc)
     return ListingObservation(
@@ -71,8 +72,8 @@ def _urban_observation(
         listing_id=uuid4(),
         concept_key=concept_key,
         matcher_type="signal_score",
-        value=0.82,
-        score=0.82,
+        value=value,
+        score=value,
         confidence=0.8,
         evidence={"signal_ref": signal_ref, "contributors": contributors},
         source="urban",
@@ -159,6 +160,23 @@ def test_geographic_facts_use_proxy_safe_language_for_composite_signals() -> Non
 
     assert [(fact.label, fact.value) for fact in facts] == [
         ("entorno más residencial", "entorno más residencial"),
+    ]
+
+
+def test_high_noise_risk_uses_directionally_correct_proxy_safe_language() -> None:
+    facts = geographic_facts(
+        {
+            "ruido_ambiental": _urban_observation(
+                "ruido_ambiental",
+                signal_ref="noise_risk",
+                contributors=[],
+                value=0.82,
+            ),
+        }
+    )
+
+    assert [(fact.label, fact.value) for fact in facts] == [
+        ("mayor actividad", "mayor exposición a actividad urbana"),
     ]
 
 

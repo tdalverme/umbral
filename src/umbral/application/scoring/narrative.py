@@ -153,11 +153,12 @@ def build_narrative_context(
 
 def _geographic_fact(
     observation: ListingObservation, signal_ref: str) -> GeographicFact | None:
-    composite_phrase = _composite_phrase(signal_ref, observation.value)
-    if composite_phrase is not None:
+    composite_fact = _composite_fact(signal_ref, observation.value)
+    if composite_fact is not None:
+        label, value = composite_fact
         return GeographicFact(
-            label=_DEFAULT_LABELS.get(observation.concept_key, "entorno"),
-            value=composite_phrase,
+            label=label,
+            value=value,
             source_ref=f"urban:{observation.observation_id}",
             confidence=observation.confidence,
         )
@@ -196,13 +197,15 @@ def _first_factual_contributor(
     return None
 
 
-def _composite_phrase(signal_ref: str, value: object) -> str | None:
+def _composite_fact(signal_ref: str, value: object) -> tuple[str, str] | None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
     if signal_ref == "residential_calm":
-        return "entorno más residencial"
+        return "entorno más residencial", "entorno más residencial"
     if signal_ref == "noise_risk":
-        return "menor exposición"
+        if value >= 0.5:
+            return "mayor actividad", "mayor exposición a actividad urbana"
+        return "menor exposición", "menor exposición a actividad urbana"
     return None
 
 
