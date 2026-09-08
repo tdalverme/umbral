@@ -254,6 +254,17 @@ def test_writer_uses_managed_text_only_with_authorized_grounding(
     assert narrative.text.startswith("Encaja")
 
 
+def test_writer_rejects_invented_price_change_with_unrelated_valid_reference(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    scripted_gateway.output = {
+        "text": "Encaja por la buena conectividad. Bajó de USD 900.000 a USD 800.000.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
 def test_fallback_explains_reason_and_tradeoff_without_jargon(
     context: ExplanationNarrativeContext,
 ) -> None:

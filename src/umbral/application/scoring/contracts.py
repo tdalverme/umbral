@@ -132,6 +132,8 @@ class GeographicFact:
     value: str
     source_ref: str
     confidence: float
+    criterion_key: str | None = None
+    favorable: bool = True
 
 
 @dataclass(frozen=True, slots=True)

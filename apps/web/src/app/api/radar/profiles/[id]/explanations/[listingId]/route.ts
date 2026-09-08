@@ -11,6 +11,8 @@ export async function GET(
   const search = new URLSearchParams();
   const runId = url.searchParams.get("run_id");
   if (runId) search.set("run_id", runId);
+  const includeNarrative = url.searchParams.get("include_narrative");
+  if (includeNarrative) search.set("include_narrative", includeNarrative);
   const query = search.toString();
   const path = `/api/v1/search-profiles/${id}/explanations/${listingId}${query ? `?${query}` : ""}`;
   const response = await forwardRadarRequest(path, {}, request);

@@ -6,6 +6,7 @@ import json
 import re
 from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
 import jsonschema  # type: ignore[import-untyped]
 
@@ -75,9 +76,9 @@ class ManagedExplanationNarrativeWriter:
         if not _valid_content(content, self.schema, context):
             return fallback
         return ExplanationNarrative(
-            text=content["text"],
-            used_criteria=tuple(content["used_criteria"]),
-            used_evidence_refs=tuple(content["used_evidence_refs"]),
+            text=cast(str, content["text"]),
+            used_criteria=tuple(cast(list[str], content["used_criteria"])),
+            used_evidence_refs=tuple(cast(list[str], content["used_evidence_refs"])),
             source="managed",
             prompt_version=self.prompt_version,
             model_version=self.model_version,
@@ -157,7 +158,73 @@ def _valid_content(
         return False
     if _RAW_KEY_RE.search(text):
         return False
+    if not _claims_match_context(text, criteria, context):
+        return False
     return not lint_voice(text)
+
+
+def _claims_match_context(
+    text: str, criteria: list[object], context: ExplanationNarrativeContext
+) -> bool:
+    lowered = text.casefold()
+    packets = (*context.reasons, *context.tradeoffs, *context.unknowns)
+    for criterion in criteria:
+        if not isinstance(criterion, str):
+            return False
+        packet = next((item for item in packets if item.get("criterion_key") == criterion), None)
+        if packet is None:
+            refs = set(context.criterion_evidence_refs.get(criterion, ()))
+            packet = next(
+                (item for item in packets if refs.intersection(_packet_refs(item))),
+                None,
+            )
+        if packet is None:
+            return False
+        if not context.criterion_evidence_refs.get(criterion):
+            return False
+        label = packet.get("label")
+        if not isinstance(label, str) or label.casefold() not in lowered:
+            return False
+    for fact in context.geography:
+        if fact.criterion_key in criteria and fact.value.casefold() not in lowered:
+            return False
+    if re.search(r"(?:baj[oó]|pas[oó]|subi[oó]|aument[oó])", lowered):
+        if not context.price_changes:
+            return False
+        if not all(
+            _price_mentioned(change, text) for change in context.price_changes
+        ):
+            return False
+    if re.search(r"\b(?:balcón|pileta|piscina|terraza|patio|cochera)\b", lowered):
+        authorized_labels = {
+            str(item.get("label", "")).casefold()
+            for item in packets
+        }
+        if not any(term in authorized_labels for term in ("balcón", "pileta", "piscina", "terraza", "patio", "cochera")):
+            return False
+    return True
+
+
+def _price_mentioned(change: Mapping[str, object], text: str) -> bool:
+    before = change.get("before")
+    after = change.get("after")
+    currency = change.get("currency")
+    if not isinstance(before, (int, float)) or isinstance(before, bool):
+        return False
+    if not isinstance(after, (int, float)) or isinstance(after, bool):
+        return False
+    if not isinstance(currency, str):
+        return False
+    def token(value: int | float) -> str:
+        return f"{value:,.0f}".replace(",", ".")
+    return all(f"{currency} {token(value)}" in text for value in (before, after))
+
+
+def _packet_refs(packet: Mapping[str, object]) -> tuple[str, ...]:
+    refs = packet.get("evidence_refs")
+    if not isinstance(refs, (tuple, list)):
+        return ()
+    return tuple(ref for ref in refs if isinstance(ref, str))
 
 
 def _load_narrative_prompt() -> str:

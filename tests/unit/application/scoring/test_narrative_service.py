@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from dataclasses import replace
 from uuid import UUID, uuid4
 
 from tests.support.radar import build_listing, build_profile, profile_version_payload
@@ -64,7 +65,19 @@ def _context() -> tuple[
         run_id=run_id,
         score_policy_version=score_policy_version,
     )
-    context.items.items_by_run[run_id] = [build_item(run_id, listing_id)]
+    context.items.items_by_run[run_id] = [
+        replace(
+            build_item(run_id, listing_id),
+            contributions={
+                "_narrative_listing": {
+                    "price_value": 700.0,
+                    "price_currency": "ARS",
+                    "price_changes": (),
+                },
+                "_narrative_observations": {},
+            },
+        )
+    ]
     context.listings.rows[listing_id] = build_listing(listing_id=listing_id)
     context.compilations.compilations[profile_version_id] = build_compilation(
         profile_id=profile_id,

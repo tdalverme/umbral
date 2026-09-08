@@ -8,7 +8,7 @@ performs I/O: the run job loads the frozen inputs first (FR-008, SC-001).
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Protocol, cast
 from uuid import UUID, uuid4
@@ -50,6 +50,8 @@ class ScoredCandidate:
     confidence: float
     contributions: Mapping[str, object]
     evaluations: tuple[CriterionEvaluation, ...]
+    narrative_listing: Mapping[str, object] = field(default_factory=dict)
+    narrative_observations: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
 
 
 class PolicyRunEngine(Protocol):
@@ -261,7 +263,41 @@ def _score_candidate(
         confidence=confidence,
         contributions=contributions,
         evaluations=tuple(evaluations),
+        narrative_listing=_narrative_listing_snapshot(listing),
+        narrative_observations=_narrative_observation_snapshot(observations),
     )
+
+
+def _narrative_listing_snapshot(listing: NormalizedListing) -> Mapping[str, object]:
+    return {
+        "price_value": listing.price_value,
+        "price_currency": listing.price_currency,
+        "surface_m2": listing.surface_m2,
+        "rooms": listing.rooms,
+        "expenses_value": listing.expenses_value,
+        "neighborhood": listing.neighborhood,
+        "price_changes": tuple(dict(change) for change in listing.price_changes),
+    }
+
+
+def _narrative_observation_snapshot(
+    observations: ObservationsByConcept,
+) -> Mapping[str, Mapping[str, object]]:
+    return {
+        key: {
+            "observation_id": str(observation.observation_id),
+            "listing_id": str(observation.listing_id),
+            "concept_key": observation.concept_key,
+            "matcher_type": observation.matcher_type,
+            "value": observation.value,
+            "score": observation.score,
+            "confidence": observation.confidence,
+            "evidence": dict(observation.evidence),
+            "source": observation.source,
+            "state": observation.state,
+        }
+        for key, observation in observations.items()
+    }
 
 
 def _normalized_criterion_weights(

@@ -68,28 +68,29 @@ def deterministic_narrative(
 ) -> ExplanationNarrative:
     """Describe bounded reasons without model availability or inference."""
 
+    selected_reasons = [item for item in context.reasons if _string(item.get("label"))][:3]
     reasons = [
-        _string(item.get("label"))
-        for item in context.reasons[:3]
-        if _string(item.get("label"))
+        label for item in selected_reasons
+        if (label := _string(item.get("label"))) is not None
     ]
-    geography = [fact.value for fact in context.geography[: 3 - len(reasons)]]
-    matches = reasons + geography
+    geography = [
+        fact.value for fact in context.geography if fact.favorable
+    ][: max(0, 3 - len(reasons))]
+    matches = [value for value in reasons + geography if value is not None]
     if matches:
         text = f"Encaja por {_join_spanish(matches)}."
     else:
         text = "Encaja con parte de lo que buscás."
 
-    tradeoff = next(
-        (
-            _string(item.get("label"))
-            for item in context.tradeoffs
-            if _string(item.get("label"))
-        ),
-        None,
+    tradeoff_item = next(
+        (item for item in context.tradeoffs if _string(item.get("label"))), None
     )
+    tradeoff = _string(tradeoff_item.get("label")) if tradeoff_item else None
+    if tradeoff is None:
+        unfavorable = next((fact for fact in context.geography if not fact.favorable), None)
+        tradeoff = unfavorable.value if unfavorable is not None else None
     if tradeoff:
-        text += f" La {tradeoff} es un punto para revisar."
+        text += f" {tradeoff[0].upper() + tradeoff[1:]} es un punto para revisar."
     elif context.unknowns:
         unknown = _string(context.unknowns[0].get("label"))
         if unknown:
@@ -120,10 +121,32 @@ def deterministic_narrative(
                 f" El precio pasó de {_price_text(before, currency)}"
                 f" a {_price_text(after, currency)}."
             )
+    used_criteria: tuple[str, ...] = tuple(
+        key
+        for item in selected_reasons
+        if (key := item.get("criterion_key")) is not None
+        and isinstance(key, str)
+    ) + tuple(
+        fact.criterion_key
+        for fact in context.geography
+        if fact.favorable and fact.criterion_key
+    )
+    if tradeoff_item is not None and isinstance(
+        tradeoff_item.get("criterion_key"), str
+    ):
+        tradeoff_key = tradeoff_item.get("criterion_key")
+        assert isinstance(tradeoff_key, str)
+        used_criteria += (tradeoff_key,)
     return ExplanationNarrative(
         text=text,
-        used_criteria=(),
-        used_evidence_refs=(),
+        used_criteria=used_criteria,
+        used_evidence_refs=tuple(
+            ref for item in selected_reasons for ref in _packet_evidence_refs(item)
+        ) + tuple(fact.source_ref for fact in context.geography if fact.favorable)
+        + tuple(
+            ref
+            for ref in _packet_evidence_refs(tradeoff_item)
+        ),
         source="deterministic_fallback",
         prompt_version=prompt_version,
         model_version=model_version,
@@ -139,14 +162,23 @@ def select_material_evaluations(
     reasons = [
         reason
         for reason in explanation.reasons
-        if reason.criterion_key in active_criteria
+        if reason.criterion_key in active_criteria and reason.state == "match"
     ][:4]
+    tradeoffs = [
+        reason
+        for reason in explanation.reasons
+        if reason.criterion_key in active_criteria and reason.state == "mismatch"
+    ][:2]
     risks = [
         risk
         for risk in explanation.risks
         if risk.criterion_key in active_criteria
     ][:2]
-    return tuple(reasons + risks)
+    selected: list[ExplanationReason | ExplanationRisk] = []
+    selected.extend(reasons)
+    selected.extend(tradeoffs)
+    selected.extend(risks)
+    return tuple(selected)
 
 
 def geographic_facts(
@@ -164,10 +196,10 @@ def geographic_facts(
 
     facts: list[GeographicFact] = []
     for signal_ref in _GEOGRAPHIC_SIGNAL_ORDER:
-        observation = by_signal.get(signal_ref)
-        if observation is None:
+        candidate_observation = by_signal.get(signal_ref)
+        if candidate_observation is None:
             continue
-        fact = _geographic_fact(observation, signal_ref)
+        fact = _geographic_fact(candidate_observation, signal_ref)
         if fact is not None:
             facts.append(fact)
     return tuple(facts)
@@ -218,14 +250,30 @@ def build_narrative_context(
         evidence_by_criterion[key] = tuple(
             sorted({*evidence_by_criterion.get(key, ()), fact.source_ref})
         )
-    geography = tuple(fact for _, fact in geography_pairs)
+    geography = tuple(
+        fact for key, fact in geography_pairs
+        if _geography_favorable(key, fact, active_criteria)
+    )
+    unfavorable = tuple(
+        fact for key, fact in geography_pairs
+        if not _geography_favorable(key, fact, active_criteria)
+    )
+    tradeoffs = tradeoffs + tuple(
+        {
+            "criterion_key": fact.criterion_key,
+            "label": fact.label,
+            "state": "mismatch",
+            "evidence_refs": (fact.source_ref,),
+        }
+        for fact in unfavorable
+    )
+    packets = (*reasons, *tradeoffs, *unknowns)
     allowed_evidence_refs = tuple(
         sorted(
             {
                 ref
-                for packet in reasons + tradeoffs + unknowns
-                for ref in packet["evidence_refs"]
-                if isinstance(ref, str)
+                for packet in packets
+                for ref in _packet_evidence_refs(packet)
             }
             | {fact.source_ref for fact in geography}
         )
@@ -270,12 +318,13 @@ def _geographic_fact(
             value=value,
             source_ref=f"urban:{observation.observation_id}",
             confidence=observation.confidence,
+            criterion_key=observation.concept_key,
         )
-    contributor = _first_factual_contributor(observation)
+    contributor = _first_factual_contributor(observation, signal_ref)
     if contributor is None:
         return None
-    observed_value, unit = contributor
-    phrase = _phrase(signal_ref, observed_value, unit)
+    observed_value, unit, term = contributor
+    phrase = _phrase(signal_ref, observed_value, unit, term)
     if phrase is None:
         return None
     return GeographicFact(
@@ -283,12 +332,34 @@ def _geographic_fact(
         value=phrase,
         source_ref=f"urban:{observation.observation_id}",
         confidence=observation.confidence,
+        criterion_key=observation.concept_key,
     )
 
 
+def _geography_favorable(
+    key: str, fact: GeographicFact, active_criteria: Mapping[str, object]
+) -> bool:
+    priority = active_criteria.get(key)
+    polarity = priority.get("polarity") if isinstance(priority, Mapping) else "positive"
+    if polarity != "negative":
+        return True
+    if key in {"vida_nocturna", "calma_residencial"}:
+        return fact.value not in {
+            "mayor actividad nocturna",
+            "entorno más residencial",
+            "mayor actividad urbana",
+        }
+    if key in {"ruido_ambiental", "ruido_transito"}:
+        return fact.value not in {
+            "mayor exposición a actividad urbana",
+            "con una avenida principal relativamente cerca",
+        }
+    return True
+
+
 def _first_factual_contributor(
-    observation: ListingObservation,
-) -> tuple[float | int, str] | None:
+    observation: ListingObservation, signal_ref: str,
+) -> tuple[float | int, str, str] | None:
     contributors = observation.evidence.get("contributors")
     if not isinstance(contributors, list):
         return None
@@ -297,20 +368,38 @@ def _first_factual_contributor(
             continue
         value = contributor.get("observed_value")
         unit = contributor.get("unit")
+        term = contributor.get("term")
         if (
             isinstance(value, (int, float))
             and not isinstance(value, bool)
             and isinstance(unit, str)
+            and isinstance(term, str)
+            and _term_matches_signal(term, signal_ref)
         ):
-            return value, unit
+            return value, unit, term
     return None
+
+
+def _term_matches_signal(term: str, signal_ref: str) -> bool:
+    expected = {
+        "transit_access": ("subway_station.", "train_station.", "rail_station."),
+        "road_noise": ("major_road.",),
+        "green_access": ("park.",),
+        "daily_convenience": ("service.",),
+        "cafe_lifestyle": ("cafe.",),
+        "commercial_intensity": ("commercial.",),
+        "nightlife_intensity": ("nightlife.",),
+    }.get(signal_ref)
+    return expected is not None and term.startswith(expected)
 
 
 def _composite_fact(signal_ref: str, value: object) -> tuple[str, str] | None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
     if signal_ref == "residential_calm":
-        return "entorno más residencial", "entorno más residencial"
+        if value >= 0.5:
+            return "entorno más residencial", "entorno más residencial"
+        return "mayor actividad", "mayor actividad urbana"
     if signal_ref == "noise_risk":
         if value >= 0.5:
             return "mayor actividad", "mayor exposición a actividad urbana"
@@ -318,7 +407,7 @@ def _composite_fact(signal_ref: str, value: object) -> tuple[str, str] | None:
     return None
 
 
-def _phrase(signal_ref: str, value: float | int, unit: str) -> str | None:
+def _phrase(signal_ref: str, value: float | int, unit: str, term: str = "") -> str | None:
     if signal_ref == "road_noise" and unit == "m":
         if value >= 300:
             return "alejada de los principales corredores"
@@ -326,10 +415,15 @@ def _phrase(signal_ref: str, value: float | int, unit: str) -> str | None:
             return "sin estar directamente sobre una avenida grande"
         return "con una avenida principal relativamente cerca"
     if signal_ref == "transit_access" and unit == "m":
+        transport = (
+            "subte" if "subway" in term or "subte" in term
+            else "tren" if "train" in term or "rail" in term
+            else "transporte"
+        )
         return (
-            "subte relativamente cerca"
+            f"{transport} relativamente cerca"
             if value <= 600
-            else "con transporte a una distancia mayor"
+            else f"con {transport} a una distancia mayor"
         )
     if signal_ref == "green_access" and unit == "m":
         return (
@@ -369,6 +463,7 @@ def _evaluation_packet(
     active_criteria: Mapping[str, object],
 ) -> Mapping[str, object]:
     return {
+        "criterion_key": reason.criterion_key,
         "label": _label(reason.criterion_key, active_criteria),
         "state": reason.state,
         "confidence": reason.confidence,
@@ -381,6 +476,7 @@ def _risk_packet(
     active_criteria: Mapping[str, object],
 ) -> Mapping[str, object]:
     return {
+        "criterion_key": risk.criterion_key,
         "label": _label(risk.criterion_key, active_criteria),
         "state": risk.state,
         "evidence_refs": (),
@@ -389,10 +485,11 @@ def _risk_packet(
 
 def _priority_packet(key: str, value: object) -> Mapping[str, object]:
     details = value if isinstance(value, Mapping) else {}
+    label = details.get("label")
     return {
         "key": key,
-        "label": details.get("label", _DEFAULT_LABELS.get(key, "esta prioridad")),
-        "polarity": details.get("polarity", "positive"),
+        "label": label if isinstance(label, str) else _DEFAULT_LABELS.get(key, "esta prioridad"),
+        "polarity": details.get("polarity") if isinstance(details.get("polarity"), str) else "positive",
     }
 
 
@@ -406,9 +503,20 @@ def _evidence_refs(refs: Sequence[Mapping[str, object]]) -> tuple[str, ...]:
 
 def _label(key: str, active_criteria: Mapping[str, object]) -> str:
     value = active_criteria.get(key)
-    if isinstance(value, Mapping) and isinstance(value.get("label"), str):
-        return value["label"]
+    if isinstance(value, Mapping):
+        label = value.get("label")
+        if isinstance(label, str):
+            return label
     return _DEFAULT_LABELS.get(key, "esta prioridad")
+
+
+def _packet_evidence_refs(packet: Mapping[str, object] | None) -> tuple[str, ...]:
+    if packet is None:
+        return ()
+    refs = packet.get("evidence_refs")
+    if not isinstance(refs, (tuple, list)):
+        return ()
+    return tuple(ref for ref in refs if isinstance(ref, str))
 
 
 def _price_change(

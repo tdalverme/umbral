@@ -10,11 +10,12 @@ over frozen run data; nothing is invented beyond the persisted breakdown.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, replace
+from dataclasses import replace
 from datetime import datetime, timezone
+from typing import Any, cast
 from uuid import UUID, uuid4
 
-from umbral.application.criteria.contracts import Compilation
+from umbral.application.criteria.contracts import Compilation, ListingObservation
 from umbral.application.criteria.registry import MatcherTypesSpec
 from umbral.application.radar.contracts import (
     RadarPermanentError,
@@ -307,6 +308,10 @@ class ScoringService:
         listing = self.listings.get(listing_id)
         if listing is None:
             raise ScoringNotFound(f"listing not found: {listing_id}")
+        item = next(
+            item for item in self.items.list_for_run(run.run_id, None, 1000)
+            if item.listing_id == listing_id
+        )
         explanation = self.get_explanation(
             owner_id=owner_id,
             profile_id=profile_id,
@@ -316,17 +321,31 @@ class ScoringService:
         policy = self._policy_document_for_reference(run.score_policy_version)
         profile = self._profile_for_run(run)
         active_keys = self._active_criterion_keys(profile, run, policy)
-        observations = self.observations.active_for_listings((listing_id,)).get(
-            listing_id, {}
+        frozen_listing = item.contributions.get("_narrative_listing")
+        listing_payload = (
+            cast(Mapping[str, object], frozen_listing)
+            if isinstance(frozen_listing, Mapping)
+            else {}
+        )
+        frozen_observations = item.contributions.get("_narrative_observations")
+        observations = _rehydrate_narrative_observations(
+            frozen_observations, run, listing_id
         )
         context = build_narrative_context(
             explanation=explanation,
-            listing=asdict(listing),
+            listing=listing_payload,
             active_criteria={
-                key: {"label": _narrative_label(key)} for key in sorted(active_keys)
+                key: value
+                for key, value in _narrative_criteria(
+                    profile, run, policy, self.compilation_for(run.profile_version_id)
+                ).items()
+                if key in active_keys
             },
             observations=observations,
-            price_changes=listing.price_changes,
+            price_changes=cast(
+                tuple[Mapping[str, object], ...],
+                listing_payload.get("price_changes", ()),
+            ),
         )
         context = replace(context, run_id=run.run_id)
         if self.narrative_writer is not None:
@@ -552,3 +571,70 @@ def _narrative_label(key: str) -> str:
         "calma_residencial": "entorno más residencial",
         "ruido_ambiental": "menor exposición",
     }.get(key, "esta prioridad")
+
+
+def _narrative_criteria(
+    profile: SearchProfile,
+    run: RecommendationRun,
+    policy: ScoringPolicyDoc,
+    compilation: Compilation | None,
+) -> Mapping[str, object]:
+    del profile, run
+    values: dict[str, object] = {
+        criterion.key: {
+            "label": _narrative_label(criterion.key),
+            "polarity": "positive",
+        }
+        for criterion in policy.criteria
+    }
+    if compilation is not None:
+        for criterion in compilation.criteria:
+            values[criterion.concept_key] = {
+                "label": _narrative_label(criterion.concept_key),
+                "polarity": criterion.params.get("polarity", "positive"),
+            }
+    return values
+
+
+def _run_snapshot(
+    diagnostics: Mapping[str, object], key: str, listing_id: UUID
+) -> Mapping[str, object] | None:
+    snapshots = diagnostics.get(key)
+    if not isinstance(snapshots, Mapping):
+        return None
+    snapshot = snapshots.get(str(listing_id), snapshots.get(listing_id))
+    return snapshot if isinstance(snapshot, Mapping) else None
+
+
+def _rehydrate_narrative_observations(
+    raw: object, run: RecommendationRun, listing_id: UUID
+) -> Mapping[str, ListingObservation]:
+    if not isinstance(raw, Mapping):
+        return {}
+    observations: dict[str, ListingObservation] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not isinstance(value, Mapping):
+            continue
+        try:
+            observation_id = UUID(str(value["observation_id"]))
+            stored_listing_id = UUID(str(value.get("listing_id", listing_id)))
+        except (KeyError, ValueError):
+            continue
+        observations[key] = ListingObservation(
+            observation_id=observation_id,
+            listing_id=stored_listing_id,
+            concept_key=str(value.get("concept_key", key)),
+            matcher_type=cast(Any, value.get("matcher_type", "categorical")),
+            value=value.get("value"),
+            score=float(value.get("score", 0.0)),
+            confidence=float(value.get("confidence", 0.0)),
+            evidence=cast(Mapping[str, object], value.get("evidence", {})),
+            source=cast(Any, value.get("source", "urban")),
+            extraction_version_id=None,
+            state=cast(Any, value.get("state", "active")),
+            failure_code=None,
+            recomputation_run_id=run.run_id,
+            created_at=run.created_at,
+            correlation_id=run.correlation_id,
+        )
+    return observations

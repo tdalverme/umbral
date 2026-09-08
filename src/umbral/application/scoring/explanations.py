@@ -145,10 +145,24 @@ def _template_text(
     **values: str,
 ) -> str:
     key = f"reason.{reason_code}"
-    text = templates.get(key, reason_code)
+    text = templates.get(key, _fallback_reason_text(reason_code))
     for name, value in values.items():
         text = text.replace("{" + name + "}", value)
     return text
+
+
+def _fallback_reason_text(reason_code: str) -> str:
+    return {
+        "budget_within_headroom": "Está dentro del presupuesto con margen.",
+        "rooms_match": "Tiene la cantidad de ambientes que buscás.",
+        "surface_within_bounds": "La superficie entra en el rango que buscás.",
+        "location_near_preferred": "Está en una zona que marcaste.",
+        "concept_observed": "Aparece alineado con este criterio.",
+        "concept_missing": "No termina de encajar con este criterio.",
+        "no_observation_data": "Todavía no puedo confirmar este dato.",
+        "signal_observed": "La zona muestra señales compatibles.",
+        "signal_below_threshold": "La zona queda por debajo de lo que buscás.",
+    }.get(reason_code, "Hay un aspecto de esta búsqueda para revisar.")
 
 
 def _display_label(criterion_key: str) -> str:

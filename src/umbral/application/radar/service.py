@@ -746,7 +746,14 @@ class RadarService:
                         listing_id=candidate.listing_id,
                         score=candidate.score,
                         position=position,
-                        contributions=dict(candidate.contributions),
+                        contributions={
+                            **candidate.contributions,
+                            "_narrative_listing": dict(candidate.narrative_listing),
+                            "_narrative_observations": {
+                                key: dict(value)
+                                for key, value in candidate.narrative_observations.items()
+                            },
+                        },
                     )
                     for position, candidate in enumerate(scored_v1)
                 )

@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
+from starlette.concurrency import run_in_threadpool
 
 from umbral.api.dependencies import RuntimeDependencies
 from umbral.application.identity.contracts import CurrentPrincipal, IdentityError
@@ -253,12 +254,16 @@ async def get_explanation(
         )
         narrative = None
         if include_narrative:
-            narrative = _scoring().get_narrative(
-                owner_id=principal.user_id,
-                profile_id=search_profile_id,
-                run_id=run_id
-                or _latest_run(request, principal.user_id, search_profile_id),
-                listing_id=listing_id,
+            resolved_narrative_run = run_id or _latest_run(
+                request, principal.user_id, search_profile_id
+            )
+            narrative = await run_in_threadpool(
+                lambda: _scoring().get_narrative(
+                    owner_id=principal.user_id,
+                    profile_id=search_profile_id,
+                    run_id=resolved_narrative_run,
+                    listing_id=listing_id,
+                )
             )
         return ExplanationResponse.from_domain(explanation, narrative)
     except ScoringError as error:

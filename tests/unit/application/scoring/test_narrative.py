@@ -302,3 +302,26 @@ def test_narrative_describes_price_increase_without_calling_it_a_drop() -> None:
 
     assert "Bajó" not in result.text
     assert "pasó de USD 100.000 a USD 120.000" in result.text
+
+
+def test_material_evaluations_keep_matches_and_tradeoffs_independent() -> None:
+    explanation = _explanation()
+    selected = select_material_evaluations(
+        explanation,
+        {key: object() for key in ("acceso_transporte", "proximidad_cafes", "balcon", "luminosidad", "superficie", "orientacion")},
+    )
+    assert [item.criterion_key for item in selected] == [
+        "acceso_transporte", "proximidad_cafes", "balcon", "luminosidad", "superficie", "orientacion"
+    ]
+
+
+def test_geographic_contributor_requires_matching_term() -> None:
+    facts = geographic_facts({
+        "acceso_transporte": _urban_observation(
+            "acceso_transporte", signal_ref="transit_access", contributors=[
+                {"term": "train_station.nearest_m", "observed_value": 200, "unit": "m"},
+                {"term": "subway_station.nearest_m", "observed_value": 800, "unit": "m"},
+            ]
+        )
+    })
+    assert facts[0].value == "tren relativamente cerca"
