@@ -302,6 +302,7 @@ def test_narrative_describes_price_increase_without_calling_it_a_drop() -> None:
 
     assert "Bajó" not in result.text
     assert "pasó de USD 100.000 a USD 120.000" in result.text
+    assert "listing_field:price" in result.used_evidence_refs
 
 
 def test_material_evaluations_keep_matches_and_tradeoffs_independent() -> None:

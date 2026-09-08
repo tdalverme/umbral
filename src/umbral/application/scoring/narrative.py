@@ -137,16 +137,17 @@ def deterministic_narrative(
         tradeoff_key = tradeoff_item.get("criterion_key")
         assert isinstance(tradeoff_key, str)
         used_criteria += (tradeoff_key,)
+    used_evidence_refs = tuple(
+        ref for item in selected_reasons for ref in _packet_evidence_refs(item)
+    ) + tuple(fact.source_ref for fact in context.geography if fact.favorable) + tuple(
+        ref for ref in _packet_evidence_refs(tradeoff_item)
+    )
+    if price_change is not None:
+        used_evidence_refs += ("listing_field:price",)
     return ExplanationNarrative(
         text=text,
         used_criteria=used_criteria,
-        used_evidence_refs=tuple(
-            ref for item in selected_reasons for ref in _packet_evidence_refs(item)
-        ) + tuple(fact.source_ref for fact in context.geography if fact.favorable)
-        + tuple(
-            ref
-            for ref in _packet_evidence_refs(tradeoff_item)
-        ),
+        used_evidence_refs=used_evidence_refs,
         source="deterministic_fallback",
         prompt_version=prompt_version,
         model_version=model_version,
@@ -276,6 +277,14 @@ def build_narrative_context(
                 for ref in _packet_evidence_refs(packet)
             }
             | {fact.source_ref for fact in geography}
+            | (
+                {"listing_field:price"}
+                if any(
+                    _price_change(change, listing.get("price_currency")) is not None
+                    for change in price_changes
+                )
+                else set()
+            )
         )
     )
     return ExplanationNarrativeContext(

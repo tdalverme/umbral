@@ -150,7 +150,10 @@ def _valid_content(
     if not isinstance(evidence_refs, list) or not all(
         isinstance(value, str)
         and value in context.allowed_evidence_refs
-        and value in criterion_refs
+        and (
+            value in criterion_refs
+            or (value == "listing_field:price" and bool(context.price_changes))
+        )
         for value in evidence_refs
     ):
         return False
@@ -158,13 +161,16 @@ def _valid_content(
         return False
     if _RAW_KEY_RE.search(text):
         return False
-    if not _claims_match_context(text, criteria, context):
+    if not _claims_match_context(text, criteria, evidence_refs, context):
         return False
     return not lint_voice(text)
 
 
 def _claims_match_context(
-    text: str, criteria: list[object], context: ExplanationNarrativeContext
+    text: str,
+    criteria: list[object],
+    evidence_refs: object,
+    context: ExplanationNarrativeContext,
 ) -> bool:
     lowered = text.casefold()
     packets = (*context.reasons, *context.tradeoffs, *context.unknowns)
@@ -190,6 +196,8 @@ def _claims_match_context(
             return False
     if re.search(r"(?:baj[oó]|pas[oó]|subi[oó]|aument[oó])", lowered):
         if not context.price_changes:
+            return False
+        if not isinstance(evidence_refs, list) or "listing_field:price" not in evidence_refs:
             return False
         if not all(
             _price_mentioned(change, text) for change in context.price_changes
