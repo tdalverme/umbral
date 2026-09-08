@@ -8,11 +8,13 @@ from uuid import uuid4
 from umbral.application.criteria.contracts import ListingObservation
 from umbral.application.scoring.contracts import (
     Explanation,
+    ExplanationNarrativeContext,
     ExplanationReason,
     ExplanationRisk,
 )
 from umbral.application.scoring.narrative import (
     build_narrative_context,
+    deterministic_narrative,
     geographic_facts,
     select_material_evaluations,
 )
@@ -263,3 +265,40 @@ def test_narrative_context_excludes_incomplete_price_changes() -> None:
     )
 
     assert context.price_changes == ()
+
+
+def test_narrative_context_uses_listing_currency_for_price_value_change() -> None:
+    context = build_narrative_context(
+        explanation=_explanation(),
+        listing={"price_currency": "USD"},
+        active_criteria={},
+        observations={},
+        price_changes=(
+            {"field": "price_value", "before": 225000, "after": 207000},
+        ),
+    )
+
+    assert context.price_changes == (
+        {"field": "price", "before": 225000, "after": 207000, "currency": "USD"},
+    )
+
+
+def test_narrative_describes_price_increase_without_calling_it_a_drop() -> None:
+    context = ExplanationNarrativeContext(
+        listing={},
+        active_priorities=(),
+        reasons=(),
+        tradeoffs=(),
+        unknowns=(),
+        geography=(),
+        price_changes=(
+            {"field": "price", "before": 100000, "after": 120000, "currency": "USD"},
+        ),
+        allowed_criteria=(),
+        allowed_evidence_refs=(),
+    )
+
+    result = deterministic_narrative(context)
+
+    assert "Bajó" not in result.text
+    assert "pasó de USD 100.000 a USD 120.000" in result.text

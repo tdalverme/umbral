@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -85,6 +86,10 @@ def context() -> ExplanationNarrativeContext:
         price_changes=(),
         allowed_criteria=("acceso_transporte", "superficie"),
         allowed_evidence_refs=("urban:transit-1", "listing_field:surface_m2"),
+        criterion_evidence_refs={
+            "acceso_transporte": ("urban:transit-1",),
+            "superficie": ("listing_field:surface_m2",),
+        },
     )
 
 
@@ -132,6 +137,97 @@ def test_writer_rejects_raw_authorized_criterion_key(
     """Snake-case criterion names are never user-facing language."""
     scripted_gateway.output = {
         "text": "El acceso_transporte suma para esta oportunidad.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_rejects_active_criterion_without_a_grounded_fact(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """An active criterion is not a fact about the selected listing."""
+    context = replace(context, allowed_criteria=("acceso_transporte", "balcon"))
+    scripted_gateway.output = {
+        "text": "También tiene balcón.",
+        "used_criteria": ["balcon"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_rejects_evidence_not_tied_to_used_criterion(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """An authorized reference cannot support a different criterion's claim."""
+    scripted_gateway.output = {
+        "text": "La superficie es un punto para revisar.",
+        "used_criteria": ["superficie"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_rejects_raw_key_when_the_context_label_collides(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """A human-label collision cannot allow a snake-case internal key."""
+    context = replace(
+        context,
+        active_priorities=(
+            {
+                "key": "acceso_transporte",
+                "label": "acceso_transporte",
+                "polarity": "positive",
+            },
+        ),
+    )
+    scripted_gateway.output = {
+        "text": "El acceso_transporte suma para esta oportunidad.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "   ",
+        (
+            "Esta oportunidad aparece por la conectividad y te permite "
+            "organizar mejor cada viaje durante la semana sin perder tiempo "
+            "en traslados largos cuando necesitás volver a casa después "
+            "del trabajo y resolver tus recorridos cotidianos durante toda "
+            "la semana."
+        ),
+    ],
+)
+def test_writer_rejects_any_voice_lint_failure(
+    scripted_gateway: ScriptedGateway,
+    context: ExplanationNarrativeContext,
+    text: str,
+) -> None:
+    """Every linter violation, not only a selected subset, triggers fallback."""
+    scripted_gateway.output = {
+        "text": text,
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_rejects_unqualified_noise_absence(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """A geographic proxy cannot become a certainty about ambient noise."""
+    scripted_gateway.output = {
+        "text": "No hay ruido cerca.",
         "used_criteria": ["acceso_transporte"],
         "used_evidence_refs": ["urban:transit-1"],
     }

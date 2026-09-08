@@ -17,24 +17,21 @@ from umbral.application.scoring.narrative import (
     deterministic_narrative,
 )
 
-_VOICE_HARD_VIOLATIONS = (
-    "VOZ-06",
-    "VOZ-07:emoji",
-    "VOZ-07:tech_jargon",
-    "VOZ-08:certainty_without_evidence",
-    "VOZ-07:multiple_exclamations",
-    "VOZ-07:too_many_exclamations",
-)
 _TECHNICAL_COPY_RE = re.compile(
     r"\b(?:criterio|criterios|evidencia|evidencias|matcher|ranking|"
     r"normalizad[oa]s?|arquitectura|modelo|ia)\b",
     re.IGNORECASE,
 )
 _UNSAFE_GEOGRAPHY_RE = re.compile(
-    r"\b(?:perfect[oa]?|ideal|safe|segur[oa]|silent|silencios[oa]|"
-    r"sin tr[aá]fico|garantizad[oa])\b",
+    r"\b(?:perfect[oa]?|ideal|safe|segur[oa]|silent|silencios?[oa]?|"
+    r"garantizad[oa])\b"
+    r"|\b(?:no hay|sin|libre de|ausencia de)\s+(?:ruido|tr[aá]fico|"
+    r"crimen(?:es)?|delitos?|inseguridad|violencia)\b"
+    r"|\b(?:zona|barrio|entorno|[áa]rea)\s+(?:segur[oa]|silencios[oa]|"
+    r"tranquil[oa])\b",
     re.IGNORECASE,
 )
+_RAW_KEY_RE = re.compile(r"\b[a-z][a-z0-9]*_[a-z0-9_]*\b", re.IGNORECASE)
 
 
 class ManagedExplanationNarrativeWriter:
@@ -135,48 +132,32 @@ def _valid_content(
     evidence_refs = content.get("used_evidence_refs")
     if not isinstance(text, str):
         return False
-    if not isinstance(criteria, list) or not all(
-        isinstance(value, str) and value in context.allowed_criteria
+    if not isinstance(criteria, list) or not criteria:
+        return False
+    if not all(
+        isinstance(value, str)
+        and value in context.allowed_criteria
+        and value in context.criterion_evidence_refs
         for value in criteria
     ):
         return False
+    criterion_refs = {
+        ref
+        for criterion in criteria
+        for ref in context.criterion_evidence_refs[criterion]
+    }
     if not isinstance(evidence_refs, list) or not all(
-        isinstance(value, str) and value in context.allowed_evidence_refs
+        isinstance(value, str)
+        and value in context.allowed_evidence_refs
+        and value in criterion_refs
         for value in evidence_refs
     ):
         return False
     if _TECHNICAL_COPY_RE.search(text) or _UNSAFE_GEOGRAPHY_RE.search(text):
         return False
-    if any(_raw_key_in_text(key, text, context) for key in context.allowed_criteria):
+    if _RAW_KEY_RE.search(text):
         return False
-    violations = lint_voice(text)
-    return not any(
-        violation.startswith(prefix)
-        for violation in violations
-        for prefix in _VOICE_HARD_VIOLATIONS
-    )
-
-
-def _raw_key_in_text(
-    key: str,
-    text: str,
-    context: ExplanationNarrativeContext,
-) -> bool:
-    if key in _human_priority_labels(context):
-        return False
-    return bool(key and re.search(rf"(?<!\w){re.escape(key)}(?!\w)", text, re.I))
-
-
-def _human_priority_labels(context: ExplanationNarrativeContext) -> set[str]:
-    priorities = {
-        label
-        for priority in context.active_priorities
-        if isinstance(label := priority.get("label"), str)
-    }
-    packets = context.reasons + context.tradeoffs + context.unknowns
-    return priorities | {
-        label for packet in packets if isinstance(label := packet.get("label"), str)
-    }
+    return not lint_voice(text)
 
 
 def _load_narrative_prompt() -> str:

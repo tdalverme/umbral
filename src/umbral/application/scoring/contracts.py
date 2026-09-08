@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
@@ -147,6 +147,9 @@ class ExplanationNarrativeContext:
     price_changes: tuple[Mapping[str, object], ...]
     allowed_criteria: tuple[str, ...]
     allowed_evidence_refs: tuple[str, ...]
+    criterion_evidence_refs: Mapping[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True, slots=True)

@@ -17,6 +17,7 @@ from umbral.application.scoring.contracts import (
 
 _SAFE_LISTING_FIELDS = {
     "price_value": "price",
+    "price_currency": "price_currency",
     "surface_m2": "surface_m2",
     "rooms": "rooms",
     "expenses_value": "expenses",
@@ -98,15 +99,27 @@ def deterministic_narrative(
         (
             change
             for change in context.price_changes
-            if _is_complete_price_change(change)
+            if _is_complete_price_change(change, change.get("currency"))
         ),
         None,
     )
     if price_change is not None:
-        text += (
-            f" Bajó de {_price_text(price_change['before'], price_change['currency'])}"
-            f" a {_price_text(price_change['after'], price_change['currency'])}."
-        )
+        before = price_change["before"]
+        after = price_change["after"]
+        currency = price_change["currency"]
+        assert isinstance(before, (int, float)) and not isinstance(before, bool)
+        assert isinstance(after, (int, float)) and not isinstance(after, bool)
+        assert isinstance(currency, str)
+        if after < before:
+            text += (
+                f" Bajó de {_price_text(before, currency)}"
+                f" a {_price_text(after, currency)}."
+            )
+        elif after > before:
+            text += (
+                f" El precio pasó de {_price_text(before, currency)}"
+                f" a {_price_text(after, currency)}."
+            )
     return ExplanationNarrative(
         text=text,
         used_criteria=(),
@@ -187,12 +200,25 @@ def build_narrative_context(
         for risk in material
         if isinstance(risk, ExplanationRisk) and risk.state == "unknown"
     )
-    geography = tuple(
-        fact
+    evidence_by_criterion = {
+        item.criterion_key: (
+            _evidence_refs(item.evidence_refs)
+            if isinstance(item, ExplanationReason)
+            else ()
+        )
+        for item in material
+    }
+    geography_pairs = tuple(
+        (key, fact)
         for key, observation in observations.items()
         if key in material_keys
         for fact in geographic_facts({key: observation})
     )
+    for key, fact in geography_pairs:
+        evidence_by_criterion[key] = tuple(
+            sorted({*evidence_by_criterion.get(key, ()), fact.source_ref})
+        )
+    geography = tuple(fact for _, fact in geography_pairs)
     allowed_evidence_refs = tuple(
         sorted(
             {
@@ -220,10 +246,17 @@ def build_narrative_context(
         price_changes=tuple(
             projected
             for change in price_changes
-            if (projected := _price_change(change)) is not None
+            if (
+                projected := _price_change(
+                    change,
+                    listing.get("price_currency"),
+                )
+            )
+            is not None
         ),
         allowed_criteria=tuple(active_criteria),
         allowed_evidence_refs=allowed_evidence_refs,
+        criterion_evidence_refs=evidence_by_criterion,
     )
 
 
@@ -378,26 +411,30 @@ def _label(key: str, active_criteria: Mapping[str, object]) -> str:
     return _DEFAULT_LABELS.get(key, "esta prioridad")
 
 
-def _price_change(change: Mapping[str, object]) -> Mapping[str, object] | None:
-    if not _is_complete_price_change(change):
+def _price_change(
+    change: Mapping[str, object],
+    listing_currency: object,
+) -> Mapping[str, object] | None:
+    currency = change.get("currency", listing_currency)
+    if not _is_complete_price_change(change, currency):
         return None
     return {
         "field": "price",
         "before": change["before"],
         "after": change["after"],
-        "currency": change["currency"],
+        "currency": currency,
     }
 
 
-def _is_complete_price_change(change: Mapping[str, object]) -> bool:
+def _is_complete_price_change(change: Mapping[str, object], currency: object) -> bool:
     return (
-        change.get("field") == "price"
+        change.get("field") in {"price", "price_value"}
         and isinstance(change.get("before"), (int, float))
         and not isinstance(change.get("before"), bool)
         and isinstance(change.get("after"), (int, float))
         and not isinstance(change.get("after"), bool)
-        and isinstance(change.get("currency"), str)
-        and bool(change["currency"])
+        and isinstance(currency, str)
+        and bool(currency)
     )
 
 
