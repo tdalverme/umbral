@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -64,6 +64,59 @@ class Reply:
     source: ReplySource
 
 
+_PREFERENCE_TARGETS = {
+    "luminosidad": "departamentos con buena luz natural",
+    "ruido_ambiental": "lugares con poco ruido",
+    "vida_nocturna": "zonas con poca actividad nocturna",
+    "calma_residencial": "zonas tranquilas y de casas bajas",
+    "acceso_transporte": "buen acceso al transporte",
+}
+_PRIORITY_LABELS = {
+    "low": "considerar",
+    "medium": "priorizar",
+    "high": "priorizar especialmente",
+    "essential": "priorizar especialmente",
+}
+
+
+def _preference_target(concept: ReplyConcept) -> str:
+    return _PREFERENCE_TARGETS.get(concept.concept_ref, "lo que me pediste")
+
+
+def _unique_concepts(
+    concepts: tuple[ReplyConcept, ...],
+) -> tuple[ReplyConcept, ...]:
+    seen: set[tuple[str, str, str]] = set()
+    unique: list[ReplyConcept] = []
+    for concept in concepts:
+        key = (concept.concept_ref, concept.polarity, concept.intensity)
+        if key not in seen:
+            seen.add(key)
+            unique.append(concept)
+    return tuple(unique)
+
+
+def _managed_outcome(item: ReplyOutcome) -> dict[str, object]:
+    """Expose only safe, human-facing context to the reply writer."""
+    outcome: dict[str, object] = {
+        "status": item.status,
+        "effect": item.effect,
+        "concepts": [
+            {
+                "label": _preference_target(concept),
+                "polarity": concept.polarity,
+                "priority": _PRIORITY_LABELS[concept.intensity],
+            }
+            for concept in item.concepts
+        ],
+    }
+    if item.ordinal is not None:
+        outcome["ordinal"] = item.ordinal
+    if item.total is not None:
+        outcome["total"] = item.total
+    return outcome
+
+
 _DEFAULT_SYSTEM_PROMPT = (
     "Redactá una respuesta breve en español sobre los resultados "
     "de este turno. Nunca inventes hechos: basate solo en los "
@@ -82,27 +135,61 @@ _VOICE_HARD_VIOLATIONS = (
 
 
 def _load_reply_prompt() -> str:
-    """Carga voice-v1 desde src/umbral/agent/prompts/reply.md.
+    """Carga la voz versionada y el contexto de producto desde PRODUCT.md.
 
     Fallback a _DEFAULT_SYSTEM_PROMPT si el archivo no existe (tests aislados
-    o migraciones). El prompt versionado es la fuente de verdad de voz; el
-    fallback mantiene grounding minimo.
+    o migraciones). El prompt contiene las reglas ejecutables y PRODUCT.md
+    conserva la fuente de verdad de propósito, posicionamiento y voz.
     """
-    try:
-        path = (
-            Path(__file__).resolve().parents[3]
-            / "agent"
-            / "prompts"
-            / "reply.md"
+    module_root = Path(__file__).resolve().parents[2]
+    prompt = _read_text(module_root / "agent" / "prompts" / "reply.md")
+    product = _product_voice_context(_read_text(module_root.parents[1] / "PRODUCT.md"))
+    if prompt and product:
+        return (
+            f"{prompt}\n\n"
+            "## Contexto de producto — PRODUCT.md\n\n"
+            f"{product}\n\n"
+            "Este contexto es interno: aplicá su voz y propósito, pero no "
+            "expongas etiquetas técnicas ni clasificaciones internas."
         )
-        text = path.read_text(encoding="utf-8")
-        # Enviar el archivo completo: contiene Rol, Reglas grounded+voz y
-        # Patrones aprobados (voice-v1). El modelo recibe la guía ejecutable.
-        if text.strip():
-            return text
+    return prompt or _DEFAULT_SYSTEM_PROMPT
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip()
     except OSError:
-        pass
-    return _DEFAULT_SYSTEM_PROMPT
+        return ""
+
+
+def _product_voice_context(product: str) -> str:
+    """Select the voice and purpose excerpts needed by a reply writer."""
+    sections = {
+        "## Product Purpose": ("**Por qué existe:", "**Qué significa éxito:"),
+        "## Positioning": ("**Mecanismo diferencial",),
+        "## Brand Commitments": (
+            "**Plataforma de marca:",
+            "**Personalidad y voz:",
+            "**Principios de escritura y patrones de agente",
+            "**Arquitectura verbal:",
+        ),
+        "## Product Principles": None,
+        "## Accessibility & Inclusion": ("- **Inclusión y lenguaje:",),
+    }
+    selected: list[str] = []
+    active: str | None = None
+    for line in product.splitlines():
+        if line.startswith("## "):
+            active = line if line in sections else None
+            if active:
+                selected.append(line)
+            continue
+        prefixes = sections.get(active) if active else None
+        if active == "## Product Principles" or (
+            prefixes and any(line.startswith(prefix) for prefix in prefixes)
+        ):
+            selected.append(line)
+    return "\n".join(selected).strip()
 
 
 class ReplyComposer:
@@ -135,7 +222,9 @@ class ReplyComposer:
                 verified_refs,
                 "deterministic_fallback",
             )
-        if any(item.effect != "other" for item in outcomes):
+        # State-changing filter outcomes and unresolved desires have canonical
+        # wording that must preserve confirmation/rejection semantics exactly.
+        if any(item.effect not in {"other", "preference.applied"} for item in outcomes):
             return Reply(
                 _fallback_text(result),
                 outcomes,
@@ -168,7 +257,7 @@ class ReplyComposer:
                 "content": json.dumps(
                     {
                         "outcomes": [
-                            asdict(item) for item in outcomes
+                            _managed_outcome(item) for item in outcomes
                         ],
                         "verified_refs": list(verified_refs),
                     },
@@ -177,13 +266,16 @@ class ReplyComposer:
                 ),
             },
         )
-        gateway_result = self.gateway.generate_structured(
-            messages=messages,
-            schema=dict(self.schema),
-            schema_version=self.reply_schema_version,
-            prompt_version=self.prompt_version,
-            model_version=self.model_version,
-        )
+        try:
+            gateway_result = self.gateway.generate_structured(
+                messages=messages,
+                schema=dict(self.schema),
+                schema_version=self.reply_schema_version,
+                prompt_version=self.prompt_version,
+                model_version=self.model_version,
+            )
+        except Exception:
+            return None
         if gateway_result.status != "success" or gateway_result.content is None:
             return None
         content = gateway_result.content
@@ -194,7 +286,7 @@ class ReplyComposer:
         text = content.get("text")
         if not isinstance(text, str) or not text:
             return None
-        # Guard de voz voice-v1: si el LLM viola VOZ-06/07/08 hard, descartar
+        # Guard de voz: si el LLM viola VOZ-06/07/08 hard, descartar
         # y caer a deterministic_fallback (grounded sereno).
         try:
             from umbral.application.conversation.voice_check import (
@@ -259,13 +351,15 @@ def _reply_outcomes(
         if executed is not None and executed.effect_key == "desire.remembered":
             command = commands_by_act.get(outcome.act_id)
             if outcome.status == "applied" and isinstance(command, RecordDesireCommand):
-                concepts = tuple(
-                    ReplyConcept(
-                        concept_ref=link.concept_ref,
-                        polarity=link.polarity,
-                        intensity=link.intensity,
+                concepts = _unique_concepts(
+                    tuple(
+                        ReplyConcept(
+                            concept_ref=link.concept_ref,
+                            polarity=link.polarity,
+                            intensity=link.intensity,
+                        )
+                        for link in command.concept_links
                     )
-                    for link in command.concept_links
                 )
                 effect = (
                     "preference.applied"
@@ -403,25 +497,18 @@ def _fallback_text(result: ConversationTurnResult) -> str:
     return " ".join(lines) if lines else "No pude procesar tu mensaje."
 
 
-_INTENSITY_WORDS = {
-    "low": "leve",
-    "medium": "moderada",
-    "high": "alta",
-    "essential": "prioritaria",
-}
-
-
 def _preference_lines(concepts: tuple[ReplyConcept, ...]) -> list[str]:
-    lines: list[str] = []
-    for concept in concepts:
-        label = concept.concept_ref.replace("_", " ")
-        intensity = _INTENSITY_WORDS[concept.intensity]
-        if concept.polarity == "negative":
-            lines.append(
-                f"Voy a tener en cuenta evitar {label} como preferencia {intensity}."
-            )
-        else:
-            lines.append(
-                f"Voy a tener en cuenta {label} como preferencia {intensity}."
-            )
-    return lines
+    unique = _unique_concepts(concepts)
+    if not unique:
+        return []
+    targets = [_preference_target(concept) for concept in unique]
+    if len(targets) == 1:
+        target_text = targets[0]
+    elif len(targets) == 2:
+        target_text = " y ".join(targets)
+    else:
+        target_text = f"{', '.join(targets[:-1])} y {targets[-1]}"
+    return [
+        "Anotado. Voy a tener en cuenta "
+        f"{target_text} al ordenar las opciones."
+    ]

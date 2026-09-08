@@ -248,6 +248,9 @@ class Settings(BaseSettings):
     agent_model_max_retries: int = Field(
         default=2, validation_alias="AGENT_MODEL_MAX_RETRIES"
     )
+    agent_reply_timeout_seconds: float = Field(
+        default=5.0, validation_alias="AGENT_REPLY_TIMEOUT_SECONDS"
+    )
     agent_managed_endpoint: str | None = Field(
         default=None, validation_alias="AGENT_MANAGED_ENDPOINT"
     )
@@ -420,6 +423,7 @@ class Settings(BaseSettings):
             "AGENT_MODEL_NAME",
             "AGENT_MODEL_TIMEOUT_SECONDS",
             "AGENT_MODEL_MAX_RETRIES",
+            "AGENT_REPLY_TIMEOUT_SECONDS",
             "AGENT_MANAGED_ENDPOINT",
             "AGENT_MANAGED_API_KEY",
             "AGENT_CHECKPOINT_RETENTION_DAYS",

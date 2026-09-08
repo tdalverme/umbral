@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import jsonschema  # type: ignore[import-untyped]
+import pytest
 
 from umbral.application.conversation.voice_check import (
     check_grounded,
@@ -131,6 +132,20 @@ def test_grounded_violation_detected() -> None:
     # is_pass solo (sin outcomes) no detecta grounded, pero efectivo si
     assert is_pass(ex["text"]) is True  # lint puro pasa
     assert not is_pass(ex["text"]) or check_grounded(ex["text"], ex["outcomes"])
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Lo guardé como preferencia blanda.",
+        "El filtro hard quedó aplicado.",
+        "Voy a tener en cuenta una preferencia alta.",
+    ],
+)
+def test_linter_rejects_internal_preference_vocabulary(text: str) -> None:
+    violations = lint_voice(text)
+
+    assert any("tech_jargon" in violation for violation in violations)
 
 
 def test_brand_templates_are_present() -> None:

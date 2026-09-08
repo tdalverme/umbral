@@ -111,6 +111,7 @@ def build_conversation_graph(
     services: ConversationServices,
     focus: FocusedEntityReader,
     gateway: ModelGateway,
+    reply_gateway: ModelGateway | None = None,
     interpretation_schema: Mapping[str, object],
     reply_schema: Mapping[str, object],
     model_version: str = "gpt-4.1-mini",
@@ -138,7 +139,7 @@ def build_conversation_graph(
         clock=clock,
     )
     reply = ReplyComposer(
-        gateway=gateway,
+        gateway=reply_gateway if reply_gateway is not None else gateway,
         schema=reply_schema,
         prompt_version=reply_prompt_version,
         model_version=model_version,

@@ -337,7 +337,7 @@ def test_v5_turn_reply_keeps_effectful_turn_deterministic() -> None:
     ).compose(result)
 
     assert reply.source == "deterministic_fallback"
-    assert "luminosidad" in reply.text.casefold()
+    assert "buena luz natural" in reply.text.casefold()
     assert "1 de 2" in reply.text
     assert reply.text.count("?") == 1
 

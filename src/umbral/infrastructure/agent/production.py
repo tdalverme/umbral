@@ -120,6 +120,13 @@ def build_production_stack(
             timeout_seconds=settings.agent_model_timeout_seconds,
             max_retries=settings.agent_model_max_retries,
         )
+        reply_gateway: ModelGateway = ManagedModelGateway(
+            endpoint=settings.agent_managed_endpoint,
+            api_key=settings.agent_managed_api_key or "",
+            model=settings.agent_model_name,
+            timeout_seconds=settings.agent_reply_timeout_seconds,
+            max_retries=0,
+        )
     else:
         from umbral.infrastructure.agent.model_gateway.fake import FakeModelGateway
 
@@ -127,6 +134,7 @@ def build_production_stack(
             ModelGateway,
             FakeModelGateway(model_version=settings.agent_model_name),
         )
+        reply_gateway = gateway
 
     class _NoFocusReader:
         def verified_focus(
@@ -184,6 +192,7 @@ def build_production_stack(
         services=services,
         focus=_NoFocusReader(),
         gateway=gateway,
+        reply_gateway=reply_gateway,
         interpretation_schema=interpretation_schema,
         reply_schema=reply_schema,
         model_version=settings.agent_model_name,

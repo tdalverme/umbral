@@ -37,10 +37,13 @@ class _FakeGateway:
         self,
         reply: Mapping[str, object] | None = None,
         status: Literal["success", "error"] = "success",
+        error: Exception | None = None,
     ) -> None:
         self._reply = reply or {}
         self._status = status
+        self._error = error
         self.calls = 0
+        self.last_messages: tuple[Mapping[str, object], ...] = ()
 
     def generate_structured(
         self,
@@ -53,6 +56,9 @@ class _FakeGateway:
         tools: Any = None,
     ) -> ModelResult:
         self.calls += 1
+        self.last_messages = messages
+        if self._error is not None:
+            raise self._error
         return ModelResult(
             content=dict(self._reply) if self._status == "success" else None,
             model_version=model_version,
@@ -236,8 +242,11 @@ def _managed_reply(text: str) -> dict[str, object]:
     }
 
 
-def test_applied_transport_preference_is_acknowledged_without_question() -> None:
-    composer = _composer(_FakeGateway(reply=_managed_reply("Listo.")))
+def test_applied_transport_preference_uses_managed_reply_without_question() -> None:
+    gateway = _FakeGateway(
+        reply=_managed_reply("Anotado. Voy a priorizar el acceso al transporte.")
+    )
+    composer = _composer(gateway)
     command = _desire_command(concept="acceso_transporte", intensity="high")
 
     reply = composer.compose(
@@ -249,9 +258,115 @@ def test_applied_transport_preference_is_acknowledged_without_question() -> None
     )
 
     assert "transporte" in reply.text.casefold()
-    assert "alta" in reply.text.casefold()
     assert "?" not in reply.text
+    assert reply.text == "Anotado. Voy a priorizar el acceso al transporte."
+    assert reply.source == "managed"
+    assert gateway.calls == 1
+
+
+def test_managed_reply_receives_product_voice_and_human_concept_labels() -> None:
+    gateway = _FakeGateway(reply=_managed_reply("Anotado."))
+    composer = _composer(gateway)
+    command = _desire_command(concept="calma_residencial", intensity="medium")
+
+    composer.compose(
+        _result(
+            plan=TurnPlan(decisions=(), commands=(command,)),
+            executed=(ExecutedAct("a1", "desire.remembered"),),
+            outcomes=(ActOutcome("a1", "applied"),),
+        )
+    )
+
+    system_prompt = str(gateway.last_messages[0]["content"])
+    user_payload = json.loads(str(gateway.last_messages[1]["content"]))
+    concepts = user_payload["outcomes"][0]["concepts"]
+
+    assert "devolver tiempo y tranquilidad" in system_prompt
+    assert "chat es interfaz para refinar criterios" in system_prompt.casefold()
+    assert "calma_residencial" not in str(concepts)
+    assert "zonas tranquilas y de casas bajas" in str(concepts)
+
+
+def test_managed_reply_deduplicates_repeated_concept_links() -> None:
+    gateway = _FakeGateway(reply=_managed_reply("Anotado."))
+    composer = _composer(gateway)
+    command = replace(
+        _desire_command(concept="calma_residencial", intensity="medium"),
+        concept_links=(
+            _desire_command(
+                concept="calma_residencial", intensity="medium"
+            ).concept_links[0],
+            _desire_command(
+                concept="calma_residencial", intensity="medium"
+            ).concept_links[0],
+        ),
+    )
+
+    reply = composer.compose(
+        _result(
+            plan=TurnPlan(decisions=(), commands=(command,)),
+            executed=(ExecutedAct("a1", "desire.remembered"),),
+            outcomes=(ActOutcome("a1", "applied"),),
+        )
+    )
+
+    assert len(reply.outcomes[0].concepts) == 1
+    payload = json.loads(str(gateway.last_messages[1]["content"]))
+    assert len(payload["outcomes"][0]["concepts"]) == 1
+
+
+def test_preference_fallback_uses_human_copy_without_internal_intensity() -> None:
+    composer = _composer(_FakeGateway(reply={}, status="error"))
+    command = _desire_command(concept="luminosidad", intensity="low")
+
+    reply = composer.compose(
+        _result(
+            plan=TurnPlan(decisions=(), commands=(command,)),
+            executed=(ExecutedAct("a1", "desire.remembered"),),
+            outcomes=(ActOutcome("a1", "applied"),),
+        )
+    )
+
     assert reply.source == "deterministic_fallback"
+    assert "buena luz natural" in reply.text
+    assert "preferencia" not in reply.text.casefold()
+    assert "leve" not in reply.text.casefold()
+
+
+def test_reply_provider_exception_uses_human_fallback() -> None:
+    composer = _composer(_FakeGateway(error=TimeoutError()))
+    command = _desire_command(concept="luminosidad", intensity="low")
+
+    reply = composer.compose(
+        _result(
+            plan=TurnPlan(decisions=(), commands=(command,)),
+            executed=(ExecutedAct("a1", "desire.remembered"),),
+            outcomes=(ActOutcome("a1", "applied"),),
+        )
+    )
+
+    assert reply.source == "deterministic_fallback"
+    assert "buena luz natural" in reply.text
+
+
+def test_technical_managed_reply_falls_back_to_human_copy() -> None:
+    gateway = _FakeGateway(
+        reply=_managed_reply("Voy a tener en cuenta una preferencia alta.")
+    )
+    composer = _composer(gateway)
+    command = _desire_command(concept="luminosidad", intensity="high")
+
+    reply = composer.compose(
+        _result(
+            plan=TurnPlan(decisions=(), commands=(command,)),
+            executed=(ExecutedAct("a1", "desire.remembered"),),
+            outcomes=(ActOutcome("a1", "applied"),),
+        )
+    )
+
+    assert reply.source == "deterministic_fallback"
+    assert "preferencia" not in reply.text.casefold()
+    assert "buena luz natural" in reply.text
 
 
 def test_unresolved_desire_is_remembered_without_false_refusal() -> None:

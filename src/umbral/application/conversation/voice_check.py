@@ -21,7 +21,10 @@ FORBIDDEN_RE = re.compile(
     re.IGNORECASE,
 )
 TECH_RE = re.compile(  # noqa: E501
-    r"\b(score|scores|embedding|embeddings|hard filter|prompt|modelo|Smart Match|AI Search|IA avanzada)\b",  # noqa: E501
+    r"\b(score|scores|embedding|embeddings|hard filter|prompt|modelo|"
+    r"Smart Match|AI Search|IA avanzada)\b"
+    r"|\bpreferencias?\s+(?:blandas?|soft|leves?|moderadas?|altas?|prioritarias?)\b"
+    r"|\bfiltros?\s+(?:hard|duros?)\b",  # noqa: E501
     re.IGNORECASE,
 )
 # Emoji: bloques principales (no exhaustivo, suficiente para lint)

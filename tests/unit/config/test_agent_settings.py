@@ -25,6 +25,7 @@ def test_agent_settings_have_safe_defaults() -> None:
     assert settings.agent_model_name == "local-fake"
     assert settings.agent_model_timeout_seconds == 30.0
     assert settings.agent_model_max_retries == 2
+    assert settings.agent_reply_timeout_seconds == 5.0
     assert settings.agent_checkpoint_retention_days == 30
     assert settings.agent_strict_msgpack is True
     assert settings.chat_message_max_length == 4000
@@ -118,6 +119,7 @@ def test_agent_overrides_are_accepted() -> None:
             "AGENT_MODEL_PROVIDER": "managed",
             "AGENT_MODEL_TIMEOUT_SECONDS": "15",
             "AGENT_MODEL_MAX_RETRIES": "0",
+            "AGENT_REPLY_TIMEOUT_SECONDS": "4",
             "AGENT_CHECKPOINT_RETENTION_DAYS": "7",
             "AGENT_STRICT_MSGPACK": "false",
             "CHAT_MESSAGE_MAX_LENGTH": "2000",
@@ -129,6 +131,7 @@ def test_agent_overrides_are_accepted() -> None:
     assert settings.agent_model_provider == "managed"
     assert settings.agent_model_timeout_seconds == 15.0
     assert settings.agent_model_max_retries == 0
+    assert settings.agent_reply_timeout_seconds == 4.0
     assert settings.agent_checkpoint_retention_days == 7
     assert settings.agent_strict_msgpack is False
     assert settings.chat_message_max_length == 2000
