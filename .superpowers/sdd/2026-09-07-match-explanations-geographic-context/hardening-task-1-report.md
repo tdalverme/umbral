@@ -2,7 +2,7 @@
 
 ## Status
 
-Complete after the independent-review correction rounds. Implemented on
+Complete after the independent-review and whole-branch correction rounds. Implemented on
 `feat/match-explanations-geographic-context` from base `e1f21b1`.
 
 ## Changes
@@ -18,6 +18,10 @@ Complete after the independent-review correction rounds. Implemented on
 - Review correction: observation snapshots must contain an explicit string `listing_id`; missing and mismatched identities are omitted.
 - Review correction: labels now cover v2 contract concepts including `piso`, `tipo_cocina`, `moderno`, `dormitorios`, `banos`, and `barrio_seguro`.
 - Final review correction: managed copy authorization is scoped to packets whose evidence refs and criteria are actually submitted in that response; descriptors from other context packets are no longer lexically authorized.
+- Whole-branch correction: managed text now has a typed internal claim plan and deterministic sentence renderer, rejecting negations, contradictory placement, inverted price transitions, and declared refs that are not rendered.
+- Whole-branch correction: geographic facts retain observed value/unit and signal direction; zero counts are omitted, distant signals become trade-offs instead of matches, and v2 contributor categories use the published contract identities.
+- Whole-branch correction: negative non-geographic matches preserve their observed direction (`poca luz natural`), deterministic explanation labels cover supported concepts, UI caveats stay neutral when direction/cause is absent, and repeated selection preserves the loaded narrative.
+- Whole-branch correction: fixed the introduced radar-service E501 and typed the two scoring test helpers without broad ignores.
 - No database model, migration, scoring ranking/filtering, or LLM decision behavior was changed.
 
 ## TDD evidence
@@ -125,4 +129,24 @@ and `131 passed, 11 warnings` respectively.
 
 Correction-round implementation commit: `99134da` — `fix: close narrative grounding review gaps`.
 Residual correction implementation commit: `205b90c` — `fix: scope narrative copy to submitted packets`.
+Whole-branch correction implementation commit: `e9004c2` — `fix: harden narrative semantics and geographic context`.
 The report update is committed separately after this implementation commit.
+
+## Whole-branch correction round
+
+### TDD evidence
+
+- Managed grounding RED: 5 regressions failed before the typed claim renderer (negated match, contradictory descriptor, mixed placement, inverted price transition, and unused declared price ref); writer GREEN: `23 passed`.
+- Geographic/polarity RED: 4 regressions failed before measurement-aware classification and negative-direction projection; GREEN: `4 passed`.
+- UI regressions cover neutral caveats and repeated same-identity selection; focused web result: `5 passed`.
+
+### Verification
+
+- Relevant backend scoring/infrastructure/urban/contracts suite: `179 passed, 11 warnings`.
+- Adjacent backend radar/matching/notifications/criteria/voice groups: `185 passed`.
+- Web suite: `32 test files, 83 tests passed`.
+- Web TypeScript typecheck: passed.
+- Targeted strict mypy over 10 changed source/test files: passed with no errors. The broader repository baseline remains documented separately and was not broadened with ignores.
+- Ruff on changed Python paths reports only 7 pre-existing E501s in `src/umbral/application/radar/service.py`; the introduced line was fixed and no new Ruff error remains in the other changed files.
+- `git diff --check`: passed.
+- No scoring formula, ranking, hard-filter, activation, notification, database model, migration, or LLM decision behavior changed.
