@@ -2,7 +2,8 @@
 
 ## Status
 
-Complete. Implemented on `feat/match-explanations-geographic-context` from base `e1f21b1`.
+Complete after the independent-review correction round. Implemented on
+`feat/match-explanations-geographic-context` from base `e1f21b1`.
 
 ## Changes
 
@@ -12,6 +13,10 @@ Complete. Implemented on `feat/match-explanations-geographic-context` from base 
 - Fallback provenance now contains only criteria and evidence refs represented in rendered text. Geographic trade-offs render the concrete fact, and unchanged price snapshots do not add hidden price evidence.
 - Frozen listing and observation snapshots require an exact listing identity match. Listing snapshots now persist `listing_id`; mismatching or identity-less snapshots are omitted from narrative context.
 - Expanded human-facing labels for all currently supported narrative criteria and reused the shared label map from the scoring service.
+- Review correction: managed claims now preserve packet placement (`match`, `tradeoff`, or `unknown`) and geographic polarity; a favorable fact cannot be presented as a concession and an unfavorable fact cannot be presented after `Encaja por`.
+- Review correction: managed copy is closed-world against packet descriptors, authorized price-change values, and a small reviewed voice vocabulary. Additional factual phrases such as `vista al río` fall back without a claim-specific regex.
+- Review correction: observation snapshots must contain an explicit string `listing_id`; missing and mismatched identities are omitted.
+- Review correction: labels now cover v2 contract concepts including `piso`, `tipo_cocina`, `moderno`, `dormitorios`, `banos`, and `barrio_seguro`.
 - No database model, migration, scoring ranking/filtering, or LLM decision behavior was changed.
 
 ## TDD evidence
@@ -68,10 +73,46 @@ The FastAPI/HTTPX test client emitted the existing deprecation warnings noted ab
 
 ## Commit
 
-`f2e77956833502b1b36a715bb88f716f9b8cf6aa` — `feat: harden grounded match narratives`
+First-round commit: `e83dcaf07657afd64a39bc5a9a6fa84fd0be2904` — `feat: harden grounded match narratives`
 
 ## Limitations / concerns
 
 - The full repository mypy baseline remains red as documented above. No full repository test suite claim is made; only the relevant backend and web suites were run.
 - Test output retains 11 existing FastAPI/HTTPX deprecation warnings.
 - Changes were not published or merged, and no migration/model-data change was created.
+
+## Independent-review correction round
+
+The review probe confirmed four gaps in the first commit: geographic placement could be reversed with valid refs, an untracked claim could follow a valid claim, an identity-less observation was treated as belonging to the requested listing, and six v2 concepts still used `esta prioridad`.
+
+### TDD cycle
+
+RED command:
+
+```text
+pytest tests/...four new regressions... -q
+4 failed, 1 passed
+```
+
+The failures were the expected placement, closed-world, identity-less snapshot, and label coverage failures.
+
+GREEN command:
+
+```text
+pytest tests/...four new regressions plus managed happy path... -q
+6 passed
+```
+
+The full focused suite then passed with `51 passed, 11 warnings`, and the relevant backend scoring/infrastructure/contracts suite passed with `130 passed, 11 warnings`.
+
+### Correction-round verification
+
+- Web suite: `31 test files, 80 tests passed`.
+- Web TypeScript typecheck: passed (`tsc --noEmit`, exit code 0).
+- Ruff on all changed source and fixture files: passed.
+- `git diff --check`: passed.
+- Targeted strict mypy: 8 errors remain, all in unrelated baseline files (`preferences/service.py`, `agent/graph.py`, and `api/dependencies.py`); no errors in changed narrative runtime or fixtures.
+- No scoring/ranking/filter/activation/notification, model, migration, or web source changes were introduced.
+
+Correction-round implementation commit: `99134da` — `fix: close narrative grounding review gaps`.
+Report commit: recorded in the final commit that adds this correction-round evidence.
