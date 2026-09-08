@@ -150,3 +150,28 @@ The report update is committed separately after this implementation commit.
 - Ruff on changed Python paths reports only 7 pre-existing E501s in `src/umbral/application/radar/service.py`; the introduced line was fixed and no new Ruff error remains in the other changed files.
 - `git diff --check`: passed.
 - No scoring formula, ranking, hard-filter, activation, notification, database model, migration, or LLM decision behavior changed.
+
+## Final whole-branch review correction round
+
+### TDD evidence
+
+- The real v2 UrbanSignalCalculator → scoring → explanation → narrative context → deterministic fallback → managed writer path reproduced the three geographic failures before implementation: zero daily services, unsupported nightlife presence, and reversed road-noise polarity. The contract-shaped luminosidad/estado_general enum path also reproduced the favorable copy inversion.
+- GREEN end-to-end regressions: `5 passed`, covering zero/unsupported geographic facts, positive and negative road-noise polarity, and positive/negative contract enum values. The existing narrative and writer tests remained green: `47 passed` in the focused slice.
+- The full listing-detail missing-data copy now shares the neutral `unknownCopy` helper with the opportunity sheet; the helper regression passed as part of the web suite.
+
+### Correction
+
+- Active urban observations without a concrete or proxy-safe geographic fact no longer authorize a favorable generic reason. They are omitted from match packets, so neither deterministic fallback nor the managed writer can claim nearby presence from a zero/unsupported signal.
+- Geographic placement now derives from the normalized signal score, then applies the user polarity once. The v2 road-noise contract therefore renders far roads as a match and near roads as a tradeoff for an avoid preference, with the inverse placement covered for positive polarity.
+- Contract-shaped enum values for `luminosidad` and `estado_general` now project their observed direction (`baja`, `malo`, `alta`, `bueno`, etc.) into the packet before narrative rendering.
+- Full listing detail no longer attributes every missing datum to the source notice; it uses the same neutral uncertainty copy as the sheet.
+
+### Verification
+
+- Relevant backend scoring/infrastructure/urban/contracts suite: `184 passed, 11 warnings`.
+- Adjacent backend radar/matching/notifications/criteria/voice groups: `185 passed`.
+- Web suite: `33 test files, 84 tests passed`.
+- Web TypeScript typecheck: passed (`tsc --noEmit`, exit code 0).
+- Ruff on the Python files changed in this correction: passed. Targeted mypy on those three Python files: passed with no issues.
+- `git diff --check`: passed. The branch-wide known baseline remains: 7 unchanged `E501` diagnostics in `src/umbral/application/radar/service.py`; they were not introduced by this round.
+- No scoring formula, ranking, hard-filter, activation, notification, database model, migration, or LLM decision behavior changed.
