@@ -8,7 +8,7 @@ import { OpportunityDetailSheet } from "./opportunities/opportunity-detail-sheet
 import { MapLuzSerena } from "./map/map-luz-serena";
 import { RadarChatPanel } from "./chat/radar-chat-panel";
 import { useRadarSelection } from "@/lib/radar/use-radar-selection";
-import type { Explanation, MatchItem, SearchProfile } from "@/lib/radar/client";
+import type { Explanation, ExplanationNarrative, MatchItem, SearchProfile } from "@/lib/radar/client";
 import { radarApi } from "@/lib/radar/client";
 import type { RadarPoi } from "@/lib/radar/urban";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,8 @@ export function RadarShell({
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"map" | "list" | "chat">("map");
   const [showAll, setShowAll] = useState(false);
+  const [narrativeResult, setNarrativeResult] = useState<{ listingId: string; runId: string; narrative: ExplanationNarrative | null } | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
 
   const effectiveFilter = opportunitiesFilter ?? filter;
   const filteredAll = matches.filter((m) => {
@@ -52,6 +54,38 @@ export function RadarShell({
 
   const selected = filtered.find((m) => m.listing_id === selectedId) ?? null;
   const selectedExplanation = selectedId ? explanations?.[selectedId] : undefined;
+  const selectedNarrative = narrativeResult?.listingId === selectedId && narrativeResult.runId === selectedExplanation?.run_id
+    ? narrativeResult.narrative
+    : null;
+
+  const selectOpportunity = (id: string | null) => {
+    setNarrativeResult(null);
+    setNarrativeLoading(id !== null);
+    setSelectedId(id);
+  };
+
+  useEffect(() => {
+    if (!selectedId || !selectedRadarId || !selectedExplanation?.run_id) {
+      return;
+    }
+    let cancelled = false;
+    radarApi
+      .explanation(selectedRadarId, selectedId, selectedExplanation.run_id, true)
+      .then((result) => {
+        if (!cancelled && result.listing_id === selectedId && result.run_id === selectedExplanation.run_id) {
+          setNarrativeResult({ listingId: selectedId, runId: selectedExplanation.run_id, narrative: result.narrative ?? null });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setNarrativeResult({ listingId: selectedId, runId: selectedExplanation.run_id, narrative: null });
+      })
+      .finally(() => {
+        if (!cancelled) setNarrativeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, selectedRadarId, selectedExplanation?.run_id]);
 
   // Qué hay cerca — POIs reales OSM 600m (urban_categories via PostGIS)
   const [visibleCategories, setVisibleCategories] = useState<string[]>([]);
@@ -122,7 +156,7 @@ export function RadarShell({
             selectedId={selectedId}
             hoverId={hoverId}
             onSelect={(id) => {
-              setSelectedId(id);
+              selectOpportunity(id);
             }}
             pois={visiblePois}
             selectedPoiId={selectedPoiId}
@@ -143,7 +177,7 @@ export function RadarShell({
               selectedId={selectedId}
               hoverId={hoverId}
               filter={effectiveFilter}
-              onSelect={setSelectedId}
+              onSelect={selectOpportunity}
               onHover={setHoverId}
               onFilterChange={setFilter}
               showAll={showAll}
@@ -173,7 +207,7 @@ export function RadarShell({
                 selectedId={selectedId}
                 hoverId={hoverId}
                 filter={effectiveFilter}
-                onSelect={(id) => { setSelectedId(id); setMobileView("map"); }}
+                onSelect={(id) => { selectOpportunity(id); setMobileView("map"); }}
                 onHover={setHoverId}
                 onFilterChange={setFilter}
                 showAll={showAll}
@@ -202,7 +236,9 @@ export function RadarShell({
               <OpportunityDetailSheet
                 opportunity={selected as never}
                 explanation={selectedExplanation}
-                onClose={() => setSelectedId(null)}
+                narrative={selectedNarrative}
+                narrativeLoading={narrativeLoading}
+                onClose={() => selectOpportunity(null)}
                 pois={allPois}
                 visibleCategories={visibleCategories}
                 onToggleCategory={handleToggleCategory}
@@ -218,7 +254,9 @@ export function RadarShell({
               <OpportunityDetailSheet
                 opportunity={selected as never}
                 explanation={selectedExplanation}
-                onClose={() => setSelectedId(null)}
+                narrative={selectedNarrative}
+                narrativeLoading={narrativeLoading}
+                onClose={() => selectOpportunity(null)}
                 pois={allPois}
                 visibleCategories={visibleCategories}
                 onToggleCategory={handleToggleCategory}

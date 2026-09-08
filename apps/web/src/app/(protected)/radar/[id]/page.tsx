@@ -21,7 +21,6 @@ import { isTerminalRunState } from "@/lib/radar/run-state";
 const PAGE_SIZE = 25;
 const POLL_INTERVAL_MS = 3000;
 const LEGACY_SCORE_POLICY = "scoring-baseline-v1";
-const EVIDENCE_LABEL: Record<string, string> = { strong: "fuerte", medium: "media", low: "baja" };
 
 function humanizeError(code: string): string {
   if (code.startsWith("http.401") || code === "unauthorized") return "No autorizado — iniciá sesión de nuevo.";
@@ -32,37 +31,6 @@ function humanizeError(code: string): string {
   if (code === "explanation_unavailable") return "Explicación no disponible para este run.";
   if (code === "network_error" || code.includes("Failed to fetch")) return "Sin conexión — revisá tu red y reintentá.";
   return code;
-}
-
-function EvidenceBadge({ level }: { level: "strong" | "medium" | "low" }): React.ReactElement {
-  return (
-    <span
-      className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-      aria-label={`evidencia ${EVIDENCE_LABEL[level]}`}
-    >
-      evidencia {EVIDENCE_LABEL[level]}
-    </span>
-  );
-}
-
-function ReasonsStrip({ explanation }: { explanation: Explanation }): React.ReactElement {
-  const top = explanation.reasons.slice(0, 3);
-  if (top.length === 0 && explanation.missing_data.length === 0) return <span />;
-  return (
-    <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="razones del match">
-      {top.map((reason) => (
-        <li key={reason.criterion_key} className="flex items-center gap-1">
-          <span className="text-xs">{reason.text}</span>
-          <EvidenceBadge level={reason.evidence_level} />
-        </li>
-      ))}
-      {explanation.missing_data.length > 0 && (
-        <li className="text-xs text-muted-foreground">
-          sin datos: {explanation.missing_data.join(", ")}
-        </li>
-      )}
-    </ul>
-  );
 }
 
 export default function RadarViewPage(): React.ReactElement {

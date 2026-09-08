@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { caveatCopy } from "@/lib/radar/criterion-labels";
 import { cn } from "@/lib/utils";
 import type { Explanation, MatchItem } from "@/lib/radar/client";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
@@ -13,15 +14,6 @@ function formatScore(score: number | null | undefined): string {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(score);
-}
-
-function EvidenceDot({ level }: { level: "strong" | "medium" | "low" }) {
-  const map: Record<string, string> = {
-    strong: "bg-emerald-500",
-    medium: "bg-amber-500",
-    low: "bg-muted-foreground/40",
-  };
-  return <span className={cn("size-1 shrink-0 rounded-full mt-[6px]", map[level])} aria-hidden="true" />;
 }
 
 export function FloatingList({
@@ -99,9 +91,7 @@ export function FloatingList({
               const exp = explanations?.[o.listing_id];
               const topReason = exp?.reasons?.[0];
               const secondReason = exp?.reasons?.[1];
-              const thirdReason = exp?.reasons?.[2];
               const risk = exp?.risks?.[0];
-              const missing = exp?.missing_data?.[0];
               const isSelected = selectedId === o.listing_id;
               return (
                 <li key={o.listing_id} role="listitem">
@@ -138,28 +128,16 @@ export function FloatingList({
                     {exp ? (
                       <span className="mt-2 block space-y-1">
                         {topReason ? (
-                          <span className="flex items-start gap-1.5 text-xs">
-                            <EvidenceDot level={topReason.evidence_level} />
-                            <span className="leading-4">{topReason.text}</span>
-                          </span>
+                          <span className="block text-xs leading-4">{topReason.text}</span>
                         ) : (
                           <span className="text-xs text-muted-foreground">Aún sin análisis detallado — se actualizará en el próximo run.</span>
                         )}
                         {secondReason && (
-                          <span className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                            <EvidenceDot level={secondReason.evidence_level} />
-                            <span className="leading-4">{secondReason.text}</span>
-                          </span>
+                          <span className="block text-xs leading-4 text-muted-foreground">{secondReason.text}</span>
                         )}
-                        {thirdReason && (
-                          <span className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                            <EvidenceDot level={thirdReason.evidence_level} />
-                            <span className="leading-4">{thirdReason.text}</span>
-                          </span>
-                        )}
-                        {(risk || missing) && (
+                        {risk && (
                           <span className="block text-xs text-muted-foreground">
-                            {risk ? `Concesión: ${risk.text}` : `No sabemos: ${missing}`}
+                            {caveatCopy(risk.criterion_key, risk.state)}
                           </span>
                         )}
                       </span>

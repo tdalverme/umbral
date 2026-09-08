@@ -10,31 +10,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { FeedbackActions } from "@/components/radar/feedback-actions";
 import { radarApi, type Explanation, type ListingDetail } from "@/lib/radar/client";
+import { caveatCopy, criterionLabel } from "@/lib/radar/criterion-labels";
 import { emitDetailViewed, emitExplanationViewed, emitSourceOpened } from "@/lib/radar/events";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
-
-const EVIDENCE_LABEL: Record<string, string> = { strong: "fuerte", medium: "media", low: "baja" };
 
 function Breakdown({ explanation }: { explanation: Explanation }): React.ReactElement {
   return (
     <CardContent className="space-y-3 text-sm">
-      <p>
-        <strong>Confianza del match:</strong> {explanation.confidence.toFixed(2)} ·{" "}
-        <strong>Score:</strong> {explanation.score.toFixed(2)} (indicador con confianza, no certeza)
-      </p>
-      {explanation.satisfied_filters.length > 0 && (
-        <p>
-          <strong>Filtros cumplidos:</strong> {explanation.satisfied_filters.join(", ")}
-        </p>
-      )}
       {explanation.reasons.length > 0 && (
         <ul className="space-y-1">
           {explanation.reasons.map((reason) => (
             <li key={reason.criterion_key} className="flex items-start gap-2">
               <span>{reason.text}</span>
-              <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                evidencia {EVIDENCE_LABEL[reason.evidence_level]}
-              </span>
             </li>
           ))}
         </ul>
@@ -44,16 +31,12 @@ function Breakdown({ explanation }: { explanation: Explanation }): React.ReactEl
           <p className="font-medium">Riesgos e incertidumbre</p>
           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
             {explanation.risks.map((risk) => (
-              <li key={`${risk.criterion_key}-${risk.state}`}>{risk.text}</li>
+              <li key={`${risk.criterion_key}-${risk.state}`}>{caveatCopy(risk.criterion_key, risk.state)}</li>
             ))}
           </ul>
         </div>
       )}
-      {explanation.missing_data.length > 0 && (
-        <p className="text-muted-foreground">
-          <strong>Sin datos para evaluar:</strong> {explanation.missing_data.join(", ")}
-        </p>
-      )}
+      {explanation.missing_data.map((key) => <p key={key} className="text-muted-foreground">No puedo confirmar {criterionLabel(key)}: el aviso no lo informa.</p>)}
     </CardContent>
   );
 }

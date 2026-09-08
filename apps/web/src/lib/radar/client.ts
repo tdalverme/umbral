@@ -187,6 +187,15 @@ export interface ExplanationRisk {
   text: string;
 }
 
+export interface ExplanationNarrative {
+  text: string;
+  used_criteria: string[];
+  used_evidence_refs: string[];
+  source: "managed" | "deterministic_fallback";
+  prompt_version: string;
+  model_version: string;
+}
+
 export interface Explanation {
   search_profile_id: string;
   run_id: string;
@@ -200,6 +209,7 @@ export interface Explanation {
   satisfied_filters: string[];
   profile_snapshot: Record<string, string>;
   feature_snapshot: Record<string, string>;
+  narrative?: ExplanationNarrative | null;
 }
 
 export interface ExplanationsPage {
@@ -292,9 +302,10 @@ export const radarApi = {
     if (afterPosition !== null) query.set("after_position", String(afterPosition));
     return (await getJson(`/api/radar/profiles/${id}/explanations?${query.toString()}`)) as ExplanationsPage;
   },
-  explanation: async (id: string, listingId: string, runId: string | null): Promise<Explanation> => {
+  explanation: async (id: string, listingId: string, runId: string | null, includeNarrative = false): Promise<Explanation> => {
     const query = new URLSearchParams();
     if (runId) query.set("run_id", runId);
+    if (includeNarrative) query.set("include_narrative", "true");
     const suffix = query.toString();
     return (await getJson(
       `/api/radar/profiles/${id}/explanations/${listingId}${suffix ? `?${suffix}` : ""}`,

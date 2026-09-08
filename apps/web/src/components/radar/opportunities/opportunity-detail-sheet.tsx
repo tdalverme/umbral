@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { snapshotBadge } from "@/lib/urban/signal-meta";
 import { neighborhoodLabel } from "@/lib/radar/neighborhoods";
-import type { Explanation } from "@/lib/radar/client";
+import { caveatCopy, criterionLabel } from "@/lib/radar/criterion-labels";
+import type { Explanation, ExplanationNarrative } from "@/lib/radar/client";
 import type { RadarPoi, PoiCategory } from "@/lib/radar/urban";
 import { POI_CATEGORY_META } from "@/lib/radar/urban";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,8 @@ import { cn } from "@/lib/utils";
 export function OpportunityDetailSheet({
   opportunity,
   explanation,
+  narrative,
+  narrativeLoading = false,
   onClose,
   pois = [],
   visibleCategories = [],
@@ -24,6 +27,8 @@ export function OpportunityDetailSheet({
 }: Readonly<{
   opportunity: { listing_id: string; neighborhood: string | null; total_cost: number | null; surface_m2: number | null; rooms: number | null; url?: string | null };
   explanation?: Explanation;
+  narrative?: ExplanationNarrative | null;
+  narrativeLoading?: boolean;
   onClose: () => void;
   pois?: RadarPoi[];
   visibleCategories?: string[];
@@ -57,7 +62,10 @@ export function OpportunityDetailSheet({
   const filteredPois = pois.filter((p) => visibleCategories.includes(p.category)).sort((a, b) => a.distance_m - b.distance_m);
   const visibleList = showAllPois ? filteredPois : filteredPois.slice(0, 3);
   const hasPois = pois.length > 0;
-  const hasReparos = Boolean(explanation && (explanation.risks.length > 0 || explanation.missing_data.length > 0));
+  // The deterministic explanation is already filtered to the active radar criteria.
+  const relevantRisks = explanation?.risks ?? [];
+  const relevantMissing = explanation?.missing_data ?? [];
+  const hasReparos = relevantRisks.length > 0 || relevantMissing.length > 0;
 
   // Señales urbanas compactas — una línea, no dos
   const snapshot = snapshotBadge({ date: "2026-08-20", sha256: "abc123def456" });
@@ -94,23 +102,25 @@ export function OpportunityDetailSheet({
           {/* 1 — Por qué encaja: primario, con aire */}
           <section className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">Por qué encaja</h3>
-            {explanation?.reasons?.length ? (
+            {narrative?.text ? (
+              <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{narrative.text}</p>
+            ) : explanation?.reasons?.length ? (
               <ul className="space-y-2.5">
-                {explanation.reasons.slice(0, 4).map((r) => (
+                {explanation.reasons.slice(0, 3).map((r) => (
                   <li key={r.criterion_key} className="flex gap-2.5">
                     <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />
-                    <p className="text-sm leading-relaxed text-foreground">
-                      {r.text}
-                      <span className="text-xs text-muted-foreground"> — {r.evidence_level === "strong" ? "evidencia clara" : r.evidence_level === "medium" ? "evidencia media" : "a confirmar"}</span>
-                    </p>
+                    <p className="text-sm leading-relaxed text-foreground">{r.text}</p>
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="text-sm leading-relaxed text-muted-foreground">Tu radar lo evaluará en el próximo barrido. Te avisa solo si realmente encaja.</p>
             )}
-            {explanation?.reasons?.length && explanation.reasons.length > 4 && (
-              <p className="text-xs text-muted-foreground">+{explanation.reasons.length - 4} coincidencias más · se priorizan las que más pesan para vos.</p>
+            {narrativeLoading && explanation?.reasons?.length ? (
+              <p className="text-xs text-muted-foreground">Preparando una síntesis de esta oportunidad.</p>
+            ) : null}
+            {!narrative && explanation?.reasons?.length && explanation.reasons.length > 3 && (
+              <p className="text-xs text-muted-foreground">+{explanation.reasons.length - 3} coincidencias más.</p>
             )}
           </section>
 
@@ -126,7 +136,7 @@ export function OpportunityDetailSheet({
                 <span className="text-xs font-semibold uppercase tracking-wide text-foreground">Antes de decidir</span>
                 <span className="flex items-center gap-2">
                   <span className="hidden text-xs text-muted-foreground sm:inline">
-                    {explanation?.risks.length ? `${explanation.risks.length} punto${explanation.risks.length > 1 ? "s" : ""}` : ""} {explanation?.missing_data.length ? `· falta ${explanation.missing_data[0]}` : ""}
+                    {relevantRisks.length ? `${relevantRisks.length} punto${relevantRisks.length > 1 ? "s" : ""}` : ""} {relevantMissing.length ? "· hay datos por confirmar" : ""}
                   </span>
                   <span className={cn("text-muted-foreground transition-transform duration-200", reparosOpen && "rotate-180")} aria-hidden>
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 6l4 4 4-4" /></svg>
@@ -135,14 +145,12 @@ export function OpportunityDetailSheet({
               </button>
               {reparosOpen && (
                 <div className="space-y-2 border-t border-border/60 px-3.5 py-3">
-                  {explanation?.risks.slice(0, 2).map((rk) => (
-                    <p key={rk.criterion_key} className="text-sm leading-relaxed text-muted-foreground">· {rk.text}</p>
+                  {relevantRisks.slice(0, 2).map((risk) => (
+                    <p key={risk.criterion_key} className="text-sm leading-relaxed text-muted-foreground">· {caveatCopy(risk.criterion_key, risk.state)}</p>
                   ))}
-                  {explanation?.missing_data?.length ? (
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      Falta confirmar: <span className="font-medium text-foreground">{explanation.missing_data.slice(0, 2).join(", ")}</span> — lo preguntamos en la visita.
-                    </p>
-                  ) : null}
+                  {relevantMissing.slice(0, 2).map((key) => (
+                    <p key={key} className="text-sm leading-relaxed text-muted-foreground">· No puedo confirmar {criterionLabel(key)}: el aviso no lo informa.</p>
+                  ))}
                 </div>
               )}
             </section>
