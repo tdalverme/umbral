@@ -138,6 +138,35 @@ def test_v5_interpretation_schema_translates_to_provider_compatible_union() -> N
     assert '"then"' not in serialized
 
 
+def test_standard_json_schema_without_defs_translates_to_provider_schema() -> None:
+    contract_path = (
+        Path(__file__).parents[4]
+        / "contracts"
+        / "scoring"
+        / "v1"
+        / "explanation-narrative-schema.json"
+    )
+    schema = json.loads(contract_path.read_text(encoding="utf-8"))
+
+    translated = _translate_schema(schema)
+
+    assert set(translated["properties"]) == {
+        "text",
+        "used_criteria",
+        "used_evidence_refs",
+    }
+    assert translated["required"] == [
+        "text",
+        "used_criteria",
+        "used_evidence_refs",
+    ]
+    assert translated["additionalProperties"] is False
+    assert translated["properties"]["text"]["type"] == "string"
+    assert translated["properties"]["used_criteria"]["items"] == {
+        "type": "string"
+    }
+
+
 def test_preference_interpreter_schema_with_meta_keys_is_not_crashing() -> None:
     """The LLM preference interpreter catalogs resolve without 500ing.
 

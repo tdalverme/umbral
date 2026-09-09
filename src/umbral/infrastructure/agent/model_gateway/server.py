@@ -74,6 +74,8 @@ def _translate_schema(schema: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"unsupported schema node: {type(schema).__name__}")
     if "$defs" in schema and isinstance(schema["$defs"], dict):
         return _translate_json_schema(schema, defs=schema["$defs"])
+    if _looks_like_json_schema(schema):
+        return _translate_json_schema(schema, defs={})
 
     def translate_value(value: Any) -> dict[str, Any]:
         if isinstance(value, str):
@@ -182,6 +184,18 @@ def _translate_schema(schema: dict[str, Any]) -> dict[str, Any]:
                 + "\n".join(lines),
             }
     return result
+
+
+def _looks_like_json_schema(schema: Mapping[str, Any]) -> bool:
+    """Distinguish JSON Schema documents from the legacy shorthand contract."""
+
+    return (
+        schema.get("type") in {"object", "array", "string", "number", "boolean"}
+        and any(
+            key in schema
+            for key in ("properties", "items", "oneOf", "anyOf", "allOf", "$ref")
+        )
+    )
 
 
 def _translate_json_schema(
