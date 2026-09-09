@@ -1,4 +1,4 @@
-# Whole-branch final independent review
+# Whole-branch final independent review + post-fix verification
 
 - Spec: PASS
 - Quality: PASS
@@ -6,7 +6,8 @@
 Fecha: 2026-09-08, America/Buenos_Aires.
 Worktree: `D:\Tomi\dev\umbral\.worktrees\match-explanations-geographic-context`.
 Rama verificada: `feat/match-explanations-geographic-context`.
-HEAD before report commit: `24e19ff`.
+Independent review HEAD: `24e19ff`.
+Post-fix verification HEAD: `a47aba7`.
 Base: `72ebf51af46d30b0fd17a8e268472b9597cbcd0c`.
 
 Los dos Major señalados en el pedido y el Minor de redacción quedaron corregidos. No se encontraron issues Blocker, Critical ni Major en esta verificación. No se declara que los checks globales del repositorio estén verdes.
@@ -187,3 +188,22 @@ El Minor fue corregido en `24e19ff` sin modificar placement, grounding, contribu
 - No hay cambios en scoring/ranking, modelos, migraciones, filtros, activación, notificaciones ni decisiones LLM.
 
 **Conclusión final:** el único Minor de redacción queda resuelto; la rama está lista para handoff, con las limitaciones y diagnósticos baseline ya documentados.
+
+## Post-fix verification at `a47aba7`
+
+The independent reviewer could not complete a second review after the final copy
+commit because the Codex review host reached its usage limit. The final code
+change was verified locally from the current worktree instead:
+
+- Direct narrative/writer/end-to-end/endpoint slice: `67 passed, 11 warnings`.
+- Backend scoring/urban/contracts slice: `171 passed`; adjacent radar,
+  matching, notification, criteria and voice slice: `204 passed`.
+- Web suite: `33 files / 84 tests passed`; TypeScript typecheck passed.
+- Targeted mypy has no errors in the changed narrative source/tests; the
+  remaining diagnostics are the documented baseline errors in unrelated
+  modules. Ruff has only the seven documented pre-existing `E501` diagnostics
+  in `radar/service.py`.
+- `git diff --check` passed and the worktree is clean.
+
+The final copy regression specifically asserts `Encaja por una avenida
+principal relativamente cerca.` and preserves the managed canonical boundary.
