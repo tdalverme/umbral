@@ -268,6 +268,25 @@ def test_writer_uses_managed_text_only_with_authorized_grounding(
     assert narrative.model_version == "test-model"
 
 
+def test_writer_accepts_natural_managed_copy_with_authorized_grounding(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """Natural prose must not be rejected only because it differs from a template."""
+    scripted_gateway.output = {
+        "text": (
+            "Esta oportunidad encaja especialmente bien por la buena conectividad. "
+            "La superficie es un punto para revisar."
+        ),
+        "used_criteria": ["acceso_transporte", "superficie"],
+        "used_evidence_refs": ["urban:transit-1", "listing_field:surface_m2"],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.text == scripted_gateway.output["text"]
+
+
 def test_writer_rejects_invented_price_change_with_unrelated_valid_reference(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:

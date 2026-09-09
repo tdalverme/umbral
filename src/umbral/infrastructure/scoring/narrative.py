@@ -34,13 +34,58 @@ _UNSAFE_GEOGRAPHY_RE = re.compile(
     re.IGNORECASE,
 )
 _RAW_KEY_RE = re.compile(r"\b[a-z][a-z0-9]*_[a-z0-9_]*\b", re.IGNORECASE)
+_PRICE_CHANGE_RE = re.compile(
+    r"\b(?:baj[oó]|reduj[oó]|sub[ií]|aument[oó]|pas[oó])\b\s+de\b"
+    r"|\bprecio\s+(?:baj[oó]|sub[ií]|aument[oó]|pas[oó])\b",
+    re.IGNORECASE,
+)
+_MATCH_CUE_RE = re.compile(
+    r"\b(?:encaja|suma|compensa|alinead[oa]|mejora|buena pinta)\b",
+    re.IGNORECASE,
+)
+_TRADEOFF_CUE_RE = re.compile(
+    r"\b(?:contra|a cambio|menos|aunque|revisar|sacrificar)\b",
+    re.IGNORECASE,
+)
+_KNOWN_PROPERTY_TERM_RE = re.compile(
+    r"\b(?:balc[oó]n|vista|r[ií]o|cocina|living|escritorio|"
+    r"dormitorios?|ba[ñn]os?|cochera|piscina|expensas|orientaci[oó]n|"
+    r"estado|luminosidad|luz|ruido|tr[aá]fico|subte|tren|parque|"
+    r"caf[eé]s?|restaurantes?|servicios|superficie)\b",
+    re.IGNORECASE,
+)
+_DESCRIPTOR_STOPWORDS = frozenset(
+    {
+        "algo",
+        "algunos",
+        "bastante",
+        "buena",
+        "bueno",
+        "cerca",
+        "con",
+        "del",
+        "de",
+        "el",
+        "la",
+        "las",
+        "los",
+        "más",
+        "mayor",
+        "menor",
+        "para",
+        "una",
+        "uno",
+        "unos",
+    }
+)
+_WORD_RE = re.compile(r"[a-záéíóúñü0-9]+", re.IGNORECASE)
 
 ClaimPlacement = Literal["match", "tradeoff", "unknown", "price"]
 
 
 @dataclass(frozen=True, slots=True)
 class _RenderedClaim:
-    """One deterministic, packet-backed sentence accepted from managed output."""
+    """One packet-backed claim used to validate managed output."""
 
     criterion_key: str | None
     evidence_refs: tuple[str, ...]
@@ -175,21 +220,138 @@ def _valid_content(
         return False
     if _RAW_KEY_RE.search(text):
         return False
-    if not _claims_match_context(text, criteria, evidence_refs, context):
+    if not _claims_are_grounded(text, criteria, evidence_refs, context):
         return False
     return not lint_voice(text)
 
 
-def _claims_match_context(
+def _claims_are_grounded(
     text: str,
     criteria: list[object],
     evidence_refs: list[object],
     context: ExplanationNarrativeContext,
 ) -> bool:
+    """Validate provenance and anchors without constraining the prose shape."""
     claims = _rendered_claims(criteria, evidence_refs, context)
     if claims is None:
         return False
-    return text.strip() == " ".join(claim.rendered for claim in claims)
+    if _contains_untracked_property_term(text, claims):
+        return False
+    if _contains_untracked_match_cue(text, claims):
+        return False
+    if _mentions_ungrounded_price_change(text, evidence_refs, context):
+        return False
+    for claim in claims:
+        if claim.placement == "price":
+            if not _mentions_authorized_price_change(text, claim, context):
+                return False
+            continue
+        if not _mentions_descriptor(text, claim.descriptor):
+            return False
+        if not _placement_is_consistent(text, claim):
+            return False
+    return True
+
+
+def _contains_untracked_property_term(
+    text: str,
+    claims: tuple[_RenderedClaim, ...],
+) -> bool:
+    selected_terms = {
+        term
+        for claim in claims
+        if claim.placement != "price"
+        for term in _descriptor_terms(claim.descriptor)
+    }
+    return any(
+        match.group(0).casefold() not in selected_terms
+        for match in _KNOWN_PROPERTY_TERM_RE.finditer(text)
+    )
+
+
+def _contains_untracked_match_cue(
+    text: str,
+    claims: tuple[_RenderedClaim, ...],
+) -> bool:
+    return not any(claim.placement == "match" for claim in claims) and bool(
+        _MATCH_CUE_RE.search(text)
+    )
+
+
+def _mentions_ungrounded_price_change(
+    text: str,
+    evidence_refs: list[object],
+    context: ExplanationNarrativeContext,
+) -> bool:
+    return bool(_PRICE_CHANGE_RE.search(text)) and (
+        "listing_field:price" not in evidence_refs or not context.price_changes
+    )
+
+
+def _mentions_authorized_price_change(
+    text: str,
+    claim: _RenderedClaim,
+    context: ExplanationNarrativeContext,
+) -> bool:
+    del claim
+    for change in context.price_changes:
+        before = change.get("before")
+        after = change.get("after")
+        if not isinstance(before, (int, float)) or isinstance(before, bool):
+            continue
+        if not isinstance(after, (int, float)) or isinstance(after, bool):
+            continue
+        digits = re.sub(r"\D", "", text)
+        if str(int(before)) not in digits or str(int(after)) not in digits:
+            continue
+        if after < before and re.search(r"\b(?:baj[oó]|reduj[oó])\b", text, re.I):
+            return True
+        if after > before and re.search(
+            r"\b(?:sub[ií]|aument[oó]|pas[oó])\b", text, re.I
+        ):
+            return True
+    return False
+
+
+def _placement_is_consistent(text: str, claim: _RenderedClaim) -> bool:
+    sentences = _sentences_for_descriptor(text, claim.descriptor)
+    if not sentences:
+        return False
+    for sentence in sentences:
+        has_match = bool(_MATCH_CUE_RE.search(sentence))
+        has_tradeoff = bool(_TRADEOFF_CUE_RE.search(sentence))
+        if claim.placement == "match" and has_tradeoff and not has_match:
+            return False
+        if claim.placement == "tradeoff" and has_match and not has_tradeoff:
+            return False
+        if claim.placement == "match" and re.search(
+            r"\bno\s+(?:encaja|tiene|hay|es)\b", sentence, re.I
+        ):
+            return False
+    return True
+
+
+def _mentions_descriptor(text: str, descriptor: str) -> bool:
+    terms = _descriptor_terms(descriptor)
+    if not terms:
+        return False
+    text_terms = set(_WORD_RE.findall(text.casefold()))
+    return any(term in text_terms for term in terms)
+
+
+def _sentences_for_descriptor(text: str, descriptor: str) -> tuple[str, ...]:
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    return tuple(
+        sentence for sentence in sentences if _mentions_descriptor(sentence, descriptor)
+    )
+
+
+def _descriptor_terms(descriptor: str) -> tuple[str, ...]:
+    return tuple(
+        term
+        for term in _WORD_RE.findall(descriptor.casefold())
+        if len(term) > 2 and term not in _DESCRIPTOR_STOPWORDS
+    )
 
 
 def _rendered_claims(
