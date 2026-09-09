@@ -287,6 +287,66 @@ def test_writer_accepts_natural_managed_copy_with_authorized_grounding(
     assert narrative.text == scripted_gateway.output["text"]
 
 
+def test_writer_accepts_paraphrased_descriptor_with_authorized_grounding(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """Natural phrasing may paraphrase the packet descriptor.
+
+    The criterion and evidence references still provide provenance.
+    """
+    scripted_gateway.output = {
+        "text": (
+            "Está bien conectado para moverte por la ciudad. "
+            "La superficie es un punto para revisar."
+        ),
+        "used_criteria": ["acceso_transporte", "superficie"],
+        "used_evidence_refs": ["urban:transit-1", "listing_field:surface_m2"],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.text == scripted_gateway.output["text"]
+
+
+def test_writer_accepts_paraphrased_geography_with_tradeoff_placement(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """A geographic fact may be expressed as a contained, user-facing paraphrase."""
+    fact = GeographicFact(
+        label="actividad nocturna",
+        value="mayor actividad nocturna",
+        source_ref="urban:nightlife-1",
+        confidence=0.8,
+        criterion_key="vida_nocturna",
+        favorable=False,
+        signal_ref="nightlife_intensity",
+    )
+    context = replace(
+        context,
+        allowed_criteria=(*context.allowed_criteria, "vida_nocturna"),
+        allowed_evidence_refs=(*context.allowed_evidence_refs, fact.source_ref),
+        criterion_evidence_refs={
+            **context.criterion_evidence_refs,
+            "vida_nocturna": (fact.source_ref,),
+        },
+        geography=(fact,),
+    )
+    scripted_gateway.output = {
+        "text": (
+            "La zona tiene bastante movimiento de noche, así que conviene "
+            "revisarla antes de decidir."
+        ),
+        "used_criteria": ["vida_nocturna"],
+        "used_evidence_refs": [fact.source_ref],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.text == scripted_gateway.output["text"]
+
+
 def test_writer_accepts_grounded_uncertainty_wording(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:

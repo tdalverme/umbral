@@ -45,7 +45,7 @@ _MATCH_CUE_RE = re.compile(
     re.IGNORECASE,
 )
 _TRADEOFF_CUE_RE = re.compile(
-    r"\b(?:contra|a cambio|menos|aunque|revisar|sacrificar)\b",
+    r"\b(?:contra|a cambio|menos|aunque|revis\w*|sacrific\w*)\b",
     re.IGNORECASE,
 )
 _KNOWN_PROPERTY_TERM_RE = re.compile(
@@ -79,6 +79,258 @@ _DESCRIPTOR_STOPWORDS = frozenset(
         "unos",
     }
 )
+# These are deliberately small, human-language anchors rather than a semantic
+# similarity check. They let the model say "bien conectado" when the packet
+# says "buena conectividad", while the criterion and evidence references still
+# remain the source of authorization.
+_DESCRIPTOR_ALIASES: Mapping[str, tuple[str, ...]] = {
+    "buena conectividad": (
+        "conectado",
+        "conectada",
+        "conectados",
+        "conectadas",
+        "transporte",
+        "subte",
+        "tren",
+        "moverte",
+        "moverse",
+    ),
+    "subte relativamente cerca": (
+        "conectado",
+        "conectada",
+        "transporte",
+        "subte",
+        "moverte",
+    ),
+    "tren relativamente cerca": (
+        "conectado",
+        "conectada",
+        "transporte",
+        "tren",
+        "moverte",
+    ),
+    "transporte relativamente cerca": (
+        "conectado",
+        "conectada",
+        "transporte",
+        "subte",
+        "tren",
+        "moverte",
+    ),
+    "buena luz natural": (
+        "luminosidad",
+        "luminoso",
+        "luminosa",
+        "iluminado",
+        "iluminada",
+    ),
+    "poca luz natural": (
+        "oscuro",
+        "oscura",
+        "luminosidad",
+    ),
+    "cantidad de ambientes": (
+        "ambiente",
+        "ambientes",
+        "habitación",
+        "habitaciones",
+        "dormitorio",
+        "dormitorios",
+    ),
+    "superficie": ("metro", "metros", "tamaño"),
+    "entorno más residencial": (
+        "residencial",
+        "residenciales",
+        "casas",
+        "bajas",
+        "calma",
+    ),
+    "mayor actividad": (
+        "actividad",
+        "activo",
+        "activa",
+        "movimiento",
+        "movida",
+        "movido",
+    ),
+    "mayor actividad urbana": (
+        "actividad",
+        "activo",
+        "activa",
+        "movimiento",
+        "movida",
+        "movido",
+    ),
+    "mayor exposición a actividad urbana": (
+        "exposición",
+        "expuesta",
+        "expuesto",
+        "activo",
+        "activa",
+        "movimiento",
+        "tránsito",
+        "tráfico",
+    ),
+    "menor exposición": (
+        "exposición",
+        "expuesta",
+        "expuesto",
+        "alejada",
+        "alejado",
+        "avenida",
+        "avenidas",
+        "corredor",
+        "corredores",
+        "tránsito",
+        "tráfico",
+    ),
+    "menor exposición al tren": (
+        "tren",
+        "alejada",
+        "alejado",
+        "vías",
+    ),
+    "actividad nocturna": (
+        "actividad",
+        "nocturna",
+        "noche",
+        "bares",
+        "bar",
+        "movimiento",
+        "movida",
+        "activo",
+        "activa",
+    ),
+    "mayor actividad nocturna": (
+        "actividad",
+        "nocturna",
+        "noche",
+        "bares",
+        "bar",
+        "movimiento",
+        "movida",
+        "activo",
+        "activa",
+    ),
+    "algo de actividad nocturna cerca": (
+        "actividad",
+        "nocturna",
+        "noche",
+        "bares",
+        "bar",
+        "movimiento",
+        "movida",
+        "activo",
+        "activa",
+    ),
+    "servicios cotidianos cerca": (
+        "servicio",
+        "servicios",
+        "supermercado",
+        "supermercados",
+        "farmacia",
+        "farmacias",
+        "compras",
+        "cotidiano",
+        "cotidianos",
+    ),
+    "servicios cotidianos relativamente cerca": (
+        "servicio",
+        "servicios",
+        "supermercado",
+        "supermercados",
+        "farmacia",
+        "farmacias",
+        "compras",
+        "cotidiano",
+        "cotidianos",
+    ),
+    "varios servicios cotidianos cerca": (
+        "servicio",
+        "servicios",
+        "supermercado",
+        "supermercados",
+        "farmacia",
+        "farmacias",
+        "compras",
+        "cotidiano",
+        "cotidianos",
+    ),
+    "algunos servicios cotidianos cerca": (
+        "servicio",
+        "servicios",
+        "supermercado",
+        "supermercados",
+        "farmacia",
+        "farmacias",
+        "compras",
+        "cotidiano",
+        "cotidianos",
+    ),
+    "espacios verdes cerca": (
+        "espacio",
+        "espacios",
+        "verde",
+        "verdes",
+        "parque",
+        "plaza",
+    ),
+    "espacio verde relativamente cerca": (
+        "espacio",
+        "espacios",
+        "verde",
+        "verdes",
+        "parque",
+        "plaza",
+    ),
+    "cafés relativamente cerca": (
+        "café",
+        "cafés",
+        "bares",
+        "bar",
+        "restaurantes",
+        "gastronomía",
+    ),
+    "varios cafés cerca": (
+        "café",
+        "cafés",
+        "bares",
+        "bar",
+        "restaurantes",
+        "gastronomía",
+    ),
+    "algunos cafés cerca": (
+        "café",
+        "cafés",
+        "bares",
+        "bar",
+        "restaurantes",
+        "gastronomía",
+    ),
+    "cafés cercanos": (
+        "café",
+        "cafés",
+        "bares",
+        "bar",
+        "restaurantes",
+        "gastronomía",
+    ),
+    "facilidad para moverte a pie": (
+        "caminando",
+        "caminar",
+        "caminable",
+        "peatonal",
+        "pie",
+    ),
+    "buen estado general": (
+        "conservado",
+        "conservada",
+        "mantenimiento",
+        "cuidado",
+        "cuidada",
+    ),
+    "balcón": ("terraza", "terrazas"),
+}
 _WORD_RE = re.compile(r"[a-záéíóúñü0-9]+", re.IGNORECASE)
 
 ClaimPlacement = Literal["match", "tradeoff", "unknown", "price"]
@@ -298,7 +550,7 @@ def _contains_untracked_property_term(
         term
         for claim in claims
         if claim.placement != "price"
-        for term in _descriptor_terms(claim.descriptor)
+        for term in _descriptor_anchor_terms(claim.descriptor)
     }
     return any(
         match.group(0).casefold() not in selected_terms
@@ -369,7 +621,7 @@ def _placement_is_consistent(text: str, claim: _RenderedClaim) -> bool:
 
 
 def _mentions_descriptor(text: str, descriptor: str) -> bool:
-    terms = _descriptor_terms(descriptor)
+    terms = _descriptor_anchor_terms(descriptor)
     if not terms:
         return False
     text_terms = set(_WORD_RE.findall(text.casefold()))
@@ -388,6 +640,13 @@ def _descriptor_terms(descriptor: str) -> tuple[str, ...]:
         term
         for term in _WORD_RE.findall(descriptor.casefold())
         if len(term) > 2 and term not in _DESCRIPTOR_STOPWORDS
+    )
+
+
+def _descriptor_anchor_terms(descriptor: str) -> frozenset[str]:
+    normalized = descriptor.casefold()
+    return frozenset(
+        (*_descriptor_terms(descriptor), *_DESCRIPTOR_ALIASES.get(normalized, ()))
     )
 
 
