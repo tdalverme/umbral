@@ -132,7 +132,7 @@ class ManagedExplanationNarrativeWriter:
             )
         except Exception as error:
             logger.warning(
-                "explanation narrative fallback",
+                "explanation narrative fallback reason=gateway_exception",
                 extra={
                     "narrative_outcome": "fallback",
                     "narrative_reason": "gateway_exception",
@@ -143,7 +143,7 @@ class ManagedExplanationNarrativeWriter:
             return fallback
         if result.status != "success" or result.content is None:
             logger.warning(
-                "explanation narrative fallback",
+                "explanation narrative fallback reason=gateway_result",
                 extra={
                     "narrative_outcome": "fallback",
                     "narrative_reason": "gateway_result",
@@ -156,7 +156,7 @@ class ManagedExplanationNarrativeWriter:
         content = result.content
         if not _valid_content(content, self.schema, context):
             logger.warning(
-                "explanation narrative fallback",
+                "explanation narrative fallback reason=validation_rejected",
                 extra={
                     "narrative_outcome": "fallback",
                     "narrative_reason": "validation_rejected",
@@ -165,7 +165,7 @@ class ManagedExplanationNarrativeWriter:
             )
             return fallback
         logger.info(
-            "explanation narrative managed",
+            "explanation narrative managed source=managed",
             extra={
                 "narrative_outcome": "managed",
                 "model_version": self.model_version,
