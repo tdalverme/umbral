@@ -227,6 +227,22 @@ def test_promotion_downloads_the_named_release_run_artifact() -> None:
     }
 
 
+def test_promotion_checks_out_the_release_that_produced_the_manifest() -> None:
+    """The workflow-run listener must use release code for migrations and gates."""
+    workflow = yaml.load(
+        PROMOTE_WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader
+    )
+    checkout = next(
+        step
+        for step in workflow["jobs"]["promote"]["steps"]
+        if step.get("uses") == "actions/checkout@v4"
+    )
+
+    assert checkout["with"]["ref"] == (
+        "${{ github.event.workflow_run.head_sha || github.sha }}"
+    )
+
+
 def test_promotion_runs_after_a_successful_release_workflow() -> None:
     workflow = yaml.load(
         PROMOTE_WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader
