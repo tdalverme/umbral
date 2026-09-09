@@ -46,7 +46,9 @@ class JobHandler(Protocol):
 class JobRuntime(Protocol):
     release_id: str
 
-    def submit(self, command: SubmitJob) -> JobSnapshot: ...
+    def submit(
+        self, command: SubmitJob, *, immediate_relay: bool | None = None
+    ) -> JobSnapshot: ...
 
     def get(self, execution_id: UUID) -> JobSnapshot: ...
 

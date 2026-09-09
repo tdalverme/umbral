@@ -98,6 +98,30 @@ def test_submit_relays_new_outbox_after_commit(
     assert isinstance(calls[0][1], UUID)
 
 
+def test_submit_can_defer_immediate_relay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _Session()
+    monkeypatch.setattr(runtime_module, "SqlAlchemyJobRepository", _Repository)
+    runtime = SqlAlchemyJobRuntime(
+        cast(Callable[[], Session], lambda: session),
+        queue=RecordingJobQueue(),
+        now=lambda: NOW,
+        immediate_relay=True,
+    )
+    calls: list[object] = []
+
+    def relay_due(**kwargs: object) -> RelayResult:
+        calls.append(kwargs)
+        return RelayResult(published=1)
+
+    monkeypatch.setattr(runtime, "relay_due", relay_due)
+
+    runtime.submit(_command(), immediate_relay=False)
+
+    assert calls == []
+
+
 def test_submit_stays_successful_when_immediate_relay_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -115,7 +115,10 @@ class InMemoryJobRuntime:
         with self._lock:
             self._now += delta
 
-    def submit(self, command: SubmitJob) -> JobSnapshot:
+    def submit(
+        self, command: SubmitJob, *, immediate_relay: bool | None = None
+    ) -> JobSnapshot:
+        del immediate_relay
         with self._lock:
             if self.handlers is not None:
                 handler = self.handlers.get(command.identity.job_type)

@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from umbral.application.identity.access import IdentityAccess
 from umbral.application.identity.administration import AccessAdministration
 from umbral.application.jobs.contracts import JobSnapshot, SubmitJob
+from umbral.application.jobs.ports import RelayResult
 from umbral.domain.identity.models import MagicLinkAttempt
 from umbral.infrastructure.db.repositories.identity import InMemoryIdentityStore
 from umbral.infrastructure.email.recording import RecordingEmailAdapter
@@ -32,7 +33,10 @@ class _CapturingRuntime:
         self.logical_target: str | None = None
         self.execution_id = uuid4()
 
-    def submit(self, command: SubmitJob) -> JobSnapshot:
+    def submit(
+        self, command: SubmitJob, *, immediate_relay: bool | None = None
+    ) -> JobSnapshot:
+        del immediate_relay
         self.logical_target = command.identity.logical_target
         if self.fail:
             raise RuntimeError("queue unavailable")
@@ -46,6 +50,13 @@ class _CapturingRuntime:
             error_code=None,
             available_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         )
+
+    def relay_due(
+        self, *, limit: int, execution_id: UUID | None = None
+    ) -> RelayResult:
+        assert limit == 1
+        assert execution_id == self.execution_id
+        return RelayResult(published=1)
 
 
 def _attempt_after_request(

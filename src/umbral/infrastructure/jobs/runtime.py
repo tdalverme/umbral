@@ -64,7 +64,9 @@ class SqlAlchemyJobRuntime:
             raise ValueError("time cannot move backwards")
         self._offset += delta
 
-    def submit(self, command: SubmitJob) -> JobSnapshot:
+    def submit(
+        self, command: SubmitJob, *, immediate_relay: bool | None = None
+    ) -> JobSnapshot:
         command = self._normalized_command(command)
         with self._session_factory() as session:
             repository = SqlAlchemyJobRepository(session)
@@ -81,7 +83,7 @@ class SqlAlchemyJobRuntime:
                     raise
                 return _snapshot(winner)
             snapshot = _snapshot(execution)
-        if self.immediate_relay:
+        if self.immediate_relay if immediate_relay is None else immediate_relay:
             self._relay_immediately(execution_id=snapshot.execution_id)
         return snapshot
 

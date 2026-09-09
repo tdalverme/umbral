@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -41,6 +42,8 @@ from umbral.domain.identity.models import (
     RoleAssignment,
     utc,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _provider_correlation(event: Mapping[str, str]) -> UUID:
@@ -132,6 +135,7 @@ class IdentityAccess:
             normalized = email.strip().lower()[:320]
         email_fingerprint = self.store.fingerprint(normalized)
         origin_digest = self.store.fingerprint(origin_fingerprint)
+        relay_execution_id: UUID | None = None
         with self._transaction():
             email_count = self.store.recent_requests(email_fingerprint, now=now, field="email_fingerprint")
             origin_count = self.store.recent_requests(origin_digest, now=now, field="origin_fingerprint")
@@ -164,10 +168,12 @@ class IdentityAccess:
                             logical_target=str(attempt.id),
                             idempotency_key=f"identity.magic-link/{attempt.id}",
                             correlation_id=correlation_id,
-                        )
+                        ),
+                        immediate_relay=False,
                     )
                     attempt.job_execution_id = submission.execution_id
                     self.store.save_attempt(attempt)
+                    relay_execution_id = submission.execution_id
                 except Exception:
                     attempt.state = "failed"
                     attempt.failure_reason = "job_submission_failed"
@@ -179,7 +185,15 @@ class IdentityAccess:
                         correlation_id,
                         attempt_id=attempt.id,
                     )
-            return MagicLinkRequestResult()
+        if relay_execution_id is not None:
+            try:
+                self.job_runtime.relay_due(limit=1, execution_id=relay_execution_id)
+            except Exception:
+                logger.exception(
+                    "identity.magic_link.immediate_relay_failed execution_id=%s",
+                    relay_execution_id,
+                )
+        return MagicLinkRequestResult()
 
     def issue_attempt(
         self,
