@@ -174,6 +174,16 @@ The report update is committed separately after this implementation commit.
 - Implementation commit: `5da5e5f` — `fix: preserve contributor narrative direction`.
 - No scoring/ranking/filter/activation/notification, model, migration or LLM decision changes.
 
+## Final copy correction round
+
+- RED: la regresión real de `ruido_transito` positivo a 40m exponía `Encaja por con una avenida principal relativamente cerca.`.
+- GREEN: la composición de match elimina sólo el prefijo geográfico `con ` antes de `Encaja por`; fallback y managed ahora producen `Encaja por una avenida principal relativamente cerca.`. Los tradeoffs mantienen su wording original.
+- Focused narrative/writer/end-to-end: `49 passed`.
+- Relevant backend: `185 passed, 11 warnings`; adjacent backend: `185 passed`.
+- Web: `33 archivos / 84 tests passed`; typecheck, Ruff y mypy focalizados OK; `git diff --check` OK.
+- Implementation commit: `24e19ff` — `fix: compose geographic match copy`.
+- No scoring/ranking/filter/activation/notification, model, migration or LLM decision changes.
+
 ## Final whole-branch review correction round
 
 ### TDD evidence
