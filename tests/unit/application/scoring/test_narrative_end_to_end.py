@@ -279,7 +279,7 @@ def test_v2_road_noise_applies_user_polarity_once() -> None:
         "con una avenida principal relativamente cerca"
     ]
     assert near_positive_fallback.text == (
-        "Encaja por con una avenida principal relativamente cerca."
+        "Encaja por una avenida principal relativamente cerca."
     )
     assert "menor exposición" not in near_positive_fallback.text
     assert near_positive_managed.source == "managed"

@@ -332,7 +332,7 @@ def _render_claim(
     descriptor: str,
 ) -> str:
     if placement == "match":
-        return f"Encaja por {_with_article(descriptor)}."
+        return f"Encaja por {_with_article(_match_descriptor(descriptor))}."
     if placement == "tradeoff":
         return f"{_capitalize(_with_article(descriptor))} es un punto para revisar."
     if placement == "unknown":
@@ -363,6 +363,10 @@ def _with_article(descriptor: str) -> str:
         "superficie": "la",
     }.get(descriptor.casefold())
     return f"{article} {descriptor}" if article else descriptor
+
+
+def _match_descriptor(descriptor: str) -> str:
+    return descriptor[4:] if descriptor.casefold().startswith("con ") else descriptor
 
 
 def _capitalize(value: str) -> str:

@@ -110,7 +110,7 @@ def deterministic_narrative(
     selected_geography = [fact for fact in context.geography if fact.favorable][
         : max(0, 3 - len(reasons))
     ]
-    geography = [fact.value for fact in selected_geography]
+    geography = [_match_descriptor(fact.value) for fact in selected_geography]
     matches = [value for value in reasons + geography if value is not None]
     if matches:
         text = f"Encaja por {_join_spanish(matches)}."
@@ -814,6 +814,10 @@ def _join_spanish(values: Sequence[str]) -> str:
     if len(values) == 2:
         return f"{values[0]} y {values[1]}"
     return f"{', '.join(values[:-1])} y {values[-1]}"
+
+
+def _match_descriptor(value: str) -> str:
+    return value[4:] if value.casefold().startswith("con ") else value
 
 
 def _price_text(value: object, currency: object) -> str:
