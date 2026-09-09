@@ -49,10 +49,16 @@ _TRADEOFF_CUE_RE = re.compile(
     re.IGNORECASE,
 )
 _KNOWN_PROPERTY_TERM_RE = re.compile(
-    r"\b(?:balc[oó]n|vista|r[ií]o|cocina|living|escritorio|"
-    r"dormitorios?|ba[ñn]os?|cochera|piscina|expensas|orientaci[oó]n|"
-    r"estado|luminosidad|luz|ruido|tr[aá]fico|subte|tren|parque|"
-    r"caf[eé]s?|restaurantes?|servicios|superficie)\b",
+    r"\b(?:balc[oó]n|terraza|vista|r[ií]o|cocina|living|escritorio|"
+    r"dormitorios?|habitaciones?|ambientes?|ba[ñn]os?|cochera|piscina|"
+    r"expensas|orientaci[oó]n|estado|luminosidad|luz|luminos[oa]s?|"
+    r"iluminad[oa]s?|conservad[oa]s?|mantenimiento|ruido|tr[aá]fico|"
+    r"tr[aá]nsito|subte|tren|parque|plaza|caf[eé]s?|bares?|"
+    r"restaurantes?|gastronom[ií]a|servicios?|supermercados?|farmacias?|"
+    r"compras|superficie|metros?|tama[ñn]o|ubicaci[oó]n|conectad[oa]s?|"
+    r"transporte|residencial(?:es)?|calma|actividad|movimiento|noche|"
+    r"nocturn[oa]s?|exposici[oó]n|expuest[oa]s?|alejad[oa]s?|"
+    r"avenidas?|corredores?|caminando|caminar|caminable|peatonal)\b",
     re.IGNORECASE,
 )
 _DESCRIPTOR_STOPWORDS = frozenset(

@@ -399,6 +399,18 @@ def test_writer_rejects_invented_amenity_with_valid_transport_reference(
     )
 
 
+def test_writer_rejects_invented_terrace_with_valid_transport_reference(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    scripted_gateway.output = {
+        "text": "Encaja por la buena conectividad y tiene terraza.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
 def test_writer_rejects_empty_evidence_refs(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
