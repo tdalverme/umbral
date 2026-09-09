@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -20,7 +21,7 @@ from umbral.application.scoring.narrative import (
 )
 
 _TECHNICAL_COPY_RE = re.compile(
-    r"\b(?:criterio|criterios|evidencia|evidencias|matcher|ranking|"
+    r"\b(?:criterio|criterios|matcher|ranking|"
     r"normalizad[oa]s?|arquitectura|modelo|ia)\b",
     re.IGNORECASE,
 )
@@ -82,6 +83,8 @@ _WORD_RE = re.compile(r"[a-záéíóúñü0-9]+", re.IGNORECASE)
 
 ClaimPlacement = Literal["match", "tradeoff", "unknown", "price"]
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class _RenderedClaim:
@@ -127,13 +130,47 @@ class ManagedExplanationNarrativeWriter:
                 prompt_version=self.prompt_version,
                 model_version=self.model_version,
             )
-        except Exception:
+        except Exception as error:
+            logger.warning(
+                "explanation narrative fallback",
+                extra={
+                    "narrative_outcome": "fallback",
+                    "narrative_reason": "gateway_exception",
+                    "error_type": type(error).__name__,
+                    "model_version": self.model_version,
+                },
+            )
             return fallback
         if result.status != "success" or result.content is None:
+            logger.warning(
+                "explanation narrative fallback",
+                extra={
+                    "narrative_outcome": "fallback",
+                    "narrative_reason": "gateway_result",
+                    "gateway_status": result.status,
+                    "gateway_error_code": result.error_code,
+                    "model_version": self.model_version,
+                },
+            )
             return fallback
         content = result.content
         if not _valid_content(content, self.schema, context):
+            logger.warning(
+                "explanation narrative fallback",
+                extra={
+                    "narrative_outcome": "fallback",
+                    "narrative_reason": "validation_rejected",
+                    "model_version": self.model_version,
+                },
+            )
             return fallback
+        logger.info(
+            "explanation narrative managed",
+            extra={
+                "narrative_outcome": "managed",
+                "model_version": self.model_version,
+            },
+        )
         return ExplanationNarrative(
             text=cast(str, content["text"]),
             used_criteria=tuple(cast(list[str], content["used_criteria"])),

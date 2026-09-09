@@ -287,6 +287,25 @@ def test_writer_accepts_natural_managed_copy_with_authorized_grounding(
     assert narrative.text == scripted_gateway.output["text"]
 
 
+def test_writer_accepts_grounded_uncertainty_wording(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """User-facing uncertainty is valid and must not trigger the fallback."""
+    scripted_gateway.output = {
+        "text": (
+            "Encaja por la buena conectividad. La superficie es un punto para "
+            "revisar; tengo poca evidencia para describirla mejor."
+        ),
+        "used_criteria": ["acceso_transporte", "superficie"],
+        "used_evidence_refs": ["urban:transit-1", "listing_field:surface_m2"],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.text == scripted_gateway.output["text"]
+
+
 def test_writer_rejects_invented_price_change_with_unrelated_valid_reference(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
