@@ -73,6 +73,7 @@ from umbral.infrastructure.db.models.runtime import RuntimeSurfaceStatus
 from umbral.infrastructure.db.models.scoring import (
     ComparisonShortlist,
     CriterionEvaluation,
+    RecommendationNarrative,
     ScoringPolicy,
     ScoringPolicyVersion,
 )
@@ -146,6 +147,7 @@ __all__ = [
     "ScoringPolicy",
     "ScoringPolicyVersion",
     "CriterionEvaluation",
+    "RecommendationNarrative",
     "ComparisonShortlist",
     "FeedbackEvent",
     "FeedbackEventReason",

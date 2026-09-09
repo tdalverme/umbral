@@ -6,7 +6,10 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
-from umbral.application.scoring.ports import ExplanationNarrativeWriter
+from umbral.application.scoring.ports import (
+    ExplanationNarrativeCache,
+    ExplanationNarrativeWriter,
+)
 from umbral.application.scoring.service import ScoringService
 from umbral.infrastructure.criteria.contract_loader import load_matcher_types
 from umbral.infrastructure.db.repositories.radar import (
@@ -17,6 +20,7 @@ from umbral.infrastructure.db.repositories.radar import (
 )
 from umbral.infrastructure.db.repositories.scoring import (
     SqlAlchemyEvaluationRepository,
+    SqlAlchemyExplanationNarrativeCache,
     SqlAlchemyObservationReader,
     SqlAlchemyPolicyRepository,
     SqlAlchemyScoringListingReader,
@@ -38,6 +42,8 @@ def build_scoring_service(
     comparison_max_listings: int = 6,
     comparator_enabled: bool = False,
     narrative_writer: ExplanationNarrativeWriter | None = None,
+    narrative_cache: ExplanationNarrativeCache | None = None,
+    narrative_model_version: str = "deterministic",
     clock: Callable[[], datetime] | None = None,
 ) -> ScoringService:
     return ScoringService(
@@ -63,6 +69,12 @@ def build_scoring_service(
         comparison_max_listings=comparison_max_listings,
         comparator_enabled=comparator_enabled,
         narrative_writer=narrative_writer,
+        narrative_cache=(
+            narrative_cache
+            if narrative_cache is not None
+            else SqlAlchemyExplanationNarrativeCache(session_factory)
+        ),
+        narrative_model_version=narrative_model_version,
         clock=clock or (lambda: datetime.now(timezone.utc)),
     )
 

@@ -17,6 +17,9 @@ from umbral.infrastructure.db.models.scoring import (
 from umbral.infrastructure.db.models.scoring import (
     CriterionEvaluation as EvaluationModel,
 )
+from umbral.infrastructure.db.models.scoring import (
+    RecommendationNarrative as NarrativeModel,
+)
 
 
 def test_evaluation_lineage_walks_to_observations_and_snapshots(
@@ -92,3 +95,36 @@ def test_explanation_is_readable_after_run(scoring_backend: Any) -> None:
     assert explanation.score_version == run.score_policy_version
     assert explanation.reasons
     assert all(reason.evidence_refs for reason in explanation.reasons)
+
+
+def test_narrative_cache_survives_scoring_service_rebuild(
+    scoring_backend: Any,
+) -> None:
+    factory = scoring_backend
+    _, profile, run = seed_run(factory)
+    listing_id = build_scoring(factory).items.listing_ids_for_run(run.run_id)[0]
+
+    first = build_scoring(factory).get_narrative(
+        owner_id=profile.owner_id,
+        profile_id=profile.profile_id,
+        run_id=run.run_id,
+        listing_id=listing_id,
+    )
+    second = build_scoring(factory).get_narrative(
+        owner_id=profile.owner_id,
+        profile_id=profile.profile_id,
+        run_id=run.run_id,
+        listing_id=listing_id,
+    )
+
+    assert second == first
+    with factory() as session:
+        assert (
+            session.scalar(
+                select(NarrativeModel.id).where(
+                    NarrativeModel.run_id == run.run_id,
+                    NarrativeModel.listing_id == listing_id,
+                )
+            )
+            is not None
+        )

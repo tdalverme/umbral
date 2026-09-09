@@ -23,6 +23,7 @@ from umbral.application.scoring.contracts import (
     CriterionEvaluation,
     PolicyVersion,
 )
+from umbral.application.scoring.narrative import ExplanationNarrative
 from umbral.application.silver.contracts import (
     ACTIVE_NORMALIZER_VERSION,
     GeoPrecision,
@@ -36,6 +37,9 @@ from umbral.infrastructure.db.models.scoring import (
 )
 from umbral.infrastructure.db.models.scoring import (
     CriterionEvaluation as CriterionEvaluationModel,
+)
+from umbral.infrastructure.db.models.scoring import (
+    RecommendationNarrative as RecommendationNarrativeModel,
 )
 from umbral.infrastructure.db.models.scoring import (
     ScoringPolicy as ScoringPolicyModel,
@@ -171,6 +175,80 @@ class SqlAlchemyEvaluationRepository:
                 listing_id: tuple(sorted(items, key=lambda item: item.criterion_key))
                 for listing_id, items in by_listing.items()
             }
+
+
+class SqlAlchemyExplanationNarrativeCache:
+    """Persists final narratives keyed by frozen run and generation versions."""
+
+    def __init__(self, session_factory: SessionFactory) -> None:
+        self.session_factory = session_factory
+
+    def get(
+        self,
+        *,
+        run_id: UUID,
+        listing_id: UUID,
+        prompt_version: str,
+        model_version: str,
+        schema_version: str,
+    ) -> ExplanationNarrative | None:
+        with self.session_factory() as session:
+            model = session.scalar(
+                select(RecommendationNarrativeModel).where(
+                    RecommendationNarrativeModel.run_id == run_id,
+                    RecommendationNarrativeModel.listing_id == listing_id,
+                    RecommendationNarrativeModel.prompt_version == prompt_version,
+                    RecommendationNarrativeModel.model_version == model_version,
+                    RecommendationNarrativeModel.schema_version == schema_version,
+                )
+            )
+            return _to_domain_narrative(model) if model is not None else None
+
+    def put(
+        self,
+        *,
+        run_id: UUID,
+        listing_id: UUID,
+        prompt_version: str,
+        model_version: str,
+        schema_version: str,
+        narrative: ExplanationNarrative,
+        now: datetime,
+        correlation_id: UUID,
+    ) -> None:
+        from sqlalchemy.dialects.postgresql import insert
+
+        with self.session_factory() as session:
+            statement = insert(RecommendationNarrativeModel).values(
+                id=uuid4(),
+                created_at=now,
+                updated_at=now,
+                version=1,
+                actor_kind="service",
+                actor_id=None,
+                source="scoring.narrative",
+                correlation_id=correlation_id,
+                run_id=run_id,
+                listing_id=listing_id,
+                prompt_version=prompt_version,
+                model_version=model_version,
+                schema_version=schema_version,
+                text=narrative.text,
+                used_criteria=list(narrative.used_criteria),
+                used_evidence_refs=list(narrative.used_evidence_refs),
+                narrative_source=narrative.source,
+                output_model_version=narrative.model_version,
+            ).on_conflict_do_nothing(
+                index_elements=[
+                    "run_id",
+                    "listing_id",
+                    "prompt_version",
+                    "model_version",
+                    "schema_version",
+                ]
+            )
+            session.execute(statement)
+            session.commit()
 
 
 class SqlAlchemyShortlistRepository:
@@ -369,6 +447,19 @@ def _to_domain_evaluation(model: CriterionEvaluationModel) -> CriterionEvaluatio
         evidence_refs=tuple(model.evidence_refs or ()),
         created_at=model.created_at,
         correlation_id=model.correlation_id,
+    )
+
+
+def _to_domain_narrative(
+    model: RecommendationNarrativeModel,
+) -> ExplanationNarrative:
+    return ExplanationNarrative(
+        text=model.text,
+        used_criteria=tuple(model.used_criteria or ()),
+        used_evidence_refs=tuple(model.used_evidence_refs or ()),
+        source=model.narrative_source,  # type: ignore[arg-type]
+        prompt_version=model.prompt_version,
+        model_version=model.output_model_version,
     )
 
 

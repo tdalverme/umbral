@@ -126,3 +126,30 @@ class ExplanationNarrativeWriter(Protocol):
     """Writes a presentation-only narrative from a frozen context packet."""
 
     def write(self, context: ExplanationNarrativeContext) -> ExplanationNarrative: ...
+
+
+class ExplanationNarrativeCache(Protocol):
+    """Stores the final narrative for one frozen run and cache version."""
+
+    def get(
+        self,
+        *,
+        run_id: UUID,
+        listing_id: UUID,
+        prompt_version: str,
+        model_version: str,
+        schema_version: str,
+    ) -> ExplanationNarrative | None: ...
+
+    def put(
+        self,
+        *,
+        run_id: UUID,
+        listing_id: UUID,
+        prompt_version: str,
+        model_version: str,
+        schema_version: str,
+        narrative: ExplanationNarrative,
+        now: datetime,
+        correlation_id: UUID,
+    ) -> None: ...

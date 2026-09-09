@@ -57,6 +57,7 @@ from umbral.application.scoring.policy import ScoringPolicyDoc, parse_policy_doc
 from umbral.application.scoring.ports import (
     CompilationReader,
     EvaluationRepository,
+    ExplanationNarrativeCache,
     ExplanationNarrativeWriter,
     ItemReader,
     ListingReader,
@@ -98,6 +99,10 @@ class ScoringService:
         comparator_enabled: bool = False,
         semantic_signals: SemanticSignalReader | None = None,
         narrative_writer: ExplanationNarrativeWriter | None = None,
+        narrative_cache: ExplanationNarrativeCache | None = None,
+        narrative_prompt_version: str = "explanation-narrative-v1",
+        narrative_model_version: str = "deterministic",
+        narrative_schema_version: str = "explanation-narrative-v1",
         clock: Clock | None = None,
     ) -> None:
         self.policies = policies
@@ -119,6 +124,10 @@ class ScoringService:
         self.comparator_enabled = comparator_enabled
         self.semantic_signals = semantic_signals
         self.narrative_writer = narrative_writer
+        self.narrative_cache = narrative_cache
+        self.narrative_prompt_version = narrative_prompt_version
+        self.narrative_model_version = narrative_model_version
+        self.narrative_schema_version = narrative_schema_version
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     # ------------------------------------------------------------------
@@ -309,6 +318,16 @@ class ScoringService:
         listing = self.listings.get(listing_id)
         if listing is None:
             raise ScoringNotFound(f"listing not found: {listing_id}")
+        if self.narrative_cache is not None:
+            cached = self.narrative_cache.get(
+                run_id=run.run_id,
+                listing_id=listing_id,
+                prompt_version=self.narrative_prompt_version,
+                model_version=self.narrative_model_version,
+                schema_version=self.narrative_schema_version,
+            )
+            if cached is not None:
+                return cached
         item = next(
             item for item in self.items.list_for_run(run.run_id, None, 1000)
             if item.listing_id == listing_id
@@ -351,8 +370,21 @@ class ScoringService:
         )
         context = replace(context, run_id=run.run_id)
         if self.narrative_writer is not None:
-            return self.narrative_writer.write(context)
-        return deterministic_narrative(context)
+            narrative = self.narrative_writer.write(context)
+        else:
+            narrative = deterministic_narrative(context)
+        if self.narrative_cache is not None:
+            self.narrative_cache.put(
+                run_id=run.run_id,
+                listing_id=listing_id,
+                prompt_version=self.narrative_prompt_version,
+                model_version=self.narrative_model_version,
+                schema_version=self.narrative_schema_version,
+                narrative=narrative,
+                now=self.clock(),
+                correlation_id=run.correlation_id,
+            )
+        return narrative
 
     # ------------------------------------------------------------------
     # Comparison (US8)

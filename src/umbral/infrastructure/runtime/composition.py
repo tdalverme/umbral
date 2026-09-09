@@ -312,13 +312,19 @@ def _build_and_bind_scoring(
     runtime: JobRuntime,
 ) -> ScoringService:
     del runtime
+    narrative_writer = _narrative_writer(settings)
     return build_scoring_service(
         session_factory=session_provider.session_factory,
         policy_seed_version=settings.scoring_policy_seed_version,
         legacy_score_policy_version=settings.scoring_legacy_score_policy_version,
         comparison_max_listings=settings.scoring_comparison_max_listings,
         comparator_enabled=settings.scoring_comparator_enabled,
-        narrative_writer=_narrative_writer(settings),
+        narrative_writer=narrative_writer,
+        narrative_model_version=(
+            settings.agent_model_name
+            if narrative_writer is not None
+            else "deterministic"
+        ),
     )
 
 

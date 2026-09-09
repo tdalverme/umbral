@@ -116,6 +116,51 @@ class CriterionEvaluation(IdentityAuditMixin, Base):
     )
 
 
+class RecommendationNarrative(IdentityAuditMixin, Base):
+    """Cached presentation copy for a listing in a frozen recommendation run."""
+
+    __tablename__ = "recommendation_narratives"
+    __mapper_args__ = {"version_id_col": IdentityAuditMixin.version}
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "listing_id",
+            "prompt_version",
+            "model_version",
+            "schema_version",
+            name="uq_recommendation_narratives_cache_key",
+        ),
+        CheckConstraint(
+            "char_length(text) > 0 AND char_length(text) <= 900",
+            name="ck_recommendation_narratives_text",
+        ),
+        CheckConstraint(
+            "narrative_source IN ('managed', 'deterministic_fallback')",
+            name="ck_recommendation_narratives_source",
+        ),
+        Index("ix_recommendation_narratives_run_listing", "run_id", "listing_id"),
+    )
+
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("recommendation_runs.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    listing_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("silver_listings.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    text: Mapped[str] = mapped_column(String(900), nullable=False)
+    used_criteria: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    used_evidence_refs: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    narrative_source: Mapped[str] = mapped_column(String(32), nullable=False)
+    output_model_version: Mapped[str] = mapped_column(String(100), nullable=False)
+
+
 class ComparisonShortlist(IdentityAuditMixin, Base):
     __tablename__ = "comparison_shortlists"
     __mapper_args__ = {"version_id_col": IdentityAuditMixin.version}

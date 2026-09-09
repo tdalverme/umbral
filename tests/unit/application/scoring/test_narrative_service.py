@@ -39,6 +39,43 @@ class RecordingNarrativeWriter:
         )
 
 
+class RecordingNarrativeCache:
+    def __init__(self) -> None:
+        self.rows: dict[tuple[UUID, UUID, str, str, str], ExplanationNarrative] = {}
+        self.puts = 0
+
+    def get(
+        self,
+        *,
+        run_id: UUID,
+        listing_id: UUID,
+        prompt_version: str,
+        model_version: str,
+        schema_version: str,
+    ) -> ExplanationNarrative | None:
+        return self.rows.get(
+            (run_id, listing_id, prompt_version, model_version, schema_version)
+        )
+
+    def put(
+        self,
+        *,
+        run_id: UUID,
+        listing_id: UUID,
+        prompt_version: str,
+        model_version: str,
+        schema_version: str,
+        narrative: ExplanationNarrative,
+        now: datetime,
+        correlation_id: UUID,
+    ) -> None:
+        del now, correlation_id
+        self.puts += 1
+        self.rows[
+            (run_id, listing_id, prompt_version, model_version, schema_version)
+        ] = narrative
+
+
 def _context() -> tuple[
     ScoringTestContext, RecordingNarrativeWriter, UUID, UUID, UUID, UUID
 ]:
@@ -121,6 +158,40 @@ def test_narrative_uses_frozen_run_profile_and_listing_context() -> None:
         item["key"] for item in writer.contexts[-1].active_priorities
     }
     assert writer.contexts[-1].listing["price"] == 700.0
+
+
+def test_narrative_reuses_persisted_result_for_same_run_and_versions() -> None:
+    context, writer, owner_id, profile_id, run_id, listing_id = _context()
+    cache = RecordingNarrativeCache()
+    context.service.narrative_cache = cache
+
+    first = context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+    second = context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+
+    assert second == first
+    assert len(writer.contexts) == 1
+    assert cache.puts == 1
+
+
+def test_narrative_cache_misses_when_model_version_changes() -> None:
+    context, writer, owner_id, profile_id, run_id, listing_id = _context()
+    cache = RecordingNarrativeCache()
+    context.service.narrative_cache = cache
+
+    context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+    context.service.narrative_model_version = "model-v2"
+    context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+
+    assert len(writer.contexts) == 2
+    assert cache.puts == 2
 
 
 def test_list_explanations_does_not_call_narrative_writer() -> None:
