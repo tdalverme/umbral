@@ -326,7 +326,9 @@ class ScoringService:
                 model_version=self.narrative_model_version,
                 schema_version=self.narrative_schema_version,
             )
-            if cached is not None:
+            if cached is not None and (
+                self.narrative_writer is None or cached.source == "managed"
+            ):
                 return cached
         item = next(
             item for item in self.items.list_for_run(run.run_id, None, 1000)
@@ -377,7 +379,9 @@ class ScoringService:
                 prompt_version=self.narrative_prompt_version,
                 model_version=self.narrative_model_version,
             )
-        if self.narrative_cache is not None:
+        if self.narrative_cache is not None and (
+            self.narrative_writer is None or narrative.source == "managed"
+        ):
             self.narrative_cache.put(
                 run_id=run.run_id,
                 listing_id=listing_id,

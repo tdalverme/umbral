@@ -33,9 +33,9 @@ class RecordingNarrativeWriter:
             text="Encaja por la luz natural.",
             used_criteria=("luminosidad",),
             used_evidence_refs=("listing_field:total_cost",),
-            source="deterministic_fallback",
+            source="managed",
             prompt_version="test",
-            model_version="test",
+            model_version="test-model",
         )
 
 
@@ -175,6 +175,68 @@ def test_narrative_reuses_persisted_result_for_same_run_and_versions() -> None:
     assert second == first
     assert len(writer.contexts) == 1
     assert cache.puts == 1
+
+
+def test_managed_writer_replaces_cached_deterministic_fallback() -> None:
+    context, _, owner_id, profile_id, run_id, listing_id = _context()
+    cache = RecordingNarrativeCache()
+    context.service.narrative_cache = cache
+    cache_key = (
+        run_id,
+        listing_id,
+        context.service.narrative_prompt_version,
+        context.service.narrative_model_version,
+        context.service.narrative_schema_version,
+    )
+    cache.rows[cache_key] = ExplanationNarrative(
+        text="Encaja por la buena conectividad.",
+        used_criteria=("ubicacion",),
+        used_evidence_refs=("listing_field:total_cost",),
+        source="deterministic_fallback",
+        prompt_version=context.service.narrative_prompt_version,
+        model_version=context.service.narrative_model_version,
+    )
+
+    class ManagedWriter(RecordingNarrativeWriter):
+        def write(self, context: ExplanationNarrativeContext) -> ExplanationNarrative:
+            fallback = super().write(context)
+            return replace(
+                fallback,
+                text="Tiene buena conectividad y queda alineado con esta búsqueda.",
+                source="managed",
+                model_version="test-model",
+            )
+
+    writer = ManagedWriter()
+    context.service.narrative_writer = writer
+
+    result = context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+
+    assert result.source == "managed"
+    assert len(writer.contexts) == 1
+    assert cache.rows[cache_key].source == "managed"
+    assert cache.puts == 1
+
+
+def test_managed_fallback_is_not_persisted_in_narrative_cache() -> None:
+    context, _, owner_id, profile_id, run_id, listing_id = _context()
+    cache = RecordingNarrativeCache()
+    context.service.narrative_cache = cache
+
+    class FallbackWriter(RecordingNarrativeWriter):
+        def write(self, context: ExplanationNarrativeContext) -> ExplanationNarrative:
+            return replace(super().write(context), source="deterministic_fallback")
+
+    context.service.narrative_writer = FallbackWriter()
+
+    result = context.service.get_narrative(
+        owner_id=owner_id, profile_id=profile_id, run_id=run_id, listing_id=listing_id
+    )
+
+    assert result.source == "deterministic_fallback"
+    assert cache.puts == 0
 
 
 def test_narrative_cache_misses_when_model_version_changes() -> None:

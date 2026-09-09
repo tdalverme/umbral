@@ -238,14 +238,27 @@ class SqlAlchemyExplanationNarrativeCache:
                 used_evidence_refs=list(narrative.used_evidence_refs),
                 narrative_source=narrative.source,
                 output_model_version=narrative.model_version,
-            ).on_conflict_do_nothing(
+            ).on_conflict_do_update(
                 index_elements=[
                     "run_id",
                     "listing_id",
                     "prompt_version",
                     "model_version",
                     "schema_version",
-                ]
+                ],
+                set_={
+                    "updated_at": now,
+                    "version": RecommendationNarrativeModel.version + 1,
+                    "actor_kind": "service",
+                    "actor_id": None,
+                    "source": "scoring.narrative",
+                    "correlation_id": correlation_id,
+                    "text": narrative.text,
+                    "used_criteria": list(narrative.used_criteria),
+                    "used_evidence_refs": list(narrative.used_evidence_refs),
+                    "narrative_source": narrative.source,
+                    "output_model_version": narrative.model_version,
+                },
             )
             session.execute(statement)
             session.commit()
