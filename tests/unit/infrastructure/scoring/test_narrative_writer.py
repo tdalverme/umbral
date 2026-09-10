@@ -280,6 +280,79 @@ def test_writer_drops_criteria_without_model_selected_evidence(
     assert narrative.used_evidence_refs == ("urban:transit-1",)
 
 
+def test_writer_recovers_omitted_authorized_criteria_from_natural_text(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """Natural copy may omit metadata for claims already present in the packet."""
+    shopping = GeographicFact(
+        label="servicios cotidianos cerca",
+        value="servicios cotidianos relativamente cerca",
+        source_ref="urban:shopping-1",
+        confidence=0.8,
+        criterion_key="proximidad_compras",
+        favorable=True,
+        signal_ref="daily_convenience",
+    )
+    cafes = GeographicFact(
+        label="cafés cercanos",
+        value="cafés relativamente cerca",
+        source_ref="urban:cafes-1",
+        confidence=0.8,
+        criterion_key="proximidad_cafes",
+        favorable=True,
+        signal_ref="cafe_lifestyle",
+    )
+    residential = GeographicFact(
+        label="entorno más residencial",
+        value="entorno más residencial",
+        source_ref="urban:residential-1",
+        confidence=0.8,
+        criterion_key="calma_residencial",
+        favorable=True,
+        signal_ref="residential_calm",
+    )
+    context = replace(
+        context,
+        reasons=(),
+        tradeoffs=(),
+        geography=(shopping, cafes, residential),
+        allowed_criteria=(
+            "proximidad_compras",
+            "proximidad_cafes",
+            "calma_residencial",
+        ),
+        allowed_evidence_refs=(
+            shopping.source_ref,
+            cafes.source_ref,
+            residential.source_ref,
+        ),
+        criterion_evidence_refs={
+            "proximidad_compras": (shopping.source_ref,),
+            "proximidad_cafes": (cafes.source_ref,),
+            "calma_residencial": (residential.source_ref,),
+        },
+    )
+    scripted_gateway.output = {
+        "text": (
+            "La zona tiene servicios y cafés cerca, y se siente bastante residencial."
+        ),
+        "used_criteria": ["calma_residencial"],
+        "used_evidence_refs": [residential.source_ref],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert set(narrative.used_criteria) == {
+        "proximidad_compras",
+        "proximidad_cafes",
+        "calma_residencial",
+    }
+    assert set(narrative.used_evidence_refs) == set(
+        context.allowed_evidence_refs
+    )
+
+
 def test_writer_deduplicates_repeated_model_criteria(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:

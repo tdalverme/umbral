@@ -427,6 +427,12 @@ class ManagedExplanationNarrativeWriter:
             candidate_evidence_refs = _string_values(
                 content.get("used_evidence_refs")
             )
+            forbidden_copy_rule = (
+                _forbidden_copy_reason(cast(str, content["text"]))
+                if validation_reason == "forbidden_copy"
+                and isinstance(content.get("text"), str)
+                else None
+            )
             untracked_terms = (
                 _untracked_property_terms(cast(str, content["text"]), context, content)
                 if validation_reason == "untracked_property_term"
@@ -436,12 +442,13 @@ class ManagedExplanationNarrativeWriter:
             logger.warning(
                 "explanation narrative fallback reason=validation_rejected "
                 "detail=%s unauthorized_criteria=%s criteria=%s refs=%s "
-                "untracked_terms=%s",
+                "untracked_terms=%s forbidden_copy_rule=%s",
                 validation_reason,
                 ",".join(unauthorized_criteria) or "-",
                 ",".join(candidate_criteria) or "-",
                 ",".join(candidate_evidence_refs) or "-",
                 ",".join(untracked_terms) or "-",
+                forbidden_copy_rule or "-",
                 extra={
                     "narrative_outcome": "fallback",
                     "narrative_reason": "validation_rejected",
@@ -563,7 +570,7 @@ def _validation_failure_reason(
         for value in evidence_refs
     ):
         return "evidence_unauthorized"
-    if _TECHNICAL_COPY_RE.search(text) or _UNSAFE_GEOGRAPHY_RE.search(text):
+    if _forbidden_copy_reason(text) is not None:
         return "forbidden_copy"
     if _RAW_KEY_RE.search(text):
         return "raw_key"
@@ -628,6 +635,16 @@ def _normalize_evidence_refs(
             for ref in context.criterion_evidence_refs[criterion]
             if ref in allowed_refs
         ]
+    text = content.get("text")
+    if isinstance(text, str):
+        for claim in _infer_omitted_claims(text, context, criteria):
+            if claim.criterion_key is not None and claim.criterion_key not in criteria:
+                criteria.append(claim.criterion_key)
+            submitted_authorized_refs.extend(
+                ref
+                for ref in claim.evidence_refs
+                if ref not in submitted_authorized_refs
+            )
     # Preserve a valid subset chosen by the model. Expanding every selected
     # criterion to every attached ref makes the validator require prose for
     # evidence the model did not use, which rejects otherwise grounded copy.
@@ -847,27 +864,16 @@ def _descriptor_anchor_terms(descriptor: str) -> frozenset[str]:
     )
 
 
-def _rendered_claims(
-    criteria: list[object],
-    evidence_refs: list[object],
+def _context_claims(
     context: ExplanationNarrativeContext,
 ) -> tuple[_RenderedClaim, ...] | None:
-    selected_criteria = tuple(value for value in criteria if isinstance(value, str))
-    submitted_refs = tuple(value for value in evidence_refs if isinstance(value, str))
-    if len(selected_criteria) != len(set(selected_criteria)):
-        return None
-    if len(submitted_refs) != len(set(submitted_refs)):
-        return None
+    """Build claims that can be rendered from the bounded context packet."""
     criterion_refs = {
-        criterion: set(context.criterion_evidence_refs.get(criterion, ()))
-        for criterion in selected_criteria
+        criterion: set(refs)
+        for criterion, refs in context.criterion_evidence_refs.items()
+        if criterion in context.allowed_criteria and refs
     }
-    if any(
-        not refs or not refs.intersection(submitted_refs)
-        for refs in criterion_refs.values()
-    ):
-        return None
-
+    allowed_refs = set(context.allowed_evidence_refs)
     claims: list[_RenderedClaim] = []
     seen: set[tuple[str | None, tuple[str, ...], ClaimPlacement, str]] = set()
 
@@ -877,6 +883,7 @@ def _rendered_claims(
         placement: ClaimPlacement,
         descriptor: str,
     ) -> None:
+        refs = tuple(ref for ref in refs if ref in allowed_refs)
         if not refs or not descriptor:
             return
         identity = (criterion_key, refs, placement, descriptor)
@@ -900,7 +907,7 @@ def _rendered_claims(
     ):
         for packet in packets:
             packet_refs = tuple(
-                ref for ref in _packet_refs(packet) if ref in submitted_refs
+                ref for ref in _packet_refs(packet) if ref in allowed_refs
             )
             packet_placement = packet.get("placement", default_placement)
             if packet_placement not in {"match", "tradeoff", "unknown"}:
@@ -909,12 +916,12 @@ def _rendered_claims(
             packet_key = packet.get("criterion_key")
             if isinstance(packet_key, str):
                 candidate_keys: tuple[str, ...] = (
-                    (packet_key,) if packet_key in selected_criteria else ()
+                    (packet_key,) if packet_key in criterion_refs else ()
                 )
             else:
                 candidate_keys = tuple(
                     criterion
-                    for criterion in selected_criteria
+                    for criterion in criterion_refs
                     if set(packet_refs).intersection(criterion_refs[criterion])
                 )
             descriptor = packet.get("fact")
@@ -929,30 +936,131 @@ def _rendered_claims(
                 add_claim(criterion, refs, packet_claim_placement, descriptor)
 
     for fact in context.geography:
-        if fact.source_ref not in submitted_refs:
+        if fact.source_ref not in allowed_refs:
             continue
-        candidate_keys = (
+        fact_candidate_keys: tuple[str | None, ...] = (
             (fact.criterion_key,)
-            if fact.criterion_key in selected_criteria
+            if fact.criterion_key in criterion_refs
             else tuple(
                 criterion
-                for criterion in selected_criteria
+                for criterion in criterion_refs
                 if fact.source_ref in criterion_refs[criterion]
             )
         )
         fact_placement: ClaimPlacement = (
             "match" if fact.favorable else "tradeoff"
         )
-        for criterion in candidate_keys:
-            if criterion is None:
+        for fact_criterion in fact_candidate_keys:
+            if (
+                fact_criterion is None
+                or fact.source_ref not in criterion_refs[fact_criterion]
+            ):
                 continue
-            if fact.source_ref in criterion_refs[criterion]:
-                add_claim(
-                    criterion,
-                    (fact.source_ref,),
-                    fact_placement,
-                    fact.value,
-                )
+            add_claim(
+                fact_criterion,
+                (fact.source_ref,),
+                fact_placement,
+                fact.value,
+            )
+
+    return tuple(claims)
+
+
+def _infer_omitted_claims(
+    text: str,
+    context: ExplanationNarrativeContext,
+    selected_criteria: list[str],
+) -> tuple[_RenderedClaim, ...]:
+    """Recover metadata omitted by the model only for unique packet anchors."""
+    candidates = _context_claims(context)
+    if candidates is None:
+        return ()
+    text_terms = set(_WORD_RE.findall(text.casefold()))
+    candidate_terms: dict[str, set[str]] = {}
+    for claim in candidates:
+        if claim.criterion_key is None or claim.placement == "price":
+            continue
+        for term in _descriptor_anchor_terms(claim.descriptor):
+            if term in text_terms:
+                candidate_terms.setdefault(term, set()).add(claim.criterion_key)
+
+    inferred: list[_RenderedClaim] = []
+    seen: set[tuple[str | None, tuple[str, ...], ClaimPlacement, str]] = set()
+    selected = set(selected_criteria)
+    for claim in candidates:
+        if (
+            claim.criterion_key is None
+            or claim.criterion_key in selected
+            or claim.placement == "price"
+        ):
+            continue
+        unique_anchor = any(
+            term in text_terms
+            and candidate_terms.get(term) == {claim.criterion_key}
+            for term in _descriptor_anchor_terms(claim.descriptor)
+        )
+        if not unique_anchor:
+            continue
+        identity = (
+            claim.criterion_key,
+            claim.evidence_refs,
+            claim.placement,
+            claim.descriptor,
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        inferred.append(claim)
+    return tuple(inferred)
+
+
+def _forbidden_copy_reason(text: str) -> str | None:
+    """Classify rejected language without logging the model's full text."""
+    if _TECHNICAL_COPY_RE.search(text):
+        return "technical"
+    if _UNSAFE_GEOGRAPHY_RE.search(text):
+        return "unsafe_geography"
+    return None
+
+
+def _rendered_claims(
+    criteria: list[object],
+    evidence_refs: list[object],
+    context: ExplanationNarrativeContext,
+) -> tuple[_RenderedClaim, ...] | None:
+    selected_criteria = tuple(value for value in criteria if isinstance(value, str))
+    submitted_refs = tuple(value for value in evidence_refs if isinstance(value, str))
+    if len(selected_criteria) != len(set(selected_criteria)):
+        return None
+    if len(submitted_refs) != len(set(submitted_refs)):
+        return None
+    criterion_refs = {
+        criterion: set(context.criterion_evidence_refs.get(criterion, ()))
+        for criterion in selected_criteria
+    }
+    if any(
+        not refs or not refs.intersection(submitted_refs)
+        for refs in criterion_refs.values()
+    ):
+        return None
+
+    candidate_claims = _context_claims(context)
+    if candidate_claims is None:
+        return None
+    claims = [
+        _RenderedClaim(
+            criterion_key=claim.criterion_key,
+            evidence_refs=tuple(
+                ref for ref in claim.evidence_refs if ref in submitted_refs
+            ),
+            placement=claim.placement,
+            descriptor=claim.descriptor,
+            rendered=claim.rendered,
+        )
+        for claim in candidate_claims
+        if claim.criterion_key in selected_criteria
+        and set(claim.evidence_refs).intersection(submitted_refs)
+    ]
 
     if "listing_field:price" in submitted_refs:
         for change in context.price_changes:
