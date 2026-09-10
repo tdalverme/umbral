@@ -412,12 +412,16 @@ class ManagedExplanationNarrativeWriter:
             )
             return fallback
         content = result.content
-        if not _valid_content(content, self.schema, context):
+        validation_reason = _validation_failure_reason(content, self.schema, context)
+        if validation_reason is not None:
             logger.warning(
-                "explanation narrative fallback reason=validation_rejected",
+                "explanation narrative fallback reason=validation_rejected "
+                "detail=%s",
+                validation_reason,
                 extra={
                     "narrative_outcome": "fallback",
                     "narrative_reason": "validation_rejected",
+                    "narrative_validation_reason": validation_reason,
                     "model_version": self.model_version,
                 },
             )
@@ -478,24 +482,32 @@ def _valid_content(
     schema: Mapping[str, object],
     context: ExplanationNarrativeContext,
 ) -> bool:
+    return _validation_failure_reason(content, schema, context) is None
+
+
+def _validation_failure_reason(
+    content: Mapping[str, object],
+    schema: Mapping[str, object],
+    context: ExplanationNarrativeContext,
+) -> str | None:
     try:
         jsonschema.validate(content, schema)
     except jsonschema.ValidationError:
-        return False
+        return "schema_invalid"
     text = content.get("text")
     criteria = content.get("used_criteria")
     evidence_refs = content.get("used_evidence_refs")
     if not isinstance(text, str):
-        return False
+        return "text_invalid"
     if not isinstance(criteria, list) or not criteria:
-        return False
+        return "criteria_missing"
     if not all(
         isinstance(value, str)
         and value in context.allowed_criteria
         and value in context.criterion_evidence_refs
         for value in criteria
     ):
-        return False
+        return "criteria_unauthorized"
     criterion_refs = {
         ref
         for criterion in criteria
@@ -510,14 +522,15 @@ def _valid_content(
         )
         for value in evidence_refs
     ):
-        return False
+        return "evidence_unauthorized"
     if _TECHNICAL_COPY_RE.search(text) or _UNSAFE_GEOGRAPHY_RE.search(text):
-        return False
+        return "forbidden_copy"
     if _RAW_KEY_RE.search(text):
-        return False
-    if not _claims_are_grounded(text, criteria, evidence_refs, context):
-        return False
-    return not lint_voice(text)
+        return "raw_key"
+    grounding_reason = _grounding_failure_reason(text, criteria, evidence_refs, context)
+    if grounding_reason is not None:
+        return grounding_reason
+    return "voice_lint" if lint_voice(text) else None
 
 
 def _claims_are_grounded(
@@ -526,26 +539,35 @@ def _claims_are_grounded(
     evidence_refs: list[object],
     context: ExplanationNarrativeContext,
 ) -> bool:
+    return _grounding_failure_reason(text, criteria, evidence_refs, context) is None
+
+
+def _grounding_failure_reason(
+    text: str,
+    criteria: list[object],
+    evidence_refs: list[object],
+    context: ExplanationNarrativeContext,
+) -> str | None:
     """Validate provenance and anchors without constraining the prose shape."""
     claims = _rendered_claims(criteria, evidence_refs, context)
     if claims is None:
-        return False
+        return "claims_not_renderable"
     if _contains_untracked_property_term(text, claims):
-        return False
+        return "untracked_property_term"
     if _contains_untracked_match_cue(text, claims):
-        return False
+        return "untracked_match_cue"
     if _mentions_ungrounded_price_change(text, evidence_refs, context):
-        return False
+        return "ungrounded_price_change"
     for claim in claims:
         if claim.placement == "price":
             if not _mentions_authorized_price_change(text, claim, context):
-                return False
+                return "price_claim_not_rendered"
             continue
         if not _mentions_descriptor(text, claim.descriptor):
-            return False
+            return "descriptor_missing"
         if not _placement_is_consistent(text, claim):
-            return False
-    return True
+            return "placement_inconsistent"
+    return None
 
 
 def _contains_untracked_property_term(

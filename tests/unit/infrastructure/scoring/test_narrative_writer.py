@@ -411,6 +411,23 @@ def test_writer_rejects_invented_terrace_with_valid_transport_reference(
     assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
 
 
+def test_writer_logs_validation_rejection_detail(
+    scripted_gateway: ScriptedGateway,
+    context: ExplanationNarrativeContext,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    scripted_gateway.output = {
+        "text": "Encaja por la buena conectividad y tiene terraza.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    with caplog.at_level("WARNING", logger="umbral.infrastructure.scoring.narrative"):
+        _writer(scripted_gateway).write(context)
+
+    assert "detail=untracked_property_term" in caplog.text
+
+
 def test_writer_rejects_empty_evidence_refs(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
