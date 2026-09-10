@@ -166,6 +166,7 @@ _DESCRIPTOR_ALIASES: Mapping[str, tuple[str, ...]] = {
         "movimiento",
         "movida",
         "movido",
+        "ruido",
     ),
     "mayor exposición a actividad urbana": (
         "exposición",
@@ -176,6 +177,7 @@ _DESCRIPTOR_ALIASES: Mapping[str, tuple[str, ...]] = {
         "movimiento",
         "tránsito",
         "tráfico",
+        "ruido",
     ),
     "menor exposición": (
         "exposición",
@@ -461,6 +463,7 @@ def _messages(
         for criterion, refs in sorted(context.criterion_evidence_refs.items())
         if criterion in context.allowed_criteria and refs
     ]
+    authorized_keys = {item["key"] for item in authorized_criteria}
     return (
         {"role": "system", "content": system_prompt},
         {
@@ -468,10 +471,16 @@ def _messages(
             "content": json.dumps(
                 {
                     "listing": context.listing,
-                    "active_priorities": context.active_priorities,
+                    "active_priorities": [
+                        item
+                        for item in context.active_priorities
+                        if item.get("key") in authorized_keys
+                    ],
                     "reasons": context.reasons,
                     "tradeoffs": context.tradeoffs,
-                    "unknowns": context.unknowns,
+                    # Unknowns are rendered separately in "Antes de decidir";
+                    # they have no evidence refs that the narrative can cite.
+                    "unknowns": [],
                     "geography": [
                         {
                             "label": fact.label,

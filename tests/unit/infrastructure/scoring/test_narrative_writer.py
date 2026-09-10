@@ -255,6 +255,77 @@ def test_writer_deduplicates_repeated_model_criteria(
     assert narrative.used_criteria == ("acceso_transporte",)
 
 
+def test_writer_prompt_excludes_unsupported_priorities_and_unknowns(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """The model must not be invited to narrate criteria without evidence."""
+    context = replace(
+        context,
+        active_priorities=(
+            *context.active_priorities,
+            {"key": "calma_residencial", "label": "entorno tranquilo"},
+        ),
+        unknowns=(
+            {
+                "criterion_key": "calma_residencial",
+                "label": "entorno tranquilo",
+                "state": "unknown",
+                "placement": "unknown",
+                "evidence_refs": (),
+            },
+        ),
+        allowed_criteria=(*context.allowed_criteria, "calma_residencial"),
+        criterion_evidence_refs={
+            **context.criterion_evidence_refs,
+            "calma_residencial": (),
+        },
+    )
+    scripted_gateway.output = {
+        "text": "Está bien conectado para moverte por la ciudad.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    _writer(scripted_gateway).write(context)
+
+    payload = json.loads(str(scripted_gateway.messages[1]["content"]))
+    assert payload["allowed_criteria"] == ["acceso_transporte", "superficie"]
+    assert payload["unknowns"] == []
+    assert [item["key"] for item in payload["active_priorities"]] == [
+        "acceso_transporte"
+    ]
+
+
+def test_writer_rejects_unknown_criterion_selected_without_evidence(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """An unknown risk cannot be smuggled into a grounded narrative."""
+    context = replace(
+        context,
+        unknowns=(
+            {
+                "criterion_key": "calma_residencial",
+                "label": "entorno tranquilo",
+                "state": "unknown",
+                "placement": "unknown",
+                "evidence_refs": (),
+            },
+        ),
+        allowed_criteria=(*context.allowed_criteria, "calma_residencial"),
+        criterion_evidence_refs={
+            **context.criterion_evidence_refs,
+            "calma_residencial": (),
+        },
+    )
+    scripted_gateway.output = {
+        "text": "Está bien conectado, pero no puedo confirmar un entorno tranquilo.",
+        "used_criteria": ["acceso_transporte", "calma_residencial"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
 def test_writer_accepts_noise_as_a_natural_exposure_paraphrase(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
@@ -287,6 +358,38 @@ def test_writer_accepts_noise_as_a_natural_exposure_paraphrase(
     narrative = _writer(scripted_gateway).write(context)
 
     assert narrative.source == "managed"
+
+
+def test_writer_accepts_noise_as_a_paraphrase_of_urban_activity(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """Urban-activity evidence may be expressed as cautious noise wording."""
+    fact = GeographicFact(
+        label="mayor exposición",
+        value="mayor exposición a actividad urbana",
+        source_ref="urban:noise-2",
+        confidence=0.8,
+        criterion_key="ruido_ambiental",
+        favorable=False,
+        signal_ref="noise_risk",
+    )
+    context = replace(
+        context,
+        allowed_criteria=(*context.allowed_criteria, "ruido_ambiental"),
+        allowed_evidence_refs=(*context.allowed_evidence_refs, fact.source_ref),
+        criterion_evidence_refs={
+            **context.criterion_evidence_refs,
+            "ruido_ambiental": (fact.source_ref,),
+        },
+        geography=(fact,),
+    )
+    scripted_gateway.output = {
+        "text": "La zona podría tener algo más de ruido, así que conviene revisarla.",
+        "used_criteria": ["ruido_ambiental"],
+        "used_evidence_refs": [fact.source_ref],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "managed"
 
 
 def test_writer_accepts_location_framing_for_geographic_evidence(
