@@ -554,6 +554,54 @@ def test_writer_accepts_noise_as_a_paraphrase_of_urban_activity(
     assert _writer(scripted_gateway).write(context).source == "managed"
 
 
+def test_writer_accepts_natural_vocabulary_for_residential_and_noise_claims(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """Criterion provenance must allow natural wording used by the product voice."""
+    residential = GeographicFact(
+        label="entorno más residencial",
+        value="entorno más residencial",
+        source_ref="urban:residential-1",
+        confidence=0.8,
+        criterion_key="calma_residencial",
+        favorable=True,
+        signal_ref="residential_calm",
+    )
+    noise = GeographicFact(
+        label="mayor actividad",
+        value="mayor exposición a actividad urbana",
+        source_ref="urban:noise-1",
+        confidence=0.8,
+        criterion_key="ruido_ambiental",
+        favorable=False,
+        signal_ref="noise_risk",
+    )
+    context = replace(
+        context,
+        reasons=(),
+        tradeoffs=(),
+        geography=(residential, noise),
+        allowed_criteria=("calma_residencial", "ruido_ambiental"),
+        allowed_evidence_refs=(residential.source_ref, noise.source_ref),
+        criterion_evidence_refs={
+            "calma_residencial": (residential.source_ref,),
+            "ruido_ambiental": (noise.source_ref,),
+        },
+    )
+    scripted_gateway.output = {
+        "text": (
+            "Esta opción suma por estar en una zona bastante residencial, "
+            "aunque el ambiente tiene algo más de actividad y conviene revisarlo."
+        ),
+        "used_criteria": ["calma_residencial", "ruido_ambiental"],
+        "used_evidence_refs": [residential.source_ref, noise.source_ref],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+
+
 def test_writer_accepts_location_framing_for_geographic_evidence(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
@@ -665,25 +713,13 @@ def test_writer_rejects_raw_key_when_the_context_label_collides(
     assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "   ",
-        (
-            "Esta oportunidad aparece por la conectividad y te permite "
-            "organizar mejor cada viaje durante la semana sin perder tiempo "
-            "en traslados largos cuando necesitás volver a casa después "
-            "del trabajo y resolver tus recorridos cotidianos durante toda "
-            "la semana."
-        ),
-    ],
-)
-def test_writer_rejects_any_voice_lint_failure(
+@pytest.mark.parametrize("text", ["   ", "Encaja por la buena conectividad!!!"])
+def test_writer_rejects_hard_voice_lint_failure(
     scripted_gateway: ScriptedGateway,
     context: ExplanationNarrativeContext,
     text: str,
 ) -> None:
-    """Every linter violation, not only a selected subset, triggers fallback."""
+    """Hard voice violations still trigger the deterministic fallback."""
     scripted_gateway.output = {
         "text": text,
         "used_criteria": ["acceso_transporte"],
@@ -872,6 +908,25 @@ def test_writer_rejects_invented_terrace_with_valid_transport_reference(
     }
 
     assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+
+
+def test_writer_accepts_a_long_but_grounded_narrative_sentence(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """The general reply linter's sentence-length heuristic is not a narrative gate."""
+    scripted_gateway.output = {
+        "text": (
+            "Encaja por la buena conectividad porque te permite resolver tus "
+            "recorridos cotidianos con transporte cerca y mantener una conexión "
+            "práctica con el resto de la ciudad durante la semana."
+        ),
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
 
 
 def test_writer_logs_validation_rejection_detail(

@@ -341,6 +341,57 @@ _DESCRIPTOR_ALIASES: Mapping[str, tuple[str, ...]] = {
     ),
     "balcón": ("terraza", "terrazas"),
 }
+# A criterion is provenance, not a phrase the model must repeat verbatim.
+# These anchors cover natural user-facing paraphrases for the same authorized
+# criterion while keeping the evidence and criterion key as the authority.
+_CRITERION_ALIASES: Mapping[str, tuple[str, ...]] = {
+    "presupuesto": ("precio", "presupuesto", "costo", "valor"),
+    "ambientes": (
+        "ambiente",
+        "ambientes",
+        "habitación",
+        "habitaciones",
+        "dormitorio",
+        "dormitorios",
+    ),
+    "ubicacion": (
+        "ubicación",
+        "zona",
+        "barrio",
+        "cuadra",
+        "entorno",
+        "ubicado",
+        "ubicada",
+        "cerca",
+        "cercanía",
+    ),
+    "calma_residencial": (
+        "calma",
+        "residencial",
+        "residenciales",
+        "tranquilo",
+        "tranquila",
+        "tranquilos",
+        "tranquilas",
+        "casas",
+        "bajas",
+        "sereno",
+        "serena",
+    ),
+    "ruido_ambiental": (
+        "ruido",
+        "ruidoso",
+        "ruidosa",
+        "ambiente",
+        "actividad",
+        "exposición",
+        "tránsito",
+        "tráfico",
+        "avenida",
+        "avenidas",
+        "movimiento",
+    ),
+}
 _WORD_RE = re.compile(r"[a-záéíóúñü0-9]+", re.IGNORECASE)
 
 ClaimPlacement = Literal["match", "tradeoff", "unknown", "price"]
@@ -581,7 +632,34 @@ def _validation_failure_reason(
     grounding_reason = _grounding_failure_reason(text, criteria, evidence_refs, context)
     if grounding_reason is not None:
         return grounding_reason
-    return "voice_lint" if lint_voice(text) else None
+    return _narrative_voice_failure_reason(text)
+
+
+def _narrative_voice_failure_reason(text: str) -> str | None:
+    """Apply only hard voice rules to bounded opportunity copy.
+
+    The general reply linter also reports heuristics such as sentence length
+    and repeated "che". Those are useful diagnostics for chat replies but are
+    not grounds to discard an otherwise grounded opportunity synthesis.
+    """
+    hard_prefixes = (
+        "VOZ-02:empty",
+        "VOZ-06:",
+        "VOZ-07:emoji",
+        "VOZ-07:multiple_exclamations",
+        "VOZ-07:too_many_exclamations",
+        "VOZ-07:tech_jargon",
+        "VOZ-08:",
+    )
+    return (
+        "voice_lint"
+        if any(
+            violation.startswith(hard_prefix)
+            for violation in lint_voice(text)
+            for hard_prefix in hard_prefixes
+        )
+        else None
+    )
 
 
 def _normalize_evidence_refs(
@@ -716,7 +794,9 @@ def _grounding_failure_reason(
             if not _mentions_authorized_price_change(text, claim, context):
                 return "price_claim_not_rendered"
             continue
-        if not _mentions_descriptor(text, claim.descriptor):
+        if not _mentions_descriptor(
+            text, claim.descriptor, claim.criterion_key
+        ):
             return "descriptor_missing"
         if not _placement_is_consistent(text, claim):
             return "placement_inconsistent"
@@ -753,7 +833,7 @@ def _untracked_property_terms_for_claims(
         term
         for claim in claims
         if claim.placement != "price"
-        for term in _descriptor_anchor_terms(claim.descriptor)
+        for term in _claim_anchor_terms(claim)
     }
     if any(
         claim.placement != "price"
@@ -821,7 +901,9 @@ def _mentions_authorized_price_change(
 
 
 def _placement_is_consistent(text: str, claim: _RenderedClaim) -> bool:
-    sentences = _sentences_for_descriptor(text, claim.descriptor)
+    sentences = _sentences_for_descriptor(
+        text, claim.descriptor, claim.criterion_key
+    )
     if not sentences:
         return False
     for sentence in sentences:
@@ -838,18 +920,26 @@ def _placement_is_consistent(text: str, claim: _RenderedClaim) -> bool:
     return True
 
 
-def _mentions_descriptor(text: str, descriptor: str) -> bool:
+def _mentions_descriptor(
+    text: str, descriptor: str, criterion_key: str | None = None
+) -> bool:
     terms = _descriptor_anchor_terms(descriptor)
+    if criterion_key is not None:
+        terms = frozenset((*terms, *_CRITERION_ALIASES.get(criterion_key, ())))
     if not terms:
         return False
     text_terms = set(_WORD_RE.findall(text.casefold()))
     return any(term in text_terms for term in terms)
 
 
-def _sentences_for_descriptor(text: str, descriptor: str) -> tuple[str, ...]:
+def _sentences_for_descriptor(
+    text: str, descriptor: str, criterion_key: str | None = None
+) -> tuple[str, ...]:
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     return tuple(
-        sentence for sentence in sentences if _mentions_descriptor(sentence, descriptor)
+        sentence
+        for sentence in sentences
+        if _mentions_descriptor(sentence, descriptor, criterion_key)
     )
 
 
@@ -865,6 +955,15 @@ def _descriptor_anchor_terms(descriptor: str) -> frozenset[str]:
     normalized = descriptor.casefold()
     return frozenset(
         (*_descriptor_terms(descriptor), *_DESCRIPTOR_ALIASES.get(normalized, ()))
+    )
+
+
+def _claim_anchor_terms(claim: _RenderedClaim) -> frozenset[str]:
+    return frozenset(
+        (
+            *_descriptor_anchor_terms(claim.descriptor),
+            *_CRITERION_ALIASES.get(claim.criterion_key or "", ()),
+        )
     )
 
 
@@ -984,7 +1083,7 @@ def _infer_omitted_claims(
     for claim in candidates:
         if claim.criterion_key is None or claim.placement == "price":
             continue
-        for term in _descriptor_anchor_terms(claim.descriptor):
+        for term in _claim_anchor_terms(claim):
             if term in text_terms:
                 candidate_terms.setdefault(term, set()).add(claim.criterion_key)
 
@@ -1001,7 +1100,7 @@ def _infer_omitted_claims(
         unique_anchor = any(
             term in text_terms
             and candidate_terms.get(term) == {claim.criterion_key}
-            for term in _descriptor_anchor_terms(claim.descriptor)
+            for term in _claim_anchor_terms(claim)
         )
         if not unique_anchor:
             continue
