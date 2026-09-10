@@ -423,11 +423,25 @@ class ManagedExplanationNarrativeWriter:
                 if validation_reason == "criteria_unauthorized"
                 else ()
             )
+            candidate_criteria = _string_values(content.get("used_criteria"))
+            candidate_evidence_refs = _string_values(
+                content.get("used_evidence_refs")
+            )
+            untracked_terms = (
+                _untracked_property_terms(cast(str, content["text"]), context, content)
+                if validation_reason == "untracked_property_term"
+                and isinstance(content.get("text"), str)
+                else ()
+            )
             logger.warning(
                 "explanation narrative fallback reason=validation_rejected "
-                "detail=%s unauthorized_criteria=%s",
+                "detail=%s unauthorized_criteria=%s criteria=%s refs=%s "
+                "untracked_terms=%s",
                 validation_reason,
                 ",".join(unauthorized_criteria) or "-",
+                ",".join(candidate_criteria) or "-",
+                ",".join(candidate_evidence_refs) or "-",
+                ",".join(untracked_terms) or "-",
                 extra={
                     "narrative_outcome": "fallback",
                     "narrative_reason": "validation_rejected",
@@ -660,6 +674,28 @@ def _contains_untracked_property_term(
     text: str,
     claims: tuple[_RenderedClaim, ...],
 ) -> bool:
+    return bool(_untracked_property_terms_for_claims(text, claims))
+
+
+def _untracked_property_terms(
+    text: str,
+    context: ExplanationNarrativeContext,
+    content: Mapping[str, object],
+) -> tuple[str, ...]:
+    criteria = content.get("used_criteria")
+    evidence_refs = content.get("used_evidence_refs")
+    if not isinstance(criteria, list) or not isinstance(evidence_refs, list):
+        return ()
+    claims = _rendered_claims(criteria, evidence_refs, context)
+    if claims is None:
+        return ()
+    return _untracked_property_terms_for_claims(text, claims)
+
+
+def _untracked_property_terms_for_claims(
+    text: str,
+    claims: tuple[_RenderedClaim, ...],
+) -> tuple[str, ...]:
     selected_terms = {
         term
         for claim in claims
@@ -672,10 +708,19 @@ def _contains_untracked_property_term(
         for claim in claims
     ):
         selected_terms.add("ubicación")
-    return any(
-        match.group(0).casefold() not in selected_terms
-        for match in _KNOWN_PROPERTY_TERM_RE.finditer(text)
+    return tuple(
+        dict.fromkeys(
+            match.group(0).casefold()
+            for match in _KNOWN_PROPERTY_TERM_RE.finditer(text)
+            if match.group(0).casefold() not in selected_terms
+        )
     )
+
+
+def _string_values(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(item for item in value if isinstance(item, str))
 
 
 def _contains_untracked_match_cue(

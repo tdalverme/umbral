@@ -727,6 +727,8 @@ def test_writer_logs_validation_rejection_detail(
         _writer(scripted_gateway).write(context)
 
     assert "detail=untracked_property_term" in caplog.text
+    assert "criteria=acceso_transporte" in caplog.text
+    assert "untracked_terms=terraza" in caplog.text
 
 
 def test_writer_derives_evidence_when_model_refs_are_empty(
