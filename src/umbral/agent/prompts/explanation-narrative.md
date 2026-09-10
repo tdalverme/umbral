@@ -38,6 +38,9 @@ agregás datos.
   esté en el paquete; para otros cambios usá una formulación neutral.
 - Declarás exactamente los criterios y referencias que aparecen en esas
   frases; no agregues una referencia que no uses.
+- `used_criteria` debe contener únicamente las claves de
+  `authorized_criteria`. Las prioridades activas que no aparecen allí no
+  tienen evidencia suficiente para esta explicación y no deben declararse.
 
 ## Salida
 

@@ -414,14 +414,21 @@ class ManagedExplanationNarrativeWriter:
         content = result.content
         validation_reason = _validation_failure_reason(content, self.schema, context)
         if validation_reason is not None:
+            unauthorized_criteria = (
+                _unauthorized_criteria(content, context)
+                if validation_reason == "criteria_unauthorized"
+                else ()
+            )
             logger.warning(
                 "explanation narrative fallback reason=validation_rejected "
-                "detail=%s",
+                "detail=%s unauthorized_criteria=%s",
                 validation_reason,
+                ",".join(unauthorized_criteria) or "-",
                 extra={
                     "narrative_outcome": "fallback",
                     "narrative_reason": "validation_rejected",
                     "narrative_validation_reason": validation_reason,
+                    "narrative_unauthorized_criteria": unauthorized_criteria,
                     "model_version": self.model_version,
                 },
             )
@@ -447,6 +454,11 @@ def _messages(
     system_prompt: str,
     context: ExplanationNarrativeContext,
 ) -> tuple[Mapping[str, object], ...]:
+    authorized_criteria = [
+        {"key": criterion, "evidence_refs": list(refs)}
+        for criterion, refs in sorted(context.criterion_evidence_refs.items())
+        if criterion in context.allowed_criteria and refs
+    ]
     return (
         {"role": "system", "content": system_prompt},
         {
@@ -467,7 +479,10 @@ def _messages(
                         for fact in context.geography
                     ],
                     "price_changes": context.price_changes,
-                    "allowed_criteria": context.allowed_criteria,
+                    "allowed_criteria": [
+                        item["key"] for item in authorized_criteria
+                    ],
+                    "authorized_criteria": authorized_criteria,
                     "allowed_evidence_refs": context.allowed_evidence_refs,
                 },
                 ensure_ascii=False,
@@ -531,6 +546,27 @@ def _validation_failure_reason(
     if grounding_reason is not None:
         return grounding_reason
     return "voice_lint" if lint_voice(text) else None
+
+
+def _unauthorized_criteria(
+    content: Mapping[str, object],
+    context: ExplanationNarrativeContext,
+) -> tuple[str, ...]:
+    criteria = content.get("used_criteria")
+    if not isinstance(criteria, list):
+        return ("<invalid>",)
+    authorized = set(context.allowed_criteria).intersection(
+        context.criterion_evidence_refs
+    )
+    return tuple(
+        dict.fromkeys(
+            value
+            if isinstance(value, str)
+            else "<invalid>"
+            for value in criteria
+            if not isinstance(value, str) or value not in authorized
+        )
+    )
 
 
 def _claims_are_grounded(

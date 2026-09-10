@@ -166,6 +166,59 @@ def test_writer_rejects_active_criterion_without_a_grounded_fact(
     assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
 
 
+def test_writer_prompt_lists_only_evidence_backed_criteria(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """The model receives the exact criteria it may cite in metadata."""
+    context = replace(
+        context,
+        active_priorities=(
+            *context.active_priorities,
+            {"key": "balcon", "label": "balcón", "polarity": "positive"},
+        ),
+        allowed_criteria=(*context.allowed_criteria, "balcon"),
+    )
+    scripted_gateway.output = {
+        "text": (
+            "Encaja por la buena conectividad. "
+            "La superficie es un punto para revisar."
+        ),
+        "used_criteria": ["acceso_transporte", "superficie"],
+        "used_evidence_refs": ["urban:transit-1", "listing_field:surface_m2"],
+    }
+
+    _writer(scripted_gateway).write(context)
+
+    payload = json.loads(str(scripted_gateway.messages[1]["content"]))
+    assert payload["authorized_criteria"] == [
+        {"key": "acceso_transporte", "evidence_refs": ["urban:transit-1"]},
+        {"key": "superficie", "evidence_refs": ["listing_field:surface_m2"]},
+    ]
+
+
+def test_writer_logs_rejected_criteria(
+    scripted_gateway: ScriptedGateway,
+    context: ExplanationNarrativeContext,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A rejected criterion is visible in diagnostics without logging model text."""
+    context = replace(context, allowed_criteria=(*context.allowed_criteria, "balcon"))
+    scripted_gateway.output = {
+        "text": "También tiene balcón.",
+        "used_criteria": ["balcon"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    with caplog.at_level("WARNING"):
+        narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "deterministic_fallback"
+    assert any(
+        "unauthorized_criteria=balcon" in record.message
+        for record in caplog.records
+    )
+
+
 def test_writer_rejects_evidence_not_tied_to_used_criterion(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
