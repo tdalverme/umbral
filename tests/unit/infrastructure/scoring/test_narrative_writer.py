@@ -410,6 +410,54 @@ def test_writer_prompt_excludes_unsupported_priorities_and_unknowns(
     ]
 
 
+def test_writer_prompt_exposes_only_renderable_grounded_claims(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """The model must not receive geographic facts the validator cannot authorize."""
+    context = replace(
+        context,
+        geography=(
+            GeographicFact(
+                label="servicios cotidianos cerca",
+                value="servicios cotidianos relativamente cerca",
+                source_ref="urban:shopping-1",
+                confidence=0.8,
+                criterion_key="proximidad_compras",
+                favorable=True,
+                signal_ref="daily_convenience",
+            ),
+        ),
+        allowed_criteria=(*context.allowed_criteria, "proximidad_compras"),
+        allowed_evidence_refs=(*context.allowed_evidence_refs, "urban:shopping-1"),
+    )
+    scripted_gateway.output = {
+        "text": "Está bien conectado para moverte por la ciudad.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    payload = json.loads(str(scripted_gateway.messages[1]["content"]))
+    assert narrative.source == "managed"
+    assert payload["grounded_claims"] == [
+        {
+            "criterion_key": "acceso_transporte",
+            "placement": "match",
+            "fact": "buena conectividad",
+            "evidence_refs": ["urban:transit-1"],
+        },
+        {
+            "criterion_key": "superficie",
+            "placement": "tradeoff",
+            "fact": "superficie",
+            "evidence_refs": ["listing_field:surface_m2"],
+        },
+    ]
+    assert "geography" not in payload
+    assert "servicios" not in json.dumps(payload, ensure_ascii=False)
+
+
 def test_writer_rejects_unknown_criterion_selected_without_evidence(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:

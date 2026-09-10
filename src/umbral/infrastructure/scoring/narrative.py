@@ -485,6 +485,16 @@ def _messages(
         if criterion in context.allowed_criteria and refs
     ]
     authorized_keys = {item["key"] for item in authorized_criteria}
+    grounded_claims = _context_claims(context) or ()
+    grounded_claim_payload = [
+        {
+            "criterion_key": claim.criterion_key,
+            "placement": claim.placement,
+            "fact": claim.descriptor,
+            "evidence_refs": list(claim.evidence_refs),
+        }
+        for claim in grounded_claims
+    ]
     return (
         {"role": "system", "content": system_prompt},
         {
@@ -497,19 +507,13 @@ def _messages(
                         for item in context.active_priorities
                         if item.get("key") in authorized_keys
                     ],
-                    "reasons": context.reasons,
-                    "tradeoffs": context.tradeoffs,
+                    # The writer receives only claims that the validator can
+                    # render from this exact packet. This prevents unrelated
+                    # geographic facts from pulling the copy outside scope.
+                    "grounded_claims": grounded_claim_payload,
                     # Unknowns are rendered separately in "Antes de decidir";
                     # they have no evidence refs that the narrative can cite.
                     "unknowns": [],
-                    "geography": [
-                        {
-                            "label": fact.label,
-                            "fact": fact.value,
-                            "evidence_refs": [fact.source_ref],
-                        }
-                        for fact in context.geography
-                    ],
                     "price_changes": context.price_changes,
                     "allowed_criteria": [
                         item["key"] for item in authorized_criteria
