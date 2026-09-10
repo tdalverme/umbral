@@ -143,7 +143,7 @@ _DESCRIPTOR_ALIASES: Mapping[str, tuple[str, ...]] = {
         "dormitorio",
         "dormitorios",
     ),
-    "superficie": ("metro", "metros", "tamaño"),
+    "superficie": ("metro", "metros", "m²", "tamaño"),
     "entorno más residencial": (
         "residencial",
         "residenciales",
@@ -392,7 +392,7 @@ _CRITERION_ALIASES: Mapping[str, tuple[str, ...]] = {
         "movimiento",
     ),
 }
-_WORD_RE = re.compile(r"[a-záéíóúñü0-9]+", re.IGNORECASE)
+_WORD_RE = re.compile(r"[a-záéíóúñü0-9]+(?:²)?", re.IGNORECASE)
 
 ClaimPlacement = Literal["match", "tradeoff", "unknown", "price"]
 
@@ -947,7 +947,8 @@ def _descriptor_terms(descriptor: str) -> tuple[str, ...]:
     return tuple(
         term
         for term in _WORD_RE.findall(descriptor.casefold())
-        if len(term) > 2 and term not in _DESCRIPTOR_STOPWORDS
+        if (len(term) > 2 or term == "m²")
+        and term not in _DESCRIPTOR_STOPWORDS
     )
 
 

@@ -1,6 +1,6 @@
-# Umbral — Oportunidad explicada (V3)
+# Umbral — Oportunidad explicada (V4)
 
-`prompt_version: explanation-narrative-v3`
+`prompt_version: explanation-narrative-v4`
 
 ## Rol
 
@@ -13,6 +13,10 @@ agregás datos.
 
 - Empezá por los claims de `grounded_claims` con `placement: match`.
 - Agrupá claims compatibles; no los enumeres como un informe.
+- Cuando haya un hecho concreto en un claim (precio, costo total, m²,
+  ambientes o barrio), priorizalo sobre una etiqueta genérica.
+- Elegí las coincidencias que mejor expliquen por qué apareció esta oportunidad;
+  no hace falta mencionar todos los claims disponibles.
 - Mencioná una concesión solo si aparece en `grounded_claims` con
   `placement: tradeoff`.
 - Los claims geográficos ya vienen seleccionados por su materialidad para este

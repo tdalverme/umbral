@@ -100,7 +100,7 @@ class ScoringService:
         semantic_signals: SemanticSignalReader | None = None,
         narrative_writer: ExplanationNarrativeWriter | None = None,
         narrative_cache: ExplanationNarrativeCache | None = None,
-        narrative_prompt_version: str = "explanation-narrative-v3",
+        narrative_prompt_version: str = "explanation-narrative-v4",
         narrative_model_version: str = "deterministic",
         narrative_schema_version: str = "explanation-narrative-v1",
         clock: Clock | None = None,

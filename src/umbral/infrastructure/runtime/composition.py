@@ -351,7 +351,7 @@ def _narrative_writer(settings: Settings) -> ExplanationNarrativeWriter | None:
             max_retries=0,
         ),
         schema=schema,
-        prompt_version="explanation-narrative-v3",
+        prompt_version="explanation-narrative-v4",
         model_version=settings.agent_model_name,
     )
 

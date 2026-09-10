@@ -18,6 +18,7 @@ from umbral.application.scoring.contracts import (
 _SAFE_LISTING_FIELDS = {
     "price_value": "price",
     "price_currency": "price_currency",
+    "total_cost": "total_cost",
     "surface_m2": "surface_m2",
     "rooms": "rooms",
     "expenses_value": "expenses",
@@ -219,11 +220,19 @@ def select_material_evaluations(
 ) -> Sequence[ExplanationReason | ExplanationRisk]:
     """Keep the highest-impact active matches and only active caveats."""
 
-    reasons = [
-        reason
-        for reason in explanation.reasons
-        if reason.criterion_key in active_criteria and reason.state == "match"
-    ][:4]
+    reasons = sorted(
+        (
+            reason
+            for reason in explanation.reasons
+            if reason.criterion_key in active_criteria and reason.state == "match"
+        ),
+        key=lambda reason: (
+            -reason.contribution,
+            -reason.confidence,
+            -reason.score,
+            reason.criterion_key,
+        ),
+    )[:4]
     tradeoffs = [
         reason
         for reason in explanation.reasons
@@ -278,12 +287,12 @@ def build_narrative_context(
     material = select_material_evaluations(explanation, active_criteria)
     material_keys = {item.criterion_key for item in material}
     reasons = tuple(
-        _evaluation_packet(reason, active_criteria, observations)
+        _evaluation_packet(reason, active_criteria, observations, listing)
         for reason in material
         if isinstance(reason, ExplanationReason) and reason.state == "match"
     )
     tradeoffs = tuple(
-        _evaluation_packet(reason, active_criteria, observations)
+        _evaluation_packet(reason, active_criteria, observations, listing)
         for reason in material
         if isinstance(reason, ExplanationReason) and reason.state == "mismatch"
     )
@@ -660,6 +669,7 @@ def _evaluation_packet(
     reason: ExplanationReason,
     active_criteria: Mapping[str, object],
     observations: Mapping[str, ListingObservation],
+    listing: Mapping[str, object],
 ) -> Mapping[str, object]:
     packet: dict[str, object] = {
         "criterion_key": reason.criterion_key,
@@ -669,7 +679,7 @@ def _evaluation_packet(
         "confidence": reason.confidence,
         "evidence_refs": _evidence_refs(reason.evidence_refs),
     }
-    fact = _evaluation_fact(reason, active_criteria, observations)
+    fact = _evaluation_fact(reason, active_criteria, observations, listing)
     if fact is not None:
         packet["fact"] = fact
     return packet
@@ -679,13 +689,22 @@ def _evaluation_fact(
     reason: ExplanationReason,
     active_criteria: Mapping[str, object],
     observations: Mapping[str, ListingObservation],
+    listing: Mapping[str, object],
 ) -> str | None:
+    fixed_fact = _fixed_listing_fact(reason, listing)
+    if fixed_fact is not None:
+        return fixed_fact
+
+    observation = observations.get(reason.criterion_key)
+    value = observation.value if observation is not None else None
+    observed_fact = _observed_listing_fact(reason.criterion_key, value)
+    if observed_fact is not None:
+        return observed_fact
+
     priority = active_criteria.get(reason.criterion_key)
     polarity = priority.get("polarity") if isinstance(priority, Mapping) else None
     if reason.state != "match":
         return None
-    observation = observations.get(reason.criterion_key)
-    value = observation.value if observation is not None else None
     if reason.criterion_key == "luminosidad":
         if isinstance(value, str):
             return {
@@ -708,6 +727,108 @@ def _evaluation_fact(
             "muy_bueno": "buen estado general",
         }.get(value)
     return None
+
+
+def _observed_listing_fact(criterion_key: str, value: object) -> str | None:
+    """Render only known structured observation values for narrative use."""
+
+    if criterion_key == "balcon":
+        if value in {"true", "si"}:
+            return "balcón"
+        if value in {"false", "no"}:
+            return "sin balcón"
+        return None
+    if criterion_key == "tipo_cocina":
+        return {
+            "separada": "cocina separada",
+            "integrada": "cocina integrada",
+            "none": "sin cocina",
+            "otra": "cocina de otro tipo",
+        }.get(value) if isinstance(value, str) else None
+    if criterion_key == "piso":
+        if isinstance(value, int) and not isinstance(value, bool):
+            return f"piso {value}"
+        return None
+    if criterion_key == "dormitorios":
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            suffix = "dormitorio" if value == 1 else "dormitorios"
+            return f"{value} {suffix}"
+        return None
+    if criterion_key == "banos":
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value >= 0
+        ):
+            suffix = "baño" if value == 1 else "baños"
+            return f"{_number_text(value)} {suffix}"
+        return None
+    if criterion_key == "orientacion" and isinstance(value, str):
+        directions = {
+            "norte",
+            "sur",
+            "este",
+            "oeste",
+            "noreste",
+            "noroeste",
+            "sureste",
+            "suroeste",
+        }
+        if value.casefold() in directions:
+            return f"orientación {value.casefold()}"
+    return None
+
+
+def _fixed_listing_fact(
+    reason: ExplanationReason,
+    listing: Mapping[str, object],
+) -> str | None:
+    """Render a concrete fixed-field fact only with its matching evidence ref."""
+
+    field_by_criterion = {
+        "presupuesto": "total_cost",
+        "ambientes": "rooms",
+        "superficie": "surface_m2",
+        "ubicacion": "neighborhood",
+    }
+    field = field_by_criterion.get(reason.criterion_key)
+    if field is None:
+        return None
+    evidence_refs = _evidence_refs(reason.evidence_refs)
+    if f"listing_field:{field}" not in evidence_refs:
+        return None
+    value = listing.get(field)
+    if reason.criterion_key == "presupuesto":
+        currency = listing.get("price_currency")
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and isinstance(currency, str)
+        ):
+            return f"precio total de {_price_text(value, currency)}"
+        return None
+    if reason.criterion_key == "ambientes":
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            suffix = "ambiente" if value == 1 else "ambientes"
+            return f"{value} {suffix}"
+        return None
+    if reason.criterion_key == "superficie":
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value >= 0
+        ):
+            return f"{_number_text(value)} m² de superficie"
+        return None
+    if reason.criterion_key == "ubicacion" and isinstance(value, str) and value:
+        return f"en {value}"
+    return None
+
+
+def _number_text(value: int | float) -> str:
+    if isinstance(value, int) or value.is_integer():
+        return f"{int(value)}"
+    return f"{value:.1f}".rstrip("0").rstrip(".")
 
 
 def _risk_packet(

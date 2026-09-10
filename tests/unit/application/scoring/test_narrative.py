@@ -113,6 +113,195 @@ def test_select_material_evaluations_limits_active_matches_and_caveats() -> None
     ]
 
 
+def test_select_material_evaluations_orders_matches_by_contribution() -> None:
+    explanation = _explanation()
+    explanation = replace(
+        explanation,
+        reasons=(
+            explanation.reasons[3],
+            explanation.reasons[0],
+            explanation.reasons[1],
+        ),
+    )
+
+    selected = select_material_evaluations(
+        explanation,
+        {
+            "luminosidad": object(),
+            "acceso_transporte": object(),
+            "proximidad_cafes": object(),
+        },
+    )
+
+    assert [item.criterion_key for item in selected] == [
+        "acceso_transporte",
+        "proximidad_cafes",
+        "luminosidad",
+    ]
+
+
+def test_narrative_context_turns_fixed_listing_values_into_grounded_facts() -> None:
+    listing_id = uuid4()
+    reasons = (
+        ExplanationReason(
+            criterion_key="presupuesto",
+            state="match",
+            score=0.9,
+            confidence=1.0,
+            contribution=0.4,
+            evidence_level="strong",
+            reason_code="budget_within_headroom",
+            evidence_refs=({"kind": "listing_field", "ref": "total_cost"},),
+            text="presupuesto",
+        ),
+        ExplanationReason(
+            criterion_key="superficie",
+            state="mismatch",
+            score=0.5,
+            confidence=1.0,
+            contribution=0.1,
+            evidence_level="strong",
+            reason_code="concept_missing",
+            evidence_refs=({"kind": "listing_field", "ref": "surface_m2"},),
+            text="superficie",
+        ),
+    )
+    explanation = replace(_explanation(), listing_id=listing_id, reasons=reasons)
+
+    context = build_narrative_context(
+        explanation=explanation,
+        listing={
+            "listing_id": str(listing_id),
+            "price_value": 207000,
+            "price_currency": "USD",
+            "total_cost": 207000,
+            "surface_m2": 54,
+        },
+        active_criteria={
+            "presupuesto": {"label": "presupuesto", "polarity": "positive"},
+            "superficie": {"label": "superficie", "polarity": "positive"},
+        },
+        observations={},
+    )
+
+    assert context.reasons[0]["fact"] == "precio total de USD 207.000"
+    assert context.tradeoffs[0]["fact"] == "54 m² de superficie"
+    assert context.listing["total_cost"] == 207000
+
+
+def test_narrative_context_turns_observed_home_attributes_into_grounded_facts() -> None:
+    listing_id = uuid4()
+    balcony = ListingObservation(
+        observation_id=uuid4(),
+        listing_id=listing_id,
+        concept_key="balcon",
+        matcher_type="categorical",
+        value="true",
+        score=1.0,
+        confidence=1.0,
+        evidence={},
+        source="rule",
+        extraction_version_id=None,
+        state="active",
+        failure_code=None,
+        recomputation_run_id=None,
+        created_at=datetime.now(timezone.utc),
+        correlation_id=uuid4(),
+    )
+    kitchen = replace(
+        balcony,
+        observation_id=uuid4(),
+        concept_key="tipo_cocina",
+        value="separada",
+    )
+    reasons = (
+        ExplanationReason(
+            criterion_key="balcon",
+            state="match",
+            score=1.0,
+            confidence=1.0,
+            contribution=0.3,
+            evidence_level="strong",
+            reason_code="concept_observed",
+            evidence_refs=(
+                {"kind": "observation", "ref": str(balcony.observation_id)},
+            ),
+            text="balcón",
+        ),
+        ExplanationReason(
+            criterion_key="tipo_cocina",
+            state="match",
+            score=1.0,
+            confidence=1.0,
+            contribution=0.2,
+            evidence_level="strong",
+            reason_code="concept_observed",
+            evidence_refs=(
+                {"kind": "observation", "ref": str(kitchen.observation_id)},
+            ),
+            text="tipo de cocina",
+        ),
+    )
+
+    context = build_narrative_context(
+        explanation=replace(_explanation(), listing_id=listing_id, reasons=reasons),
+        listing={"listing_id": str(listing_id)},
+        active_criteria={
+            "balcon": {"label": "balcón", "polarity": "positive"},
+            "tipo_cocina": {"label": "tipo de cocina", "polarity": "positive"},
+        },
+        observations={"balcon": balcony, "tipo_cocina": kitchen},
+    )
+
+    assert [item["fact"] for item in context.reasons] == [
+        "balcón",
+        "cocina separada",
+    ]
+
+
+def test_narrative_context_keeps_observed_tradeoff_fact() -> None:
+    listing_id = uuid4()
+    kitchen = ListingObservation(
+        observation_id=uuid4(),
+        listing_id=listing_id,
+        concept_key="tipo_cocina",
+        matcher_type="categorical",
+        value="integrada",
+        score=0.0,
+        confidence=1.0,
+        evidence={},
+        source="rule",
+        extraction_version_id=None,
+        state="active",
+        failure_code=None,
+        recomputation_run_id=None,
+        created_at=datetime.now(timezone.utc),
+        correlation_id=uuid4(),
+    )
+    reason = ExplanationReason(
+        criterion_key="tipo_cocina",
+        state="mismatch",
+        score=0.0,
+        confidence=1.0,
+        contribution=0.0,
+        evidence_level="strong",
+        reason_code="concept_missing",
+        evidence_refs=({"kind": "observation", "ref": str(kitchen.observation_id)},),
+        text="tipo de cocina",
+    )
+
+    context = build_narrative_context(
+        explanation=replace(_explanation(), listing_id=listing_id, reasons=(reason,)),
+        listing={"listing_id": str(listing_id)},
+        active_criteria={
+            "tipo_cocina": {"label": "tipo de cocina", "polarity": "positive"},
+        },
+        observations={"tipo_cocina": kitchen},
+    )
+
+    assert context.tradeoffs[0]["fact"] == "cocina integrada"
+
+
 def test_geographic_facts_translate_observed_distances_without_signal_scores() -> None:
     facts = geographic_facts(
         {

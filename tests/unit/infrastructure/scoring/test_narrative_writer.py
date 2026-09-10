@@ -458,6 +458,81 @@ def test_writer_prompt_exposes_only_renderable_grounded_claims(
     assert "servicios" not in json.dumps(payload, ensure_ascii=False)
 
 
+def test_writer_prompt_exposes_concrete_listing_facts_as_grounded_claims(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    context = replace(
+        context,
+        listing={
+            "price": 207000,
+            "total_cost": 207000,
+            "surface_m2": 54,
+            "neighborhood": "Palermo",
+        },
+        reasons=(
+            {
+                "criterion_key": "superficie",
+                "label": "superficie",
+                "fact": "54 m² de superficie",
+                "state": "match",
+                "placement": "match",
+                "evidence_refs": ("listing_field:surface_m2",),
+            },
+        ),
+        tradeoffs=(),
+        allowed_criteria=("superficie",),
+        allowed_evidence_refs=("listing_field:surface_m2",),
+        criterion_evidence_refs={"superficie": ("listing_field:surface_m2",)},
+    )
+    scripted_gateway.output = {
+        "text": "Tiene 54 m² de superficie y una distribución que parece eficiente.",
+        "used_criteria": ["superficie"],
+        "used_evidence_refs": ["listing_field:surface_m2"],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    payload = json.loads(str(scripted_gateway.messages[1]["content"]))
+    assert narrative.source == "managed"
+    assert payload["grounded_claims"] == [
+        {
+            "criterion_key": "superficie",
+            "placement": "match",
+            "fact": "54 m² de superficie",
+            "evidence_refs": ["listing_field:surface_m2"],
+        },
+    ]
+
+
+def test_writer_accepts_compact_metric_wording_for_surface_fact(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    context = replace(
+        context,
+        reasons=(
+            {
+                "criterion_key": "superficie",
+                "label": "superficie",
+                "fact": "54 m² de superficie",
+                "state": "match",
+                "placement": "match",
+                "evidence_refs": ("listing_field:surface_m2",),
+            },
+        ),
+        tradeoffs=(),
+        allowed_criteria=("superficie",),
+        allowed_evidence_refs=("listing_field:surface_m2",),
+        criterion_evidence_refs={"superficie": ("listing_field:surface_m2",)},
+    )
+    scripted_gateway.output = {
+        "text": "Tiene 54 m² y parece aprovechar bien el espacio.",
+        "used_criteria": ["superficie"],
+        "used_evidence_refs": ["listing_field:surface_m2"],
+    }
+
+    assert _writer(scripted_gateway).write(context).source == "managed"
+
+
 def test_writer_rejects_unknown_criterion_selected_without_evidence(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:

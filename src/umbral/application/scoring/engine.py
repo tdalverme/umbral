@@ -275,6 +275,7 @@ def _narrative_listing_snapshot(listing: NormalizedListing) -> Mapping[str, obje
         "listing_id": str(listing.listing_id),
         "price_value": listing.price_value,
         "price_currency": listing.price_currency,
+        "total_cost": listing.total_cost,
         "surface_m2": listing.surface_m2,
         "rooms": listing.rooms,
         "expenses_value": listing.expenses_value,
