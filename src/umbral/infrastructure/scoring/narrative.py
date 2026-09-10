@@ -593,13 +593,31 @@ def _normalize_evidence_refs(
     ):
         return content
     allowed_refs = set(context.allowed_evidence_refs)
-    evidence_refs = [
+    criterion_refs = [
         ref
         for criterion in criteria
         for ref in context.criterion_evidence_refs[criterion]
         if ref in allowed_refs
     ]
     submitted_refs = content.get("used_evidence_refs")
+    submitted_authorized_refs = (
+        [
+            ref
+            for ref in submitted_refs
+            if isinstance(ref, str)
+            and ref in allowed_refs
+            and (
+                ref in criterion_refs
+                or (ref == "listing_field:price" and bool(context.price_changes))
+            )
+        ]
+        if isinstance(submitted_refs, list)
+        else []
+    )
+    # Preserve a valid subset chosen by the model. Expanding every selected
+    # criterion to every attached ref makes the validator require prose for
+    # evidence the model did not use, which rejects otherwise grounded copy.
+    evidence_refs = submitted_authorized_refs or criterion_refs
     if (
         isinstance(submitted_refs, list)
         and "listing_field:price" in submitted_refs

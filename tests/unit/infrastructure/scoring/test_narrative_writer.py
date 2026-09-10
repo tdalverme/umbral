@@ -239,6 +239,30 @@ def test_writer_derives_only_allowed_evidence_refs(
     assert narrative.used_evidence_refs == ("urban:transit-1",)
 
 
+def test_writer_preserves_model_selected_subset_of_evidence_refs(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """A grounded synthesis may use only some evidence for one criterion."""
+    context = replace(
+        context,
+        allowed_evidence_refs=(*context.allowed_evidence_refs, "urban:noise-2"),
+        criterion_evidence_refs={
+            **context.criterion_evidence_refs,
+            "acceso_transporte": ("urban:transit-1", "urban:noise-2"),
+        },
+    )
+    scripted_gateway.output = {
+        "text": "Está bien conectado para moverte por la ciudad.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.used_evidence_refs == ("urban:transit-1",)
+
+
 def test_writer_deduplicates_repeated_model_criteria(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
