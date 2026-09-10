@@ -194,6 +194,83 @@ def test_writer_prompt_lists_only_evidence_backed_criteria(
         {"key": "acceso_transporte", "evidence_refs": ["urban:transit-1"]},
         {"key": "superficie", "evidence_refs": ["listing_field:surface_m2"]},
     ]
+    assert payload["allowed_criteria"] == ["acceso_transporte", "superficie"]
+
+
+def test_writer_derives_evidence_refs_from_authorized_criteria(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """Provenance is owned by the packet, not by model-produced reference IDs."""
+    scripted_gateway.output = {
+        "text": "Está bien conectado para moverte por la ciudad.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": ["model-invented-ref"],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.used_evidence_refs == ("urban:transit-1",)
+
+
+def test_writer_derives_only_allowed_evidence_refs(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """Internal observation refs must not leak into the serving provenance."""
+    context = replace(
+        context,
+        criterion_evidence_refs={
+            **context.criterion_evidence_refs,
+            "acceso_transporte": (
+                "observation:transit-1",
+                "urban:transit-1",
+            ),
+        },
+    )
+    scripted_gateway.output = {
+        "text": "Está bien conectado para moverte por la ciudad.",
+        "used_criteria": ["acceso_transporte"],
+        "used_evidence_refs": [],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.used_evidence_refs == ("urban:transit-1",)
+
+
+def test_writer_accepts_noise_as_a_natural_exposure_paraphrase(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """Natural noise wording remains grounded in the exposure descriptor."""
+    fact = GeographicFact(
+        label="menor exposición",
+        value="menor exposición",
+        source_ref="urban:noise-1",
+        confidence=0.8,
+        criterion_key="ruido_ambiental",
+        favorable=False,
+        signal_ref="noise_risk",
+    )
+    context = replace(
+        context,
+        allowed_criteria=(*context.allowed_criteria, "ruido_ambiental"),
+        allowed_evidence_refs=(*context.allowed_evidence_refs, fact.source_ref),
+        criterion_evidence_refs={
+            **context.criterion_evidence_refs,
+            "ruido_ambiental": (fact.source_ref,),
+        },
+        geography=(fact,),
+    )
+    scripted_gateway.output = {
+        "text": "La zona parece tener menos ruido, así que conviene revisarla.",
+        "used_criteria": ["ruido_ambiental"],
+        "used_evidence_refs": [fact.source_ref],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
 
 
 def test_writer_logs_rejected_criteria(
@@ -219,17 +296,20 @@ def test_writer_logs_rejected_criteria(
     )
 
 
-def test_writer_rejects_evidence_not_tied_to_used_criterion(
+def test_writer_derives_evidence_when_model_ref_is_not_tied_to_criterion(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
-    """An authorized reference cannot support a different criterion's claim."""
+    """An authorized criterion owns its evidence regardless of model IDs."""
     scripted_gateway.output = {
         "text": "La superficie es un punto para revisar.",
         "used_criteria": ["superficie"],
         "used_evidence_refs": ["urban:transit-1"],
     }
 
-    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.used_evidence_refs == ("listing_field:surface_m2",)
 
 
 def test_writer_rejects_raw_key_when_the_context_label_collides(
@@ -481,7 +561,7 @@ def test_writer_logs_validation_rejection_detail(
     assert "detail=untracked_property_term" in caplog.text
 
 
-def test_writer_rejects_empty_evidence_refs(
+def test_writer_derives_evidence_when_model_refs_are_empty(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
     scripted_gateway.output = {
@@ -490,7 +570,10 @@ def test_writer_rejects_empty_evidence_refs(
         "used_evidence_refs": [],
     }
 
-    assert _writer(scripted_gateway).write(context).source == "deterministic_fallback"
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.used_evidence_refs == ("urban:transit-1",)
 
 
 @pytest.mark.parametrize(

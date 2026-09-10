@@ -189,12 +189,14 @@ _DESCRIPTOR_ALIASES: Mapping[str, tuple[str, ...]] = {
         "corredores",
         "tránsito",
         "tráfico",
+        "ruido",
     ),
     "menor exposición al tren": (
         "tren",
         "alejada",
         "alejado",
         "vías",
+        "ruido",
     ),
     "actividad nocturna": (
         "actividad",
@@ -411,7 +413,7 @@ class ManagedExplanationNarrativeWriter:
                 },
             )
             return fallback
-        content = result.content
+        content = _normalize_evidence_refs(result.content, context)
         validation_reason = _validation_failure_reason(content, self.schema, context)
         if validation_reason is not None:
             unauthorized_criteria = (
@@ -546,6 +548,43 @@ def _validation_failure_reason(
     if grounding_reason is not None:
         return grounding_reason
     return "voice_lint" if lint_voice(text) else None
+
+
+def _normalize_evidence_refs(
+    content: Mapping[str, object],
+    context: ExplanationNarrativeContext,
+) -> Mapping[str, object]:
+    """Derive provenance from authorized criteria instead of model IDs."""
+    criteria = content.get("used_criteria")
+    if not isinstance(criteria, list) or not all(
+        isinstance(value, str) for value in criteria
+    ):
+        return content
+    authorized = set(context.allowed_criteria).intersection(
+        context.criterion_evidence_refs
+    )
+    if any(
+        value not in authorized or not context.criterion_evidence_refs[value]
+        for value in criteria
+    ):
+        return content
+    allowed_refs = set(context.allowed_evidence_refs)
+    evidence_refs = [
+        ref
+        for criterion in criteria
+        for ref in context.criterion_evidence_refs[criterion]
+        if ref in allowed_refs
+    ]
+    submitted_refs = content.get("used_evidence_refs")
+    if (
+        isinstance(submitted_refs, list)
+        and "listing_field:price" in submitted_refs
+        and context.price_changes
+    ):
+        evidence_refs.append("listing_field:price")
+    normalized = dict(content)
+    normalized["used_evidence_refs"] = list(dict.fromkeys(evidence_refs))
+    return normalized
 
 
 def _unauthorized_criteria(
