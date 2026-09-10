@@ -614,6 +614,20 @@ def _normalize_evidence_refs(
         if isinstance(submitted_refs, list)
         else []
     )
+    if submitted_authorized_refs:
+        criteria = [
+            criterion
+            for criterion in criteria
+            if set(context.criterion_evidence_refs[criterion]).intersection(
+                submitted_authorized_refs
+            )
+        ]
+        criterion_refs = [
+            ref
+            for criterion in criteria
+            for ref in context.criterion_evidence_refs[criterion]
+            if ref in allowed_refs
+        ]
     # Preserve a valid subset chosen by the model. Expanding every selected
     # criterion to every attached ref makes the validator require prose for
     # evidence the model did not use, which rejects otherwise grounded copy.

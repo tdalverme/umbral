@@ -263,6 +263,23 @@ def test_writer_preserves_model_selected_subset_of_evidence_refs(
     assert narrative.used_evidence_refs == ("urban:transit-1",)
 
 
+def test_writer_drops_criteria_without_model_selected_evidence(
+    scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
+) -> None:
+    """Criteria without a submitted ref must not make grounded copy fail."""
+    scripted_gateway.output = {
+        "text": "Está bien conectado para moverte por la ciudad.",
+        "used_criteria": ["acceso_transporte", "superficie"],
+        "used_evidence_refs": ["urban:transit-1"],
+    }
+
+    narrative = _writer(scripted_gateway).write(context)
+
+    assert narrative.source == "managed"
+    assert narrative.used_criteria == ("acceso_transporte",)
+    assert narrative.used_evidence_refs == ("urban:transit-1",)
+
+
 def test_writer_deduplicates_repeated_model_criteria(
     scripted_gateway: ScriptedGateway, context: ExplanationNarrativeContext
 ) -> None:
