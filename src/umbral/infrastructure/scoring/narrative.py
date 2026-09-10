@@ -560,6 +560,7 @@ def _normalize_evidence_refs(
         isinstance(value, str) for value in criteria
     ):
         return content
+    criteria = list(dict.fromkeys(cast(list[str], criteria)))
     authorized = set(context.allowed_criteria).intersection(
         context.criterion_evidence_refs
     )
@@ -583,6 +584,7 @@ def _normalize_evidence_refs(
     ):
         evidence_refs.append("listing_field:price")
     normalized = dict(content)
+    normalized["used_criteria"] = criteria
     normalized["used_evidence_refs"] = list(dict.fromkeys(evidence_refs))
     return normalized
 
@@ -655,6 +657,12 @@ def _contains_untracked_property_term(
         if claim.placement != "price"
         for term in _descriptor_anchor_terms(claim.descriptor)
     }
+    if any(
+        claim.placement != "price"
+        and any(ref.startswith("urban:") for ref in claim.evidence_refs)
+        for claim in claims
+    ):
+        selected_terms.add("ubicación")
     return any(
         match.group(0).casefold() not in selected_terms
         for match in _KNOWN_PROPERTY_TERM_RE.finditer(text)
